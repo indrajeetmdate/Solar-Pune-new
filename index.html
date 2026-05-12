@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pune Solar Calculator</title>
+    <link rel="stylesheet" href="./src/styles.css">
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Pune rooftop solar</p>
+        <h1>Solar calculator</h1>
+      </div>
+      <div class="header-actions" aria-label="Mode selector">
+        <button class="mode-button active" id="easyModeButton" type="button">Easy</button>
+        <button class="mode-button" id="internalModeButton" type="button">Internal</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="input-panel" aria-label="Customer and site inputs">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Inputs</p>
+            <h2>Customer basics</h2>
+          </div>
+          <button class="ghost-button" id="resetButton" type="button">Reset</button>
+        </div>
+
+        <div class="field-grid">
+          <label class="field">
+            <span>Customer name</span>
+            <input id="customerName" type="text" placeholder="Optional">
+          </label>
+
+          <label class="field">
+            <span>Monthly units</span>
+            <input id="monthlyUnits" type="number" min="0" step="1" value="450">
+          </label>
+
+          <label class="field">
+            <span>Monthly bill amount</span>
+            <input id="monthlyBill" type="number" min="0" step="100" value="5200">
+          </label>
+
+          <label class="field">
+            <span>Usable roof area</span>
+            <input id="roofArea" type="number" min="0" step="10" value="650">
+          </label>
+
+          <label class="field">
+            <span>Sanctioned load</span>
+            <input id="sanctionedLoad" type="number" min="0" step="0.5" value="5">
+          </label>
+
+          <label class="field">
+            <span>Goal</span>
+            <select id="goal">
+              <option value="maximumSavings">Maximum savings</option>
+              <option value="backupSupport">Backup support</option>
+              <option value="lowestUpfront">Lowest upfront cost</option>
+              <option value="bestRoi">Best long-term ROI</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="upload-zone" for="billUpload">
+          <input id="billUpload" type="file" accept=".pdf,.jpg,.jpeg,.png,.txt,.csv">
+          <span class="upload-title">Attach electricity bill</span>
+          <span id="billUploadStatus">Optional for V1. Enter units manually after upload.</span>
+        </label>
+
+        <div class="toggle-row">
+          <label class="check-row">
+            <input id="backupNeeded" type="checkbox" checked>
+            <span>Customer wants backup comparison</span>
+          </label>
+          <label class="check-row">
+            <input id="customerView" type="checkbox" checked>
+            <span>Customer view</span>
+          </label>
+        </div>
+
+        <div id="internalPanel" class="internal-panel hidden">
+          <div class="section-heading compact">
+            <div>
+              <p class="eyebrow">Internal</p>
+              <h2>Editable assumptions</h2>
+            </div>
+            <button class="ghost-button" id="lockInternalButton" type="button">Lock</button>
+          </div>
+
+          <div class="tabs" aria-label="Internal assumption groups">
+            <button class="tab-button active" type="button" data-tab="system">System</button>
+            <button class="tab-button" type="button" data-tab="pricing">Pricing</button>
+            <button class="tab-button" type="button" data-tab="losses">Losses</button>
+            <button class="tab-button" type="button" data-tab="tariff">Tariff</button>
+          </div>
+
+          <div class="tab-panel" data-panel="system">
+            <div class="field-grid">
+              <label class="field">
+                <span>Panel type</span>
+                <select id="panelType">
+                  <option value="dcr">DCR subsidy path</option>
+                  <option value="nonDcr">Non-DCR no subsidy</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>Structure</span>
+                <select id="structureType">
+                  <option value="hotDip">Hot-dip galvanized</option>
+                  <option value="galvalume">Galvalume</option>
+                  <option value="gpPurlin">GP purlin</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>Capacity override</span>
+                <input id="capacityOverride" type="number" min="0" step="0.1" placeholder="Auto">
+              </label>
+
+              <label class="field">
+                <span>Inverter override</span>
+                <input id="inverterOverride" type="number" min="0" step="0.1" placeholder="Auto">
+              </label>
+
+              <label class="field">
+                <span>Backup load</span>
+                <input id="backupLoad" type="number" min="0" step="0.1" value="1.5">
+              </label>
+
+              <label class="field">
+                <span>Backup hours</span>
+                <input id="backupHours" type="number" min="0" step="0.5" value="4">
+              </label>
+            </div>
+          </div>
+
+          <div class="tab-panel hidden" data-panel="pricing">
+            <div class="field-grid">
+              <label class="field">
+                <span>DCR panel Rs/Wp</span>
+                <input id="panelDcrRate" type="number" min="0" step="0.1" value="26">
+              </label>
+
+              <label class="field">
+                <span>Non-DCR panel Rs/Wp</span>
+                <input id="panelNonDcrRate" type="number" min="0" step="0.1" value="17">
+              </label>
+
+              <label class="field">
+                <span>Battery Rs/Wh</span>
+                <input id="batteryRate" type="number" min="0" step="0.1" value="17.5">
+              </label>
+
+              <label class="field">
+                <span>Hybrid inverter Rs/W</span>
+                <input id="hybridInverterRate" type="number" min="0" step="0.1" value="23">
+              </label>
+
+              <label class="field">
+                <span>Off-grid inverter Rs/W</span>
+                <input id="offgridInverterRate" type="number" min="0" step="0.1" value="15">
+              </label>
+
+              <label class="field">
+                <span>On-grid inverter Rs/W</span>
+                <input id="ongridInverterRate" type="number" min="0" step="0.1" value="8">
+              </label>
+
+              <label class="field">
+                <span>Hot-dip structure Rs/W</span>
+                <input id="hotDipStructureRate" type="number" min="0" step="0.1" value="6">
+              </label>
+
+              <label class="field">
+                <span>Galvalume structure Rs/W</span>
+                <input id="galvalumeStructureRate" type="number" min="0" step="0.1" value="5.3">
+              </label>
+
+              <label class="field">
+                <span>GP purlin structure Rs/W</span>
+                <input id="gpPurlinStructureRate" type="number" min="0" step="0.1" value="4.8">
+              </label>
+
+              <label class="field">
+                <span>Wiring Rs/W</span>
+                <input id="wiringRate" type="number" min="0" step="0.1" value="3.5">
+              </label>
+
+              <label class="field">
+                <span>Installation Rs/W</span>
+                <input id="installationRate" type="number" min="0" step="0.1" value="4">
+              </label>
+
+              <label class="field">
+                <span>Protection fixed</span>
+                <input id="protectionCost" type="number" min="0" step="500" value="12000">
+              </label>
+
+              <label class="field">
+                <span>Net meter/testing</span>
+                <input id="netMeterCost" type="number" min="0" step="500" value="7000">
+              </label>
+
+              <label class="field">
+                <span>Consultancy</span>
+                <input id="consultancyFee" type="number" min="0" step="500" value="10000">
+              </label>
+
+              <label class="field">
+                <span>Liaisoning</span>
+                <input id="liaisoningFee" type="number" min="0" step="500" value="8000">
+              </label>
+
+              <label class="field">
+                <span>GST %</span>
+                <input id="gstRate" type="number" min="0" step="0.1" value="13.8">
+              </label>
+
+              <label class="field">
+                <span>Contingency %</span>
+                <input id="contingencyRate" type="number" min="0" step="0.1" value="3">
+              </label>
+            </div>
+          </div>
+
+          <div class="tab-panel hidden" data-panel="losses">
+            <div class="field-grid">
+              <label class="field">
+                <span>kWh/kWp/day</span>
+                <input id="dailyGeneration" type="number" min="0" step="0.1" value="4.2">
+              </label>
+
+              <label class="field">
+                <span>Sq ft per kWp</span>
+                <input id="sqftPerKw" type="number" min="1" step="1" value="120">
+              </label>
+
+              <label class="field">
+                <span>Shading loss %</span>
+                <input id="shadingLoss" type="number" min="0" max="90" step="1" value="5">
+              </label>
+
+              <label class="field">
+                <span>Tilt/orientation loss %</span>
+                <input id="orientationLoss" type="number" min="0" max="90" step="1" value="4">
+              </label>
+
+              <label class="field">
+                <span>System loss %</span>
+                <input id="systemLoss" type="number" min="0" max="90" step="1" value="8">
+              </label>
+
+              <label class="field">
+                <span>Annual degradation %</span>
+                <input id="degradationRate" type="number" min="0" step="0.1" value="0.5">
+              </label>
+
+              <label class="field">
+                <span>Battery DoD %</span>
+                <input id="batteryDod" type="number" min="1" max="100" step="1" value="90">
+              </label>
+
+              <label class="field">
+                <span>Inverter efficiency %</span>
+                <input id="inverterEfficiency" type="number" min="1" max="100" step="1" value="92">
+              </label>
+            </div>
+          </div>
+
+          <div class="tab-panel hidden" data-panel="tariff">
+            <div class="field-grid">
+              <label class="field">
+                <span>Savings method</span>
+                <select id="savingsMethod">
+                  <option value="auto">Auto</option>
+                  <option value="effective">Effective bill tariff</option>
+                  <option value="slab">MSEDCL slab estimate</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>Fixed charges</span>
+                <input id="fixedCharge" type="number" min="0" step="10" value="130">
+              </label>
+
+              <label class="field">
+                <span>Duty %</span>
+                <input id="electricityDuty" type="number" min="0" step="0.1" value="16">
+              </label>
+
+              <label class="field">
+                <span>Tariff escalation %</span>
+                <input id="tariffEscalation" type="number" min="0" step="0.1" value="3">
+              </label>
+            </div>
+            <p class="muted small">Slab rates are kept in the calculator config and can be moved to admin-managed config later.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="results-panel" aria-live="polite">
+        <div class="summary-band">
+          <div>
+            <p class="eyebrow">Recommendation</p>
+            <h2 id="recommendationTitle">On-grid DCR solar</h2>
+            <p id="recommendationReason" class="muted">Best payback for subsidy-eligible residential use.</p>
+          </div>
+          <div class="status-pill" id="sanctionStatus">Within sanctioned load</div>
+        </div>
+
+        <div class="metric-grid">
+          <div class="metric-card">
+            <span>Recommended size</span>
+            <strong id="recommendedCapacity">0 kWp</strong>
+          </div>
+          <div class="metric-card">
+            <span>Monthly generation</span>
+            <strong id="monthlyGeneration">0 units</strong>
+          </div>
+          <div class="metric-card">
+            <span>Monthly savings</span>
+            <strong id="monthlySavings">Rs 0</strong>
+          </div>
+          <div class="metric-card">
+            <span>Payback</span>
+            <strong id="payback">0 years</strong>
+          </div>
+        </div>
+
+        <div class="comparison-section">
+          <div class="section-heading compact">
+            <div>
+              <p class="eyebrow">Compare</p>
+              <h2>System options</h2>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>System</th>
+                  <th>Panel</th>
+                  <th>Net cost</th>
+                  <th>Subsidy</th>
+                  <th>Savings/mo</th>
+                  <th>Payback</th>
+                </tr>
+              </thead>
+              <tbody id="comparisonRows"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="detail-grid" id="detailGrid">
+          <section class="detail-card">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Cost</p>
+                <h2>Selected breakup</h2>
+              </div>
+            </div>
+            <dl id="costBreakup" class="breakup-list"></dl>
+          </section>
+
+          <section class="detail-card">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Notes</p>
+                <h2>Eligibility and backup</h2>
+              </div>
+            </div>
+            <ul id="notesList" class="notes-list"></ul>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="passwordDialog" class="password-dialog">
+      <form method="dialog" class="password-box">
+        <p class="eyebrow">Internal mode</p>
+        <h2 id="passwordDialogTitle">Enter passphrase</h2>
+        <p id="passwordHelp" class="muted small">Use the browser-local passphrase for this device.</p>
+        <label class="field">
+          <span>Passphrase</span>
+          <input id="internalPassword" type="password" autocomplete="current-password">
+        </label>
+        <p id="passwordError" class="error-text hidden">Incorrect password.</p>
+        <div class="dialog-actions">
+          <button class="ghost-button" value="cancel" type="submit">Cancel</button>
+          <button class="primary-button" id="unlockButton" value="default" type="button">Unlock</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
