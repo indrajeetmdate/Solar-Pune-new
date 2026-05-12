@@ -1,3 +1,28 @@
+// Helper to load image and get base64 data
+const loadImage = (url) => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.src = url;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      resolve({
+        data: canvas.toDataURL('image/png'),
+        width: img.width,
+        height: img.height
+      });
+    };
+    img.onerror = () => {
+      console.warn(`Failed to load image: ${url}`);
+      resolve(null);
+    }
+  });
+};
+
 export async function generateProposalPDF(estimates) {
   const jsPDF = window.jspdf ? window.jspdf.jsPDF : window.jsPDF;
 
@@ -5,6 +30,9 @@ export async function generateProposalPDF(estimates) {
     alert("PDF generator is still loading or blocked. Please wait a moment and try again.");
     return;
   }
+
+  // Load logo before generating document
+  const logoResult = await loadImage("https://bfkxdpripwjxenfvwpfu.supabase.co/storage/v1/object/public/Logo/DC_Energy.png");
 
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -45,9 +73,23 @@ export async function generateProposalPDF(estimates) {
     doc.setTextColor(COLORS.text);
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
-    doc.text("www.dcenergy.in", margin, footerY);
+    
+    // Left: URL
+    doc.text("www.cnergy.co.in", margin, footerY);
+    
+    // Center: Page number
     doc.text(`Page ${pageNum}`, pageWidth / 2, footerY, { align: "center" });
+    
+    // Right: Logo, Company Name, Location
+    doc.setFontSize(8);
+    doc.text("Datlion Cnergy Pvt. Ltd.", pageWidth - margin, footerY - 4, { align: "right" });
     doc.text("Pune, Maharashtra", pageWidth - margin, footerY, { align: "right" });
+    
+    if (logoResult) {
+      const targetWidth = 16;
+      const targetHeight = (logoResult.height / logoResult.width) * targetWidth;
+      doc.addImage(logoResult.data, 'PNG', pageWidth - margin - targetWidth, footerY - 8 - targetHeight, targetWidth, targetHeight);
+    }
   };
 
   // ================= PAGE 1: System Design Considerations =================
