@@ -73,7 +73,17 @@ async function callOcrProxy(base64, mimeType) {
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.error || `OCR proxy error ${response.status}`);
+    const msg = body.error || "";
+
+    // Friendly messages for common errors
+    if (response.status === 429 || msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED")) {
+      throw new Error("OCR rate limit reached. Please wait a minute and try again.");
+    }
+    if (msg.includes("limit: 0") || msg.includes("quota")) {
+      throw new Error("OCR API key needs setup. Generate a key at aistudio.google.com/apikey.");
+    }
+
+    throw new Error(body.error || `OCR service error (${response.status})`);
   }
 
   const result = await response.json();

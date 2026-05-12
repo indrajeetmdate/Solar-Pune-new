@@ -4,10 +4,14 @@
  * and returns the extracted text. Keeps the API key server-side.
  *
  * Vercel env var: gem_key
+ *
+ * Features:
+ * - Tries gemini-2.0-flash first, falls back to gemini-1.5-flash
+ * - Auto-retries once on 429 (rate limit) with the suggested delay
  */
 
-const GEMINI_ENDPOINT =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+const MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"];
 
 const PROMPT = `You are an expert OCR system specialising in Indian electricity bills (MSEDCL / MSEB / Maharashtra State Electricity Distribution Co. Ltd).
 
@@ -26,6 +30,48 @@ Pay special attention to these fields and ensure they appear in the output:
 • Tariff Category
 
 Return ONLY the extracted text. Do not add any commentary, explanation, or formatting beyond the raw bill text.`;
+
+function buildRequestBody(imageBase64, mimeType) {
+  return {
+    contents: [
+      {
+        parts: [
+          { text: PROMPT },
+          { inline_data: { mime_type: mimeType, data: imageBase64 } },
+        ],
+      },
+    ],
+    generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+  };
+}
+
+function extractText(result) {
+  return (
+    result?.candidates?.[0]?.content?.parts
+      ?.map((part) => part.text || "")
+      .join("\n")
+      .trim() || ""
+  );
+}
+
+function parseRetryDelay(errorBody) {
+  const match = errorBody.match(/"retryDelay"\s*:\s*"(\d+)s?"/);
+  return match ? Math.min(parseInt(match[1], 10), 60) : 10;
+}
+
+async function callModel(model, apiKey, body) {
+  const url = `${BASE_URL}/${model}:generateContent?key=${apiKey}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return response;
+}
+
+async function sleep(seconds) {
+  return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+}
 
 export default async function handler(req, res) {
   // CORS headers
@@ -51,56 +97,44 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing imageBase64 or mimeType in request body." });
   }
 
-  try {
-    const body = {
-      contents: [
-        {
-          parts: [
-            { text: PROMPT },
-            {
-              inline_data: {
-                mime_type: mimeType,
-                data: imageBase64,
-              },
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 4096,
-      },
-    };
+  const body = buildRequestBody(imageBase64, mimeType);
+  let lastError = "";
 
-    const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+  // Try each model, with one retry on 429
+  for (const model of MODELS) {
+    try {
+      let response = await callModel(model, apiKey, body);
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      return res.status(response.status).json({
-        error: `Gemini API error ${response.status}: ${errorBody}`,
-      });
+      // Auto-retry once on 429
+      if (response.status === 429) {
+        const errorBody = await response.text();
+        const delay = parseRetryDelay(errorBody);
+        await sleep(delay);
+        response = await callModel(model, apiKey, body);
+      }
+
+      if (!response.ok) {
+        lastError = await response.text();
+        continue; // try next model
+      }
+
+      const result = await response.json();
+      const text = extractText(result);
+
+      if (!text) {
+        lastError = "Gemini returned an empty response.";
+        continue;
+      }
+
+      return res.status(200).json({ text, model });
+    } catch (err) {
+      lastError = err.message;
+      continue;
     }
-
-    const result = await response.json();
-
-    const text =
-      result?.candidates?.[0]?.content?.parts
-        ?.map((part) => part.text || "")
-        .join("\n")
-        .trim() || "";
-
-    if (!text) {
-      return res.status(422).json({
-        error: "Gemini returned an empty response. The image may not contain readable text.",
-      });
-    }
-
-    return res.status(200).json({ text });
-  } catch (err) {
-    return res.status(500).json({ error: err.message || "Internal server error" });
   }
+
+  // All models failed
+  return res.status(502).json({
+    error: `OCR failed on all models. Last error: ${lastError}`,
+  });
 }
