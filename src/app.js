@@ -423,6 +423,16 @@ function attachEvents() {
     }
   });
 
+  $("downloadProposalButton")?.addEventListener("click", () => {
+    if (state.estimates) {
+      import("./reportGenerator.js").then(({ generateProposalPDF }) => {
+        generateProposalPDF(state.estimates);
+      }).catch(err => console.error("Failed to load PDF generator", err));
+    } else {
+      alert("Please ensure all inputs are filled to calculate the estimate before downloading.");
+    }
+  });
+
   document.querySelectorAll(".tab-button").forEach((button) => {
     button.addEventListener("click", () => switchTab(button.dataset.tab));
   });

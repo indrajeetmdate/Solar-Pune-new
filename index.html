@@ -363,7 +363,10 @@
             <h2 id="recommendationTitle">On-grid DCR solar</h2>
             <p id="recommendationReason" class="muted">Best payback for subsidy-eligible residential use.</p>
           </div>
-          <div class="status-pill" id="sanctionStatus">Within sanctioned load</div>
+          <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+            <div class="status-pill" id="sanctionStatus">Within sanctioned load</div>
+            <button class="ghost-button" id="downloadProposalButton" type="button" style="border-color: var(--brand-green); color: var(--brand-green); background: rgba(99, 146, 62, 0.1);">Download Proposal</button>
+          </div>
         </div>
 
         <div class="metric-grid">
@@ -464,6 +467,8 @@
       // Then update the window global below for local testing:
       // window.__OPENROUTER_API_KEY = 'your-key-here';
     </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script type="module" src="./src/app.js"></script>
   </body>
 </html>
