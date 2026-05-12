@@ -1,13 +1,13 @@
 /**
  * OCR Extractor — sends bill images to the /api/ocr serverless proxy,
- * which calls Google Gemini server-side (keeping the API key secure).
+ * which calls OpenRouter server-side (keeping the API key secure).
  *
- * Falls back to direct Gemini call if window.__GEMINI_API_KEY is set
+ * Falls back to direct OpenRouter call if window.__OPENROUTER_API_KEY is set
  * (useful for local development).
  */
 
-const GEMINI_ENDPOINT =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+const MODEL = "baidu/qianfan-ocr-fast:free";
 
 const OCR_PROMPT = `You are an expert OCR system specialising in Indian electricity bills (MSEDCL / MSEB / Maharashtra State Electricity Distribution Co. Ltd).
 
@@ -62,7 +62,7 @@ function mimeForFile(file) {
 
 /**
  * Call the /api/ocr serverless proxy (Vercel) to extract text from an image.
- * Falls back to direct Gemini call if a local API key is available.
+ * Falls back to direct OpenRouter call if a local API key is available.
  */
 async function callOcrProxy(base64, mimeType) {
   const response = await fetch("/api/ocr", {
@@ -76,11 +76,11 @@ async function callOcrProxy(base64, mimeType) {
     const msg = body.error || "";
 
     // Friendly messages for common errors
-    if (response.status === 429 || msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED")) {
+    if (response.status === 429 || msg.includes("429") || msg.includes("rate limit")) {
       throw new Error("OCR rate limit reached. Please wait a minute and try again.");
     }
-    if (msg.includes("limit: 0") || msg.includes("quota")) {
-      throw new Error("OCR API key needs setup. Generate a key at aistudio.google.com/apikey.");
+    if (msg.includes("limit: 0") || msg.includes("quota") || response.status === 402) {
+      throw new Error("OCR API key needs setup. Check your OpenRouter billing or key configuration.");
     }
 
     throw new Error(body.error || `OCR service error (${response.status})`);
@@ -91,41 +91,47 @@ async function callOcrProxy(base64, mimeType) {
 }
 
 /**
- * Direct Gemini call — used for local development when window.__GEMINI_API_KEY is set.
+ * Direct OpenRouter call — used for local development when window.__OPENROUTER_API_KEY is set.
  */
-async function callGeminiDirect(base64, mimeType, apiKey) {
+async function callOpenRouterDirect(base64, mimeType, apiKey) {
   const body = {
-    contents: [
+    model: MODEL,
+    messages: [
       {
-        parts: [
-          { text: OCR_PROMPT },
-          { inline_data: { mime_type: mimeType, data: base64 } },
+        role: "user",
+        content: [
+          { type: "text", text: OCR_PROMPT },
+          {
+            type: "image_url",
+            image_url: { url: `data:${mimeType};base64,${base64}` },
+          },
         ],
       },
     ],
-    generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+    temperature: 0.1,
   };
 
-  const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
+  const response = await fetch(OPENROUTER_ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+      "HTTP-Referer": "http://localhost:5173", // Optional, for OpenRouter rankings
+      "X-Title": "DC Energy Solar Calculator Local" // Optional, for OpenRouter rankings
+    },
     body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     const errorBody = await response.text();
-    throw new Error(`Gemini API error ${response.status}: ${errorBody}`);
+    throw new Error(`OpenRouter API error ${response.status}: ${errorBody}`);
   }
 
   const result = await response.json();
-  const text =
-    result?.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text || "")
-      .join("\n")
-      .trim() || "";
+  const text = result?.choices?.[0]?.message?.content?.trim() || "";
 
   if (!text) {
-    throw new Error("Gemini returned an empty response. The image may not contain readable text.");
+    throw new Error("Model returned an empty response. The image may not contain readable text.");
   }
 
   return text;
@@ -135,7 +141,7 @@ async function callGeminiDirect(base64, mimeType, apiKey) {
  * Extract text from a bill image file.
  *
  * On Vercel: routes through /api/ocr serverless function (API key stays server-side).
- * Locally: uses window.__GEMINI_API_KEY or <meta name="gemini-api-key"> for direct calls.
+ * Locally: uses window.__OPENROUTER_API_KEY or <meta name="gemini-api-key"> (as fallback) for direct calls.
  *
  * @param {File} file — image file (JPG, PNG, WEBP, etc.)
  * @returns {Promise<string>} extracted text
@@ -144,15 +150,15 @@ export async function extractTextFromImage(file) {
   const base64 = await fileToBase64(file);
   const mimeType = mimeForFile(file);
 
-  // Check for local dev API key
+  // Check for local dev API key (checking both __OPENROUTER_API_KEY and __GEMINI_API_KEY for backwards compat with index.html instructions)
   const localKey =
-    (typeof window !== "undefined" && window.__GEMINI_API_KEY) ||
+    (typeof window !== "undefined" && (window.__OPENROUTER_API_KEY || window.__GEMINI_API_KEY)) ||
     document.querySelector('meta[name="gemini-api-key"]')?.content ||
     "";
 
   if (localKey) {
     // Direct call for local development
-    return callGeminiDirect(base64, mimeType, localKey);
+    return callOpenRouterDirect(base64, mimeType, localKey);
   }
 
   // Production: use the serverless proxy
