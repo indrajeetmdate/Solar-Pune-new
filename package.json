@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/calculator.test.mjs",
+    "test": "node tests/calculator.test.mjs && node tests/billParser.test.mjs",
     "serve": "python -m http.server 5173"
   }
 }

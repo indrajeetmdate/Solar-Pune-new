@@ -102,7 +102,7 @@ Included:
 
 - Easy Mode and Developer Mode
 - Manual monthly consumption entry
-- Bill upload placeholder or basic bill data extraction path
+- MSEB/MSEDCL bill upload extraction for selectable PDFs, TXT, and CSV files
 - Rooftop area sizing
 - Sanctioned load check
 - On-grid, hybrid, and off-grid comparison
@@ -140,6 +140,7 @@ Likely additions:
 - Bill OCR improvements
 - Admin panel for tariff and price updates
 - Customer share links
+- Scanned-image OCR for non-selectable bills
 
 ## 5. Core Inputs
 
@@ -154,6 +155,15 @@ Likely additions:
 - Existing monthly consumption in kWh
 - Average monthly bill amount
 - Bill upload file, optional
+- Extracted bill fields:
+  - File name
+  - Name
+  - Address
+  - Bill month
+  - Sanction load in kW
+  - Bill amount in Rs
+  - Units consumed in kWh
+  - Yearly average units in kWh
 
 ### Roof and Site Inputs
 
@@ -762,8 +772,27 @@ Recommended modules:
   - Future tariff update support
 
 - `bill-parser`
-  - V1 placeholder or basic parser
-  - V2 OCR extraction
+  - V1 selectable PDF/TXT/CSV extraction
+  - MSEB/MSEDCL field parser
+  - V2 scanned-image OCR extraction
+
+### Bill Extraction Behavior
+
+V1 extracts MSEB/MSEDCL bill data from selectable PDFs using PDF.js in the browser. The parsed fields are shown in the upload panel and applicable values are auto-applied to the calculator:
+
+- Name -> customer name
+- Units consumed -> monthly units
+- Bill amount -> monthly bill amount
+- Sanctioned load -> sanctioned load
+
+The bill extraction panel still displays address, bill month, file name, and yearly average units even though not all of those fields are calculator inputs yet.
+
+Parser limitations:
+
+- Works best with selectable MSEB/MSEDCL PDFs.
+- Does not perform OCR for scanned image bills in V1.
+- Uses heuristics because MSEDCL PDF text order can put values before labels.
+- Should keep confidence/warning output visible so the internal team can review uncertain fields.
 
 - `report-state`
   - Captures selected assumptions and final numbers
@@ -789,6 +818,7 @@ Test areas:
 - Battery backup formula
 - Cost breakup totals
 - Slab-based tariff calculations
+- MSEB/MSEDCL bill parsing for name, address, bill month, sanctioned load, bill amount, units consumed, and yearly average units
 
 Golden test cases should be maintained in the blueprint or a separate test fixtures file once implementation begins.
 
@@ -868,7 +898,8 @@ When policy changes, update:
 | 2026-05-12 | Build V1 as a dependency-free static ES-module app | Start with a framework scaffold | Fast local deployment and portable calculation core |
 | 2026-05-12 | Use Rs 8/W as editable placeholder for on-grid inverter | Block implementation until final rate | Allows comparisons to work while keeping the assumption visible |
 | 2026-05-12 | Use a browser-local Internal Mode passphrase | Hardcoded static password | Avoids publishing a shared password while keeping a simple V1 gate |
-| 2026-05-12 | Treat bill upload as attachment/manual-entry helper in V1 | Attempt PDF OCR immediately | Avoids fragile bill parsing before the calculator is validated |
+| 2026-05-12 | Add selectable MSEB/MSEDCL bill extraction in V1 | Keep bill upload as a placeholder | Real sample bill has extractable text, so basic extraction is useful immediately |
+| 2026-05-12 | Defer scanned bill OCR | Add OCR immediately | OCR adds dependency and accuracy risk; selectable PDF extraction covers the provided bill |
 
 ## 23. Implementation Handoff Checklist
 

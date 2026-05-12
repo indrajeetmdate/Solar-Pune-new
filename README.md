@@ -36,10 +36,13 @@ npm test
 
 - Easy customer-friendly calculator
 - Password-gated Internal mode
+- MSEB/MSEDCL bill extraction from selectable PDF, TXT, and CSV files
 - On-grid, hybrid, and off-grid with grid charging comparison
 - DCR and non-DCR pricing
 - PM Surya Ghar subsidy logic
 - Editable pricing, tariff, performance, backup, and loss assumptions
 - On-screen cost breakup and eligibility notes
 
-PDF generation, saved estimates, bill OCR, admin-managed product catalog, and real authentication are planned for later versions.
+Bill extraction currently reads selectable text PDFs through PDF.js. Scanned image bills still need OCR in a later version.
+
+PDF generation, saved estimates, scanned bill OCR, admin-managed product catalog, and real authentication are planned for later versions.

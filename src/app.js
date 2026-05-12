@@ -1,5 +1,7 @@
 import { DEFAULT_CONFIG, PANEL_LABELS, STRUCTURE_LABELS, SYSTEM_LABELS } from "./config.js";
 import { calculateEstimate } from "./calculator.js";
+import { parseMsebBillFile } from "./billParser.js";
+import { isImageFile } from "./ocrExtractor.js";
 
 const INTERNAL_PASSPHRASE_KEY = "puneSolarInternalPassphrase";
 
@@ -8,6 +10,7 @@ const $ = (id) => document.getElementById(id);
 const state = {
   internalUnlocked: false,
   activeTab: "system",
+  extractedBill: null,
 };
 
 const ids = [
@@ -71,6 +74,11 @@ function units(value) {
 
 function years(value) {
   return Number.isFinite(value) ? `${value.toFixed(1)} yrs` : "Review";
+}
+
+function plainValue(value, suffix = "") {
+  if (value === null || value === undefined || value === "") return "-";
+  return `${value}${suffix}`;
 }
 
 function readInput() {
@@ -233,6 +241,39 @@ function renderNotes(option, input) {
     .join("");
 }
 
+function renderExtractedBill(result) {
+  if (!result) {
+    $("billExtractPanel").classList.add("hidden");
+    return;
+  }
+
+  const { fields, warnings, confidence } = result;
+  $("billExtractPanel").classList.remove("hidden");
+  $("extractedFileName").textContent = plainValue(fields.fileName);
+  $("extractedName").textContent = plainValue(fields.name);
+  $("extractedAddress").textContent = plainValue(fields.address);
+  $("extractedBillMonth").textContent = plainValue(fields.billMonth);
+  $("extractedSanctionLoad").textContent = plainValue(fields.sanctionedLoadKw, " kW");
+  $("extractedBillAmount").textContent = fields.billAmountRs ? money(fields.billAmountRs) : "-";
+  $("extractedUnits").textContent = fields.unitsConsumedKwh ? `${fields.unitsConsumedKwh} kWh` : "-";
+  $("extractedYearlyAvg").textContent = fields.yearlyAvgUnitsKwh ? `${fields.yearlyAvgUnitsKwh} kWh` : "-";
+  $("billExtractWarnings").textContent = warnings.length
+    ? `${confidence}% confidence. ${warnings.join(" ")}`
+    : `${confidence}% confidence. All target fields detected.`;
+}
+
+function applyExtractedBill() {
+  const fields = state.extractedBill?.fields;
+  if (!fields) return;
+
+  if (fields.name) $("customerName").value = fields.name;
+  if (fields.unitsConsumedKwh) $("monthlyUnits").value = Math.round(fields.unitsConsumedKwh);
+  if (fields.billAmountRs) $("monthlyBill").value = Math.round(fields.billAmountRs);
+  if (fields.sanctionedLoadKw) $("sanctionedLoad").value = fields.sanctionedLoadKw;
+
+  render();
+}
+
 function render() {
   const input = readInput();
   const config = readConfig();
@@ -251,6 +292,7 @@ function render() {
   renderComparison(estimate.options, option);
   renderBreakup(option, input, input.customerView);
   renderNotes(option, input);
+  renderExtractedBill(state.extractedBill);
 }
 
 function unlockInternal() {
@@ -337,6 +379,7 @@ function attachEvents() {
   $("unlockButton").addEventListener("click", unlockInternal);
   $("lockInternalButton").addEventListener("click", lockInternal);
   $("resetButton").addEventListener("click", resetForm);
+  $("applyExtractedBill").addEventListener("click", applyExtractedBill);
 
   $("internalPassword").addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -345,11 +388,39 @@ function attachEvents() {
     }
   });
 
-  $("billUpload").addEventListener("change", (event) => {
+  $("billUpload").addEventListener("change", async (event) => {
     const [file] = event.target.files;
-    $("billUploadStatus").textContent = file
-      ? `${file.name} attached. Manual unit entry is used in V1.`
-      : "Optional for V1. Enter units manually after upload.";
+    if (!file) {
+      state.extractedBill = null;
+      $("billUploadStatus").textContent = "";
+      $("billUploadStatus").className = "";
+      render();
+      return;
+    }
+
+    const isImage = isImageFile(file);
+    const statusEl = $("billUploadStatus");
+    statusEl.className = "upload-status-loading";
+
+    if (isImage) {
+      statusEl.innerHTML = `<span class="spinner"></span> Running OCR on ${file.name}… this may take a few seconds.`;
+    } else {
+      statusEl.textContent = `Extracting ${file.name}…`;
+    }
+
+    try {
+      state.extractedBill = await parseMsebBillFile(file);
+      applyExtractedBill();
+      statusEl.className = "upload-status-success";
+      statusEl.textContent = isImage
+        ? `✓ ${file.name} — OCR extraction applied.`
+        : `✓ ${file.name} — extracted and applied.`;
+    } catch (error) {
+      state.extractedBill = null;
+      statusEl.className = "upload-status-error";
+      statusEl.textContent = `✗ ${file.name}: ${error.message}`;
+      render();
+    }
   });
 
   document.querySelectorAll(".tab-button").forEach((button) => {

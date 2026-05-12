@@ -3,14 +3,18 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Pune Solar Calculator</title>
+    <meta name="gemini-api-key" content="">
+    <title>Pune Solar Calculator — DC Energy</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./src/styles.css">
   </head>
   <body>
     <header class="app-header">
       <div>
-        <p class="eyebrow">Pune rooftop solar</p>
-        <h1>Solar calculator</h1>
+        <p class="eyebrow">DC Energy • Pune rooftop solar</p>
+        <h1>Solar Calculator</h1>
       </div>
       <div class="header-actions" aria-label="Mode selector">
         <button class="mode-button active" id="easyModeButton" type="button">Easy</button>
@@ -66,10 +70,59 @@
         </div>
 
         <label class="upload-zone" for="billUpload">
-          <input id="billUpload" type="file" accept=".pdf,.jpg,.jpeg,.png,.txt,.csv">
+          <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <input id="billUpload" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.tiff,.tif,.txt,.csv">
           <span class="upload-title">Attach electricity bill</span>
-          <span id="billUploadStatus">Optional for V1. Enter units manually after upload.</span>
+          <span class="upload-formats">PDF, JPG, PNG, TXT, CSV — scanned images use AI-powered OCR</span>
+          <span id="billUploadStatus"></span>
         </label>
+
+        <div id="billExtractPanel" class="extract-panel hidden">
+          <div class="section-heading compact">
+            <div>
+              <p class="eyebrow">Bill extraction</p>
+              <h2>Detected fields</h2>
+            </div>
+            <button class="ghost-button" id="applyExtractedBill" type="button">Apply</button>
+          </div>
+
+          <div class="extract-grid">
+            <div>
+              <span>File Name</span>
+              <strong id="extractedFileName">-</strong>
+            </div>
+            <div>
+              <span>Name</span>
+              <strong id="extractedName">-</strong>
+            </div>
+            <div>
+              <span>Address</span>
+              <strong id="extractedAddress">-</strong>
+            </div>
+            <div>
+              <span>Bill Month</span>
+              <strong id="extractedBillMonth">-</strong>
+            </div>
+            <div>
+              <span>Sanction Load</span>
+              <strong id="extractedSanctionLoad">-</strong>
+            </div>
+            <div>
+              <span>Bill Amount</span>
+              <strong id="extractedBillAmount">-</strong>
+            </div>
+            <div>
+              <span>Units Consumed</span>
+              <strong id="extractedUnits">-</strong>
+            </div>
+            <div>
+              <span>Yearly Avg Unit</span>
+              <strong id="extractedYearlyAvg">-</strong>
+            </div>
+          </div>
+
+          <p id="billExtractWarnings" class="muted small"></p>
+        </div>
 
         <div class="toggle-row">
           <label class="check-row">
@@ -398,6 +451,19 @@
       </form>
     </dialog>
 
+    <footer class="app-footer">
+      <div class="footer-inner">
+        <span class="footer-brand">DC Energy</span>
+        <span class="footer-copy">© 2026 DC Energy. Truly Indian-Made 🇮🇳</span>
+      </div>
+    </footer>
+
+    <script>
+      // Inject Gemini API key from Vercel environment variable
+      // Set GEMINI_API_KEY in Vercel Project Settings → Environment Variables
+      // Then update the meta tag content or window global below:
+      // window.__GEMINI_API_KEY = 'your-key-here';
+    </script>
     <script type="module" src="./src/app.js"></script>
   </body>
 </html>
