@@ -107,6 +107,14 @@ export async function generateProposalPDF(estimates) {
   doc.setTextColor(COLORS.text);
   doc.text(`Customer Name: ${input.customerName || "Valued Customer"}`, margin, yPos);
   yPos += 6;
+  if (input.mobileNumber) {
+    doc.text(`Mobile: ${input.mobileNumber}`, margin, yPos);
+    yPos += 6;
+  }
+  if (input.emailAddress) {
+    doc.text(`Email: ${input.emailAddress}`, margin, yPos);
+    yPos += 6;
+  }
   doc.text(`Monthly Consumption: ${input.monthlyUnits} units`, margin, yPos);
   yPos += 6;
   doc.text(`Current Average Bill: ${formatCurrency(input.monthlyBill || 0)}`, margin, yPos);

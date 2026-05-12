@@ -87,6 +87,8 @@ function plainValue(value, suffix = "") {
 function readInput() {
   return {
     customerName: $("customerName").value.trim(),
+    mobileNumber: $("mobileNumber").value.trim(),
+    emailAddress: $("emailAddress").value.trim(),
     monthlyUnits: numberValue("monthlyUnits"),
     monthlyBill: numberValue("monthlyBill"),
     roofArea: numberValue("roofArea"),
@@ -474,3 +476,31 @@ function attachEvents() {
 
 attachEvents();
 render();
+
+ w i n d o w . g o T o S t e p   =   f u n c t i o n ( s t e p )   { 
+     d o c u m e n t . q u e r y S e l e c t o r A l l ( ' . w i z a r d - s t e p ' ) . f o r E a c h ( ( e l ,   i n d e x )   = >   { 
+         i f   ( i n d e x   +   1   = = =   s t e p )   { 
+             e l . c l a s s L i s t . r e m o v e ( ' h i d d e n ' ) ; 
+         }   e l s e   { 
+             e l . c l a s s L i s t . a d d ( ' h i d d e n ' ) ; 
+         } 
+     } ) ; 
+     d o c u m e n t . q u e r y S e l e c t o r A l l ( ' . w i z a r d - s t e p - d o t ' ) . f o r E a c h ( ( e l ,   i n d e x )   = >   { 
+         i f   ( i n d e x   +   1   = = =   s t e p )   { 
+             e l . c l a s s L i s t . a d d ( ' a c t i v e ' ) ; 
+         }   e l s e   { 
+             e l . c l a s s L i s t . r e m o v e ( ' a c t i v e ' ) ; 
+         } 
+     } ) ; 
+ } ; 
+ 
+ w i n d o w . f i n i s h W i z a r d   =   f u n c t i o n ( )   { 
+     c o n s t   i s M o b i l e   =   w i n d o w . i n n e r W i d t h   < =   7 6 8 ; 
+     i f   ( i s M o b i l e )   { 
+         d o c u m e n t . q u e r y S e l e c t o r ( ' . r e s u l t s - p a n e l ' ) . s c r o l l I n t o V i e w ( {   b e h a v i o r :   ' s m o o t h '   } ) ; 
+     }   e l s e   { 
+         a l e r t ( ' R e s u l t s   a r e   u p d a t e d   o n   t h e   r i g h t   p a n e l ! ' ) ; 
+     } 
+ } ; 
+  
+ 
