@@ -1,10 +1,8 @@
 export async function generateProposalPDF(estimates) {
-  // Assuming jsPDF is available globally via CDN
-  const { jsPDF } = window.jspdf;
-  const autoTable = window.jspdf.autoTable;
+  const jsPDF = window.jspdf ? window.jspdf.jsPDF : window.jsPDF;
 
   if (!jsPDF) {
-    console.error("jsPDF library not loaded");
+    alert("PDF generator is still loading or blocked. Please wait a moment and try again.");
     return;
   }
 
@@ -102,7 +100,7 @@ export async function generateProposalPDF(estimates) {
     ["Sanction Status", sanctionedStatus.label]
   ];
 
-  autoTable(doc, {
+  doc.autoTable({
     startY: yPos,
     body: reqData,
     theme: "grid",
@@ -139,7 +137,7 @@ export async function generateProposalPDF(estimates) {
     opt.paybackYears === Infinity ? "N/A" : `${opt.paybackYears.toFixed(1)} yrs`,
   ]);
 
-  autoTable(doc, {
+  doc.autoTable({
     startY: yPos,
     head: comparisonHead,
     body: comparisonBody,
@@ -205,7 +203,7 @@ export async function generateProposalPDF(estimates) {
   costData.push(["Expected Subsidy", `- ${formatCurrency(recommended.subsidy)}`]);
   costData.push(["Net Payable Cost", formatCurrency(recommended.netCost)]);
 
-  autoTable(doc, {
+  doc.autoTable({
     startY: yPos,
     body: costData,
     theme: "plain",
