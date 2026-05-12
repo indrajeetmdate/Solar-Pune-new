@@ -284,6 +284,7 @@ function render() {
   const input = readInput();
   const config = readConfig();
   const estimate = calculateEstimate(input, config);
+  state.estimates = estimate;
   const option = estimate.recommended;
 
   $("recommendationTitle").textContent = `${SYSTEM_LABELS[option.systemType]} ${PANEL_LABELS[option.panelType]} solar`;
