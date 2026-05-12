@@ -6,5 +6,8 @@
   "scripts": {
     "test": "node tests/calculator.test.mjs && node tests/billParser.test.mjs",
     "serve": "python -m http.server 5173"
+  },
+  "dependencies": {
+    "jsdom": "^29.1.1"
   }
 }

@@ -63,7 +63,9 @@ const ids = [
 ];
 
 function numberValue(id) {
-  const value = parseFloat($(id).value);
+  const el = $(id);
+  if (!el) return 0;
+  const value = parseFloat(el.value);
   return Number.isFinite(value) ? value : 0;
 }
 
@@ -85,27 +87,29 @@ function plainValue(value, suffix = "") {
 }
 
 function readInput() {
+  const safeStr = (id) => { const el = $(id); return el ? el.value.trim() : ""; };
+  const safeChecked = (id) => { const el = $(id); return el ? el.checked : false; };
   return {
-    customerName: $("customerName").value.trim(),
-    mobileNumber: $("mobileNumber").value.trim(),
-    emailAddress: $("emailAddress").value.trim(),
+    customerName: safeStr("customerName"),
+    mobileNumber: safeStr("mobileNumber"),
+    emailAddress: safeStr("emailAddress"),
     monthlyUnits: numberValue("monthlyUnits"),
     monthlyBill: numberValue("monthlyBill"),
     roofArea: numberValue("roofArea"),
     sanctionedLoad: numberValue("sanctionedLoad"),
-    goal: $("goal").value,
-    coordinates: $("coordinates").value.trim(),
-    tiltAngle: $("tiltAngle").value !== "" ? numberValue("tiltAngle") : null,
-    orientationDir: $("orientationDir").value,
-    backupNeeded: $("backupNeeded").checked,
-    customerView: $("customerView").checked,
-    panelType: $("panelType").value,
-    structureType: $("structureType").value,
+    goal: safeStr("goal"),
+    coordinates: safeStr("coordinates"),
+    tiltAngle: safeStr("tiltAngle") !== "" ? numberValue("tiltAngle") : null,
+    orientationDir: safeStr("orientationDir"),
+    backupNeeded: safeChecked("backupNeeded"),
+    customerView: safeChecked("customerView"),
+    panelType: safeStr("panelType"),
+    structureType: safeStr("structureType"),
     capacityOverride: numberValue("capacityOverride"),
     inverterOverride: numberValue("inverterOverride"),
     backupLoadKw: numberValue("backupLoad"),
     backupHours: numberValue("backupHours"),
-    savingsMethod: $("savingsMethod").value,
+    savingsMethod: safeStr("savingsMethod"),
   };
 }
 
@@ -383,12 +387,12 @@ function attachEvents() {
     element.addEventListener("change", render);
   });
 
-  $("easyModeButton").addEventListener("click", lockInternal);
-  $("internalModeButton").addEventListener("click", openInternal);
-  $("unlockButton").addEventListener("click", unlockInternal);
-  $("lockInternalButton").addEventListener("click", lockInternal);
-  $("resetButton").addEventListener("click", resetForm);
-  $("applyExtractedBill").addEventListener("click", applyExtractedBill);
+  $("easyModeButton")?.addEventListener("click", lockInternal);
+  $("internalModeButton")?.addEventListener("click", openInternal);
+  $("unlockButton")?.addEventListener("click", unlockInternal);
+  $("lockInternalButton")?.addEventListener("click", lockInternal);
+  $("resetButton")?.addEventListener("click", resetForm);
+  $("applyExtractedBill")?.addEventListener("click", applyExtractedBill);
 
   $("fetchLocationButton")?.addEventListener("click", () => {
     if (!navigator.geolocation) {
@@ -417,7 +421,7 @@ function attachEvents() {
     );
   });
 
-  $("internalPassword").addEventListener("keydown", (event) => {
+  $("internalPassword")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
       unlockInternal();
@@ -474,33 +478,58 @@ function attachEvents() {
   });
 }
 
+let slackSent = false;
+
+window.goToStep = function(step) {
+  if (step > 1) {
+    const mobile = document.getElementById('mobileNumber').value.trim();
+    if (!mobile) {
+      alert("Please enter your Mobile Number before proceeding.");
+      return;
+    }
+
+    if (!slackSent) {
+      const name = document.getElementById('customerName').value.trim();
+      const email = document.getElementById('emailAddress').value.trim();
+      
+      const payload = {
+        text: `*New Solar Calculator Lead*\n*Name:* ${name || 'N/A'}\n*Mobile:* ${mobile}\n*Email:* ${email || 'N/A'}`
+      };
+
+      fetch('/api/slack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(err => console.error("Slack proxy error:", err));
+      
+      slackSent = true;
+    }
+  }
+
+  document.querySelectorAll('.wizard-step').forEach((el, index) => {
+    if (index + 1 === step) {
+      el.classList.remove('hidden');
+    } else {
+      el.classList.add('hidden');
+    }
+  });
+  document.querySelectorAll('.wizard-step-dot').forEach((el, index) => {
+    if (index + 1 === step) {
+      el.classList.add('active');
+    } else {
+      el.classList.remove('active');
+    }
+  });
+}
+
+window.finishWizard = function() {
+  const isMobile = window.innerWidth <= 768;
+  if (isMobile) {
+    document.querySelector('.results-panel').scrollIntoView({ behavior: 'smooth' });
+  } else {
+    alert('Results are updated on the right panel!');
+  }
+}
+
 attachEvents();
 render();
-
- w i n d o w . g o T o S t e p   =   f u n c t i o n ( s t e p )   { 
-     d o c u m e n t . q u e r y S e l e c t o r A l l ( ' . w i z a r d - s t e p ' ) . f o r E a c h ( ( e l ,   i n d e x )   = >   { 
-         i f   ( i n d e x   +   1   = = =   s t e p )   { 
-             e l . c l a s s L i s t . r e m o v e ( ' h i d d e n ' ) ; 
-         }   e l s e   { 
-             e l . c l a s s L i s t . a d d ( ' h i d d e n ' ) ; 
-         } 
-     } ) ; 
-     d o c u m e n t . q u e r y S e l e c t o r A l l ( ' . w i z a r d - s t e p - d o t ' ) . f o r E a c h ( ( e l ,   i n d e x )   = >   { 
-         i f   ( i n d e x   +   1   = = =   s t e p )   { 
-             e l . c l a s s L i s t . a d d ( ' a c t i v e ' ) ; 
-         }   e l s e   { 
-             e l . c l a s s L i s t . r e m o v e ( ' a c t i v e ' ) ; 
-         } 
-     } ) ; 
- } ; 
- 
- w i n d o w . f i n i s h W i z a r d   =   f u n c t i o n ( )   { 
-     c o n s t   i s M o b i l e   =   w i n d o w . i n n e r W i d t h   < =   7 6 8 ; 
-     i f   ( i s M o b i l e )   { 
-         d o c u m e n t . q u e r y S e l e c t o r ( ' . r e s u l t s - p a n e l ' ) . s c r o l l I n t o V i e w ( {   b e h a v i o r :   ' s m o o t h '   } ) ; 
-     }   e l s e   { 
-         a l e r t ( ' R e s u l t s   a r e   u p d a t e d   o n   t h e   r i g h t   p a n e l ! ' ) ; 
-     } 
- } ; 
-  
- 
