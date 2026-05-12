@@ -7,9 +7,34 @@ const round = (value, decimals = 2) => {
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
-export function calculatePerformanceFactor(performance) {
+export function calculatePerformanceFactor(performance, input = {}) {
   const shading = clamp(performance.shadingLoss || 0, 0, 90) / 100;
-  const orientation = clamp(performance.orientationLoss || 0, 0, 90) / 100;
+  let orientation = clamp(performance.orientationLoss || 0, 0, 90) / 100;
+  
+  // Apply additional heuristic losses based on orientation if provided
+  if (input.orientationDir) {
+    const dirLosses = {
+      "South": 0,
+      "SouthEast": 0.05,
+      "SouthWest": 0.05,
+      "East": 0.15,
+      "West": 0.15,
+      "North": 0.30
+    };
+    const dirLoss = dirLosses[input.orientationDir] || 0;
+    // Combine base orientation loss with direction loss
+    orientation = clamp(orientation + dirLoss, 0, 0.9);
+  }
+
+  // Tilt loss heuristic: assuming ~18 deg is optimal for Pune region
+  // For every 10 degrees away from optimal, add ~2% loss
+  if (input.tiltAngle !== null && input.tiltAngle !== undefined) {
+    const optimalTilt = 18; 
+    const diff = Math.abs(input.tiltAngle - optimalTilt);
+    const tiltLoss = (diff / 10) * 0.02;
+    orientation = clamp(orientation + tiltLoss, 0, 0.9);
+  }
+
   const system = clamp(performance.systemLoss || 0, 0, 90) / 100;
   return round((1 - shading) * (1 - orientation) * (1 - system), 4);
 }
@@ -53,7 +78,7 @@ export function calculateBill(units, tariff = DEFAULT_CONFIG.tariff) {
 }
 
 export function recommendCapacity(input, config = DEFAULT_CONFIG) {
-  const performanceFactor = calculatePerformanceFactor(config.performance);
+  const performanceFactor = calculatePerformanceFactor(config.performance, input);
   const monthlyGenerationPerKw =
     config.performance.dailyGenerationPerKw * 30 * performanceFactor;
 
@@ -121,7 +146,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const batteryCapacityKwh = getBatteryCapacityKwh(systemType, input, config.performance);
   const batteryCapacityWh = batteryCapacityKwh * 1000;
 
-  const performanceFactor = calculatePerformanceFactor(config.performance);
+  const performanceFactor = calculatePerformanceFactor(config.performance, input);
   const monthlyGeneration = round(
     dcCapacityKw * config.performance.dailyGenerationPerKw * 30 * performanceFactor,
     0,

@@ -74,7 +74,18 @@ export async function generateProposalPDF(estimates) {
   doc.text(`Sanctioned Load: ${input.sanctionedLoad} kW`, margin, yPos);
   yPos += 6;
   doc.text(`Usable Roof Area: ${input.roofArea} sq ft`, margin, yPos);
-  yPos += 12;
+  yPos += 6;
+  if (input.coordinates || input.tiltAngle !== null || input.orientationDir) {
+    const geoInfo = [];
+    if (input.coordinates) geoInfo.push(`Coordinates: ${input.coordinates}`);
+    if (input.tiltAngle !== null) geoInfo.push(`Tilt: ${input.tiltAngle}°`);
+    if (input.orientationDir) geoInfo.push(`Orientation: ${input.orientationDir}`);
+    if (geoInfo.length > 0) {
+      doc.text(geoInfo.join(" | "), margin, yPos);
+      yPos += 6;
+    }
+  }
+  yPos += 6;
 
   // Sizing Requirements
   doc.setTextColor(COLORS.black);

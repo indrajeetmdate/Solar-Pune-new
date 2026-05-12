@@ -69,6 +69,38 @@
           </label>
         </div>
 
+        <div class="section-heading compact" style="margin-top: 1.5rem;">
+          <div>
+            <p class="eyebrow">Site</p>
+            <h2>Location & Orientation</h2>
+          </div>
+          <button class="ghost-button" id="fetchLocationButton" type="button" title="Fetch current coordinates">Auto-fetch</button>
+        </div>
+
+        <div class="field-grid">
+          <label class="field">
+            <span>Coordinates (Lat, Lng)</span>
+            <input id="coordinates" type="text" placeholder="e.g. 18.52, 73.85">
+          </label>
+
+          <label class="field">
+            <span>Tilt Angle (°)</span>
+            <input id="tiltAngle" type="number" min="0" max="90" step="1" placeholder="Auto (Lat)">
+          </label>
+
+          <label class="field">
+            <span>Orientation</span>
+            <select id="orientationDir">
+              <option value="South">South (Optimal)</option>
+              <option value="SouthEast">South-East</option>
+              <option value="SouthWest">South-West</option>
+              <option value="East">East</option>
+              <option value="West">West</option>
+              <option value="North">North (High Loss)</option>
+            </select>
+          </label>
+        </div>
+
         <label class="upload-zone" for="billUpload">
           <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <input id="billUpload" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.tiff,.tif,.txt,.csv">

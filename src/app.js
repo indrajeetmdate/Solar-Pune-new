@@ -20,6 +20,9 @@ const ids = [
   "roofArea",
   "sanctionedLoad",
   "goal",
+  "coordinates",
+  "tiltAngle",
+  "orientationDir",
   "backupNeeded",
   "customerView",
   "panelType",
@@ -89,6 +92,9 @@ function readInput() {
     roofArea: numberValue("roofArea"),
     sanctionedLoad: numberValue("sanctionedLoad"),
     goal: $("goal").value,
+    coordinates: $("coordinates").value.trim(),
+    tiltAngle: $("tiltAngle").value !== "" ? numberValue("tiltAngle") : null,
+    orientationDir: $("orientationDir").value,
     backupNeeded: $("backupNeeded").checked,
     customerView: $("customerView").checked,
     panelType: $("panelType").value,
@@ -380,6 +386,33 @@ function attachEvents() {
   $("lockInternalButton").addEventListener("click", lockInternal);
   $("resetButton").addEventListener("click", resetForm);
   $("applyExtractedBill").addEventListener("click", applyExtractedBill);
+
+  $("fetchLocationButton")?.addEventListener("click", () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      return;
+    }
+    const btn = $("fetchLocationButton");
+    btn.textContent = "Fetching...";
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        $("coordinates").value = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        // Suggest tilt angle = latitude (rounded)
+        if ($("tiltAngle").value === "") {
+          $("tiltAngle").value = Math.max(0, Math.round(lat));
+        }
+        btn.textContent = "Auto-fetch";
+        render();
+      },
+      (error) => {
+        console.error("Error getting location:", error);
+        alert("Failed to fetch location. Please check browser permissions.");
+        btn.textContent = "Auto-fetch";
+      }
+    );
+  });
 
   $("internalPassword").addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
