@@ -162,6 +162,42 @@ export async function generateProposalPDF(estimates) {
   });
   yPos = doc.lastAutoTable.finalY + 15;
 
+  // Panel Layout Configuration
+  const panelLayout = estimates.panelLayout;
+  if (panelLayout) {
+    doc.setTextColor(COLORS.black);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Panel Configuration", margin, yPos);
+    yPos += 8;
+
+    const fitStatus = panelLayout.fitsInArea === null
+      ? "Area not specified"
+      : panelLayout.fitsInArea
+        ? `Yes — fits in ${panelLayout.availableAreaSqft} sq ft`
+        : `No — needs ${panelLayout.totalAreaSqft - panelLayout.availableAreaSqft} sq ft more`;
+
+    const panelData = [
+      ["Panel Specification", `${panelLayout.panelDimensions} (${panelLayout.panelWp} Wp each)`],
+      ["Number of Panels", `${panelLayout.numPanels} panels`],
+      ["Total Area Required", `${panelLayout.totalAreaSqft} sq ft (${panelLayout.totalAreaSqm} m²)`],
+      ["Available Installation Area", `${panelLayout.availableAreaSqft} sq ft`],
+      ["Fits in Available Area", fitStatus],
+    ];
+
+    doc.autoTable({
+      startY: yPos,
+      body: panelData,
+      theme: "grid",
+      headStyles: { fillColor: COLORS.primary },
+      columnStyles: {
+        0: { fontStyle: "bold", width: 80, fillColor: COLORS.bgLight },
+      },
+      margin: { left: margin },
+    });
+    yPos = doc.lastAutoTable.finalY + 15;
+  }
+
   addFooter(1);
 
   // ================= PAGE 2: Feasible Solutions =================

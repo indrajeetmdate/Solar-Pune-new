@@ -302,6 +302,24 @@ function render() {
   $("sanctionStatus").textContent = estimate.sanctionedStatus.label;
   $("sanctionStatus").className = `status-pill ${estimate.sanctionedStatus.level}`;
 
+  // Panel layout
+  const pl = estimate.panelLayout;
+  if ($("panelCount")) $("panelCount").textContent = `${pl.numPanels} panels`;
+  if ($("panelAreaRequired")) $("panelAreaRequired").textContent = `${pl.totalAreaSqft} sq ft (${pl.totalAreaSqm} m²)`;
+  if ($("panelSpec")) $("panelSpec").textContent = `${pl.panelDimensions} · ${pl.panelWp} Wp`;
+  if ($("areaFitStatus")) {
+    if (pl.fitsInArea === null) {
+      $("areaFitStatus").textContent = "Area not specified";
+      $("areaFitStatus").className = "status-pill review";
+    } else if (pl.fitsInArea) {
+      $("areaFitStatus").textContent = `Fits in ${pl.availableAreaSqft} sq ft`;
+      $("areaFitStatus").className = "status-pill";
+    } else {
+      $("areaFitStatus").textContent = `Needs ${pl.totalAreaSqft - pl.availableAreaSqft} sq ft more`;
+      $("areaFitStatus").className = "status-pill warn";
+    }
+  }
+
   renderComparison(estimate.options, option);
   renderBreakup(option, input, input.customerView);
   renderNotes(option, input);

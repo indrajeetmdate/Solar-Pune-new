@@ -137,7 +137,7 @@
 
           <div class="field-grid">
             <label class="field">
-              <span>Usable roof area</span>
+              <span>Available installation area (sq ft)</span>
               <input id="roofArea" type="number" min="0" step="10" value="650">
             </label>
             <label class="field">
@@ -437,6 +437,28 @@
           <div class="metric-card">
             <span>Payback</span>
             <strong id="payback">0 years</strong>
+          </div>
+        </div>
+
+        <div class="section-heading compact" style="margin-top: 18px;">
+          <div>
+            <p class="eyebrow">Panel Configuration</p>
+            <h2>Layout &amp; Area</h2>
+          </div>
+          <div class="status-pill" id="areaFitStatus">Checking fit</div>
+        </div>
+        <div class="metric-grid" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
+          <div class="metric-card">
+            <span>Panels required</span>
+            <strong id="panelCount">0</strong>
+          </div>
+          <div class="metric-card">
+            <span>Area required</span>
+            <strong id="panelAreaRequired">0 sq ft</strong>
+          </div>
+          <div class="metric-card">
+            <span>Panel spec</span>
+            <strong id="panelSpec">1123 × 2279 mm · 550 Wp</strong>
           </div>
         </div>
 

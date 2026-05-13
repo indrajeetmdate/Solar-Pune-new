@@ -240,6 +240,32 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   };
 }
 
+export function calculatePanelLayout(dcCapacityKw, availableAreaSqft) {
+  // Standard panel: 1123mm × 2279mm = 2.559 m² ≈ 27.54 sq ft
+  const panelWidthMm = 1123;
+  const panelHeightMm = 2279;
+  const panelAreaSqm = (panelWidthMm * panelHeightMm) / 1_000_000; // 2.559 m²
+  const panelAreaSqft = panelAreaSqm * 10.7639;                     // ≈ 27.54 sq ft
+  const panelWp = 550;
+
+  const numPanels = Math.ceil((dcCapacityKw * 1000) / panelWp);
+  const totalAreaSqft = round(numPanels * panelAreaSqft, 0);
+  const totalAreaSqm = round(numPanels * panelAreaSqm, 1);
+  const fitsInArea = availableAreaSqft > 0 ? totalAreaSqft <= availableAreaSqft : null;
+
+  return {
+    panelWidthMm,
+    panelHeightMm,
+    panelWp,
+    numPanels,
+    totalAreaSqft,
+    totalAreaSqm,
+    availableAreaSqft: round(availableAreaSqft, 0),
+    fitsInArea,
+    panelDimensions: `${panelWidthMm} × ${panelHeightMm} mm`,
+  };
+}
+
 export function calculateEstimate(input, config = DEFAULT_CONFIG) {
   const panelType = input.panelType || "dcr";
   const options = [
@@ -250,12 +276,14 @@ export function calculateEstimate(input, config = DEFAULT_CONFIG) {
 
   const recommended = chooseRecommendedOption(options, input.goal);
   const sanctionedStatus = getSanctionedStatus(recommended.dcCapacityKw, input.sanctionedLoad);
+  const panelLayout = calculatePanelLayout(recommended.dcCapacityKw, input.roofArea || 0);
 
   return {
     input,
     options,
     recommended,
     sanctionedStatus,
+    panelLayout,
   };
 }
 
