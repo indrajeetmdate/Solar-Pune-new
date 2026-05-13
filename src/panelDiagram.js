@@ -16,15 +16,16 @@ export function drawPanelArray(canvas, config) {
 
   const { rows, cols, panelWidthMm, panelHeightMm } = config;
   
-  // Scale the physical dimensions
-  const scale = 0.045; // mm to px scale
+  // Scale the physical dimensions (scaled down to fit terrace area)
+  const scale = 0.028; // mm to px scale (reduced from 0.045)
   const pW = panelWidthMm * scale;
   const pH = panelHeightMm * scale;
   const totalW = cols * pW;
   const totalH = rows * pH;
   
   const cx = logicalWidth / 2;
-  const cy = logicalHeight / 2 + 50; // shift down to accommodate tall structure
+  // Shifted downward significantly to place legs on the terrace floor
+  const cy = logicalHeight / 2 + 110; 
 
   // Isometric projection
   const iso = (x, y, z) => ({
