@@ -3,12 +3,9 @@ export function drawPanelArray(canvas, config) {
 
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
-  
-  // Logical canvas dimensions
   const logicalWidth = canvas.parentElement.clientWidth;
-  const logicalHeight = 300; // Fixed max height for the diagram area
+  const logicalHeight = 350; // Increased height for tall legs
 
-  // Setup hi-dpi canvas
   canvas.width = logicalWidth * dpr;
   canvas.height = logicalHeight * dpr;
   canvas.style.width = `${logicalWidth}px`;
@@ -17,149 +14,174 @@ export function drawPanelArray(canvas, config) {
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, logicalWidth, logicalHeight);
 
-  // Configuration
-  const {
-    rows,
-    cols,
-    panelWidthMm,
-    panelHeightMm,
-    tiltAngle,
-    orientationDir
-  } = config;
-
-  const totalWidthMm = cols * panelWidthMm;
-  const totalHeightMm = rows * panelHeightMm;
-
-  // We need to scale the physical dimensions (mm) to fit in the logical canvas.
-  // We'll leave padding for dimensions and compass.
-  const padding = 40;
-  const availableWidth = logicalWidth - padding * 2;
-  const availableHeight = logicalHeight - padding * 2;
-
-  // Calculate scale factor to fit
-  const scaleX = availableWidth / totalWidthMm;
-  const scaleY = availableHeight / totalHeightMm;
-  const scale = Math.min(scaleX, scaleY) * 0.9; // 90% of max fit
-
-  const drawWidth = totalWidthMm * scale;
-  const drawHeight = totalHeightMm * scale;
-  const pWidth = panelWidthMm * scale;
-  const pHeight = panelHeightMm * scale;
-
-  // Center the drawing
-  const cx = logicalWidth / 2;
-  const cy = logicalHeight / 2;
-
-  ctx.save();
-  ctx.translate(cx, cy);
-
-  // 1. Compass / Orientation (Simple text indicator top-right)
-  ctx.restore();
-  ctx.save();
-  ctx.font = "bold 12px sans-serif";
-  ctx.fillStyle = "var(--ink, #333)";
-  ctx.textAlign = "right";
-  ctx.textBaseline = "top";
-  ctx.fillText(`Facing: ${orientationDir}`, logicalWidth - 10, 10);
-  ctx.fillText(`Tilt: ${tiltAngle}°`, logicalWidth - 10, 26);
-  ctx.restore();
-
-  // Re-translate to center for array drawing
-  ctx.save();
-  ctx.translate(cx, cy);
-
-  // The CSS 3D transform handles the perspective/tilt visually in the browser,
-  // but if we want to draw it purely on 2D canvas we apply some isometric transforms.
-  // The user plan mentioned CSS transforms in index.html, but drawing the grid 
-  // on canvas is easiest. Wait, the plan says:
-  // "transform: rotateX(var(--tilt)) rotateZ(var(--orient));"
-  // If we rely on CSS for the 3D effect, we should just draw the array flat!
-  // BUT the compass and dimensions will also be rotated and tilted if we rotate the canvas.
-  // It's better to draw everything flat on the canvas and let CSS transform just the array, 
-  // OR draw the array, and draw dimensions outside it on the canvas *without* CSS transform.
-  // Given the CSS approach, we would only apply CSS transform to the array. 
-  // Let's actually draw it flat on the canvas, and use a wrapper div for CSS transform!
-  // Wait, the plan was:
-  // <canvas id="panelDiagramCanvas"></canvas>
-  // <div id="panelDiagramDimensions" class="diagram-dimensions"></div>
-  // Let's draw it flat. The CSS will tilt the canvas.
-
-  const startX = -drawWidth / 2;
-  const startY = -drawHeight / 2;
-
-  // --- Draw Mechanical Structure ---
-  ctx.save();
-  // Drop shadow for the entire structure/panels to give depth over the "roof"
-  ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
-  ctx.shadowBlur = 15;
-  ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = 10;
-
-  // Draw mounting rails (2 horizontal rails per row of panels)
-  const railBleed = 10; // Rails stick out slightly beyond panels
-  ctx.fillStyle = "#94a3b8"; // Metallic silver/gray
+  const { rows, cols, panelWidthMm, panelHeightMm } = config;
   
-  for (let r = 0; r < rows; r++) {
-    const yTopRail = startY + r * pHeight + pHeight * 0.2;
-    const yBotRail = startY + r * pHeight + pHeight * 0.8;
-    
-    // Top rail for row r
-    ctx.fillRect(startX - railBleed, yTopRail, drawWidth + railBleed * 2, 4);
-    // Bottom rail for row r
-    ctx.fillRect(startX - railBleed, yBotRail, drawWidth + railBleed * 2, 4);
-  }
+  // Scale the physical dimensions
+  const scale = 0.045; // mm to px scale
+  const pW = panelWidthMm * scale;
+  const pH = panelHeightMm * scale;
+  const totalW = cols * pW;
+  const totalH = rows * pH;
+  
+  const cx = logicalWidth / 2;
+  const cy = logicalHeight / 2 + 50; // shift down to accommodate tall structure
 
-  // Draw vertical mounting brackets/legs periodically
-  ctx.fillStyle = "#64748b"; // Darker metal for legs
-  for (let c = 0; c <= cols; c++) {
-    const xLeg = startX + c * pWidth - (c === cols ? 6 : 0);
-    // Draw legs extending "down" slightly to simulate height
-    for (let r = 0; r < rows; r++) {
-      const yTopRail = startY + r * pHeight + pHeight * 0.2;
-      const yBotRail = startY + r * pHeight + pHeight * 0.8;
-      
-      // Top rail mount
-      ctx.fillRect(xLeg + 2, yTopRail - 2, 6, 12);
-      // Bottom rail mount
-      ctx.fillRect(xLeg + 2, yBotRail - 2, 6, 12);
+  // Isometric projection
+  const iso = (x, y, z) => ({
+    x: cx + (x - y) * Math.cos(Math.PI / 6),
+    y: cy + (x + y) * Math.sin(Math.PI / 6) - z
+  });
+
+  const tiltRad = 15 * Math.PI / 180; // visual tilt
+  const structureHeight = 80; // tall legs for terrace
+
+  // To draw back-to-front, we iterate x and y from back to front.
+  // In our isometric view (x down-right, y down-left), back is small x, small y.
+  
+  // 1. Draw floor shadows for legs
+  ctx.fillStyle = "rgba(0,0,0,0.3)";
+  for (let r = 0; r <= rows; r++) {
+    for (let c = 0; c <= cols; c++) {
+      if (c % Math.max(1, Math.floor(cols/2)) === 0 && r % Math.max(1, Math.floor(rows/2)) === 0) {
+        const x = c * pW - totalW/2;
+        const y = r * pH - totalH/2;
+        const p = iso(x, y, 0);
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y, 8, 4, 0, 0, Math.PI*2);
+        ctx.fill();
+      }
     }
   }
-  ctx.restore();
 
-  // --- Draw Panels ---
+  // 2. Draw Legs (Verticals)
+  ctx.strokeStyle = "#475569";
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+  for (let r = 0; r <= rows; r++) {
+    for (let c = 0; c <= cols; c++) {
+      // Only draw legs at corners and middle
+      if (c % Math.max(1, Math.floor(cols/2)) === 0 && r % Math.max(1, Math.floor(rows/2)) === 0) {
+        const x = c * pW - totalW/2;
+        const y = r * pH - totalH/2;
+        const zBottom = 0;
+        const zTop = structureHeight + y * Math.tan(tiltRad); // top matches tilted plane
+        
+        const pb = iso(x, y, zBottom);
+        const pt = iso(x, y, zTop);
+        
+        ctx.beginPath();
+        ctx.moveTo(pb.x, pb.y);
+        ctx.lineTo(pt.x, pt.y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // 3. Draw horizontal support rails (under the panels)
+  ctx.strokeStyle = "#94a3b8";
+  ctx.lineWidth = 3;
+  for (let r = 0; r <= rows; r++) {
+    const y = r * pH - totalH/2;
+    const z = structureHeight + y * Math.tan(tiltRad);
+    const p1 = iso(-totalW/2, y, z);
+    const p2 = iso(totalW/2, y, z);
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+  }
+  for (let c = 0; c <= cols; c++) {
+    const x = c * pW - totalW/2;
+    const yStart = -totalH/2;
+    const yEnd = totalH/2;
+    const p1 = iso(x, yStart, structureHeight + yStart * Math.tan(tiltRad));
+    const p2 = iso(x, yEnd, structureHeight + yEnd * Math.tan(tiltRad));
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+  }
+
+  // 4. Draw Panels
+  const drawPoly = (pts, fill, stroke) => {
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for(let i=1; i<pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+  };
+
+  const panelGap = 1.5;
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const x = startX + c * pWidth;
-      const y = startY + r * pHeight;
+      const x = c * pW - totalW/2 + panelGap;
+      const y = r * pH - totalH/2 + panelGap;
+      const w = pW - panelGap*2;
+      const h = pH - panelGap*2;
+      
+      const z0 = structureHeight + y * Math.tan(tiltRad);
+      const z1 = structureHeight + (y+h) * Math.tan(tiltRad);
 
-      // Panel background
-      ctx.fillStyle = "#1e293b"; // Dark slate
-      ctx.fillRect(x + 1, y + 1, pWidth - 2, pHeight - 2); // 1px gap between panels
+      const p0 = iso(x, y, z0);
+      const p1 = iso(x+w, y, z0);
+      const p2 = iso(x+w, y+h, z1);
+      const p3 = iso(x, y+h, z1);
 
-      // Panel border (silver frame)
-      ctx.strokeStyle = "#cbd5e1";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x + 1, y + 1, pWidth - 2, pHeight - 2);
+      drawPoly([p0, p1, p2, p3], "rgba(30, 41, 59, 0.95)", "#cbd5e1");
 
-      // Inner cell grid lines (simulating solar cells)
+      // Draw panel cell lines
       ctx.strokeStyle = "rgba(255,255,255,0.06)";
       ctx.beginPath();
-      // vertical lines
-      for (let i = 1; i < 6; i++) {
-        const lineX = x + 1 + ((pWidth - 2) / 6) * i;
-        ctx.moveTo(lineX, y + 1);
-        ctx.lineTo(lineX, y + pHeight - 1);
+      for(let i=1; i<4; i++) {
+        const lx = x + w*(i/4);
+        const pt1 = iso(lx, y, z0);
+        const pt2 = iso(lx, y+h, z1);
+        ctx.moveTo(pt1.x, pt1.y); ctx.lineTo(pt2.x, pt2.y);
       }
-      // horizontal lines
-      for (let i = 1; i < 10; i++) {
-        const lineY = y + 1 + ((pHeight - 2) / 10) * i;
-        ctx.moveTo(x + 1, lineY);
-        ctx.lineTo(x + pWidth - 1, lineY);
+      for(let i=1; i<6; i++) {
+        const ly = y + h*(i/6);
+        const lz = structureHeight + ly * Math.tan(tiltRad);
+        const pt1 = iso(x, ly, lz);
+        const pt2 = iso(x+w, ly, lz);
+        ctx.moveTo(pt1.x, pt1.y); ctx.lineTo(pt2.x, pt2.y);
       }
       ctx.stroke();
     }
   }
 
-  // Draw dimensions outside the array
-  ctx.restore(); // back to logical coords
+  // 5. Draw Dimension Arrows
+  const drawArrow = (pStart, pEnd, label) => {
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 1.5;
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.moveTo(pStart.x, pStart.y);
+    ctx.lineTo(pEnd.x, pEnd.y);
+    ctx.stroke();
+
+    // Text
+    ctx.font = "bold 12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.shadowColor = "rgba(0,0,0,0.8)";
+    ctx.shadowBlur = 4;
+    const mx = (pStart.x + pEnd.x)/2;
+    const my = (pStart.y + pEnd.y)/2;
+    ctx.fillText(label, mx, my - 5);
+    ctx.shadowBlur = 0; // reset
+  };
+
+  // Width dimension (along X axis)
+  const yFront = totalH/2 + 20;
+  const zFront = structureHeight + yFront * Math.tan(tiltRad);
+  const d1 = iso(-totalW/2, yFront, zFront);
+  const d2 = iso(totalW/2, yFront, zFront);
+  drawArrow(d1, d2, `${(cols * panelWidthMm / 1000).toFixed(2)} m`);
+
+  // Height dimension (along Y axis)
+  const xRight = totalW/2 + 20;
+  const d3 = iso(xRight, -totalH/2, structureHeight + (-totalH/2) * Math.tan(tiltRad));
+  const d4 = iso(xRight, totalH/2, structureHeight + (totalH/2) * Math.tan(tiltRad));
+  drawArrow(d3, d4, `${(rows * panelHeightMm / 1000).toFixed(2)} m`);
 }

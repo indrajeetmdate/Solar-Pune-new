@@ -366,24 +366,12 @@ function renderDiagram(pl, input) {
     : 18; // Default tilt heuristic
   const orient = input.orientationDir || "South";
 
-  // CSS transform for tilt and rotation
-  // Adjust wrapper perspective and rotation
+  // Adjust wrapper styling if needed
   const wrapper = $("panelDiagramWrapper");
   if (wrapper) {
-    // We tilt the canvas using CSS 3D transform.
-    // X rotation simulates tilt. Z rotation simulates orientation.
-    // South = 0deg, East = -90deg, West = 90deg, North = 180deg
-    let zRot = 0;
-    if (orient === "SouthEast") zRot = -45;
-    else if (orient === "East") zRot = -90;
-    else if (orient === "North") zRot = 180;
-    else if (orient === "West") zRot = 90;
-    else if (orient === "SouthWest") zRot = 45;
-
-    canvas.style.transform = `rotateX(${tilt}deg) rotateZ(${zRot}deg)`;
-    canvas.style.transformOrigin = "center center";
-    canvas.style.boxShadow = "0 20px 40px rgba(0,0,0,0.4)";
-    canvas.style.transition = "transform 0.5s ease";
+    canvas.style.transform = "none";
+    canvas.style.boxShadow = "none";
+    canvas.style.background = "transparent";
   }
 
   drawPanelArray(canvas, {
