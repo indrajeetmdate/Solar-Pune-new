@@ -462,6 +462,25 @@
           </div>
         </div>
 
+        <div class="panel-diagram-section" style="margin-top: 18px; display: none;" id="panelDiagramSection">
+          <div class="section-heading compact">
+            <div>
+              <p class="eyebrow">Visual Layout</p>
+              <h2>Panel Array Diagram</h2>
+            </div>
+            <select id="panelConfigSelect" style="max-width: 150px; margin-left: 10px;">
+              <!-- Options populated dynamically -->
+            </select>
+          </div>
+          <div class="panel-diagram-container" style="background: var(--surface); padding: 20px; border-radius: var(--radius); border: 1px solid var(--line);">
+            <div id="panelDiagramWrapper" style="perspective: 1000px; transform-style: preserve-3d; display: flex; justify-content: center; padding: 20px 0;">
+              <canvas id="panelDiagramCanvas"></canvas>
+            </div>
+            <div id="panelDiagramDimensions" class="diagram-dimensions" style="text-align: center; font-size: 13px; color: var(--muted); margin-top: 12px; font-weight: 600;"></div>
+          </div>
+        </div>
+
+
         <div class="comparison-section">
           <div class="section-heading compact">
             <div>

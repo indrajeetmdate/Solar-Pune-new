@@ -1,7 +1,8 @@
 import { DEFAULT_CONFIG, PANEL_LABELS, STRUCTURE_LABELS, SYSTEM_LABELS } from "./config.js";
-import { calculateEstimate } from "./calculator.js";
+import { calculateEstimate, getPanelConfigurations } from "./calculator.js";
 import { parseMsebBillFile } from "./billParser.js";
 import { isImageFile } from "./ocrExtractor.js";
+import { drawPanelArray } from "./panelDiagram.js";
 
 const INTERNAL_PASSPHRASE_KEY = "puneSolarInternalPassphrase";
 
@@ -324,6 +325,75 @@ function render() {
   renderBreakup(option, input, input.customerView);
   renderNotes(option, input);
   renderExtractedBill(state.extractedBill);
+  renderDiagram(pl, input);
+}
+
+function renderDiagram(pl, input) {
+  const section = $("panelDiagramSection");
+  const select = $("panelConfigSelect");
+  const canvas = $("panelDiagramCanvas");
+  const dimLabel = $("panelDiagramDimensions");
+
+  if (!section || !select || !canvas || !dimLabel) return;
+  if (!pl || pl.numPanels <= 0) {
+    section.style.display = "none";
+    return;
+  }
+
+  section.style.display = "block";
+  const configs = getPanelConfigurations(pl.numPanels);
+
+  // Re-populate select if panel count changed
+  const currentVal = select.value;
+  select.innerHTML = configs.map(c => 
+    `<option value="${c.label}">${c.label}</option>`
+  ).join("");
+  
+  if (configs.some(c => c.label === currentVal)) {
+    select.value = currentVal;
+  } else {
+    // Default to a square-ish configuration
+    const best = configs.sort((a, b) => Math.abs(a.rows - a.cols) - Math.abs(b.rows - b.cols))[0];
+    select.value = best.label;
+  }
+
+  const activeConfig = configs.find(c => c.label === select.value) || configs[0];
+  
+  dimLabel.textContent = `Outer dimensions: ${activeConfig.totalWidthM}m width × ${activeConfig.totalHeightM}m length`;
+
+  const tilt = input.tiltAngle !== null && input.tiltAngle !== undefined && input.tiltAngle !== "" 
+    ? Number(input.tiltAngle) 
+    : 18; // Default tilt heuristic
+  const orient = input.orientationDir || "South";
+
+  // CSS transform for tilt and rotation
+  // Adjust wrapper perspective and rotation
+  const wrapper = $("panelDiagramWrapper");
+  if (wrapper) {
+    // We tilt the canvas using CSS 3D transform.
+    // X rotation simulates tilt. Z rotation simulates orientation.
+    // South = 0deg, East = -90deg, West = 90deg, North = 180deg
+    let zRot = 0;
+    if (orient === "SouthEast") zRot = -45;
+    else if (orient === "East") zRot = -90;
+    else if (orient === "North") zRot = 180;
+    else if (orient === "West") zRot = 90;
+    else if (orient === "SouthWest") zRot = 45;
+
+    canvas.style.transform = `rotateX(${tilt}deg) rotateZ(${zRot}deg)`;
+    canvas.style.transformOrigin = "center center";
+    canvas.style.boxShadow = "0 20px 40px rgba(0,0,0,0.4)";
+    canvas.style.transition = "transform 0.5s ease";
+  }
+
+  drawPanelArray(canvas, {
+    rows: activeConfig.rows,
+    cols: activeConfig.cols,
+    panelWidthMm: pl.panelWidthMm,
+    panelHeightMm: pl.panelHeightMm,
+    tiltAngle: tilt,
+    orientationDir: orient
+  });
 }
 
 function unlockInternal() {
@@ -516,6 +586,12 @@ function attachEvents() {
 
   document.querySelectorAll(".tab-button").forEach((button) => {
     button.addEventListener("click", () => switchTab(button.dataset.tab));
+  });
+
+  $("panelConfigSelect")?.addEventListener("change", () => {
+    const pl = state.estimates?.panelLayout;
+    const input = readInput();
+    if (pl) renderDiagram(pl, input);
   });
 }
 

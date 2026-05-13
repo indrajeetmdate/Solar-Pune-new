@@ -266,6 +266,30 @@ export function calculatePanelLayout(dcCapacityKw, availableAreaSqft) {
   };
 }
 
+export function getPanelConfigurations(numPanels) {
+  const panelWidthMm = 1123;
+  const panelHeightMm = 2279;
+  const configs = [];
+
+  for (let rows = 1; rows <= numPanels; rows++) {
+    if (numPanels % rows !== 0) continue;
+    const cols = numPanels / rows;
+    const totalWidthMm = cols * panelWidthMm;
+    const totalHeightMm = rows * panelHeightMm;
+    configs.push({
+      rows,
+      cols,
+      label: `${rows} × ${cols}`,
+      totalWidthMm,
+      totalHeightMm,
+      totalWidthM: round(totalWidthMm / 1000, 2),
+      totalHeightM: round(totalHeightMm / 1000, 2),
+    });
+  }
+
+  return configs;
+}
+
 export function calculateEstimate(input, config = DEFAULT_CONFIG) {
   const panelType = input.panelType || "dcr";
   const options = [
