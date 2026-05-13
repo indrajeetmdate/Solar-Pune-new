@@ -403,13 +403,9 @@ function unlockInternal() {
 
   state.internalUnlocked = true;
   $("passwordDialog").close();
-  $("internalPanel").classList.remove("hidden");
-  $("easyModeButton").classList.remove("active");
-  $("internalModeButton").classList.add("active");
-  $("customerView").checked = false;
   $("internalPassword").value = "";
   $("passwordError").classList.add("hidden");
-  render();
+  openInternal();
 }
 
 function lockInternal() {
