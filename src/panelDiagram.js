@@ -87,7 +87,46 @@ export function drawPanelArray(canvas, config) {
   const startX = -drawWidth / 2;
   const startY = -drawHeight / 2;
 
-  // Draw panels
+  // --- Draw Mechanical Structure ---
+  ctx.save();
+  // Drop shadow for the entire structure/panels to give depth over the "roof"
+  ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+  ctx.shadowBlur = 15;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 10;
+
+  // Draw mounting rails (2 horizontal rails per row of panels)
+  const railBleed = 10; // Rails stick out slightly beyond panels
+  ctx.fillStyle = "#94a3b8"; // Metallic silver/gray
+  
+  for (let r = 0; r < rows; r++) {
+    const yTopRail = startY + r * pHeight + pHeight * 0.2;
+    const yBotRail = startY + r * pHeight + pHeight * 0.8;
+    
+    // Top rail for row r
+    ctx.fillRect(startX - railBleed, yTopRail, drawWidth + railBleed * 2, 4);
+    // Bottom rail for row r
+    ctx.fillRect(startX - railBleed, yBotRail, drawWidth + railBleed * 2, 4);
+  }
+
+  // Draw vertical mounting brackets/legs periodically
+  ctx.fillStyle = "#64748b"; // Darker metal for legs
+  for (let c = 0; c <= cols; c++) {
+    const xLeg = startX + c * pWidth - (c === cols ? 6 : 0);
+    // Draw legs extending "down" slightly to simulate height
+    for (let r = 0; r < rows; r++) {
+      const yTopRail = startY + r * pHeight + pHeight * 0.2;
+      const yBotRail = startY + r * pHeight + pHeight * 0.8;
+      
+      // Top rail mount
+      ctx.fillRect(xLeg + 2, yTopRail - 2, 6, 12);
+      // Bottom rail mount
+      ctx.fillRect(xLeg + 2, yBotRail - 2, 6, 12);
+    }
+  }
+  ctx.restore();
+
+  // --- Draw Panels ---
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const x = startX + c * pWidth;
@@ -95,27 +134,27 @@ export function drawPanelArray(canvas, config) {
 
       // Panel background
       ctx.fillStyle = "#1e293b"; // Dark slate
-      ctx.fillRect(x, y, pWidth, pHeight);
+      ctx.fillRect(x + 1, y + 1, pWidth - 2, pHeight - 2); // 1px gap between panels
 
       // Panel border (silver frame)
       ctx.strokeStyle = "#cbd5e1";
       ctx.lineWidth = 1;
-      ctx.strokeRect(x, y, pWidth, pHeight);
+      ctx.strokeRect(x + 1, y + 1, pWidth - 2, pHeight - 2);
 
-      // Inner cell grid lines (simulating solar cells, 6x10 grid per panel roughly)
-      ctx.strokeStyle = "rgba(255,255,255,0.05)";
+      // Inner cell grid lines (simulating solar cells)
+      ctx.strokeStyle = "rgba(255,255,255,0.06)";
       ctx.beginPath();
       // vertical lines
       for (let i = 1; i < 6; i++) {
-        const lineX = x + (pWidth / 6) * i;
-        ctx.moveTo(lineX, y);
-        ctx.lineTo(lineX, y + pHeight);
+        const lineX = x + 1 + ((pWidth - 2) / 6) * i;
+        ctx.moveTo(lineX, y + 1);
+        ctx.lineTo(lineX, y + pHeight - 1);
       }
       // horizontal lines
       for (let i = 1; i < 10; i++) {
-        const lineY = y + (pHeight / 10) * i;
-        ctx.moveTo(x, lineY);
-        ctx.lineTo(x + pWidth, lineY);
+        const lineY = y + 1 + ((pHeight - 2) / 10) * i;
+        ctx.moveTo(x + 1, lineY);
+        ctx.lineTo(x + pWidth - 1, lineY);
       }
       ctx.stroke();
     }
