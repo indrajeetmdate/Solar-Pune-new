@@ -176,7 +176,7 @@
 
           <div class="wizard-actions">
             <button class="ghost-button" type="button" onclick="window.goToStep(1)">← Back</button>
-            <button class="primary-button" type="button" onclick="window.finishWizard()">View Results ✓</button>
+            <button class="primary-button" id="downloadProposalButton" type="button">Download Proposal ↓</button>
           </div>
         </div>
 
@@ -401,134 +401,123 @@
         </div>
       </section>
 
-      <section class="results-panel blurred-overlay" id="resultsPanel" aria-label="Recommendations">
+      <section class="results-panel blurred-overlay" id="resultsPanel" aria-label="Recommendations" style="padding: 16px;">
         
         <!-- TOP: Panel Array Diagram -->
-        <div class="panel-diagram-section detail-card" style="margin-bottom: 24px; display: none; padding: 20px;" id="panelDiagramSection">
-          <div class="section-heading compact">
+        <div class="panel-diagram-section detail-card" style="margin-bottom: 16px; display: none; padding: 12px;" id="panelDiagramSection">
+          <div class="section-heading compact" style="margin-bottom: 8px;">
             <div>
-              <p class="eyebrow">Visual Layout</p>
-              <h2>Panel Array Diagram</h2>
+              <p class="eyebrow" style="font-size: 10px;">Visual Layout</p>
+              <h2 style="font-size: 16px;">Panel Array Diagram</h2>
             </div>
-            <select id="panelConfigSelect" style="max-width: 150px; margin-left: 10px;">
+            <select id="panelConfigSelect" style="max-width: 120px; margin-left: 10px; font-size: 13px; padding: 4px;">
               <!-- Options populated dynamically -->
             </select>
           </div>
-          <div class="panel-diagram-container" style="background-image: url('https://ncxynrxeabkvlcirspnz.supabase.co/storage/v1/object/sign/Assets/solar_terrace_without%20panels.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV82YWY1NzE2OS1kZmJjLTRiMDEtOWI3ZS1jNzZkMzAwMjU4NjQiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJBc3NldHMvc29sYXJfdGVycmFjZV93aXRob3V0IHBhbmVscy5wbmciLCJpYXQiOjE3Nzg2ODAzNzYsImV4cCI6NDkzMjI4MDM3Nn0.ndjxiF8axs9f1SJ4Hqb63eBTWH-WDoFqskrq9uN5vjk'); background-size: cover; background-position: center; padding: 20px; border-radius: var(--radius); overflow: hidden; margin-top: 16px;">
-            <div id="panelDiagramWrapper" style="display: flex; justify-content: center; padding: 20px 0;">
+          <div class="panel-diagram-container" style="background-image: url('https://ncxynrxeabkvlcirspnz.supabase.co/storage/v1/object/sign/Assets/solar_terrace_without%20panels.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV82YWY1NzE2OS1kZmJjLTRiMDEtOWI3ZS1jNzZkMzAwMjU4NjQiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJBc3NldHMvc29sYXJfdGVycmFjZV93aXRob3V0IHBhbmVscy5wbmciLCJpYXQiOjE3Nzg2ODAzNzYsImV4cCI6NDkzMjI4MDM3Nn0.ndjxiF8axs9f1SJ4Hqb63eBTWH-WDoFqskrq9uN5vjk'); background-size: cover; background-position: center; padding: 12px; border-radius: var(--radius); overflow: hidden;">
+            <div id="panelDiagramWrapper" style="display: flex; justify-content: center; padding: 10px 0;">
               <canvas id="panelDiagramCanvas"></canvas>
             </div>
-            <div id="panelDiagramDimensions" class="diagram-dimensions" style="text-align: center; font-size: 13px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.8); margin-top: 12px; font-weight: 600;"></div>
+            <div id="panelDiagramDimensions" class="diagram-dimensions" style="text-align: center; font-size: 12px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.8); margin-top: 8px; font-weight: 600;"></div>
           </div>
         </div>
 
-        <!-- 2-COLUMN GRID -->
-        <div class="detail-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px;">
+        <!-- SEQUENTIAL HORIZONTAL LAYOUT -->
+        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
           
-          <!-- LEFT COLUMN -->
-          <div style="display: flex; flex-direction: column; gap: 24px;">
-            
-            <div class="detail-card" style="padding: 24px;">
-              <div class="summary-band">
-                <div>
-                  <p class="eyebrow">Recommendation</p>
-                  <h2 id="recommendationTitle">On-grid DCR solar</h2>
-                  <p id="recommendationReason" class="muted">Best payback for subsidy-eligible residential use.</p>
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
-                  <div class="status-pill" id="sanctionStatus">Within sanctioned load</div>
-                  <button class="ghost-button" id="downloadProposalButton" type="button" style="border-color: var(--brand-green); color: var(--brand-green); background: rgba(99, 146, 62, 0.1);">Download Proposal</button>
-                </div>
+          <!-- Recommendation Header -->
+          <div class="detail-card" style="padding: 12px 16px;">
+            <div class="summary-band" style="margin-bottom: 12px; align-items: center;">
+              <div>
+                <p class="eyebrow" style="font-size: 10px;">Recommendation</p>
+                <h2 id="recommendationTitle" style="font-size: 18px;">On-grid DCR solar</h2>
+                <p id="recommendationReason" class="muted" style="font-size: 13px; margin-top: 2px;">Best payback for subsidy-eligible residential use.</p>
               </div>
-
-              <div class="metric-grid" style="margin-top: 24px;">
-                <div class="metric-card">
-                  <span>Size</span>
-                  <strong id="recommendedCapacity">0 kWp</strong>
-                </div>
-                <div class="metric-card">
-                  <span>Gen/mo</span>
-                  <strong id="monthlyGeneration">0 units</strong>
-                </div>
-                <div class="metric-card">
-                  <span>Save/mo</span>
-                  <strong id="monthlySavings">Rs 0</strong>
-                </div>
-                <div class="metric-card">
-                  <span>Payback</span>
-                  <strong id="payback">0 years</strong>
-                </div>
-              </div>
+              <div class="status-pill" id="sanctionStatus" style="font-size: 12px; padding: 4px 8px;">Within sanctioned load</div>
             </div>
 
-            <div class="detail-card" style="padding: 24px;">
-              <div class="section-heading compact">
-                <div>
-                  <p class="eyebrow">Panel Configuration</p>
-                  <h2>Layout &amp; Area</h2>
-                </div>
-                <div class="status-pill" id="areaFitStatus">Checking fit</div>
+            <div class="metric-grid" style="grid-template-columns: repeat(4, 1fr); gap: 8px;">
+              <div class="metric-card" style="padding: 10px;">
+                <span style="font-size: 11px;">Size</span>
+                <strong id="recommendedCapacity" style="font-size: 15px;">0 kWp</strong>
               </div>
-              <div class="metric-grid" style="grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 16px;">
-                <div class="metric-card">
-                  <span>Panels required</span>
-                  <strong id="panelCount">0</strong>
-                </div>
-                <div class="metric-card">
-                  <span>Area required</span>
-                  <strong id="panelAreaRequired">0 sq ft</strong>
-                </div>
-                <div class="metric-card">
-                  <span>Panel spec</span>
-                  <strong id="panelSpec">1123 × 2279 mm · 550 Wp</strong>
-                </div>
+              <div class="metric-card" style="padding: 10px;">
+                <span style="font-size: 11px;">Gen/mo</span>
+                <strong id="monthlyGeneration" style="font-size: 15px;">0 units</strong>
+              </div>
+              <div class="metric-card" style="padding: 10px;">
+                <span style="font-size: 11px;">Save/mo</span>
+                <strong id="monthlySavings" style="font-size: 15px;">Rs 0</strong>
+              </div>
+              <div class="metric-card" style="padding: 10px;">
+                <span style="font-size: 11px;">Payback</span>
+                <strong id="payback" style="font-size: 15px;">0 years</strong>
               </div>
             </div>
-
           </div>
 
-          <!-- RIGHT COLUMN -->
-          <div style="display: flex; flex-direction: column; gap: 24px;">
-            
-            <div class="detail-card" style="padding: 24px;">
-              <div class="section-heading compact">
-                <div>
-                  <p class="eyebrow">Compare</p>
-                  <h2>System options</h2>
-                </div>
-              </div>
-              <div class="table-wrap" style="margin-top: 16px;">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>System</th>
-                      <th>Panel</th>
-                      <th>Net cost</th>
-                      <th>Subsidy</th>
-                      <th>Savings/mo</th>
-                      <th>Payback</th>
-                    </tr>
-                  </thead>
-                  <tbody id="comparisonRows"></tbody>
-                </table>
+          <!-- Compare Table -->
+          <div class="detail-card" style="padding: 12px 16px;">
+            <div class="section-heading compact" style="margin-bottom: 8px;">
+              <div>
+                <h3 style="margin: 0; font-size: 15px;">System options</h3>
               </div>
             </div>
-
-            <details class="detail-card" open style="padding: 24px; cursor: pointer;">
-              <summary style="font-weight: 700; font-size: 16px; outline: none;">Cost Breakup</summary>
-              <div style="margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px;">
-                <dl id="costBreakup" class="breakup-list"></dl>
-              </div>
-            </details>
-
-            <details class="detail-card" style="padding: 24px; cursor: pointer;">
-              <summary style="font-weight: 700; font-size: 16px; outline: none;">Eligibility &amp; Notes</summary>
-              <div style="margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px;">
-                <ul id="notesList" class="notes-list"></ul>
-              </div>
-            </details>
-
+            <div class="table-wrap">
+              <table style="font-size: 13px;">
+                <thead>
+                  <tr>
+                    <th style="padding: 8px;">System</th>
+                    <th style="padding: 8px;">Panel</th>
+                    <th style="padding: 8px;">Net cost</th>
+                    <th style="padding: 8px;">Subsidy</th>
+                    <th style="padding: 8px;">Savings/mo</th>
+                    <th style="padding: 8px;">Payback</th>
+                  </tr>
+                </thead>
+                <tbody id="comparisonRows"></tbody>
+              </table>
+            </div>
           </div>
+
+          <!-- Configuration & Area -->
+          <div class="detail-card" style="padding: 12px 16px;">
+            <div style="display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <h3 style="margin: 0; font-size: 15px;">Panel Configuration & Area</h3>
+              <div class="status-pill" id="areaFitStatus" style="font-size: 12px; padding: 4px 8px;">Checking fit</div>
+            </div>
+            <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr); gap: 8px;">
+              <div class="metric-card" style="padding: 10px;">
+                <span style="font-size: 11px;">Panels required</span>
+                <strong id="panelCount" style="font-size: 15px;">0</strong>
+              </div>
+              <div class="metric-card" style="padding: 10px;">
+                <span style="font-size: 11px;">Area required</span>
+                <strong id="panelAreaRequired" style="font-size: 15px;">0 sq ft</strong>
+              </div>
+              <div class="metric-card" style="padding: 10px;">
+                <span style="font-size: 11px;">Panel spec</span>
+                <strong id="panelSpec" style="font-size: 13px;">1123 × 2279 mm · 550 Wp</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Breakup Accordion -->
+          <details class="detail-card" style="padding: 12px 16px; cursor: pointer; border: 1px solid var(--line); border-radius: var(--radius); background: #fff;" open>
+            <summary style="font-weight: 600; font-size: 14px; outline: none;">Cost Breakup</summary>
+            <div style="margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px;">
+              <dl id="costBreakup" class="breakup-list" style="margin: 0; font-size: 13px;"></dl>
+            </div>
+          </details>
+
+          <!-- Notes Accordion -->
+          <details class="detail-card" style="padding: 12px 16px; cursor: pointer; border: 1px solid var(--line); border-radius: var(--radius); background: #fff;">
+            <summary style="font-weight: 600; font-size: 14px; outline: none;">Eligibility &amp; Notes</summary>
+            <div style="margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px;">
+              <ul id="notesList" class="notes-list" style="margin: 0; padding-left: 16px; font-size: 13px;"></ul>
+            </div>
+          </details>
+
         </div>
       </section>
     </main>
