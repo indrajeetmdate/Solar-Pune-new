@@ -348,6 +348,8 @@ function lockInternal() {
 function openInternal() {
   if (state.internalUnlocked) {
     $("internalPanel").classList.remove("hidden");
+    const resultsPanel = document.querySelector('.results-panel');
+    if (resultsPanel) resultsPanel.classList.remove('blurred-overlay');
     $("easyModeButton").classList.remove("active");
     $("internalModeButton").classList.add("active");
     $("customerView").checked = false;
@@ -504,6 +506,10 @@ window.goToStep = function(step) {
       
       slackSent = true;
     }
+    
+    // Remove blur overlay when customer basics are filled
+    const resultsPanel = document.querySelector('.results-panel');
+    if (resultsPanel) resultsPanel.classList.remove('blurred-overlay');
   }
 
   document.querySelectorAll('.wizard-step').forEach((el, index) => {

@@ -958,3 +958,13 @@ tr:hover td {
  } 
   
  
+ / *   B l u r   O v e r l a y   f o r   E a s y   M o d e   I n i t i a l   S t e p   * / 
+ . b l u r r e d - o v e r l a y   { 
+     f i l t e r :   b l u r ( 6 p x ) ; 
+     o p a c i t y :   0 . 4 ; 
+     p o i n t e r - e v e n t s :   n o n e ; 
+     u s e r - s e l e c t :   n o n e ; 
+     t r a n s i t i o n :   f i l t e r   0 . 4 s   e a s e ,   o p a c i t y   0 . 4 s   e a s e ; 
+ } 
+  
+ 
