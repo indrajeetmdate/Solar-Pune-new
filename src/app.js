@@ -439,13 +439,11 @@ function openInternal() {
     $("internalModeButton").classList.add("active");
     $("customerView").checked = false;
 
-    // Show step 2 and 3, hide step 1 (Customer Basics)
+    // Show step 2, hide step 1 (Customer Basics)
     const step1 = document.getElementById("step1");
     const step2 = document.getElementById("step2");
-    const step3 = document.getElementById("step3");
     if (step1) step1.classList.add("hidden");
     if (step2) step2.classList.remove("hidden");
-    if (step3) step3.classList.remove("hidden");
 
     // Hide wizard buttons
     document.querySelectorAll('.wizard-actions').forEach(el => el.classList.add('hidden'));
@@ -631,13 +629,6 @@ window.goToStep = function(step) {
       }
     });
   }
-  document.querySelectorAll('.wizard-step-dot').forEach((el, index) => {
-    if (index + 1 === step) {
-      el.classList.add('active');
-    } else {
-      el.classList.remove('active');
-    }
-  });
 }
 
 window.finishWizard = function() {

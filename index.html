@@ -20,7 +20,7 @@
         </div>
       </div>
       <div class="header-actions" aria-label="Mode selector">
-        <button class="mode-button active" id="easyModeButton" type="button">Easy</button>
+        <button class="mode-button active" id="easyModeButton" type="button">Customer</button>
         <button class="mode-button" id="internalModeButton" type="button">Internal</button>
       </div>
     </header>
@@ -60,7 +60,7 @@
           
           <div class="wizard-actions">
             <div></div> <!-- Spacer -->
-            <button class="primary-button" type="button" onclick="window.goToStep(2)">Next: Energy →</button>
+            <button class="primary-button" type="button" onclick="window.goToStep(2)">Next: Energy & Site →</button>
           </div>
         </div>
 
@@ -69,7 +69,7 @@
           <div class="section-heading">
             <div>
               <p class="eyebrow">Step 2</p>
-              <h2>Energy profile</h2>
+              <h2>Energy & Site details</h2>
             </div>
           </div>
 
@@ -119,17 +119,10 @@
             </label>
           </div>
 
-          <div class="wizard-actions">
-            <button class="ghost-button" type="button" onclick="window.goToStep(1)">← Back</button>
-            <button class="primary-button" type="button" onclick="window.goToStep(3)">Next: Site →</button>
-          </div>
-        </div>
+          <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--line);">
 
-        <!-- STEP 3 -->
-        <div id="step3" class="wizard-step hidden">
           <div class="section-heading compact">
             <div>
-              <p class="eyebrow">Step 3</p>
               <h2>Site & Goals</h2>
             </div>
             <button class="ghost-button" id="fetchLocationButton" type="button" title="Fetch current coordinates">Auto-fetch</button>
@@ -182,7 +175,7 @@
           </div>
 
           <div class="wizard-actions">
-            <button class="ghost-button" type="button" onclick="window.goToStep(2)">← Back</button>
+            <button class="ghost-button" type="button" onclick="window.goToStep(1)">← Back</button>
             <button class="primary-button" type="button" onclick="window.finishWizard()">View Results ✓</button>
           </div>
         </div>
@@ -462,7 +455,8 @@
           </div>
         </div>
 
-        <div class="panel-diagram-section" style="margin-top: 18px; display: none;" id="panelDiagramSection">
+      <section class="results-panel blurred" id="resultsPanel" aria-label="Recommendations">
+        <div class="panel-diagram-section" style="margin-bottom: 24px; display: none;" id="panelDiagramSection">
           <div class="section-heading compact">
             <div>
               <p class="eyebrow">Visual Layout</p>
@@ -480,8 +474,7 @@
           </div>
         </div>
 
-
-        <div class="comparison-section">
+        <div class="summary-header">
           <div class="section-heading compact">
             <div>
               <p class="eyebrow">Compare</p>
