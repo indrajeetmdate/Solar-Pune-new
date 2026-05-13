@@ -339,9 +339,18 @@ function unlockInternal() {
 function lockInternal() {
   state.internalUnlocked = false;
   $("internalPanel").classList.add("hidden");
-  $("internalModeButton").classList.remove("active");
   $("easyModeButton").classList.add("active");
+  $("internalModeButton").classList.remove("active");
   $("customerView").checked = true;
+
+  // Restore wizard actions
+  document.querySelectorAll('.wizard-actions').forEach(el => el.classList.remove('hidden'));
+  
+  // If we lock, restart the wizard visually, or just go to step 1
+  if (typeof window.goToStep === 'function') {
+    window.goToStep(1);
+  }
+
   render();
 }
 
@@ -353,6 +362,18 @@ function openInternal() {
     $("easyModeButton").classList.remove("active");
     $("internalModeButton").classList.add("active");
     $("customerView").checked = false;
+
+    // Show step 2 and 3, hide step 1 (Customer Basics)
+    const step1 = document.getElementById("step1");
+    const step2 = document.getElementById("step2");
+    const step3 = document.getElementById("step3");
+    if (step1) step1.classList.add("hidden");
+    if (step2) step2.classList.remove("hidden");
+    if (step3) step3.classList.remove("hidden");
+
+    // Hide wizard buttons
+    document.querySelectorAll('.wizard-actions').forEach(el => el.classList.add('hidden'));
+
     render();
     return;
   }
@@ -510,15 +531,24 @@ window.goToStep = function(step) {
     // Remove blur overlay when customer basics are filled
     const resultsPanel = document.querySelector('.results-panel');
     if (resultsPanel) resultsPanel.classList.remove('blurred-overlay');
+  } else {
+    // If going back to step 1, optionally re-blur if slack isn't sent yet
+    const resultsPanel = document.querySelector('.results-panel');
+    if (resultsPanel && !slackSent) {
+      resultsPanel.classList.add('blurred-overlay');
+    }
   }
 
-  document.querySelectorAll('.wizard-step').forEach((el, index) => {
-    if (index + 1 === step) {
-      el.classList.remove('hidden');
-    } else {
-      el.classList.add('hidden');
-    }
-  });
+  // Only apply step hiding if not in internal mode
+  if (!state.internalUnlocked) {
+    document.querySelectorAll('.wizard-step').forEach((el, index) => {
+      if (index + 1 === step) {
+        el.classList.remove('hidden');
+      } else {
+        el.classList.add('hidden');
+      }
+    });
+  }
   document.querySelectorAll('.wizard-step-dot').forEach((el, index) => {
     if (index + 1 === step) {
       el.classList.add('active');
