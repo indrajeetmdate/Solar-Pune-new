@@ -396,7 +396,31 @@
                 <input id="tariffEscalation" type="number" min="0" step="0.1" value="3">
               </label>
             </div>
-            <p class="muted small">Slab rates are kept in the calculator config and can be moved to admin-managed config later.</p>
+
+            <div class="section-heading compact" style="margin-top: 1rem;">
+              <div>
+                <p class="eyebrow">MSEDCL Slab Rates (Rs/unit)</p>
+              </div>
+            </div>
+            <div class="field-grid">
+              <label class="field">
+                <span>0–100 units</span>
+                <input id="slabRate1" type="number" min="0" step="0.01" value="5.52">
+              </label>
+              <label class="field">
+                <span>101–300 units</span>
+                <input id="slabRate2" type="number" min="0" step="0.01" value="10.6">
+              </label>
+              <label class="field">
+                <span>301–500 units</span>
+                <input id="slabRate3" type="number" min="0" step="0.01" value="13.71">
+              </label>
+              <label class="field">
+                <span>500+ units</span>
+                <input id="slabRate4" type="number" min="0" step="0.01" value="15.17">
+              </label>
+            </div>
+            <p class="muted small">Slab rates are now editable. Update when MSEDCL revises tariffs.</p>
           </div>
         </div>
       </section>

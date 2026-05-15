@@ -85,16 +85,26 @@ export function recommendCapacity(input, config = DEFAULT_CONFIG) {
   const byConsumption =
     monthlyGenerationPerKw > 0 ? input.monthlyUnits / monthlyGenerationPerKw : 0;
   const byArea =
-    config.performance.sqftPerKw > 0 ? input.roofArea / config.performance.sqftPerKw : 0;
+    config.performance.sqftPerKw > 0 && input.roofArea > 0
+      ? input.roofArea / config.performance.sqftPerKw
+      : 0;
   const byLoad = input.sanctionedLoad > 0 ? input.sanctionedLoad : Infinity;
 
-  const recommended = Math.min(byConsumption || 0, byArea || 0, byLoad);
-  const rounded = Math.max(1, Math.floor(recommended * 10) / 10);
+  // BUG #1 FIX: Only include constraints that are actively set (> 0).
+  // Previously, a blank roofArea (0) would force the recommendation to 0,
+  // then Math.max(1, ...) would snap it to 1 kWp regardless of consumption.
+  const candidates = [];
+  if (byConsumption > 0) candidates.push(byConsumption);
+  if (byArea > 0) candidates.push(byArea);
+  if (Number.isFinite(byLoad) && byLoad > 0) candidates.push(byLoad);
+
+  const recommended = candidates.length > 0 ? Math.min(...candidates) : 0;
+  const rounded = recommended > 0 ? Math.max(0.5, Math.floor(recommended * 10) / 10) : 0;
 
   return {
     dcCapacityKw: round(rounded, 1),
     byConsumptionKw: round(byConsumption, 1),
-    byAreaKw: round(byArea, 1),
+    byAreaKw: byArea > 0 ? round(byArea, 1) : null,
     byLoadKw: Number.isFinite(byLoad) ? round(byLoad, 1) : null,
     performanceFactor,
   };
@@ -147,29 +157,51 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const batteryCapacityWh = batteryCapacityKwh * 1000;
 
   const performanceFactor = calculatePerformanceFactor(config.performance, input);
-  const monthlyGeneration = round(
+  let monthlyGeneration = round(
     dcCapacityKw * config.performance.dailyGenerationPerKw * 30 * performanceFactor,
     0,
   );
+
+  // BUG #7 FIX: For hybrid/offgrid, apply battery round-trip efficiency loss
+  // to generation instead of an unexplained 4% monetary haircut.
+  // Battery round-trip = DoD × inverter efficiency (already in config).
+  // We apply a ~4% loss to the energy that passes through the battery.
+  // Approximate: 50% of hybrid/offgrid generation goes through battery.
+  if (systemType === "hybrid" || systemType === "offgrid") {
+    const batteryRoundTrip = (clamp(config.performance.batteryDod || 90, 1, 100) / 100)
+      * (clamp(config.performance.inverterEfficiency || 92, 1, 100) / 100);
+    // ~50% of energy cycles through battery; rest is used directly
+    const batteryFraction = 0.5;
+    const effectiveGenFactor = (1 - batteryFraction) + batteryFraction * batteryRoundTrip;
+    monthlyGeneration = round(monthlyGeneration * effectiveGenFactor, 0);
+  }
+
   const offsetUnits = Math.min(monthlyGeneration, input.monthlyUnits);
 
-  const currentBill = input.monthlyBill > 0
-    ? { total: input.monthlyBill }
-    : calculateBill(input.monthlyUnits, config.tariff);
+  // BUG #6 FIX: Always compute both bills from the slab model for apples-to-apples
+  // comparison. The user-entered bill is only used for the "effective" tariff method.
+  const modelCurrentBill = calculateBill(input.monthlyUnits, config.tariff);
   const postSolarBill = calculateBill(Math.max(input.monthlyUnits - offsetUnits, 0), config.tariff);
-  const effectiveTariff = input.monthlyUnits > 0
-    ? (input.monthlyBill || calculateBill(input.monthlyUnits, config.tariff).total) / input.monthlyUnits
-    : 0;
+
+  // BUG #2 FIX: Effective tariff should only reflect the energy portion of the bill,
+  // excluding fixed charges and electricity duty which cannot be "saved" by solar.
+  const userBillForEnergy = input.monthlyBill > 0
+    ? Math.max(input.monthlyBill - (config.tariff.fixedCharge || 0), 0)
+    : modelCurrentBill.energyCharge;
+  const dutyRate = (config.tariff.electricityDuty || 0) / 100;
+  // Remove duty component: energyWithDuty = energy * (1 + dutyRate) → energy = energyWithDuty / (1 + dutyRate)
+  const energyOnlyBill = userBillForEnergy / (1 + dutyRate);
+  const effectiveTariff = input.monthlyUnits > 0 ? energyOnlyBill / input.monthlyUnits : 0;
 
   let monthlySavings;
   if (input.savingsMethod === "effective" || (input.savingsMethod === "auto" && input.monthlyBill > 0)) {
-    monthlySavings = Math.min(offsetUnits * effectiveTariff, Math.max(currentBill.total - config.tariff.fixedCharge, 0));
+    // Savings = offset units × energy-only per-unit rate, plus the duty saved on those units
+    const energySaved = offsetUnits * effectiveTariff;
+    const dutySaved = energySaved * dutyRate;
+    monthlySavings = Math.min(energySaved + dutySaved, Math.max(modelCurrentBill.total - (config.tariff.fixedCharge || 0), 0));
   } else {
-    monthlySavings = Math.max(currentBill.total - postSolarBill.total, 0);
-  }
-
-  if (systemType === "hybrid" || systemType === "offgrid") {
-    monthlySavings *= 0.96;
+    // Slab method: always model-vs-model for consistency
+    monthlySavings = Math.max(modelCurrentBill.total - postSolarBill.total, 0);
   }
 
   const annualSavings = monthlySavings * 12;
@@ -248,18 +280,28 @@ export function calculatePanelLayout(dcCapacityKw, availableAreaSqft) {
   const panelAreaSqft = panelAreaSqm * 10.7639;                     // ≈ 27.54 sq ft
   const panelWp = 550;
 
+  // BUG #9 FIX: Include spacing multiplier for inter-row shading clearance,
+  // maintenance walkways, and edge setbacks. Industry standard is ~1.5×.
+  // This aligns the area-fit check with the sqftPerKw sizing constraint (~120 sqft/kWp
+  // vs raw panel area of ~55 sqft/kWp).
+  const spacingMultiplier = 1.5;
+
   const numPanels = Math.ceil((dcCapacityKw * 1000) / panelWp);
-  const totalAreaSqft = round(numPanels * panelAreaSqft, 0);
-  const totalAreaSqm = round(numPanels * panelAreaSqm, 1);
-  const fitsInArea = availableAreaSqft > 0 ? totalAreaSqft <= availableAreaSqft : null;
+  const panelOnlyAreaSqft = round(numPanels * panelAreaSqft, 0);
+  const panelOnlyAreaSqm = round(numPanels * panelAreaSqm, 1);
+  const requiredAreaSqft = round(panelOnlyAreaSqft * spacingMultiplier, 0);
+  const requiredAreaSqm = round(panelOnlyAreaSqm * spacingMultiplier, 1);
+  const fitsInArea = availableAreaSqft > 0 ? requiredAreaSqft <= availableAreaSqft : null;
 
   return {
     panelWidthMm,
     panelHeightMm,
     panelWp,
     numPanels,
-    totalAreaSqft,
-    totalAreaSqm,
+    panelOnlyAreaSqft,
+    panelOnlyAreaSqm,
+    totalAreaSqft: requiredAreaSqft,
+    totalAreaSqm: requiredAreaSqm,
     availableAreaSqft: round(availableAreaSqft, 0),
     fitsInArea,
     panelDimensions: `${panelWidthMm} × ${panelHeightMm} mm`,

@@ -61,6 +61,10 @@ const ids = [
   "fixedCharge",
   "electricityDuty",
   "tariffEscalation",
+  "slabRate1",
+  "slabRate2",
+  "slabRate3",
+  "slabRate4",
 ];
 
 function numberValue(id) {
@@ -148,10 +152,15 @@ function readConfig() {
       inverterEfficiency: numberValue("inverterEfficiency"),
     },
     tariff: {
-      ...DEFAULT_CONFIG.tariff,
       fixedCharge: numberValue("fixedCharge"),
       electricityDuty: numberValue("electricityDuty"),
       tariffEscalation: numberValue("tariffEscalation"),
+      slabs: [
+        { upto: 100, rate: numberValue("slabRate1") || DEFAULT_CONFIG.tariff.slabs[0].rate },
+        { upto: 300, rate: numberValue("slabRate2") || DEFAULT_CONFIG.tariff.slabs[1].rate },
+        { upto: 500, rate: numberValue("slabRate3") || DEFAULT_CONFIG.tariff.slabs[2].rate },
+        { upto: Infinity, rate: numberValue("slabRate4") || DEFAULT_CONFIG.tariff.slabs[3].rate },
+      ],
     },
     policy: DEFAULT_CONFIG.policy,
   };
@@ -316,7 +325,8 @@ function render() {
       $("areaFitStatus").textContent = `Fits in ${pl.availableAreaSqft} sq ft`;
       $("areaFitStatus").className = "status-pill";
     } else {
-      $("areaFitStatus").textContent = `Needs ${pl.totalAreaSqft - pl.availableAreaSqft} sq ft more`;
+      const deficit = pl.totalAreaSqft - pl.availableAreaSqft;
+      $("areaFitStatus").textContent = `Needs ${deficit} sq ft more`;
       $("areaFitStatus").className = "status-pill warn";
     }
   }
