@@ -61,8 +61,9 @@ export function drawPanelArray(canvas, config) {
   };
 
   const tiltRad = 15 * Math.PI / 180; // Panel tilt angle
-  const frontLegHeight = 35; // Leg height at the front (lowest point)
-  const backLegHeight = 120; // Leg height at the back (highest point)
+  // Leg heights scale with modelScale to maintain proper proportions
+  const frontLegHeight = 35 * modelScale / baseModelScale; // Leg height at the front (lowest point)
+  const backLegHeight = 120 * modelScale / baseModelScale; // Leg height at the back (highest point)
 
   // Calculate Z (height) based on Y (depth)
   // Back (negative y) is elevated. Front (positive y) is low.
@@ -238,8 +239,8 @@ export function drawPanelArray(canvas, config) {
   // We offset it slightly forward in Y and down in Z so it hovers in front
   const d1 = proj(-totalW/2, yFrontEdge + 30, zFrontEdge - 15);
   const d2 = proj(totalW/2, yFrontEdge + 30, zFrontEdge - 15);
-  const displayWidthM = (cols * panelWidthMm / 1000) * (modelScale / baseModelScale);
-  const displayDepthM = (rows * panelHeightMm / 1000) * (modelScale / baseModelScale);
+  const displayWidthM = (cols * panelWidthMm / 1000); // Always show actual dimensions
+  const displayDepthM = (rows * panelHeightMm / 1000); // Always show actual dimensions
   drawArrow(d1, d2, `${displayWidthM.toFixed(2)} m`, 12);
 
   // Height dimension (along right edge, projected into perspective)
