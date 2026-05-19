@@ -70,9 +70,8 @@ export async function generateProposalPDF(estimates) {
   }
 
   try {
-
-  // Load logo before generating document
-  const logoResult = await loadImage("https://bfkxdpripwjxenfvwpfu.supabase.co/storage/v1/object/public/Logo/DC_Energy.png");
+    // Load logo before generating document
+    const logoResult = await loadImage("https://bfkxdpripwjxenfvwpfu.supabase.co/storage/v1/object/public/Logo/DC_Energy.png");
 
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -419,6 +418,7 @@ export async function generateProposalPDF(estimates) {
     : `DC_Energy_Proposal.pdf`;
 
   doc.save(filename);
+  }
   } catch (error) {
     console.error("PDF generation error:", error);
     alert("Error generating PDF: " + error.message);
