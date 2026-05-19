@@ -52,11 +52,19 @@ const canvasToImageData = (canvasId) => {
 export async function generateProposalPDF(estimates) {
   console.log("Starting PDF generation...", estimates);
 
-  // Check if jsPDF is loaded
-  const jsPDF = window.jspdf ? window.jspdf.jsPDF : window.jsPDF;
+  // Wait for jsPDF to be available (it loads from CDN)
+  let jsPDF = null;
+  let attempts = 0;
+  while (!jsPDF && attempts < 50) {
+    jsPDF = window.jspdf ? window.jspdf.jsPDF : window.jsPDF;
+    if (!jsPDF) {
+      await new Promise(r => setTimeout(r, 100));
+      attempts++;
+    }
+  }
 
   if (!jsPDF) {
-    console.error("jsPDF not loaded - checking window.jspdf:", window.jspdf);
+    console.error("jsPDF not loaded after waiting");
     alert("PDF generator library not loaded. Please refresh the page and try again.");
     return;
   }
