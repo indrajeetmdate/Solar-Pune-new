@@ -23,6 +23,13 @@ const loadImage = (url) => {
   });
 };
 
+// Helper to get canvas as image data
+const canvasToImageData = (canvasId) => {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+  return canvas.toDataURL('image/png');
+};
+
 export async function generateProposalPDF(estimates) {
   const jsPDF = window.jspdf ? window.jspdf.jsPDF : window.jsPDF;
 
@@ -199,6 +206,57 @@ export async function generateProposalPDF(estimates) {
   }
 
   addFooter(1);
+
+  // ================= PAGE 1B: Panel Array Diagram =================
+  const panelDiagramData = canvasToImageData('panelDiagramCanvas');
+  if (panelDiagramData) {
+    doc.addPage();
+    yPos = 30;
+    addHeader("Panel Array Layout");
+
+    doc.setTextColor(COLORS.black);
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("Panel Array Visualization", margin, yPos);
+    yPos += 10;
+
+    // Add the panel diagram image
+    const imgWidth = pageWidth - (margin * 2);
+    const imgHeight = 180;
+    doc.addImage(panelDiagramData, 'PNG', margin, yPos, imgWidth, imgHeight);
+    yPos += imgHeight + 15;
+
+    // Add dimensions info if available
+    const dimLabel = document.getElementById('panelDiagramDimensions');
+    if (dimLabel && dimLabel.textContent) {
+      doc.setFontSize(11);
+      doc.setTextColor(COLORS.text);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Dimensions: ${dimLabel.textContent}`, margin, yPos);
+    }
+
+    // Add panel configuration details
+    const panelLayout = estimates.panelLayout;
+    if (panelLayout) {
+      yPos += 15;
+      doc.setTextColor(COLORS.black);
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text("Configuration Details:", margin, yPos);
+      yPos += 8;
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(COLORS.text);
+      doc.text(`Rows: ${panelLayout.rows} | Columns: ${panelLayout.cols} | Total Panels: ${panelLayout.numPanels}`, margin, yPos);
+      yPos += 5;
+      doc.text(`Panel Size: ${panelLayout.panelDimensions} (${panelLayout.panelWp} Wp each)`, margin, yPos);
+      yPos += 5;
+      doc.text(`Total Area: ${panelLayout.totalAreaSqft} sq ft (${panelLayout.totalAreaSqm} m²)`, margin, yPos);
+    }
+
+    addFooter(doc.internal.getNumberOfPages());
+  }
 
   // ================= PAGE 2: Feasible Solutions =================
   doc.addPage();
