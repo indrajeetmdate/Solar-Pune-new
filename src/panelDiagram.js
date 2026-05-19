@@ -16,22 +16,19 @@ export function drawPanelArray(canvas, config) {
 
   const { rows, cols, panelWidthMm, panelHeightMm } = config;
 
-  // Terrace boundary dimensions (usable roof space in meters)
-  const terraceWidthM = 10; // Max usable width in meters
-  const terraceDepthM = 8;  // Max usable depth in meters
-
-  // Calculate panel array dimensions in meters
-  const arrayWidthM = (cols * panelWidthMm) / 1000;
-  const arrayDepthM = (rows * panelHeightMm) / 1000;
-
-  // Calculate required scale to fit within terrace boundary
-  const scaleX = arrayWidthM > terraceWidthM ? terraceWidthM / arrayWidthM : 1;
-  const scaleY = arrayDepthM > terraceDepthM ? terraceDepthM / arrayDepthM : 1;
-  const fitScale = Math.min(scaleX, scaleY, 1); // Only scale down, never up
-
-  // Scale down physical dimensions to internal model units
+  // Dynamic scaling: auto-fit from 4 to 100 panels in canvas
   const baseModelScale = 0.045;
-  const modelScale = baseModelScale * fitScale;
+  const maxPanelsForUnscaled = 20; // Up to 20 panels show at full size
+
+  let modelScale;
+  if (rows <= maxPanelsForUnscaled) {
+    modelScale = baseModelScale; // No scaling for small arrays (4, 6, 8, 10, 20)
+  } else {
+    // Calculate scale to fit within canvas height (350px)
+    const maxCanvasHeight = 320; // Leave 30px buffer
+    const requiredHeight = rows * panelHeightMm * baseModelScale;
+    modelScale = baseModelScale * (maxCanvasHeight / requiredHeight);
+  }
 
   const pW = panelWidthMm * modelScale;
   const pH = panelHeightMm * modelScale;
@@ -241,8 +238,8 @@ export function drawPanelArray(canvas, config) {
   // We offset it slightly forward in Y and down in Z so it hovers in front
   const d1 = proj(-totalW/2, yFrontEdge + 30, zFrontEdge - 15);
   const d2 = proj(totalW/2, yFrontEdge + 30, zFrontEdge - 15);
-  const displayWidthM = (cols * panelWidthMm / 1000) * fitScale;
-  const displayDepthM = (rows * panelHeightMm / 1000) * fitScale;
+  const displayWidthM = (cols * panelWidthMm / 1000) * (modelScale / baseModelScale);
+  const displayDepthM = (rows * panelHeightMm / 1000) * (modelScale / baseModelScale);
   drawArrow(d1, d2, `${displayWidthM.toFixed(2)} m`, 12);
 
   // Height dimension (along right edge, projected into perspective)

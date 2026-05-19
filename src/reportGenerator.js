@@ -203,60 +203,50 @@ export async function generateProposalPDF(estimates) {
       margin: { left: margin },
     });
     yPos = doc.lastAutoTable.finalY + 15;
-  }
 
-  addFooter(1);
-
-  // ================= PAGE 1B: Panel Array Diagram =================
+  // ================= Panel Array Diagram (on page 1, below panel configuration) =================
   const panelDiagramData = canvasToImageData('panelDiagramCanvas');
   if (panelDiagramData) {
-    doc.addPage();
-    yPos = 30;
-    addHeader("Panel Array Layout");
+    // Check if we need a new page for the diagram
+    const diagramSpaceNeeded = 200;
+    if (yPos + diagramSpaceNeeded > pageHeight - 30) {
+      doc.addPage();
+      yPos = 30;
+      addHeader("Solar System Proposal");
+    }
 
     doc.setTextColor(COLORS.black);
-    doc.setFontSize(18);
+    doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.text("Panel Array Visualization", margin, yPos);
-    yPos += 10;
+    yPos += 8;
 
     // Add the panel diagram image
     const imgWidth = pageWidth - (margin * 2);
-    const imgHeight = 180;
+    const imgHeight = 160;
     doc.addImage(panelDiagramData, 'PNG', margin, yPos, imgWidth, imgHeight);
-    yPos += imgHeight + 15;
+    yPos += imgHeight + 10;
 
     // Add dimensions info if available
     const dimLabel = document.getElementById('panelDiagramDimensions');
     if (dimLabel && dimLabel.textContent) {
-      doc.setFontSize(11);
+      doc.setFontSize(10);
       doc.setTextColor(COLORS.text);
       doc.setFont("helvetica", "normal");
-      doc.text(`Dimensions: ${dimLabel.textContent}`, margin, yPos);
+      doc.text(dimLabel.textContent, margin, yPos);
+      yPos += 6;
     }
 
-    // Add panel configuration details
+    // Add panel configuration summary
     const panelLayout = estimates.panelLayout;
     if (panelLayout) {
-      yPos += 15;
-      doc.setTextColor(COLORS.black);
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      doc.text("Configuration Details:", margin, yPos);
-      yPos += 8;
-
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
       doc.setTextColor(COLORS.text);
-      doc.text(`Rows: ${panelLayout.rows} | Columns: ${panelLayout.cols} | Total Panels: ${panelLayout.numPanels}`, margin, yPos);
-      yPos += 5;
-      doc.text(`Panel Size: ${panelLayout.panelDimensions} (${panelLayout.panelWp} Wp each)`, margin, yPos);
-      yPos += 5;
-      doc.text(`Total Area: ${panelLayout.totalAreaSqft} sq ft (${panelLayout.totalAreaSqm} m²)`, margin, yPos);
+      doc.text(`Configuration: ${panelLayout.rows} × ${panelLayout.cols} | ${panelLayout.numPanels} panels | ${panelLayout.panelDimensions} (${panelLayout.panelWp} Wp) | Area: ${panelLayout.totalAreaSqft} sq ft`, margin, yPos);
     }
-
-    addFooter(doc.internal.getNumberOfPages());
   }
+
+  addFooter(1);
 
   // ================= PAGE 2: Feasible Solutions =================
   doc.addPage();
