@@ -49,11 +49,12 @@ export function drawPanelArray(canvas, config) {
   };
 
   const tiltRad = 15 * Math.PI / 180; // Panel tilt angle
-  const structureHeight = 15; // Leg height at the front
+  const frontLegHeight = 20; // Leg height at the front (lowest point)
+  const backLegHeight = 80; // Leg height at the back (highest point)
 
   // Calculate Z (height) based on Y (depth)
   // Back (negative y) is elevated. Front (positive y) is low.
-  const getZ = (y) => structureHeight + (totalH/2 - y) * Math.tan(tiltRad);
+  const getZ = (y) => frontLegHeight + (totalH/2 - y) * Math.tan(tiltRad);
 
   // Helper to draw polygons
   const drawPoly = (pts, fill, stroke, lineWidth = 1) => {
@@ -90,19 +91,28 @@ export function drawPanelArray(canvas, config) {
     const yLine = r * pH - totalH/2;
     const zLine = getZ(yLine);
 
-    // 2. Draw Legs for this row
+    // 2. Draw Legs with base plates for this row
     ctx.strokeStyle = "#475569";
     for (let c = 0; c <= cols; c++) {
       if (c % Math.max(1, Math.floor(cols/2)) === 0) {
         const xLine = c * pW - totalW/2;
-        const pb = proj(xLine, yLine, 0);
-        const pt = proj(xLine, yLine, zLine);
+        const pb = proj(xLine, yLine, 0); // Base on ground
+        const pt = proj(xLine, yLine, zLine); // Top connection point
         
         const dy = camY - yLine;
-        ctx.lineWidth = Math.max(1, 6 * (focalLength / dy)); // Scale line width by depth
-        ctx.lineCap = "round";
+        const lineWidth = Math.max(1, 6 * (focalLength / dy));
         
+        // Draw main leg
+        ctx.lineWidth = lineWidth;
+        ctx.lineCap = "round";
         ctx.beginPath(); ctx.moveTo(pb.x, pb.y); ctx.lineTo(pt.x, pt.y); ctx.stroke();
+        
+        // Draw base plate at bottom
+        const plateSize = 8 * (focalLength / dy);
+        ctx.fillStyle = "#334155";
+        ctx.beginPath();
+        ctx.ellipse(pb.x, pb.y, plateSize, plateSize * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
 
@@ -114,7 +124,37 @@ export function drawPanelArray(canvas, config) {
     const pr1 = proj(-totalW/2, yLine, zLine - 2); // Slightly below panel surface
     const pr2 = proj(totalW/2, yLine, zLine - 2);
     ctx.beginPath(); ctx.moveTo(pr1.x, pr1.y); ctx.lineTo(pr2.x, pr2.y); ctx.stroke();
+
+    // 3b. Draw cross braces between legs (diagonal support)
+    if (r > 0) {
+      const prevYLine = (r - 1) * pH - totalH/2;
+      const prevZLine = getZ(prevYLine);
+      const dyBrace = camY - yLine;
+      const braceWidth = Math.max(0.5, 2 * (focalLength / dyBrace));
+      
+      ctx.strokeStyle = "#64748b";
+      ctx.lineWidth = braceWidth;
+      
+      // Draw diagonal braces from front leg of previous row to back leg of current row
+      for (let c = 0; c <= cols; c++) {
+        if (c % Math.max(1, Math.floor(cols/2)) === 0) {
+          const xLine = c * pW - totalW/2;
+          const topCurrent = proj(xLine, yLine, zLine);
+          const topPrev = proj(xLine, prevYLine, prevZLine);
+          ctx.beginPath(); ctx.moveTo(topCurrent.x, topCurrent.y); ctx.lineTo(topPrev.x, topPrev.y); ctx.stroke();
+        }
+      }
+    }
   }
+  
+  // Draw ground line / foundation reference
+  ctx.strokeStyle = "#475569";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 5]);
+  const groundY1 = proj(-totalW/2 - 20, totalH/2 + 40, 0);
+  const groundY2 = proj(totalW/2 + 20, totalH/2 + 40, 0);
+  ctx.beginPath(); ctx.moveTo(groundY1.x, groundY1.y); ctx.lineTo(groundY2.x, groundY2.y); ctx.stroke();
+  ctx.setLineDash([]);
 
   // 4. Draw Panels (back to front)
   const panelGap = 1.5;
