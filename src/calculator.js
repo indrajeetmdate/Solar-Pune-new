@@ -272,6 +272,32 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   };
 }
 
+// Helper: Check if number has good factor pairs (not prime and max factor <= 10)
+function hasGoodFactorPairs(n) {
+  if (n <= 7) return true; // Allow small numbers
+  const factors = [];
+  for (let i = 1; i <= Math.sqrt(n); i++) {
+    if (n % i === 0) {
+      factors.push(i);
+      if (i !== n / i) factors.push(n / i);
+    }
+  }
+  // Check if all factors are <= 10 (manageable for diagram)
+  return factors.some(f => f > 1 && f <= 10 && f !== n);
+}
+
+// Helper: Find nearest panel count with good factor pairs
+function getValidPanelCount(targetPanels) {
+  if (hasGoodFactorPairs(targetPanels)) return targetPanels;
+
+  // Search upwards for valid count
+  for (let i = targetPanels + 1; i <= targetPanels + 20; i++) {
+    if (hasGoodFactorPairs(i)) return i;
+  }
+  // Fallback: return original if no good option found nearby
+  return targetPanels;
+}
+
 export function calculatePanelLayout(dcCapacityKw, availableAreaSqft) {
   // Standard panel: 1123mm × 2279mm = 2.559 m² ≈ 27.54 sq ft
   const panelWidthMm = 1123;
@@ -286,7 +312,8 @@ export function calculatePanelLayout(dcCapacityKw, availableAreaSqft) {
   // vs raw panel area of ~55 sqft/kWp).
   const spacingMultiplier = 1.5;
 
-  const numPanels = Math.ceil((dcCapacityKw * 1000) / panelWp);
+  const rawNumPanels = Math.ceil((dcCapacityKw * 1000) / panelWp);
+  const numPanels = getValidPanelCount(rawNumPanels);
   const panelOnlyAreaSqft = round(numPanels * panelAreaSqft, 0);
   const panelOnlyAreaSqm = round(numPanels * panelAreaSqm, 1);
   const requiredAreaSqft = round(panelOnlyAreaSqft * spacingMultiplier, 0);
