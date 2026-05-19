@@ -49,8 +49,8 @@ export function drawPanelArray(canvas, config) {
   };
 
   const tiltRad = 15 * Math.PI / 180; // Panel tilt angle
-  const frontLegHeight = 20; // Leg height at the front (lowest point)
-  const backLegHeight = 80; // Leg height at the back (highest point)
+  const frontLegHeight = 35; // Leg height at the front (lowest point)
+  const backLegHeight = 120; // Leg height at the back (highest point)
 
   // Calculate Z (height) based on Y (depth)
   // Back (negative y) is elevated. Front (positive y) is low.
