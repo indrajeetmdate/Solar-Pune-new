@@ -568,24 +568,31 @@ function attachEvents() {
 
   $("downloadProposalButton")?.addEventListener("click", () => {
     if (state.estimates) {
-      import("./reportGenerator.js").then(({ generateProposalPDF }) => {
-        generateProposalPDF(state.estimates);
-      }).catch(err => console.error("Failed to load PDF generator", err));
+      if (window.generateProposalPDF) {
+        window.generateProposalPDF(state.estimates);
+      } else {
+        // Fallback: load as module
+        import("./reportGenerator.js").then(({ generateProposalPDF }) => {
+          generateProposalPDF(state.estimates);
+        }).catch(err => console.error("Failed to load PDF generator", err));
+      }
     } else {
       alert("Please ensure all inputs are filled to calculate the estimate before downloading.");
     }
   });
 
   $("downloadProposalButtonInternal")?.addEventListener("click", () => {
-    console.log("Internal download clicked, state.estimates:", state.estimates);
     if (state.estimates) {
-      import("./reportGenerator.js").then(({ generateProposalPDF }) => {
-        console.log("Generating PDF with estimates:", state.estimates);
-        generateProposalPDF(state.estimates);
-      }).catch(err => {
-        console.error("Failed to load PDF generator", err);
-        alert("Failed to generate PDF: " + err.message);
-      });
+      if (window.generateProposalPDF) {
+        window.generateProposalPDF(state.estimates);
+      } else {
+        import("./reportGenerator.js").then(({ generateProposalPDF }) => {
+          generateProposalPDF(state.estimates);
+        }).catch(err => {
+          console.error("Failed to load PDF generator", err);
+          alert("Failed to generate PDF: " + err.message);
+        });
+      }
     } else {
       alert("Please calculate an estimate first before downloading the proposal.");
     }

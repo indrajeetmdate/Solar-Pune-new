@@ -396,4 +396,7 @@ export async function generateProposalPDF(estimates) {
   doc.save(filename);
 }
 
-export { generateProposalPDF };
+// Make available globally for both module and non-module usage
+if (typeof window !== 'undefined') {
+  window.generateProposalPDF = generateProposalPDF;
+}
