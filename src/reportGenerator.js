@@ -27,10 +27,21 @@ const loadImage = (url) => {
 const canvasToImageData = (canvasId) => {
   try {
     const canvas = document.getElementById(canvasId);
-    if (!canvas) return null;
+    if (!canvas) {
+      console.warn("Canvas not found:", canvasId);
+      return null;
+    }
+    // Check if canvas has content by checking width
+    if (canvas.width === 0 || canvas.height === 0) {
+      console.warn("Canvas not drawn yet - empty dimensions");
+      return null;
+    }
     const dataUrl = canvas.toDataURL('image/png');
     // Check if canvas is empty (might not be drawn yet)
-    if (!dataUrl || dataUrl === 'data:,') return null;
+    if (!dataUrl || dataUrl.length < 100 || dataUrl === 'data:,') {
+      console.warn("Canvas appears empty");
+      return null;
+    }
     return dataUrl;
   } catch (e) {
     console.warn("Canvas conversion failed:", e);
@@ -39,12 +50,18 @@ const canvasToImageData = (canvasId) => {
 };
 
 export async function generateProposalPDF(estimates) {
+  console.log("Starting PDF generation...", estimates);
+
+  // Check if jsPDF is loaded
   const jsPDF = window.jspdf ? window.jspdf.jsPDF : window.jsPDF;
 
   if (!jsPDF) {
-    alert("PDF generator is still loading or blocked. Please wait a moment and try again.");
+    console.error("jsPDF not loaded - checking window.jspdf:", window.jspdf);
+    alert("PDF generator library not loaded. Please refresh the page and try again.");
     return;
   }
+
+  try {
 
   // Load logo before generating document
   const logoResult = await loadImage("https://bfkxdpripwjxenfvwpfu.supabase.co/storage/v1/object/public/Logo/DC_Energy.png");
@@ -394,6 +411,10 @@ export async function generateProposalPDF(estimates) {
     : `DC_Energy_Proposal.pdf`;
 
   doc.save(filename);
+  } catch (error) {
+    console.error("PDF generation error:", error);
+    alert("Error generating PDF: " + error.message);
+  }
 }
 
 // Make available globally for both module and non-module usage
