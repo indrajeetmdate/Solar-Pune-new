@@ -577,12 +577,17 @@ function attachEvents() {
   });
 
   $("downloadProposalButtonInternal")?.addEventListener("click", () => {
+    console.log("Internal download clicked, state.estimates:", state.estimates);
     if (state.estimates) {
       import("./reportGenerator.js").then(({ generateProposalPDF }) => {
+        console.log("Generating PDF with estimates:", state.estimates);
         generateProposalPDF(state.estimates);
-      }).catch(err => console.error("Failed to load PDF generator", err));
+      }).catch(err => {
+        console.error("Failed to load PDF generator", err);
+        alert("Failed to generate PDF: " + err.message);
+      });
     } else {
-      alert("Please ensure all inputs are filled to calculate the estimate before downloading.");
+      alert("Please calculate an estimate first before downloading the proposal.");
     }
   });
 
