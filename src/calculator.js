@@ -272,30 +272,17 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   };
 }
 
-// Helper: Check if number has good factor pairs (not prime and max factor <= 10)
-function hasGoodFactorPairs(n) {
-  if (n <= 7) return true; // Allow small numbers
-  const factors = [];
-  for (let i = 1; i <= Math.sqrt(n); i++) {
-    if (n % i === 0) {
-      factors.push(i);
-      if (i !== n / i) factors.push(n / i);
-    }
+// Helper: Get valid factor pairs avoiding oblong layouts (1*N or N*1)
+function getValidFactorPairs(n) {
+  const configs = [];
+  for (let rows = 1; rows <= n; rows++) {
+    if (n % rows !== 0) continue;
+    const cols = n / rows;
+    // Skip oblong configurations where rows or cols is 1
+    if (rows === 1 || cols === 1) continue;
+    configs.push({ rows, cols });
   }
-  // Check if all factors are <= 10 (manageable for diagram)
-  return factors.some(f => f > 1 && f <= 10 && f !== n);
-}
-
-// Helper: Find nearest panel count with good factor pairs
-function getValidPanelCount(targetPanels) {
-  if (hasGoodFactorPairs(targetPanels)) return targetPanels;
-
-  // Search upwards for valid count
-  for (let i = targetPanels + 1; i <= targetPanels + 20; i++) {
-    if (hasGoodFactorPairs(i)) return i;
-  }
-  // Fallback: return original if no good option found nearby
-  return targetPanels;
+  return configs;
 }
 
 export function calculatePanelLayout(dcCapacityKw, availableAreaSqft) {
@@ -312,8 +299,7 @@ export function calculatePanelLayout(dcCapacityKw, availableAreaSqft) {
   // vs raw panel area of ~55 sqft/kWp).
   const spacingMultiplier = 1.5;
 
-  const rawNumPanels = Math.ceil((dcCapacityKw * 1000) / panelWp);
-  const numPanels = getValidPanelCount(rawNumPanels);
+  const numPanels = Math.ceil((dcCapacityKw * 1000) / panelWp);
   const panelOnlyAreaSqft = round(numPanels * panelAreaSqft, 0);
   const panelOnlyAreaSqm = round(numPanels * panelAreaSqm, 1);
   const requiredAreaSqft = round(panelOnlyAreaSqft * spacingMultiplier, 0);
@@ -343,6 +329,25 @@ export function getPanelConfigurations(numPanels) {
   for (let rows = 1; rows <= numPanels; rows++) {
     if (numPanels % rows !== 0) continue;
     const cols = numPanels / rows;
+    // Skip oblong configurations (1*N or N*1)
+    if (rows === 1 || cols === 1) continue;
+    const totalWidthMm = cols * panelWidthMm;
+    const totalHeightMm = rows * panelHeightMm;
+    configs.push({
+      rows,
+      cols,
+      label: `${rows} × ${cols}`,
+      totalWidthMm,
+      totalHeightMm,
+      totalWidthM: round(totalWidthMm / 1000, 2),
+      totalHeightM: round(totalHeightMm / 1000, 2),
+    });
+  }
+
+  // If no valid configs (e.g., prime numbers), create a balanced fallback
+  if (configs.length === 0) {
+    const rows = Math.ceil(Math.sqrt(numPanels));
+    const cols = Math.ceil(numPanels / rows);
     const totalWidthMm = cols * panelWidthMm;
     const totalHeightMm = rows * panelHeightMm;
     configs.push({
