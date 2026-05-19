@@ -25,9 +25,17 @@ const loadImage = (url) => {
 
 // Helper to get canvas as image data
 const canvasToImageData = (canvasId) => {
-  const canvas = document.getElementById(canvasId);
-  if (!canvas) return null;
-  return canvas.toDataURL('image/png');
+  try {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+    const dataUrl = canvas.toDataURL('image/png');
+    // Check if canvas is empty (might not be drawn yet)
+    if (!dataUrl || dataUrl === 'data:,') return null;
+    return dataUrl;
+  } catch (e) {
+    console.warn("Canvas conversion failed:", e);
+    return null;
+  }
 };
 
 export async function generateProposalPDF(estimates) {
@@ -387,3 +395,5 @@ export async function generateProposalPDF(estimates) {
 
   doc.save(filename);
 }
+
+export { generateProposalPDF };
