@@ -10,14 +10,29 @@ export function drawPanelArray(canvas, config) {
   canvas.height = logicalHeight * dpr;
   canvas.style.width = `${logicalWidth}px`;
   canvas.style.height = `${logicalHeight}px`;
-  
+
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, logicalWidth, logicalHeight);
 
   const { rows, cols, panelWidthMm, panelHeightMm } = config;
-  
+
+  // Terrace boundary dimensions (usable roof space in meters)
+  const terraceWidthM = 10; // Max usable width in meters
+  const terraceDepthM = 8;  // Max usable depth in meters
+
+  // Calculate panel array dimensions in meters
+  const arrayWidthM = (cols * panelWidthMm) / 1000;
+  const arrayDepthM = (rows * panelHeightMm) / 1000;
+
+  // Calculate required scale to fit within terrace boundary
+  const scaleX = arrayWidthM > terraceWidthM ? terraceWidthM / arrayWidthM : 1;
+  const scaleY = arrayDepthM > terraceDepthM ? terraceDepthM / arrayDepthM : 1;
+  const fitScale = Math.min(scaleX, scaleY, 1); // Only scale down, never up
+
   // Scale down physical dimensions to internal model units
-  const modelScale = 0.045; 
+  const baseModelScale = 0.045;
+  const modelScale = baseModelScale * fitScale;
+
   const pW = panelWidthMm * modelScale;
   const pH = panelHeightMm * modelScale;
   const totalW = cols * pW;
@@ -226,12 +241,14 @@ export function drawPanelArray(canvas, config) {
   // We offset it slightly forward in Y and down in Z so it hovers in front
   const d1 = proj(-totalW/2, yFrontEdge + 30, zFrontEdge - 15);
   const d2 = proj(totalW/2, yFrontEdge + 30, zFrontEdge - 15);
-  drawArrow(d1, d2, `${(cols * panelWidthMm / 1000).toFixed(2)} m`, 12);
+  const displayWidthM = (cols * panelWidthMm / 1000) * fitScale;
+  const displayDepthM = (rows * panelHeightMm / 1000) * fitScale;
+  drawArrow(d1, d2, `${displayWidthM.toFixed(2)} m`, 12);
 
   // Height dimension (along right edge, projected into perspective)
   const xRightEdge = totalW/2;
   // Offset to the right
   const d3 = proj(xRightEdge + 30, -totalH/2, getZ(-totalH/2));
   const d4 = proj(xRightEdge + 30, totalH/2, getZ(totalH/2));
-  drawArrow(d3, d4, `${(rows * panelHeightMm / 1000).toFixed(2)} m`, 0);
+  drawArrow(d3, d4, `${displayDepthM.toFixed(2)} m`, 0);
 }
