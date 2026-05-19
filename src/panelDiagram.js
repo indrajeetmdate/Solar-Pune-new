@@ -20,14 +20,30 @@ export function drawPanelArray(canvas, config) {
   const baseModelScale = 0.045;
   const maxPanelsForUnscaled = 20; // Up to 20 panels show at full size
 
+  // Get canvas dimensions
+  const maxCanvasHeight = 320; // Leave 30px buffer
+  const maxCanvasWidth = logicalWidth * 0.85; // Leave some margin on sides
+
   let modelScale;
-  if (rows <= maxPanelsForUnscaled) {
-    modelScale = baseModelScale; // No scaling for small arrays (4, 6, 8, 10, 20)
-  } else {
-    // Calculate scale to fit within canvas height (350px)
-    const maxCanvasHeight = 320; // Leave 30px buffer
+  if (rows <= maxPanelsForUnscaled && cols <= maxPanelsForUnscaled) {
+    // Check if it fits without scaling
     const requiredHeight = rows * panelHeightMm * baseModelScale;
-    modelScale = baseModelScale * (maxCanvasHeight / requiredHeight);
+    const requiredWidth = cols * panelWidthMm * baseModelScale;
+    if (requiredHeight <= maxCanvasHeight && requiredWidth <= maxCanvasWidth) {
+      modelScale = baseModelScale; // No scaling needed
+    } else {
+      // Need to scale but within limits
+      const scaleY = maxCanvasHeight / requiredHeight;
+      const scaleX = maxCanvasWidth / requiredWidth;
+      modelScale = baseModelScale * Math.min(scaleY, scaleX);
+    }
+  } else {
+    // Calculate scale to fit within canvas (considering both height and width)
+    const requiredHeight = rows * panelHeightMm * baseModelScale;
+    const requiredWidth = cols * panelWidthMm * baseModelScale;
+    const scaleY = maxCanvasHeight / requiredHeight;
+    const scaleX = maxCanvasWidth / requiredWidth;
+    modelScale = baseModelScale * Math.min(scaleY, scaleX);
   }
 
   const pW = panelWidthMm * modelScale;
