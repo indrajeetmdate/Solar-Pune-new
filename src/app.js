@@ -338,6 +338,14 @@ function render() {
   const sbEl = $("savingsBreakdownPanel");
   if (sbEl && option.savingsBreakdown) {
     const sb = option.savingsBreakdown;
+    const tipMap = {
+      "Slab/tariff offset": "Savings from reducing units in expensive MSEDCL slab tiers. More solar = lower per-unit rate.",
+      "ToD daytime rebate": "Solar generates during 9AM–5PM when MSEDCL offers a rebate on Time-of-Day tariff. You earn credits at a lower cost.",
+      "Peak penalty avoided": "Battery discharges during expensive peak hours (5PM–10PM), avoiding the highest tariff rates.",
+      "PF improvement": "Smart inverters improve your Power Factor, earning a discount from MSEDCL on your bill.",
+      "Prompt pay discount": "1% discount for paying your reduced bill on time. Solar makes this easier with lower bills.",
+      "Banking loss": "MSEDCL charges a grid-support fee on excess solar units exported to the grid.",
+    };
     const items = [
       ["Slab/tariff offset", sb.baseSavings],
       ["ToD daytime rebate", sb.todDaytimeRebate],
@@ -350,7 +358,11 @@ function render() {
     if (items.length > 1) {
       sbEl.classList.remove("hidden");
       sbEl.innerHTML = items
-        .map(([label, value]) => `<div><dt>${label}</dt><dd>${value > 0 ? "+" : ""}${money(Math.abs(value))}${value < 0 ? " loss" : ""}/mo</dd></div>`)
+        .map(([label, value]) => {
+          const tip = tipMap[label] || "";
+          const icon = tip ? ` <i class="info-tip" data-tip="${tip}">i</i>` : "";
+          return `<div><dt>${label}${icon}</dt><dd>${value > 0 ? "+" : ""}${money(Math.abs(value))}${value < 0 ? " loss" : ""}/mo</dd></div>`;
+        })
         .join("");
     } else {
       sbEl.classList.add("hidden");

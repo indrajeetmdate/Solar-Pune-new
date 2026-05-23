@@ -339,12 +339,14 @@ button {
   margin-left: 4px;
   flex-shrink: 0;
   transition: color 0.2s, border-color 0.2s, background 0.2s;
+  z-index: 1;
 }
 
 .info-tip:hover {
   color: var(--brand-green);
   border-color: var(--brand-green);
   background: var(--brand-green-soft);
+  z-index: 9999;
 }
 
 .info-tip::after {
@@ -367,7 +369,7 @@ button {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.18s ease;
-  z-index: 100;
+  z-index: 9999;
   box-shadow: var(--shadow-md);
 }
 
@@ -375,12 +377,26 @@ button {
   opacity: 1;
 }
 
+/* Allow tooltips to escape parent overflow */
+.detail-card,
+.metric-card,
+.metric-grid,
+.table-wrap,
+.summary-band,
+thead,
+th {
+  overflow: visible !important;
+  position: relative;
+}
+
 /* Ensure field span can hold the icon inline */
 .field > span,
-.check-row > span {
+.check-row > span,
+.metric-card > span {
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  overflow: visible;
 }
 
 /* ----------------------------------------------------------------
@@ -771,6 +787,10 @@ tr:hover td {
 .breakup-list dt {
   color: var(--muted);
   font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  overflow: visible;
 }
 
 .breakup-list dd {
