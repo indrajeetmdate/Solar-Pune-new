@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG, PANEL_LABELS, STRUCTURE_LABELS, SYSTEM_LABELS } from "./config.js";
+import { DEFAULT_CONFIG, TARIFF_PROFILES, PANEL_LABELS, STRUCTURE_LABELS, SYSTEM_LABELS } from "./config.js";
 import { calculateEstimate, getPanelConfigurations } from "./calculator.js";
 import { parseMsebBillFile } from "./billParser.js";
 import { isImageFile } from "./ocrExtractor.js";
@@ -20,6 +20,11 @@ const ids = [
   "monthlyBill",
   "roofArea",
   "sanctionedLoad",
+  "consumerCategory",
+  "connectionPhase",
+  "numFlats",
+  "currentPf",
+  "peakHourUsagePct",
   "goal",
   "coordinates",
   "tiltAngle",
@@ -102,6 +107,12 @@ function readInput() {
     monthlyBill: numberValue("monthlyBill"),
     roofArea: numberValue("roofArea"),
     sanctionedLoad: numberValue("sanctionedLoad"),
+    consumerCategory: safeStr("consumerCategory") || "LT-I",
+    connectionPhase: safeStr("connectionPhase") || "1-phase",
+    numFlats: numberValue("numFlats"),
+    currentPf: numberValue("currentPf") || null,
+    improvedPf: 0.97,  // Smart inverters typically bring PF to 0.97+
+    peakHourUsagePct: numberValue("peakHourUsagePct") || 30,
     goal: safeStr("goal"),
     coordinates: safeStr("coordinates"),
     tiltAngle: safeStr("tiltAngle") !== "" ? numberValue("tiltAngle") : null,
@@ -119,6 +130,19 @@ function readInput() {
 }
 
 function readConfig() {
+  const category = ($("consumerCategory") ? $("consumerCategory").value : "LT-I") || "LT-I";
+  const profile = TARIFF_PROFILES[category] || TARIFF_PROFILES["LT-I"];
+
+  // Build slabs: use UI overrides if set, else fall back to profile defaults
+  const profileSlabs = profile.slabs || DEFAULT_CONFIG.tariff.slabs;
+  const slabs = [];
+  for (let i = 0; i < profileSlabs.length; i++) {
+    const uiRate = numberValue(`slabRate${i + 1}`);
+    slabs.push({ upto: profileSlabs[i].upto, rate: uiRate || profileSlabs[i].rate });
+  }
+  // If profile has fewer than 4 slabs, pad remaining UI fields to 0
+  if (slabs.length === 0) slabs.push({ upto: Infinity, rate: profileSlabs[0]?.rate || 5 });
+
   return {
     pricing: {
       panelDcrRatePerWp: numberValue("panelDcrRate"),
@@ -152,15 +176,11 @@ function readConfig() {
       inverterEfficiency: numberValue("inverterEfficiency"),
     },
     tariff: {
-      fixedCharge: numberValue("fixedCharge"),
-      electricityDuty: numberValue("electricityDuty"),
+      consumerCategory: category,
+      fixedCharge: numberValue("fixedCharge") || (profile.fixedChargePerKw * (numberValue("sanctionedLoad") || 5)),
+      electricityDuty: numberValue("electricityDuty") || profile.dutyRate || 7,
       tariffEscalation: numberValue("tariffEscalation"),
-      slabs: [
-        { upto: 100, rate: numberValue("slabRate1") || DEFAULT_CONFIG.tariff.slabs[0].rate },
-        { upto: 300, rate: numberValue("slabRate2") || DEFAULT_CONFIG.tariff.slabs[1].rate },
-        { upto: 500, rate: numberValue("slabRate3") || DEFAULT_CONFIG.tariff.slabs[2].rate },
-        { upto: Infinity, rate: numberValue("slabRate4") || DEFAULT_CONFIG.tariff.slabs[3].rate },
-      ],
+      slabs,
     },
     policy: DEFAULT_CONFIG.policy,
   };
@@ -311,6 +331,29 @@ function render() {
   $("payback").textContent = years(option.paybackYears);
   $("sanctionStatus").textContent = estimate.sanctionedStatus.label;
   $("sanctionStatus").className = `status-pill ${estimate.sanctionedStatus.level}`;
+
+  // Savings breakdown (category-aware bonuses)
+  const sbEl = $("savingsBreakdownPanel");
+  if (sbEl && option.savingsBreakdown) {
+    const sb = option.savingsBreakdown;
+    const items = [
+      ["Slab/tariff offset", sb.baseSavings],
+      ["ToD daytime rebate", sb.todDaytimeRebate],
+      ["Peak penalty avoided", sb.todPeakAvoided],
+      ["PF improvement", sb.pfIncentive],
+      ["Prompt pay discount", sb.promptPayDiscount],
+      ["Banking loss", -sb.bankingLoss],
+    ].filter(([, v]) => v !== 0);
+
+    if (items.length > 1) {
+      sbEl.classList.remove("hidden");
+      sbEl.innerHTML = items
+        .map(([label, value]) => `<div><dt>${label}</dt><dd>${value > 0 ? "+" : ""}${money(Math.abs(value))}${value < 0 ? " loss" : ""}/mo</dd></div>`)
+        .join("");
+    } else {
+      sbEl.classList.add("hidden");
+    }
+  }
 
   // Panel layout
   const pl = estimate.panelLayout;
@@ -496,6 +539,37 @@ function attachEvents() {
   $("lockInternalButton")?.addEventListener("click", lockInternal);
   $("resetButton")?.addEventListener("click", resetForm);
   $("applyExtractedBill")?.addEventListener("click", applyExtractedBill);
+
+  // Consumer category change: toggle conditional fields and update slab defaults
+  $("consumerCategory")?.addEventListener("change", () => {
+    const cat = $("consumerCategory").value;
+    const profile = TARIFF_PROFILES[cat];
+    if (!profile) return;
+
+    // Toggle conditional fields
+    $("numFlatsField")?.classList.toggle("hidden", cat !== "LT-I-GHS");
+    $("powerFactorField")?.classList.toggle("hidden", !profile.pfIncentiveApplicable);
+    $("peakUsageField")?.classList.toggle("hidden", profile.todPeakPenaltyPct <= 0);
+
+    // Update slab rate fields to reflect profile defaults
+    const slabs = profile.slabs || [];
+    for (let i = 1; i <= 4; i++) {
+      const el = $(`slabRate${i}`);
+      if (el && slabs[i - 1]) {
+        el.value = slabs[i - 1].rate;
+      } else if (el) {
+        el.value = "";
+      }
+    }
+
+    // Update fixed charge and duty defaults
+    const fcEl = $("fixedCharge");
+    if (fcEl) fcEl.value = Math.round(profile.fixedChargePerKw * (numberValue("sanctionedLoad") || 5));
+    const dutyEl = $("electricityDuty");
+    if (dutyEl) dutyEl.value = profile.dutyRate || 7;
+
+    render();
+  });
 
   $("fetchLocationButton")?.addEventListener("click", () => {
     if (!navigator.geolocation) {

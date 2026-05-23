@@ -117,6 +117,37 @@
               <span>Sanctioned load</span>
               <input id="sanctionedLoad" type="number" min="0" step="0.5" value="5">
             </label>
+            <label class="field">
+              <span>Consumer category</span>
+              <select id="consumerCategory">
+                <option value="LT-I" selected>LT-I Residential</option>
+                <option value="LT-I-GHS">LT-I Group Housing</option>
+                <option value="LT-II">LT-II Commercial</option>
+                <option value="LT-III">LT-III Industrial</option>
+                <option value="LT-AG">LT-AG Agricultural</option>
+                <option value="HT-I">HT-I Industrial</option>
+                <option value="HT-II">HT-II Commercial</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Phase</span>
+              <select id="connectionPhase">
+                <option value="1-phase">Single phase</option>
+                <option value="3-phase">Three phase</option>
+              </select>
+            </label>
+            <label class="field hidden" id="numFlatsField">
+              <span>Number of flats (GHS)</span>
+              <input id="numFlats" type="number" min="1" step="1" placeholder="e.g. 80">
+            </label>
+            <label class="field hidden" id="powerFactorField">
+              <span>Current power factor</span>
+              <input id="currentPf" type="number" min="0.5" max="1" step="0.01" placeholder="e.g. 0.85">
+            </label>
+            <label class="field hidden" id="peakUsageField">
+              <span>Peak hour usage %</span>
+              <input id="peakHourUsagePct" type="number" min="0" max="100" step="5" value="30">
+            </label>
           </div>
 
           <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--line);">
@@ -478,6 +509,7 @@
                 <strong id="payback" style="font-size: 15px;">0 years</strong>
               </div>
             </div>
+            <dl id="savingsBreakdownPanel" class="breakup-list hidden" style="margin: 10px 0 0; font-size: 12px; padding: 8px 12px; background: var(--card-bg); border: 1px solid var(--line); border-radius: var(--radius);"></dl>
           </div>
 
           <!-- Compare Table -->

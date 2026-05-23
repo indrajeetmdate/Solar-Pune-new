@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG } from "./config.js";
+import { DEFAULT_CONFIG, TARIFF_PROFILES } from "./config.js";
 
 const round = (value, decimals = 2) => {
   const factor = 10 ** decimals;
@@ -39,15 +39,31 @@ export function calculatePerformanceFactor(performance, input = {}) {
   return round((1 - shading) * (1 - orientation) * (1 - system), 4);
 }
 
-export function calculateSubsidy(systemType, panelType, dcCapacityKw, policy = DEFAULT_CONFIG.policy) {
+export function calculateSubsidy(systemType, panelType, dcCapacityKw, input = {}, policy = DEFAULT_CONFIG.policy) {
   const isGridConnected = systemType === "ongrid" || systemType === "hybrid";
   if (!isGridConnected || panelType !== "dcr" || dcCapacityKw <= 0) {
-    return 0;
+    return { total: 0, type: "none" };
   }
 
+  const profile = TARIFF_PROFILES[input.consumerCategory] || TARIFF_PROFILES["LT-I"];
+  const subsidyType = profile.subsidyType || "individual";
+
+  if (subsidyType === "none") {
+    return { total: 0, type: "none" };
+  }
+
+  if (subsidyType === "ghs") {
+    // GHS: ₹18,000/kW flat, max 500kW, capped by 3kW per flat
+    const maxByFlats = (input.numFlats || 100) * (policy.ghsPerFlatCapKw || 3);
+    const maxCapacity = Math.min(policy.ghsSubsidyMaxKw || 500, maxByFlats);
+    const eligibleKw = Math.min(dcCapacityKw, maxCapacity);
+    return { total: round(eligibleKw * (policy.ghsSubsidyPerKw || 18000), 0), type: "ghs" };
+  }
+
+  // Individual residential: PM Surya Ghar bands
   const firstBand = Math.min(dcCapacityKw, 2) * policy.subsidyFirstTwoKw;
   const secondBand = Math.min(Math.max(dcCapacityKw - 2, 0), 1) * policy.subsidyNextOneKw;
-  return round(Math.min(firstBand + secondBand, policy.subsidyCap), 0);
+  return { total: round(Math.min(firstBand + secondBand, policy.subsidyCap), 0), type: "individual" };
 }
 
 export function calculateBill(units, tariff = DEFAULT_CONFIG.tariff) {
@@ -75,6 +91,82 @@ export function calculateBill(units, tariff = DEFAULT_CONFIG.tariff) {
     duty: round(duty, 0),
     total: round(subtotal + duty, 0),
   };
+}
+
+// ─── Banking / Grid Support Charge Deduction ─────────────────────────────────
+// MSEDCL deducts a % of energy INJECTED into the grid (not self-consumed).
+// Systems ≤10 kW are fully exempt. LT >10kW = 12%, HT >10kW = 7.5%.
+export function calculateBankingDeduction(systemCapacityKw, monthlyGen, selfConsumedUnits, input = {}) {
+  const profile = TARIFF_PROFILES[input.consumerCategory] || TARIFF_PROFILES["LT-I"];
+  const injected = Math.max(monthlyGen - selfConsumedUnits, 0);
+  if (injected <= 0) return { deductedUnits: 0, usableInjected: injected };
+
+  if (systemCapacityKw <= (profile.bankingExemptUptoKw || 10)) {
+    return { deductedUnits: 0, usableInjected: injected };
+  }
+
+  const pct = profile.connectionType === "HT"
+    ? (profile.bankingChargePctHT || 7.5) / 100
+    : (profile.bankingChargePctLT || 12) / 100;
+
+  const deducted = round(injected * pct, 0);
+  return { deductedUnits: deducted, usableInjected: round(injected - deducted, 0) };
+}
+
+// ─── Time-of-Day (ToD) Savings ───────────────────────────────────────────────
+// Solar generates during 09:00–17:00 (daytime). Some categories get a rebate
+// on energy consumed in this window, and all non-residential pay a penalty
+// for 17:00–24:00 (peak). Battery can avoid peak penalty.
+export function calculateTodSavings(offsetUnits, energyChargePerUnit, input = {}) {
+  const profile = TARIFF_PROFILES[input.consumerCategory] || TARIFF_PROFILES["LT-I"];
+  let daytimeRebate = 0;
+  let peakPenaltyAvoided = 0;
+
+  // Daytime rebate on behind-the-meter consumption during solar hours
+  // Assume ~60% of offset is self-consumed during 09:00–17:00
+  const selfConsumedDaytime = offsetUnits * 0.6;
+
+  if (profile.todRebatePerUnit > 0) {
+    daytimeRebate = round(selfConsumedDaytime * profile.todRebatePerUnit, 0);
+  } else if (profile.todRebatePct) {
+    // C&I: percentage of energy charge, averaged summer/winter
+    const avgPct = ((profile.todRebatePct.summer || 0) + (profile.todRebatePct.winter || 0)) / 2 / 100;
+    daytimeRebate = round(selfConsumedDaytime * energyChargePerUnit * avgPct, 0);
+  }
+
+  // Peak penalty avoidance: battery can discharge 17:00–24:00
+  // Only relevant for categories with todPeakPenaltyPct > 0 and hybrid/offgrid
+  if (profile.todPeakPenaltyPct > 0 && input.backupNeeded) {
+    const peakUsagePct = (input.peakHourUsagePct || 30) / 100;
+    const peakUnits = input.monthlyUnits * peakUsagePct;
+    const batteryCanCover = Math.min(peakUnits, offsetUnits * 0.3); // battery covers ~30% of gen
+    peakPenaltyAvoided = round(batteryCanCover * energyChargePerUnit * (profile.todPeakPenaltyPct / 100), 0);
+  }
+
+  return { daytimeRebate, peakPenaltyAvoided, totalTod: daytimeRebate + peakPenaltyAvoided };
+}
+
+// ─── Power Factor Incentive ──────────────────────────────────────────────────
+// HT & LT >20kW billed in kVAh. Smart inverters improve PF → 0.5–3.5% discount.
+export function calculatePfIncentive(currentPf, improvedPf, energyCharge, input = {}) {
+  const profile = TARIFF_PROFILES[input.consumerCategory] || TARIFF_PROFILES["LT-I"];
+  if (!profile.pfIncentiveApplicable) return 0;
+  if (!currentPf || currentPf >= 0.95) return 0;
+
+  // Incentive tiers: PF 0.95–0.97 = 0.5%, 0.97–0.99 = 1.5%, 0.99–1.0 = 3.5%
+  const targetPf = Math.min(improvedPf || 0.97, 1.0);
+  let incentivePct = 0;
+  if (targetPf >= 0.99) incentivePct = 3.5;
+  else if (targetPf >= 0.97) incentivePct = 1.5;
+  else if (targetPf >= 0.95) incentivePct = 0.5;
+
+  return round(energyCharge * (incentivePct / 100), 0);
+}
+
+// ─── Prompt Payment Discount ─────────────────────────────────────────────────
+// 1% of monthly bill (excluding taxes/duties) if paid within 7 days.
+export function calculatePromptPayDiscount(energyCharge, fixedCharge) {
+  return round((energyCharge + fixedCharge) * 0.01, 0);
 }
 
 export function recommendCapacity(input, config = DEFAULT_CONFIG) {
@@ -162,50 +254,51 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
     0,
   );
 
-  // BUG #7 FIX: For hybrid/offgrid, apply battery round-trip efficiency loss
-  // to generation instead of an unexplained 4% monetary haircut.
-  // Battery round-trip = DoD × inverter efficiency (already in config).
-  // We apply a ~4% loss to the energy that passes through the battery.
-  // Approximate: 50% of hybrid/offgrid generation goes through battery.
+  // Battery round-trip efficiency loss for hybrid/offgrid
   if (systemType === "hybrid" || systemType === "offgrid") {
     const batteryRoundTrip = (clamp(config.performance.batteryDod || 90, 1, 100) / 100)
       * (clamp(config.performance.inverterEfficiency || 92, 1, 100) / 100);
-    // ~50% of energy cycles through battery; rest is used directly
     const batteryFraction = 0.5;
     const effectiveGenFactor = (1 - batteryFraction) + batteryFraction * batteryRoundTrip;
     monthlyGeneration = round(monthlyGeneration * effectiveGenFactor, 0);
   }
 
-  const offsetUnits = Math.min(monthlyGeneration, input.monthlyUnits);
+  // Banking deduction: MSEDCL takes % of grid-injected energy
+  const selfConsumedEstimate = Math.min(monthlyGeneration, input.monthlyUnits * 0.6);
+  const banking = calculateBankingDeduction(dcCapacityKw, monthlyGeneration, selfConsumedEstimate, input);
+  const usableGeneration = selfConsumedEstimate + banking.usableInjected;
+  const offsetUnits = Math.min(usableGeneration, input.monthlyUnits);
 
-  // BUG #6 FIX: Always compute both bills from the slab model for apples-to-apples
-  // comparison. The user-entered bill is only used for the "effective" tariff method.
+  // Bill calculation
   const modelCurrentBill = calculateBill(input.monthlyUnits, config.tariff);
   const postSolarBill = calculateBill(Math.max(input.monthlyUnits - offsetUnits, 0), config.tariff);
 
-  // BUG #2 FIX: Effective tariff should only reflect the energy portion of the bill,
-  // excluding fixed charges and electricity duty which cannot be "saved" by solar.
   const userBillForEnergy = input.monthlyBill > 0
     ? Math.max(input.monthlyBill - (config.tariff.fixedCharge || 0), 0)
     : modelCurrentBill.energyCharge;
   const dutyRate = (config.tariff.electricityDuty || 0) / 100;
-  // Remove duty component: energyWithDuty = energy * (1 + dutyRate) → energy = energyWithDuty / (1 + dutyRate)
   const energyOnlyBill = userBillForEnergy / (1 + dutyRate);
   const effectiveTariff = input.monthlyUnits > 0 ? energyOnlyBill / input.monthlyUnits : 0;
 
-  let monthlySavings;
+  let baseSavings;
   if (input.savingsMethod === "effective" || (input.savingsMethod === "auto" && input.monthlyBill > 0)) {
-    // Savings = offset units × energy-only per-unit rate, plus the duty saved on those units
     const energySaved = offsetUnits * effectiveTariff;
     const dutySaved = energySaved * dutyRate;
-    monthlySavings = Math.min(energySaved + dutySaved, Math.max(modelCurrentBill.total - (config.tariff.fixedCharge || 0), 0));
+    baseSavings = Math.min(energySaved + dutySaved, Math.max(modelCurrentBill.total - (config.tariff.fixedCharge || 0), 0));
   } else {
-    // Slab method: always model-vs-model for consistency
-    monthlySavings = Math.max(modelCurrentBill.total - postSolarBill.total, 0);
+    baseSavings = Math.max(modelCurrentBill.total - postSolarBill.total, 0);
   }
 
+  // Category-aware bonus savings
+  const avgRate = input.monthlyUnits > 0 ? modelCurrentBill.energyCharge / input.monthlyUnits : 0;
+  const todSavings = calculateTodSavings(offsetUnits, avgRate, input);
+  const pfIncentive = calculatePfIncentive(input.currentPf, input.improvedPf, modelCurrentBill.energyCharge, input);
+  const promptPay = calculatePromptPayDiscount(postSolarBill.energyCharge, postSolarBill.fixedCharge);
+
+  const monthlySavings = round(baseSavings + todSavings.totalTod + pfIncentive + promptPay, 0);
   const annualSavings = monthlySavings * 12;
 
+  // Cost breakup
   const pricing = config.pricing;
   const panelCost = dcCapacityWp * getPanelRate(panelType, pricing);
   const structureCost = dcCapacityWp * pricing.structureRates[input.structureType];
@@ -219,21 +312,15 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const liaisoningCost = systemType === "offgrid" ? 0 : pricing.liaisoningFee;
 
   const preTaxSubtotal =
-    panelCost +
-    structureCost +
-    inverterCost +
-    batteryCost +
-    wiringCost +
-    installationCost +
-    protectionCost +
-    netMeterCost +
-    consultancyCost +
-    liaisoningCost;
+    panelCost + structureCost + inverterCost + batteryCost +
+    wiringCost + installationCost + protectionCost +
+    netMeterCost + consultancyCost + liaisoningCost;
 
   const gst = preTaxSubtotal * ((pricing.gstRate || 0) / 100);
   const contingency = preTaxSubtotal * ((pricing.contingencyRate || 0) / 100);
   const totalPreSubsidy = preTaxSubtotal + gst + contingency;
-  const subsidy = calculateSubsidy(systemType, panelType, dcCapacityKw, config.policy);
+  const subsidyResult = calculateSubsidy(systemType, panelType, dcCapacityKw, input, config.policy);
+  const subsidy = subsidyResult.total;
   const netCost = Math.max(totalPreSubsidy - subsidy, 0);
   const paybackYears = annualSavings > 0 ? netCost / annualSavings : Infinity;
   const roiPercent = netCost > 0 ? (annualSavings / netCost) * 100 : 0;
@@ -250,11 +337,20 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
     annualSavings: round(annualSavings, 0),
     lifetimeSavings: calculateLifetimeSavings(annualSavings, config),
     subsidy: round(subsidy, 0),
+    subsidyType: subsidyResult.type,
     totalPreSubsidy: round(totalPreSubsidy, 0),
     netCost: round(netCost, 0),
     paybackYears: Number.isFinite(paybackYears) ? round(paybackYears, 1) : Infinity,
     roiPercent: round(roiPercent, 1),
     sizing,
+    savingsBreakdown: {
+      baseSavings: round(baseSavings, 0),
+      bankingLoss: round(banking.deductedUnits * avgRate, 0),
+      todDaytimeRebate: todSavings.daytimeRebate,
+      todPeakAvoided: todSavings.peakPenaltyAvoided,
+      pfIncentive: round(pfIncentive, 0),
+      promptPayDiscount: round(promptPay, 0),
+    },
     costBreakup: {
       panels: round(panelCost, 0),
       structure: round(structureCost, 0),
