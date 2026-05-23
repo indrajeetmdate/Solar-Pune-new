@@ -319,6 +319,70 @@ button {
   color: var(--light-grey);
 }
 
+/* Info tooltip icon */
+.info-tip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  font-size: 10px;
+  font-weight: 700;
+  font-style: normal;
+  color: var(--muted);
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  cursor: help;
+  position: relative;
+  vertical-align: middle;
+  margin-left: 4px;
+  flex-shrink: 0;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.info-tip:hover {
+  color: var(--brand-green);
+  border-color: var(--brand-green);
+  background: var(--brand-green-soft);
+}
+
+.info-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: normal;
+  padding: 6px 10px;
+  border-radius: 6px;
+  white-space: normal;
+  width: max-content;
+  max-width: 220px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  z-index: 100;
+  box-shadow: var(--shadow-md);
+}
+
+.info-tip:hover::after {
+  opacity: 1;
+}
+
+/* Ensure field span can hold the icon inline */
+.field > span,
+.check-row > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 /* ----------------------------------------------------------------
    Upload Zone
    ---------------------------------------------------------------- */

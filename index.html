@@ -106,19 +106,19 @@
 
           <div class="field-grid mt-4" style="margin-top: 1.5rem;">
             <label class="field">
-              <span>Monthly units</span>
+              <span>Monthly units <i class="info-tip" data-tip="Average electricity units consumed per month as shown on your bill.">i</i></span>
               <input id="monthlyUnits" type="number" min="0" step="1" value="450">
             </label>
             <label class="field">
-              <span>Monthly bill amount</span>
+              <span>Monthly bill amount <i class="info-tip" data-tip="Total amount on your latest electricity bill including all charges.">i</i></span>
               <input id="monthlyBill" type="number" min="0" step="100" value="5200">
             </label>
             <label class="field">
-              <span>Sanctioned load</span>
+              <span>Sanctioned load <i class="info-tip" data-tip="Maximum power (kW) your electricity connection is approved for. Found on your bill.">i</i></span>
               <input id="sanctionedLoad" type="number" min="0" step="0.5" value="5">
             </label>
             <label class="field">
-              <span>Consumer category</span>
+              <span>Consumer category <i class="info-tip" data-tip="Your MSEDCL connection type. Residential, commercial, industrial, agricultural, or group housing — each has different tariff rates.">i</i></span>
               <select id="consumerCategory">
                 <option value="LT-I" selected>LT-I Residential</option>
                 <option value="LT-I-GHS">LT-I Group Housing</option>
@@ -161,7 +161,7 @@
 
           <div class="field-grid">
             <label class="field">
-              <span>Available installation area (sq ft)</span>
+              <span>Area (sq ft) <i class="info-tip" data-tip="Shadow-free roof or terrace area available for panels. Includes space for walkways and cleaning access.">i</i></span>
               <input id="roofArea" type="number" min="0" step="10" value="650">
             </label>
             <label class="field">
@@ -230,7 +230,7 @@
           <div class="tab-panel" data-panel="system">
             <div class="field-grid">
               <label class="field">
-                <span>Panel type</span>
+                <span>Panel type <i class="info-tip" data-tip="DCR panels are domestically made (required for govt subsidy). Non-DCR are imported, cheaper but no subsidy.">i</i></span>
                 <select id="panelType">
                   <option value="dcr">DCR subsidy path</option>
                   <option value="nonDcr">Non-DCR no subsidy</option>
@@ -238,7 +238,7 @@
               </label>
 
               <label class="field">
-                <span>Structure</span>
+                <span>Structure <i class="info-tip" data-tip="The mounting frame for panels. Hot-dip is most durable, Galvalume is mid-range, GP Purlin is budget.">i</i></span>
                 <select id="structureType">
                   <option value="hotDip">Hot-dip galvanized</option>
                   <option value="galvalume">Galvalume</option>
@@ -247,22 +247,22 @@
               </label>
 
               <label class="field">
-                <span>Capacity override</span>
+                <span>Capacity override <i class="info-tip" data-tip="Manually set the system size (kWp) instead of using the auto-calculated recommendation.">i</i></span>
                 <input id="capacityOverride" type="number" min="0" step="0.1" placeholder="Auto">
               </label>
 
               <label class="field">
-                <span>Inverter override</span>
+                <span>Inverter override <i class="info-tip" data-tip="Manually set the inverter size (kW). Leave blank to auto-match panel capacity.">i</i></span>
                 <input id="inverterOverride" type="number" min="0" step="0.1" placeholder="Auto">
               </label>
 
               <label class="field">
-                <span>Backup load</span>
+                <span>Backup load <i class="info-tip" data-tip="How much power (kW) the customer needs during a power cut. E.g. 1 fan + 3 lights + 1 fridge ≈ 0.5 kW.">i</i></span>
                 <input id="backupLoad" type="number" min="0" step="0.1" value="1.5">
               </label>
 
               <label class="field">
-                <span>Backup hours</span>
+                <span>Backup hours <i class="info-tip" data-tip="How many hours of battery backup needed during outages. More hours = bigger battery = higher cost.">i</i></span>
                 <input id="backupHours" type="number" min="0" step="0.5" value="4">
               </label>
             </div>
@@ -271,87 +271,87 @@
           <div class="tab-panel hidden" data-panel="pricing">
             <div class="field-grid">
               <label class="field">
-                <span>DCR panel Rs/Wp</span>
+                <span>DCR panel Rs/Wp <i class="info-tip" data-tip="Cost per watt of domestically manufactured panels. Required for government subsidy eligibility.">i</i></span>
                 <input id="panelDcrRate" type="number" min="0" step="0.1" value="26">
               </label>
 
               <label class="field">
-                <span>Non-DCR panel Rs/Wp</span>
+                <span>Non-DCR panel Rs/Wp <i class="info-tip" data-tip="Cost per watt of imported panels. Cheaper but not eligible for government subsidy.">i</i></span>
                 <input id="panelNonDcrRate" type="number" min="0" step="0.1" value="17">
               </label>
 
               <label class="field">
-                <span>Battery Rs/Wh</span>
+                <span>Battery Rs/Wh <i class="info-tip" data-tip="Cost per watt-hour of lithium battery storage for backup during power cuts.">i</i></span>
                 <input id="batteryRate" type="number" min="0" step="0.1" value="17.5">
               </label>
 
               <label class="field">
-                <span>Hybrid inverter Rs/W</span>
+                <span>Hybrid inverter Rs/W <i class="info-tip" data-tip="Inverter that works with both grid and battery. More expensive but provides backup power.">i</i></span>
                 <input id="hybridInverterRate" type="number" min="0" step="0.1" value="23">
               </label>
 
               <label class="field">
-                <span>Off-grid inverter Rs/W</span>
+                <span>Off-grid inverter Rs/W <i class="info-tip" data-tip="Inverter for standalone systems with battery. No grid export, full independence.">i</i></span>
                 <input id="offgridInverterRate" type="number" min="0" step="0.1" value="15">
               </label>
 
               <label class="field">
-                <span>On-grid inverter Rs/W</span>
+                <span>On-grid inverter Rs/W <i class="info-tip" data-tip="Cheapest inverter type. Feeds solar to grid, earns credits, but no backup during outages.">i</i></span>
                 <input id="ongridInverterRate" type="number" min="0" step="0.1" value="8">
               </label>
 
               <label class="field">
-                <span>Hot-dip structure Rs/W</span>
+                <span>Hot-dip structure Rs/W <i class="info-tip" data-tip="Premium zinc-coated mounting frame. Best corrosion resistance, lasts 25+ years.">i</i></span>
                 <input id="hotDipStructureRate" type="number" min="0" step="0.1" value="6">
               </label>
 
               <label class="field">
-                <span>Galvalume structure Rs/W</span>
+                <span>Galvalume structure Rs/W <i class="info-tip" data-tip="Aluminium-zinc coated steel frame. Good durability at mid-range cost.">i</i></span>
                 <input id="galvalumeStructureRate" type="number" min="0" step="0.1" value="5.3">
               </label>
 
               <label class="field">
-                <span>GP purlin structure Rs/W</span>
+                <span>GP purlin structure Rs/W <i class="info-tip" data-tip="Galvanized steel purlin. Budget option, adequate for most residential installs.">i</i></span>
                 <input id="gpPurlinStructureRate" type="number" min="0" step="0.1" value="4.8">
               </label>
 
               <label class="field">
-                <span>Wiring Rs/W</span>
+                <span>Wiring Rs/W <i class="info-tip" data-tip="Cost of DC and AC cables, connectors, and junction boxes per watt of system size.">i</i></span>
                 <input id="wiringRate" type="number" min="0" step="0.1" value="3.5">
               </label>
 
               <label class="field">
-                <span>Installation Rs/W</span>
+                <span>Installation Rs/W <i class="info-tip" data-tip="Labour cost for mounting panels, wiring, inverter setup, and testing.">i</i></span>
                 <input id="installationRate" type="number" min="0" step="0.1" value="4">
               </label>
 
               <label class="field">
-                <span>Protection fixed</span>
+                <span>Protection fixed <i class="info-tip" data-tip="Surge protectors, MCBs, isolators, and earthing kit. Fixed cost regardless of system size.">i</i></span>
                 <input id="protectionCost" type="number" min="0" step="500" value="12000">
               </label>
 
               <label class="field">
-                <span>Net meter/testing</span>
+                <span>Net meter/testing <i class="info-tip" data-tip="Bidirectional meter + MSEDCL inspection fees. Required for grid-connected systems.">i</i></span>
                 <input id="netMeterCost" type="number" min="0" step="500" value="7000">
               </label>
 
               <label class="field">
-                <span>Consultancy</span>
+                <span>Consultancy <i class="info-tip" data-tip="Site survey, system design, and technical documentation fees.">i</i></span>
                 <input id="consultancyFee" type="number" min="0" step="500" value="10000">
               </label>
 
               <label class="field">
-                <span>Liaisoning</span>
+                <span>Liaisoning <i class="info-tip" data-tip="Handling MSEDCL paperwork, net meter application, and subsidy claim processing.">i</i></span>
                 <input id="liaisoningFee" type="number" min="0" step="500" value="8000">
               </label>
 
               <label class="field">
-                <span>GST %</span>
+                <span>GST % <i class="info-tip" data-tip="Goods & Services Tax. Solar panels attract ~12% GST, services attract higher rates.">i</i></span>
                 <input id="gstRate" type="number" min="0" step="0.1" value="13.8">
               </label>
 
               <label class="field">
-                <span>Contingency %</span>
+                <span>Contingency % <i class="info-tip" data-tip="Buffer for unexpected costs like cable extensions, extra earthing, or site-specific modifications.">i</i></span>
                 <input id="contingencyRate" type="number" min="0" step="0.1" value="3">
               </label>
             </div>
@@ -360,42 +360,42 @@
           <div class="tab-panel hidden" data-panel="losses">
             <div class="field-grid">
               <label class="field">
-                <span>kWh/kWp/day</span>
+                <span>kWh/kWp/day <i class="info-tip" data-tip="How many units 1 kW of solar panels generate daily in Pune. Varies by season (3.5–5.0).">i</i></span>
                 <input id="dailyGeneration" type="number" min="0" step="0.1" value="4.2">
               </label>
 
               <label class="field">
-                <span>Sq ft per kWp</span>
+                <span>Sq ft per kWp <i class="info-tip" data-tip="Roof area needed per kW of solar. Includes panel area plus gaps for shading, walkways, and cleaning.">i</i></span>
                 <input id="sqftPerKw" type="number" min="1" step="1" value="120">
               </label>
 
               <label class="field">
-                <span>Shading loss %</span>
+                <span>Shading loss % <i class="info-tip" data-tip="Energy lost due to shadows from trees, walls, water tanks, or nearby buildings during peak sun hours.">i</i></span>
                 <input id="shadingLoss" type="number" min="0" max="90" step="1" value="5">
               </label>
 
               <label class="field">
-                <span>Tilt/orientation loss %</span>
+                <span>Tilt/orientation loss % <i class="info-tip" data-tip="Energy lost if panels aren't tilted south at the optimal angle (~18° for Pune). East/West facing adds more loss.">i</i></span>
                 <input id="orientationLoss" type="number" min="0" max="90" step="1" value="4">
               </label>
 
               <label class="field">
-                <span>System loss %</span>
+                <span>System loss % <i class="info-tip" data-tip="Miscellaneous losses: wiring, dust, inverter conversion, temperature. Typically 6–10%.">i</i></span>
                 <input id="systemLoss" type="number" min="0" max="90" step="1" value="8">
               </label>
 
               <label class="field">
-                <span>Annual degradation %</span>
+                <span>Annual degradation % <i class="info-tip" data-tip="Panels lose ~0.5% output each year. After 25 years, they still produce ~87% of original capacity.">i</i></span>
                 <input id="degradationRate" type="number" min="0" step="0.1" value="0.5">
               </label>
 
               <label class="field">
-                <span>Battery DoD %</span>
+                <span>Battery DoD % <i class="info-tip" data-tip="Depth of Discharge — how much of the battery can safely be used. 90% means 10% is always reserved.">i</i></span>
                 <input id="batteryDod" type="number" min="1" max="100" step="1" value="90">
               </label>
 
               <label class="field">
-                <span>Inverter efficiency %</span>
+                <span>Inverter efficiency % <i class="info-tip" data-tip="How efficiently the inverter converts DC solar power to AC household power. Higher is better.">i</i></span>
                 <input id="inverterEfficiency" type="number" min="1" max="100" step="1" value="92">
               </label>
             </div>
@@ -404,7 +404,7 @@
           <div class="tab-panel hidden" data-panel="tariff">
             <div class="field-grid">
               <label class="field">
-                <span>Savings method</span>
+                <span>Savings method <i class="info-tip" data-tip="Auto uses your bill amount if entered, else uses MSEDCL slab rates. Slab is more conservative.">i</i></span>
                 <select id="savingsMethod">
                   <option value="auto">Auto</option>
                   <option value="effective">Effective bill tariff</option>
@@ -413,17 +413,17 @@
               </label>
 
               <label class="field">
-                <span>Fixed charges</span>
+                <span>Fixed charges <i class="info-tip" data-tip="Monthly fixed amount charged by MSEDCL regardless of consumption. Cannot be offset by solar.">i</i></span>
                 <input id="fixedCharge" type="number" min="0" step="10" value="130">
               </label>
 
               <label class="field">
-                <span>Duty %</span>
+                <span>Duty % <i class="info-tip" data-tip="Electricity duty levied by the state government as a percentage of your energy + fixed charges.">i</i></span>
                 <input id="electricityDuty" type="number" min="0" step="0.1" value="16">
               </label>
 
               <label class="field">
-                <span>Tariff escalation %</span>
+                <span>Tariff escalation % <i class="info-tip" data-tip="Expected annual increase in electricity rates. Higher escalation = more savings over 25 years.">i</i></span>
                 <input id="tariffEscalation" type="number" min="0" step="0.1" value="3">
               </label>
             </div>
@@ -523,12 +523,12 @@
               <table style="font-size: 13px;">
                 <thead>
                   <tr>
-                    <th style="padding: 8px;">System</th>
-                    <th style="padding: 8px;">Panel</th>
-                    <th style="padding: 8px;">Net cost</th>
-                    <th style="padding: 8px;">Subsidy</th>
-                    <th style="padding: 8px;">Savings/mo</th>
-                    <th style="padding: 8px;">Payback</th>
+                    <th style="padding: 8px;">System <i class="info-tip" data-tip="On-grid: cheapest, no backup. Hybrid: grid + battery backup. Off-grid: fully independent.">i</i></th>
+                    <th style="padding: 8px;">Panel <i class="info-tip" data-tip="DCR = subsidy eligible Indian-made. Non-DCR = imported, no subsidy.">i</i></th>
+                    <th style="padding: 8px;">Net cost <i class="info-tip" data-tip="Total system cost after subtracting government subsidy.">i</i></th>
+                    <th style="padding: 8px;">Subsidy <i class="info-tip" data-tip="Government incentive to reduce your upfront cost. Only for DCR panels on grid-connected systems.">i</i></th>
+                    <th style="padding: 8px;">Savings/mo <i class="info-tip" data-tip="Estimated monthly reduction in your electricity bill after solar.">i</i></th>
+                    <th style="padding: 8px;">Payback <i class="info-tip" data-tip="Years to recover your investment through monthly bill savings.">i</i></th>
                   </tr>
                 </thead>
                 <tbody id="comparisonRows"></tbody>
