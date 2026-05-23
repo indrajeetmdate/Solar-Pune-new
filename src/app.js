@@ -235,6 +235,8 @@ function renderComparison(options, recommended) {
         <tr class="${selected}">
           <td>${SYSTEM_LABELS[option.systemType]}</td>
           <td>${PANEL_LABELS[option.panelType]}</td>
+          <td>${option.inverterCapacityKw} kW</td>
+          <td>${option.batteryCapacityKwh > 0 ? option.batteryCapacityKwh + ' kWh' : '—'}</td>
           <td>${money(option.netCost)}</td>
           <td>${money(option.subsidy)}</td>
           <td>${money(option.monthlySavings)}</td>
