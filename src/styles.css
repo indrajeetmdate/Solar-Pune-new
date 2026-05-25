@@ -377,6 +377,64 @@ button {
   opacity: 1;
 }
 
+/* Warning tooltip icon */
+.warning-tip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  font-size: 10px;
+  font-weight: 700;
+  font-style: normal;
+  color: #d32f2f;
+  background: #ffebee;
+  border: 1px solid #ffcdd2;
+  border-radius: 50%;
+  cursor: help;
+  position: relative;
+  vertical-align: middle;
+  margin-left: 4px;
+  flex-shrink: 0;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  z-index: 1;
+}
+
+.warning-tip:hover {
+  color: #fff;
+  border-color: #d32f2f;
+  background: #d32f2f;
+  z-index: 9999;
+}
+
+.warning-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #d32f2f;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: normal;
+  padding: 6px 10px;
+  border-radius: 6px;
+  white-space: normal;
+  width: max-content;
+  max-width: 220px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  z-index: 9999;
+  box-shadow: var(--shadow-md);
+}
+
+.warning-tip:hover::after {
+  opacity: 1;
+}
+
 /* Allow tooltips to escape parent overflow */
 .detail-card,
 .metric-card,

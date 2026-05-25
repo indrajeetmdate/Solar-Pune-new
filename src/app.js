@@ -305,15 +305,24 @@ function renderExtractedBill(result) {
   // Extra fields from Gemini
   const extraEl = $("extractedExtra");
   if (extraEl) {
+    let pfText = fields.powerFactor ? `PF: ${fields.powerFactor}` : null;
+    if (fields.powerFactor && fields.powerFactor < 0.9) {
+      pfText += ` <i class="warning-tip" data-tip="Low power factor (<0.9) incurs PF penalties. APFC panels or Solar inverters can improve this.">!</i>`;
+    }
+    let mdText = fields.maximumDemandKva ? `MD: ${fields.maximumDemandKva} kVA` : null;
+    if (fields.maximumDemandKva && fields.sanctionedLoadKw && fields.maximumDemandKva > fields.sanctionedLoadKw) {
+      mdText += ` <i class="warning-tip" data-tip="Maximum demand exceeded sanctioned load. This usually attracts excess demand penalties.">!</i>`;
+    }
+
     const extras = [
       fields.tariffCategory && `Category: ${fields.tariffCategory}`,
       fields.connectionPhase && `Phase: ${fields.connectionPhase}`,
       fields.meterNumber && `Meter: ${fields.meterNumber}`,
       fields.dueDate && `Due: ${fields.dueDate}`,
-      fields.powerFactor && `PF: ${fields.powerFactor}`,
-      fields.maximumDemandKva && `MD: ${fields.maximumDemandKva} kVA`,
+      pfText,
+      mdText,
     ].filter(Boolean);
-    extraEl.textContent = extras.join(" · ") || "";
+    extraEl.innerHTML = extras.join(" &middot; ") || "";
     extraEl.classList.toggle("hidden", !extras.length);
   }
 
@@ -324,8 +333,12 @@ function renderExtractedBill(result) {
     const chargeDiv = chargeEl.querySelector("div");
     const rows = charges.map(c => {
       const isNeg = c.amount < 0;
+      let label = c.label;
+      if (/(penalty|pf penalty|tod penalty|excess)/i.test(label) && c.amount > 0) {
+          label += ` <i class="warning-tip" data-tip="This penalty increases your bill. It may be mitigated by load management, APFC, or solar installation.">!</i>`;
+      }
       return `<tr class="${isNeg ? 'rebate-row' : ''}">
-        <td>${c.label}</td>
+        <td>${label}</td>
         <td style="text-align:right;font-variant-numeric:tabular-nums;">${isNeg ? '−' : ''}${money(Math.abs(c.amount))}</td>
       </tr>`;
     }).join("");
