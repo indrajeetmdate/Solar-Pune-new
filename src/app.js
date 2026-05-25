@@ -13,6 +13,7 @@ const state = {
   activeTab: "system",
   extractedBill: null,
   ongridBackup: "basic",
+  selectedSystemIndex: null,
 };
 
 const ASSUMPTION_IDS = [
@@ -245,14 +246,18 @@ function getOptionNotes(option, input) {
 
 function renderComparison(options, recommended) {
   $("comparisonRows").innerHTML = options
-    .map((option) => {
-      const selected = option.systemType === recommended.systemType ? "selected-row" : "";
+    .map((option, index) => {
+      const isSelected = state.selectedSystemIndex !== null 
+        ? state.selectedSystemIndex === index 
+        : option.systemType === recommended.systemType;
+        
+      const selectedClass = isSelected ? "selected-row" : "";
       
       let systemCell = SYSTEM_LABELS[option.systemType] || SYSTEM_LABELS[option.systemType.split('_')[0]];
       
       if (option.systemType === "ongrid" || option.systemType === "ongrid_basic_backup" || option.systemType === "ongrid_standard_backup") {
         systemCell = `
-          <select class="table-select system-select">
+          <select class="table-select system-select" onclick="event.stopPropagation()">
             <option value="none" ${state.ongridBackup === 'none' ? 'selected' : ''}>On-grid</option>
             <option value="basic" ${state.ongridBackup === 'basic' ? 'selected' : ''}>On-grid + Basic Backup (1100VA)</option>
             <option value="standard" ${state.ongridBackup === 'standard' ? 'selected' : ''}>On-grid + Std Backup (2100VA)</option>
@@ -261,7 +266,8 @@ function renderComparison(options, recommended) {
       }
 
       return `
-        <tr class="${selected}">
+        <tr class="${selectedClass}" style="cursor: pointer;" data-index="${index}">
+          <td style="text-align: center;"><input type="radio" name="systemSelection" ${isSelected ? 'checked' : ''} style="cursor: pointer;" onclick="event.stopPropagation(); this.closest('tr').click();"></td>
           <td>${systemCell}</td>
           <td>${PANEL_LABELS[option.panelType]}</td>
           <td>${option.inverterCapacityKw} kW</td>
@@ -278,6 +284,13 @@ function renderComparison(options, recommended) {
   document.querySelectorAll(".system-select").forEach(select => {
     select.addEventListener("change", (e) => {
       state.ongridBackup = e.target.value;
+      render();
+    });
+  });
+
+  document.querySelectorAll("#comparisonRows tr").forEach(row => {
+    row.addEventListener("click", () => {
+      state.selectedSystemIndex = parseInt(row.dataset.index, 10);
       render();
     });
   });
@@ -467,10 +480,15 @@ function render() {
   const config = readConfig();
   const estimate = calculateEstimate(input, config);
   state.estimates = estimate;
-  const option = estimate.recommended;
+  const option = (state.selectedSystemIndex !== null && state.selectedSystemIndex >= 0 && state.selectedSystemIndex < estimate.options.length)
+    ? estimate.options[state.selectedSystemIndex]
+    : estimate.recommended;
 
-  $("recommendationTitle").textContent = `${SYSTEM_LABELS[option.systemType]} ${PANEL_LABELS[option.panelType]} solar`;
-  $("recommendationReason").textContent = getGoalReason(input.goal, option);
+  const isOverride = state.selectedSystemIndex !== null && estimate.options[state.selectedSystemIndex] !== estimate.recommended;
+  const reasonText = isOverride ? "Manually selected option." : getGoalReason(input.goal, option);
+
+  $("recommendationTitle").textContent = `${SYSTEM_LABELS[option.systemType] || SYSTEM_LABELS[option.systemType.split('_')[0]]} ${PANEL_LABELS[option.panelType]} solar`;
+  $("recommendationReason").textContent = reasonText;
   $("recommendedCapacity").textContent = `${option.dcCapacityKw.toFixed(1)} kWp`;
   $("monthlyGeneration").textContent = units(option.monthlyGeneration);
   $("monthlySavings").textContent = money(option.monthlySavings);
@@ -752,6 +770,11 @@ function attachEvents() {
   $("lockInternalButton")?.addEventListener("click", lockInternal);
   $("resetButton")?.addEventListener("click", resetForm);
   $("applyExtractedBill")?.addEventListener("click", applyExtractedBill);
+
+  $("goal")?.addEventListener("change", () => {
+    state.selectedSystemIndex = null;
+    render();
+  });
 
   $("savePresetButton")?.addEventListener("click", savePreset);
   $("presetSelect")?.addEventListener("change", (e) => loadPreset(e.target.value));
