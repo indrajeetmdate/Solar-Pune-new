@@ -174,8 +174,14 @@ export function recommendCapacity(input, config = DEFAULT_CONFIG) {
   const monthlyGenerationPerKw =
     config.performance.dailyGenerationPerKw * 30 * performanceFactor;
 
+  let targetUnits = input.monthlyUnits;
+  if (input.optimizationStrategy === "summer_proof") {
+    // Size for the absolute peak month, assuming 30% higher if no exact history exists
+    targetUnits = input.extractedPeakUnits || (input.monthlyUnits * 1.3);
+  }
+
   const byConsumption =
-    monthlyGenerationPerKw > 0 ? input.monthlyUnits / monthlyGenerationPerKw : 0;
+    monthlyGenerationPerKw > 0 ? targetUnits / monthlyGenerationPerKw : 0;
   const byArea =
     config.performance.sqftPerKw > 0 && input.roofArea > 0
       ? input.roofArea / config.performance.sqftPerKw

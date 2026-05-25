@@ -80,12 +80,15 @@ function normalizeGeminiResult(data, fileName) {
   const charges = Array.isArray(data.charges) ? data.charges : [];
   const history = Array.isArray(data.billingHistory) ? data.billingHistory : [];
 
-  // Calculate yearly average from billing history
+  // Calculate yearly average and peak from billing history
   const validUnits = history
     .map((e) => e.units)
     .filter((v) => Number.isFinite(v) && v > 0);
   const yearlyAvg = validUnits.length
     ? round(validUnits.reduce((s, v) => s + v, 0) / validUnits.length)
+    : null;
+  const peakUnits = validUnits.length
+    ? Math.max(...validUnits)
     : null;
 
   const fields = {
@@ -112,6 +115,7 @@ function normalizeGeminiResult(data, fileName) {
     arrears: toNumber(data.arrears),
     totalPayable: toNumber(data.totalPayable),
     yearlyAvgUnitsKwh: yearlyAvg,
+    peakUnitsKwh: peakUnits,
   };
 
   // Build warnings for missing critical fields
@@ -162,6 +166,9 @@ function parseBillText(text, fileName) {
   const yearlyAvg = validUnits.length
     ? round(validUnits.reduce((s, v) => s + v, 0) / validUnits.length)
     : null;
+  const peakUnits = validUnits.length
+    ? Math.max(...validUnits)
+    : null;
 
   const fields = {
     fileName,
@@ -174,6 +181,7 @@ function parseBillText(text, fileName) {
     billAmountRs: extractBillAmount(normalized),
     unitsConsumedKwh: extractUnitsConsumed(normalized),
     yearlyAvgUnitsKwh: yearlyAvg,
+    peakUnitsKwh: peakUnits,
   };
 
   const warnings = [];

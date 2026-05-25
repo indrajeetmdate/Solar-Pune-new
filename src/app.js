@@ -117,6 +117,8 @@ function readInput() {
     coordinates: safeStr("coordinates"),
     tiltAngle: safeStr("tiltAngle") !== "" ? numberValue("tiltAngle") : null,
     orientationDir: safeStr("orientationDir"),
+    optimizationStrategy: safeStr("optimizationStrategy") || "optimum",
+    extractedPeakUnits: state.extractedBill?.fields?.peakUnitsKwh || null,
     backupNeeded: safeChecked("backupNeeded"),
     customerView: safeChecked("customerView"),
     panelType: safeStr("panelType"),
@@ -394,7 +396,10 @@ function applyExtractedBill() {
   const fields = result.fields;
 
   if (fields.name) $("customerName").value = fields.name;
-  if (fields.unitsConsumedKwh) $("monthlyUnits").value = Math.round(fields.unitsConsumedKwh);
+  
+  // Prefer the calculated yearly average, fallback to the current month's consumption
+  const targetUnits = fields.yearlyAvgUnitsKwh || fields.unitsConsumedKwh;
+  if (targetUnits) $("monthlyUnits").value = Math.round(targetUnits);
   if (fields.billAmountRs) $("monthlyBill").value = Math.round(fields.billAmountRs);
   if (fields.sanctionedLoadKw) $("sanctionedLoad").value = fields.sanctionedLoadKw;
 

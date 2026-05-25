@@ -98,7 +98,7 @@
               <div><span>Sanction Load</span><strong id="extractedSanctionLoad">-</strong></div>
               <div><span>Bill Amount</span><strong id="extractedBillAmount">-</strong></div>
               <div><span>Units Consumed</span><strong id="extractedUnits">-</strong></div>
-              <div><span>Yearly Avg Unit</span><strong id="extractedYearlyAvg">-</strong></div>
+              <div><span>Avg Units Per Month</span><strong id="extractedYearlyAvg">-</strong></div>
             </div>
 
             <p id="extractedExtra" class="muted small hidden" style="margin-top: 8px;"></p>
@@ -120,8 +120,15 @@
 
           <div class="field-grid mt-4" style="margin-top: 1.5rem;">
             <label class="field">
-              <span>Monthly units <i class="info-tip" data-tip="Average electricity units consumed per month as shown on your bill.">i</i></span>
+              <span>Avg units per month <i class="info-tip" data-tip="Average electricity units consumed per month as shown on your bill.">i</i></span>
               <input id="monthlyUnits" type="number" min="0" step="1" value="450">
+            </label>
+            <label class="field">
+              <span>Optimization Goal <i class="info-tip" data-tip="Optimum sizes for average use (max ROI). Summer-proof sizes for peak usage (zero bills even in hot months, but higher upfront cost).">i</i></span>
+              <select id="optimizationStrategy">
+                <option value="optimum" selected>Optimum (Cost & ROI)</option>
+                <option value="summer_proof">Summer-Proof (Peak Sizing)</option>
+              </select>
             </label>
             <label class="field">
               <span>Monthly bill amount <i class="info-tip" data-tip="Total amount on your latest electricity bill including all charges.">i</i></span>
