@@ -9,7 +9,7 @@
  * (useful for local development).
  */
 
-const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
 /**
  * Convert a File / Blob to a base64 data string (without the data-URI prefix).

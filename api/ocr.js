@@ -6,7 +6,7 @@
  * Vercel env var: gem_key (Google AI Studio API key)
  */
 
-const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
 const EXTRACTION_PROMPT = `You are an expert system for extracting data from Indian electricity bills issued by MSEDCL (Maharashtra State Electricity Distribution Co. Ltd).
 
