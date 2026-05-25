@@ -449,7 +449,6 @@ export async function generateProposalPDF(estimates) {
     : `DC_Energy_Proposal.pdf`;
 
   doc.save(filename);
-  }
   } catch (error) {
     console.error("PDF generation error:", error);
     alert("Error generating PDF: " + error.message);
