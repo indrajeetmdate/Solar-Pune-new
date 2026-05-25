@@ -12,8 +12,7 @@ const state = {
   internalUnlocked: false,
   activeTab: "system",
   extractedBill: null,
-  ongridBackup: "none",
-  hybridBackup: "custom",
+  ongridBackup: "basic",
 };
 
 const ids = [
@@ -131,7 +130,6 @@ function readInput() {
     backupHours: numberValue("backupHours"),
     savingsMethod: safeStr("savingsMethod"),
     ongridBackup: state.ongridBackup,
-    hybridBackup: state.hybridBackup,
   };
 }
 
@@ -238,33 +236,24 @@ function renderComparison(options, recommended) {
     .map((option) => {
       const selected = option.systemType === recommended.systemType ? "selected-row" : "";
       
-      let batteryCell = `${option.batteryCapacityKwh > 0 ? option.batteryCapacityKwh + ' kWh' : '—'}`;
+      let systemCell = SYSTEM_LABELS[option.systemType] || SYSTEM_LABELS[option.systemType.split('_')[0]];
       
-      // We only inject the dropdowns for the base system types, ignoring the generated backup types
       if (option.systemType === "ongrid" || option.systemType === "ongrid_basic_backup" || option.systemType === "ongrid_standard_backup") {
-        batteryCell = `
-          <select class="battery-select" data-type="ongrid" style="font-size: 13px; max-width: 120px; padding: 2px;">
-            <option value="none" ${state.ongridBackup === 'none' ? 'selected' : ''}>None</option>
-            <option value="basic" ${state.ongridBackup === 'basic' ? 'selected' : ''}>Basic (1.28 kWh)</option>
-            <option value="standard" ${state.ongridBackup === 'standard' ? 'selected' : ''}>Std (2.56 kWh)</option>
-          </select>
-        `;
-      } else if (option.systemType === "hybrid" || option.systemType === "hybrid_basic_backup" || option.systemType === "hybrid_standard_backup") {
-        batteryCell = `
-          <select class="battery-select" data-type="hybrid" style="font-size: 13px; max-width: 120px; padding: 2px;">
-            <option value="custom" ${state.hybridBackup === 'custom' ? 'selected' : ''}>Custom (${option.batteryCapacityKwh > 0 ? option.batteryCapacityKwh : 0} kWh)</option>
-            <option value="basic" ${state.hybridBackup === 'basic' ? 'selected' : ''}>Basic (1.28 kWh)</option>
-            <option value="standard" ${state.hybridBackup === 'standard' ? 'selected' : ''}>Std (2.56 kWh)</option>
+        systemCell = `
+          <select class="system-select" style="font-size: 13px; max-width: 180px; padding: 2px;">
+            <option value="none" ${state.ongridBackup === 'none' ? 'selected' : ''}>On-grid</option>
+            <option value="basic" ${state.ongridBackup === 'basic' ? 'selected' : ''}>On-grid + Basic Backup (1100VA)</option>
+            <option value="standard" ${state.ongridBackup === 'standard' ? 'selected' : ''}>On-grid + Std Backup (2100VA)</option>
           </select>
         `;
       }
 
       return `
         <tr class="${selected}">
-          <td>${SYSTEM_LABELS[option.systemType] || SYSTEM_LABELS[option.systemType.split('_')[0]]}</td>
+          <td>${systemCell}</td>
           <td>${PANEL_LABELS[option.panelType]}</td>
           <td>${option.inverterCapacityKw} kW</td>
-          <td>${batteryCell}</td>
+          <td>${option.batteryCapacityKwh > 0 ? option.batteryCapacityKwh + ' kWh' : '—'}</td>
           <td>${money(option.netCost)}</td>
           <td>${money(option.subsidy)}</td>
           <td>${money(option.monthlySavings)}</td>
@@ -274,12 +263,9 @@ function renderComparison(options, recommended) {
     })
     .join("");
 
-  // Attach event listeners to the new selects
-  document.querySelectorAll(".battery-select").forEach(select => {
+  document.querySelectorAll(".system-select").forEach(select => {
     select.addEventListener("change", (e) => {
-      const type = e.target.dataset.type;
-      if (type === "ongrid") state.ongridBackup = e.target.value;
-      if (type === "hybrid") state.hybridBackup = e.target.value;
+      state.ongridBackup = e.target.value;
       render();
     });
   });

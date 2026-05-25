@@ -220,15 +220,18 @@ function getInverterRate(systemType, pricing) {
 
 function getBatteryCapacityKwh(systemType, input, performance) {
   if (systemType === "ongrid" || !input.backupNeeded) return 0;
-  if (systemType === "ongrid_basic_backup" || systemType === "hybrid_basic_backup") return 1.28;
-  if (systemType === "ongrid_standard_backup" || systemType === "hybrid_standard_backup") return 2.56;
+  if (systemType === "ongrid_basic_backup") return 1.28;
+  if (systemType === "ongrid_standard_backup") return 2.56;
   
   const dod = clamp(performance.batteryDod || 90, 1, 100) / 100;
   const efficiency = clamp(performance.inverterEfficiency || 92, 1, 100) / 100;
   const required =
     (Math.max(input.backupLoadKw, 0) * Math.max(input.backupHours, 0)) /
     (dod * efficiency);
-  return round(Math.max(required, 2), 1);
+    
+  const batteryModuleKwh = 5.12; // 51.2V 100Ah
+  const modulesNeeded = Math.max(1, Math.ceil(required / batteryModuleKwh));
+  return round(modulesNeeded * batteryModuleKwh, 2);
 }
 
 function calculateLifetimeSavings(annualSavings, config) {
@@ -475,10 +478,12 @@ export function getPanelConfigurations(numPanels) {
 
 export function calculateEstimate(input, config = DEFAULT_CONFIG) {
   const panelType = input.panelType || "dcr";
+  let ongridType = "ongrid";
+  if (input.ongridBackup === "basic") ongridType = "ongrid_basic_backup";
+  if (input.ongridBackup === "standard") ongridType = "ongrid_standard_backup";
+
   const options = [
-    calculateSystemOption("ongrid", panelType, input, config),
-    calculateSystemOption("ongrid_basic_backup", panelType, input, config),
-    calculateSystemOption("ongrid_standard_backup", panelType, input, config),
+    calculateSystemOption(ongridType, panelType, input, config),
     calculateSystemOption("hybrid", panelType, input, config),
     calculateSystemOption("offgrid", panelType === "dcr" ? "nonDcr" : panelType, input, config),
   ];
