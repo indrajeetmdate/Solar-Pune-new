@@ -1,31 +1,15 @@
 /**
- * OCR Extractor — sends bill images to the /api/ocr serverless proxy,
- * which calls OpenRouter server-side (keeping the API key secure).
+ * Bill Extractor — sends PDF/image files to the /api/ocr serverless proxy,
+ * which calls Google Gemini 2.0 Flash for structured extraction.
  *
- * Falls back to direct OpenRouter call if window.__OPENROUTER_API_KEY is set
+ * Supports: PDF, JPG, PNG, WEBP, BMP, TIFF
+ * Returns: Structured JSON with full bill breakdown
+ *
+ * Falls back to direct Gemini call if window.__GEMINI_API_KEY is set
  * (useful for local development).
  */
 
-const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL = "baidu/qianfan-ocr-fast:free";
-
-const OCR_PROMPT = `You are an expert OCR system specialising in Indian electricity bills (MSEDCL / MSEB / Maharashtra State Electricity Distribution Co. Ltd).
-
-Extract ALL text from this electricity bill image. Preserve the original layout as closely as possible — output each line of text on a separate line, keeping numbers, labels, table rows, and header/footer text intact.
-
-Pay special attention to these fields and ensure they appear in the output:
-• Consumer No (12-digit number)
-• Consumer Name
-• Address
-• Bill Month (e.g. "Jan-2026")
-• Sanctioned Load / Connected Load (in kW)
-• Bill Amount / Total Amount (in Rs)
-• Units Consumed / Total Consumption (in kWh)
-• Billing History table (month, units, amount rows)
-• Meter reading details (previous, current, consumption)
-• Tariff Category
-
-Return ONLY the extracted text. Do not add any commentary, explanation, or formatting beyond the raw bill text.`;
+const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
 /**
  * Convert a File / Blob to a base64 data string (without the data-URI prefix).
@@ -56,117 +40,156 @@ function mimeForFile(file) {
     bmp: "image/bmp",
     tiff: "image/tiff",
     tif: "image/tiff",
+    pdf: "application/pdf",
   };
-  return map[ext] || file.type || "image/jpeg";
+  return map[ext] || file.type || "application/octet-stream";
 }
 
 /**
- * Call the /api/ocr serverless proxy (Vercel) to extract text from an image.
- * Falls back to direct OpenRouter call if a local API key is available.
+ * Call the /api/ocr serverless proxy (Vercel) to extract bill data.
+ * Returns structured JSON from Gemini.
  */
-async function callOcrProxy(base64, mimeType) {
+async function callGeminiProxy(base64, mimeType) {
   const response = await fetch("/api/ocr", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageBase64: base64, mimeType }),
+    body: JSON.stringify({ base64Data: base64, mimeType }),
   });
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     const msg = body.error || "";
 
-    // Friendly messages for common errors
-    if (response.status === 429 || msg.includes("429") || msg.includes("rate limit")) {
-      throw new Error("OCR rate limit reached. Please wait a minute and try again.");
+    if (response.status === 429 || msg.includes("429") || msg.includes("rate limit") || msg.includes("RESOURCE_EXHAUSTED")) {
+      throw new Error("Gemini rate limit reached. Please wait a minute and try again.");
     }
-    if (msg.includes("limit: 0") || msg.includes("quota") || response.status === 402) {
-      throw new Error("OCR API key needs setup. Check your OpenRouter billing or key configuration.");
+    if (response.status === 403 || msg.includes("API_KEY_INVALID")) {
+      throw new Error("Gemini API key is invalid. Check your configuration.");
     }
 
-    throw new Error(body.error || `OCR service error (${response.status})`);
+    throw new Error(body.error || `Extraction service error (${response.status})`);
   }
 
   const result = await response.json();
-  return result.text;
+  return result.data;
 }
 
 /**
- * Direct OpenRouter call — used for local development when window.__OPENROUTER_API_KEY is set.
+ * Direct Gemini call — used for local development when window.__GEMINI_API_KEY is set.
  */
-async function callOpenRouterDirect(base64, mimeType, apiKey) {
-  const body = {
-    model: MODEL,
-    messages: [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: OCR_PROMPT },
-          {
-            type: "image_url",
-            image_url: { url: `data:${mimeType};base64,${base64}` },
-          },
-        ],
-      },
-    ],
-    temperature: 0.1,
-  };
+async function callGeminiDirect(base64, mimeType, apiKey) {
+  const EXTRACTION_PROMPT = `You are an expert system for extracting data from Indian electricity bills issued by MSEDCL.
 
-  const response = await fetch(OPENROUTER_ENDPOINT, {
+IMPORTANT: The bill may be in Marathi. Translate all Marathi terms to standard English using this glossary:
+- स्थिर आकार → Fixed Charge
+- वीज आकार → Energy Charge
+- वहन आकार → Wheeling Charge
+- इंधन समायोजन आकार → Fuel Adjustment Charge
+- वीज शुल्क → Electricity Duty
+- मागणी आकार → Demand Charge
+- मीटर भाडे → Meter Rent
+- चालू वीज देयक → Current Bill Amount
+- देयकाची निव्वळ रक्कम → Net Payable Amount
+
+Extract ALL data into this JSON structure. Use null for missing fields:
+{
+  "consumerNo": "string or null",
+  "buNumber": "string or null",
+  "consumerName": "string or null",
+  "address": "string or null",
+  "tariffCategory": "string or null",
+  "connectionPhase": "string or null",
+  "sanctionedLoadKw": number or null,
+  "connectedLoadKw": number or null,
+  "meterNumber": "string or null",
+  "billMonth": "string or null",
+  "billingPeriod": "string or null",
+  "dueDate": "string or null",
+  "previousReading": number or null,
+  "currentReading": number or null,
+  "multiplicationFactor": number or null,
+  "unitsConsumed": number or null,
+  "maximumDemandKva": number or null,
+  "powerFactor": number or null,
+  "charges": [{ "label": "string", "amount": number }],
+  "currentBillAmount": number or null,
+  "arrears": number or null,
+  "totalPayable": number or null,
+  "billingHistory": [{ "month": "string", "units": number, "amount": number }]
+}
+
+RULES: charges must include EVERY line item. Rebates are negative. All amounts in Rs as numbers.`;
+
+  const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-      "HTTP-Referer": "http://localhost:5173", // Optional, for OpenRouter rankings
-      "X-Title": "DC Energy Solar Calculator Local" // Optional, for OpenRouter rankings
-    },
-    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{
+        role: "user",
+        parts: [
+          { inlineData: { data: base64, mimeType } },
+          { text: EXTRACTION_PROMPT }
+        ]
+      }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.0
+      }
+    })
   });
 
   if (!response.ok) {
     const errorBody = await response.text();
-    throw new Error(`OpenRouter API error ${response.status}: ${errorBody}`);
+    throw new Error(`Gemini API error ${response.status}: ${errorBody}`);
   }
 
   const result = await response.json();
-  const text = result?.choices?.[0]?.message?.content?.trim() || "";
+  const text = result?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
   if (!text) {
-    throw new Error("Model returned an empty response. The image may not contain readable text.");
+    throw new Error("Gemini returned an empty response. The file may not contain readable bill data.");
   }
 
-  return text;
+  return JSON.parse(text);
 }
 
 /**
- * Extract text from a bill image file.
+ * Extract structured bill data from a file (PDF or image).
  *
- * On Vercel: routes through /api/ocr serverless function (API key stays server-side).
- * Locally: uses window.__OPENROUTER_API_KEY or <meta name="gemini-api-key"> (as fallback) for direct calls.
+ * On Vercel: routes through /api/ocr serverless function.
+ * Locally: uses window.__GEMINI_API_KEY for direct calls.
  *
- * @param {File} file — image file (JPG, PNG, WEBP, etc.)
- * @returns {Promise<string>} extracted text
+ * @param {File} file — PDF or image file
+ * @returns {Promise<object>} structured bill data JSON
  */
-export async function extractTextFromImage(file) {
+export async function extractBillData(file) {
   const base64 = await fileToBase64(file);
   const mimeType = mimeForFile(file);
 
-  // Check for local dev API key (checking both __OPENROUTER_API_KEY and __GEMINI_API_KEY for backwards compat with index.html instructions)
+  // Check for local dev API key
   const localKey =
-    (typeof window !== "undefined" && (window.__OPENROUTER_API_KEY || window.__GEMINI_API_KEY)) ||
+    (typeof window !== "undefined" && window.__GEMINI_API_KEY) ||
     document.querySelector('meta[name="gemini-api-key"]')?.content ||
     "";
 
   if (localKey) {
-    // Direct call for local development
-    return callOpenRouterDirect(base64, mimeType, localKey);
+    return callGeminiDirect(base64, mimeType, localKey);
   }
 
-  // Production: use the serverless proxy
-  return callOcrProxy(base64, mimeType);
+  return callGeminiProxy(base64, mimeType);
 }
 
 /**
- * Returns true if the file extension suggests an image that needs OCR.
+ * Returns true if the file is a type that Gemini can process directly.
+ * Now supports both images AND PDFs.
+ */
+export function isSupportedBillFile(file) {
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  return ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff", "tif", "pdf"].includes(ext);
+}
+
+/**
+ * Legacy compat — returns true if file needs vision/OCR processing (images).
  */
 export function isImageFile(file) {
   const ext = file.name.split(".").pop()?.toLowerCase();

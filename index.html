@@ -77,7 +77,7 @@
             <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             <input id="billUpload" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.tiff,.tif,.txt,.csv">
             <span class="upload-title">Attach electricity bill</span>
-            <span class="upload-formats">PDF, JPG, PNG, TXT, CSV — scanned images use AI-powered OCR</span>
+            <span class="upload-formats">PDF, JPG, PNG, WEBP — Marathi & English bills via Gemini AI</span>
             <span id="billUploadStatus"></span>
           </label>
 
@@ -101,7 +101,21 @@
               <div><span>Yearly Avg Unit</span><strong id="extractedYearlyAvg">-</strong></div>
             </div>
 
-            <p id="billExtractWarnings" class="muted small"></p>
+            <p id="extractedExtra" class="muted small hidden" style="margin-top: 8px;"></p>
+
+            <!-- Charge Breakdown Table -->
+            <details id="extractedChargesTable" class="hidden" style="margin-top: 10px; cursor: pointer;" open>
+              <summary style="font-weight: 600; font-size: 13px; color: var(--ink);">Current Bill Breakdown <i class="info-tip" data-tip="Every charge, duty, and rebate line item extracted from your bill. Negative amounts are discounts/rebates.">i</i></summary>
+              <div style="margin-top: 8px; max-height: 280px; overflow-y: auto;"></div>
+            </details>
+
+            <!-- Billing History Table -->
+            <details id="extractedHistoryTable" class="hidden" style="margin-top: 8px; cursor: pointer;">
+              <summary style="font-weight: 600; font-size: 13px; color: var(--ink);">Billing History <i class="info-tip" data-tip="Past 6–12 months of consumption and bill amounts from your electricity bill.">i</i></summary>
+              <div style="margin-top: 8px; max-height: 200px; overflow-y: auto;"></div>
+            </details>
+
+            <p id="billExtractWarnings" class="muted small" style="margin-top: 8px;"></p>
           </div>
 
           <div class="field-grid mt-4" style="margin-top: 1.5rem;">

@@ -544,6 +544,41 @@ th {
   color: var(--ink);
 }
 
+/* Extracted tables (charges, history) */
+#extractedChargesTable,
+#extractedHistoryTable {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  background: var(--surface);
+}
+
+#extractedChargesTable table td,
+#extractedChargesTable table th,
+#extractedHistoryTable table td,
+#extractedHistoryTable table th {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+#extractedChargesTable table tr:last-child td,
+#extractedHistoryTable table tr:last-child td {
+  border-bottom: none;
+}
+
+#extractedChargesTable .rebate-row td {
+  color: var(--brand-green);
+}
+
+#extractedChargesTable .total-row {
+  border-top: 2px solid var(--ink);
+}
+
+#extractedChargesTable .total-row td {
+  padding-top: 8px;
+  font-size: 13px;
+}
+
 .small {
   font-size: 13px;
 }

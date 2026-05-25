@@ -1,7 +1,7 @@
 import { DEFAULT_CONFIG, TARIFF_PROFILES, PANEL_LABELS, STRUCTURE_LABELS, SYSTEM_LABELS } from "./config.js";
 import { calculateEstimate, getPanelConfigurations } from "./calculator.js";
 import { parseMsebBillFile } from "./billParser.js";
-import { isImageFile } from "./ocrExtractor.js";
+import { isSupportedBillFile } from "./ocrExtractor.js";
 import { drawPanelArray } from "./panelDiagram.js";
 
 const INTERNAL_PASSPHRASE_KEY = "puneSolarInternalPassphrase";
@@ -291,7 +291,7 @@ function renderExtractedBill(result) {
     return;
   }
 
-  const { fields, warnings, confidence } = result;
+  const { fields, charges, history, warnings, confidence, extractionMethod } = result;
   $("billExtractPanel").classList.remove("hidden");
   $("extractedFileName").textContent = plainValue(fields.fileName);
   $("extractedName").textContent = plainValue(fields.name);
@@ -301,19 +301,111 @@ function renderExtractedBill(result) {
   $("extractedBillAmount").textContent = fields.billAmountRs ? money(fields.billAmountRs) : "-";
   $("extractedUnits").textContent = fields.unitsConsumedKwh ? `${fields.unitsConsumedKwh} kWh` : "-";
   $("extractedYearlyAvg").textContent = fields.yearlyAvgUnitsKwh ? `${fields.yearlyAvgUnitsKwh} kWh` : "-";
+
+  // Extra fields from Gemini
+  const extraEl = $("extractedExtra");
+  if (extraEl) {
+    const extras = [
+      fields.tariffCategory && `Category: ${fields.tariffCategory}`,
+      fields.connectionPhase && `Phase: ${fields.connectionPhase}`,
+      fields.meterNumber && `Meter: ${fields.meterNumber}`,
+      fields.dueDate && `Due: ${fields.dueDate}`,
+      fields.powerFactor && `PF: ${fields.powerFactor}`,
+      fields.maximumDemandKva && `MD: ${fields.maximumDemandKva} kVA`,
+    ].filter(Boolean);
+    extraEl.textContent = extras.join(" · ") || "";
+    extraEl.classList.toggle("hidden", !extras.length);
+  }
+
+  // Charge breakdown table
+  const chargeEl = $("extractedChargesTable");
+  if (chargeEl && charges && charges.length > 0) {
+    chargeEl.classList.remove("hidden");
+    const chargeDiv = chargeEl.querySelector("div");
+    const rows = charges.map(c => {
+      const isNeg = c.amount < 0;
+      return `<tr class="${isNeg ? 'rebate-row' : ''}">
+        <td>${c.label}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">${isNeg ? '−' : ''}${money(Math.abs(c.amount))}</td>
+      </tr>`;
+    }).join("");
+
+    const totalRow = fields.billAmountRs
+      ? `<tr class="total-row"><td><strong>Current Bill Total</strong></td><td style="text-align:right;"><strong>${money(fields.billAmountRs)}</strong></td></tr>`
+      : "";
+
+    if (chargeDiv) {
+      chargeDiv.innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse;">
+        <thead><tr><th style="text-align:left;padding:4px 6px;border-bottom:2px solid var(--line);">Charge</th><th style="text-align:right;padding:4px 6px;border-bottom:2px solid var(--line);">Amount (₹)</th></tr></thead>
+        <tbody>${rows}${totalRow}</tbody>
+      </table>`;
+    }
+  } else if (chargeEl) {
+    chargeEl.classList.add("hidden");
+    const cd = chargeEl.querySelector("div");
+    if (cd) cd.innerHTML = "";
+  }
+
+  // Billing history table
+  const histEl = $("extractedHistoryTable");
+  if (histEl && history && history.length > 0) {
+    histEl.classList.remove("hidden");
+    const histDiv = histEl.querySelector("div");
+    const hRows = history.map(h => `<tr>
+      <td>${h.month || '-'}</td>
+      <td style="text-align:right;">${h.units != null ? h.units : '-'}</td>
+      <td style="text-align:right;">${h.amount != null ? money(h.amount) : '-'}</td>
+    </tr>`).join("");
+
+    if (histDiv) {
+      histDiv.innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse;">
+        <thead><tr><th style="text-align:left;padding:4px 6px;border-bottom:2px solid var(--line);">Month</th><th style="text-align:right;padding:4px 6px;border-bottom:2px solid var(--line);">Units</th><th style="text-align:right;padding:4px 6px;border-bottom:2px solid var(--line);">Amount (₹)</th></tr></thead>
+        <tbody>${hRows}</tbody>
+      </table>`;
+    }
+  } else if (histEl) {
+    histEl.classList.add("hidden");
+    const hd = histEl.querySelector("div");
+    if (hd) hd.innerHTML = "";
+  }
+
+  const methodLabel = extractionMethod === "gemini-structured" ? "Gemini AI" : "Text regex";
   $("billExtractWarnings").textContent = warnings.length
-    ? `${confidence}% confidence. ${warnings.join(" ")}`
-    : `${confidence}% confidence. All target fields detected.`;
+    ? `${confidence}% · ${methodLabel}. ${warnings.join(" ")}`
+    : `${confidence}% · ${methodLabel}. All fields detected.`;
 }
 
 function applyExtractedBill() {
-  const fields = state.extractedBill?.fields;
-  if (!fields) return;
+  const result = state.extractedBill;
+  if (!result?.fields) return;
+  const fields = result.fields;
 
   if (fields.name) $("customerName").value = fields.name;
   if (fields.unitsConsumedKwh) $("monthlyUnits").value = Math.round(fields.unitsConsumedKwh);
   if (fields.billAmountRs) $("monthlyBill").value = Math.round(fields.billAmountRs);
   if (fields.sanctionedLoadKw) $("sanctionedLoad").value = fields.sanctionedLoadKw;
+
+  // Auto-set category from extracted tariff
+  if (fields.tariffCategory) {
+    const cat = $("consumerCategory");
+    if (cat) {
+      const tc = fields.tariffCategory.toUpperCase();
+      if (tc.includes("LT-I") && tc.includes("GHS")) cat.value = "LT-I-GHS";
+      else if (tc.includes("LT-I") || tc.includes("RESIDENTIAL")) cat.value = "LT-I";
+      else if (tc.includes("LT-II") || tc.includes("COMMERCIAL")) cat.value = "LT-II";
+      else if (tc.includes("LT-III") || tc.includes("INDUSTRIAL")) cat.value = "LT-III";
+      else if (tc.includes("HT-I")) cat.value = "HT-I";
+      else if (tc.includes("HT-II")) cat.value = "HT-II";
+      else if (tc.includes("AG")) cat.value = "LT-AG";
+      cat.dispatchEvent(new Event("change"));
+    }
+  }
+
+  // Auto-set power factor if extracted
+  if (fields.powerFactor) {
+    const pfEl = $("currentPf");
+    if (pfEl) pfEl.value = fields.powerFactor;
+  }
 
   render();
 }
@@ -629,12 +721,13 @@ function attachEvents() {
       return;
     }
 
-    const isImage = isImageFile(file);
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    const isAI = isSupportedBillFile(file) && ext !== "txt" && ext !== "csv";
     const statusEl = $("billUploadStatus");
     statusEl.className = "upload-status-loading";
 
-    if (isImage) {
-      statusEl.innerHTML = `<span class="spinner"></span> Running OCR on ${file.name}… this may take a few seconds.`;
+    if (isAI) {
+      statusEl.innerHTML = `<span class="spinner"></span> Analyzing ${file.name} with Gemini AI… this may take a few seconds.`;
     } else {
       statusEl.textContent = `Extracting ${file.name}…`;
     }
@@ -643,9 +736,8 @@ function attachEvents() {
       state.extractedBill = await parseMsebBillFile(file);
       applyExtractedBill();
       statusEl.className = "upload-status-success";
-      statusEl.textContent = isImage
-        ? `✓ ${file.name} — OCR extraction applied.`
-        : `✓ ${file.name} — extracted and applied.`;
+      const method = state.extractedBill?.extractionMethod === "gemini-structured" ? "Gemini AI" : "text";
+      statusEl.textContent = `✓ ${file.name} — extracted via ${method} and applied.`;
     } catch (error) {
       state.extractedBill = null;
       statusEl.className = "upload-status-error";
