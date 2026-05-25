@@ -252,7 +252,7 @@ function renderComparison(options, recommended) {
       
       if (option.systemType === "ongrid" || option.systemType === "ongrid_basic_backup" || option.systemType === "ongrid_standard_backup") {
         systemCell = `
-          <select class="system-select" style="font-size: 13px; max-width: 180px; padding: 2px;">
+          <select class="table-select system-select">
             <option value="none" ${state.ongridBackup === 'none' ? 'selected' : ''}>On-grid</option>
             <option value="basic" ${state.ongridBackup === 'basic' ? 'selected' : ''}>On-grid + Basic Backup (1100VA)</option>
             <option value="standard" ${state.ongridBackup === 'standard' ? 'selected' : ''}>On-grid + Std Backup (2100VA)</option>

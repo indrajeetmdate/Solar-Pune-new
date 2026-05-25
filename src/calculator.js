@@ -40,7 +40,7 @@ export function calculatePerformanceFactor(performance, input = {}) {
 }
 
 export function calculateSubsidy(systemType, panelType, dcCapacityKw, input = {}, policy = DEFAULT_CONFIG.policy) {
-  const isGridConnected = systemType === "ongrid" || systemType === "hybrid";
+  const isGridConnected = systemType.startsWith("ongrid") || systemType.startsWith("hybrid");
   if (!isGridConnected || panelType !== "dcr" || dcCapacityKw <= 0) {
     return { total: 0, type: "none" };
   }

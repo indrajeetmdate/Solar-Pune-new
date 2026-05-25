@@ -315,6 +315,27 @@ button {
   background: var(--surface);
 }
 
+.table-select {
+  width: 100%;
+  max-width: 220px;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface-alt);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-weight: 500;
+}
+
+.table-select:focus {
+  outline: none;
+  border-color: var(--brand-green);
+  box-shadow: 0 0 0 3px var(--brand-green-glow);
+  background: var(--surface);
+}
+
 .field input::placeholder {
   color: var(--light-grey);
 }
