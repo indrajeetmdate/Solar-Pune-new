@@ -213,15 +213,15 @@ function getPanelRate(panelType, pricing) {
 }
 
 function getInverterRate(systemType, pricing) {
-  if (systemType === "hybrid") return pricing.hybridInverterRatePerW;
+  if (systemType.startsWith("hybrid")) return pricing.hybridInverterRatePerW;
   if (systemType === "offgrid") return pricing.offgridInverterRatePerW;
   return pricing.ongridInverterRatePerW;
 }
 
 function getBatteryCapacityKwh(systemType, input, performance) {
   if (systemType === "ongrid" || !input.backupNeeded) return 0;
-  if (systemType === "ongrid_basic_backup") return 1.28;
-  if (systemType === "ongrid_standard_backup") return 2.56;
+  if (systemType === "ongrid_basic_backup" || systemType === "hybrid_basic_backup") return 1.28;
+  if (systemType === "ongrid_standard_backup" || systemType === "hybrid_standard_backup") return 2.56;
   
   const dod = clamp(performance.batteryDod || 90, 1, 100) / 100;
   const efficiency = clamp(performance.inverterEfficiency || 92, 1, 100) / 100;
@@ -264,7 +264,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   );
 
   // Battery round-trip efficiency loss for hybrid/offgrid
-  if (systemType === "hybrid" || systemType === "offgrid") {
+  if (systemType.startsWith("hybrid") || systemType === "offgrid") {
     const batteryRoundTrip = (clamp(config.performance.batteryDod || 90, 1, 100) / 100)
       * (clamp(config.performance.inverterEfficiency || 92, 1, 100) / 100);
     const batteryFraction = 0.5;
