@@ -185,7 +185,7 @@ export async function generateProposalPDF(estimates) {
     ["Required by Consumption", `${recommended.sizing.byConsumptionKw} kW`],
     ["Supported by Roof Area", `${recommended.sizing.byAreaKw} kW`],
     ["Sanctioned Load Limit", recommended.sizing.byLoadKw ? `${recommended.sizing.byLoadKw} kW` : "N/A"],
-    ["Recommended DC Capacity", `${recommended.dcCapacityKw} kWp`],
+    ["Recommended Solar Capacity", `${recommended.dcCapacityKw} kWp`],
     ["Sanction Status", sanctionedStatus.label]
   ];
 
@@ -235,6 +235,37 @@ export async function generateProposalPDF(estimates) {
       margin: { left: margin },
     });
     yPos = doc.lastAutoTable.finalY + 15;
+  }
+
+  // Battery and Inverter Specifications
+  doc.setTextColor(COLORS.black);
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text("Battery and Inverter Specifications", margin, yPos);
+  yPos += 8;
+
+  const inverterSpecs = [
+    ["Inverter Capacity", `${recommended.inverterCapacityKw} kW`],
+  ];
+  
+  if (recommended.batteryCapacityKwh > 0) {
+    inverterSpecs.push(["Battery Capacity", `${recommended.batteryCapacityKwh} kWh`]);
+    inverterSpecs.push(["Backup Support", `Approx. ${input.backupHours || 0} hours at ${input.backupLoadKw || 0} kW load`]);
+  } else {
+    inverterSpecs.push(["Battery Capacity", "No battery (Grid-tied system)"]);
+  }
+
+  doc.autoTable({
+    startY: yPos,
+    body: inverterSpecs,
+    theme: "grid",
+    headStyles: { fillColor: COLORS.primary },
+    columnStyles: {
+      0: { fontStyle: "bold", width: 80, fillColor: COLORS.bgLight },
+    },
+    margin: { left: margin },
+  });
+  yPos = doc.lastAutoTable.finalY + 15;
 
   // ================= Panel Array Diagram (on page 1, below panel configuration) =================
   const panelDiagramData = canvasToImageData('panelDiagramCanvas');
