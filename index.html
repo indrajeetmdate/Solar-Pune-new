@@ -238,7 +238,13 @@
               <p class="eyebrow">Internal</p>
               <h2>Editable assumptions</h2>
             </div>
-            <button class="ghost-button" id="lockInternalButton" type="button">Lock</button>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <select id="presetSelect" style="max-width: 140px; font-size: 13px; padding: 4px;">
+                <option value="">Load Preset...</option>
+              </select>
+              <button class="ghost-button" id="savePresetButton" type="button" style="padding: 4px 8px;">Save</button>
+              <button class="ghost-button" id="lockInternalButton" type="button" style="padding: 4px 8px;">Lock</button>
+            </div>
           </div>
 
           <div class="tabs" aria-label="Internal assumption groups">

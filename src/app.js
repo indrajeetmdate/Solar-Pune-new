@@ -15,6 +15,18 @@ const state = {
   ongridBackup: "basic",
 };
 
+const ASSUMPTION_IDS = [
+  "panelType", "structureType", "capacityOverride", "inverterOverride", "backupLoad", "backupHours",
+  "panelDcrRate", "panelNonDcrRate", "batteryRate", "hybridInverterRate", "offgridInverterRate", "ongridInverterRate",
+  "hotDipStructureRate", "galvalumeStructureRate", "gpPurlinStructureRate", "wiringRate", "installationRate", "protectionCost",
+  "netMeterCost", "consultancyFee", "liaisoningFee", "gstRate", "contingencyRate",
+  "dailyGeneration", "sqftPerKw", "shadingLoss", "orientationLoss", "systemLoss", "degradationRate", "batteryDod", "inverterEfficiency",
+  "savingsMethod", "fixedCharge", "electricityDuty", "tariffEscalation",
+  "slabRate1", "slabRate2", "slabRate3", "slabRate4"
+];
+
+const PRESETS_STORAGE_KEY = "solar_calculator_presets";
+
 const ids = [
   "customerName",
   "monthlyUnits",
@@ -671,6 +683,61 @@ function resetForm() {
   window.location.reload();
 }
 
+function updatePresetDropdown() {
+  const select = $("presetSelect");
+  if (!select) return;
+  
+  const presets = JSON.parse(window.localStorage.getItem(PRESETS_STORAGE_KEY) || "{}");
+  const presetNames = Object.keys(presets);
+  
+  const currentValue = select.value;
+  
+  let html = '<option value="">Load Preset...</option>';
+  presetNames.forEach(name => {
+    html += `<option value="${name}">${name}</option>`;
+  });
+  
+  select.innerHTML = html;
+  if (presetNames.includes(currentValue)) {
+    select.value = currentValue;
+  }
+}
+
+function savePreset() {
+  const name = prompt("Enter a name for this preset:");
+  if (!name || !name.trim()) return;
+  
+  const presetData = {};
+  ASSUMPTION_IDS.forEach(id => {
+    const el = $(id);
+    if (el) presetData[id] = el.value;
+  });
+  
+  const presets = JSON.parse(window.localStorage.getItem(PRESETS_STORAGE_KEY) || "{}");
+  presets[name.trim()] = presetData;
+  window.localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets));
+  
+  updatePresetDropdown();
+  $("presetSelect").value = name.trim();
+  alert(`Preset "${name.trim()}" saved successfully!`);
+}
+
+function loadPreset(name) {
+  if (!name) return;
+  const presets = JSON.parse(window.localStorage.getItem(PRESETS_STORAGE_KEY) || "{}");
+  const presetData = presets[name];
+  if (!presetData) return;
+  
+  ASSUMPTION_IDS.forEach(id => {
+    const el = $(id);
+    if (el && presetData[id] !== undefined) {
+      el.value = presetData[id];
+    }
+  });
+  
+  render();
+}
+
 function attachEvents() {
   ids.forEach((id) => {
     const element = $(id);
@@ -685,6 +752,9 @@ function attachEvents() {
   $("lockInternalButton")?.addEventListener("click", lockInternal);
   $("resetButton")?.addEventListener("click", resetForm);
   $("applyExtractedBill")?.addEventListener("click", applyExtractedBill);
+
+  $("savePresetButton")?.addEventListener("click", savePreset);
+  $("presetSelect")?.addEventListener("change", (e) => loadPreset(e.target.value));
 
   // Consumer category change: toggle conditional fields and update slab defaults
   $("consumerCategory")?.addEventListener("change", () => {
@@ -905,5 +975,6 @@ window.finishWizard = function() {
   }
 }
 
+updatePresetDropdown();
 attachEvents();
 render();
