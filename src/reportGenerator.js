@@ -250,7 +250,6 @@ export async function generateProposalPDF(estimates) {
   
   if (recommended.batteryCapacityKwh > 0) {
     inverterSpecs.push(["Battery Capacity", `${recommended.batteryCapacityKwh} kWh`]);
-    inverterSpecs.push(["Backup Support", `Approx. ${input.backupHours || 0} hours at ${input.backupLoadKw || 0} kW load`]);
   } else {
     inverterSpecs.push(["Battery Capacity", "No battery (Grid-tied system)"]);
   }
