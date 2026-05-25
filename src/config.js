@@ -222,8 +222,8 @@ export const DEFAULT_CONFIG = {
 
 export const SYSTEM_LABELS = {
   ongrid: "On-grid",
-  ongrid_basic_backup: "On-grid + Basic Backup (1100VA)",
-  ongrid_standard_backup: "On-grid + Std Backup (2100VA)",
+  ongrid_basic_backup: "Semi-hybrid (1100VA)",
+  ongrid_standard_backup: "Semi-hybrid (2100VA)",
   hybrid: "Hybrid",
   offgrid: "Off-grid with grid charging",
 };

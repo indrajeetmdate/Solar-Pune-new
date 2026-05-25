@@ -259,8 +259,8 @@ function renderComparison(options, recommended) {
         systemCell = `
           <select class="table-select system-select" onclick="event.stopPropagation()">
             <option value="none" ${state.ongridBackup === 'none' ? 'selected' : ''}>On-grid</option>
-            <option value="basic" ${state.ongridBackup === 'basic' ? 'selected' : ''}>On-grid + Basic Backup (1100VA)</option>
-            <option value="standard" ${state.ongridBackup === 'standard' ? 'selected' : ''}>On-grid + Std Backup (2100VA)</option>
+            <option value="basic" ${state.ongridBackup === 'basic' ? 'selected' : ''}>Semi-hybrid (1100VA)</option>
+            <option value="standard" ${state.ongridBackup === 'standard' ? 'selected' : ''}>Semi-hybrid (2100VA)</option>
           </select>
         `;
       }
