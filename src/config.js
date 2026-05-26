@@ -175,9 +175,6 @@ export const DEFAULT_CONFIG = {
     panelDcrRatePerWp: 26,
     panelNonDcrRatePerWp: 17,
     batteryRatePerWh: 17.5,
-    hybridInverterRatePerW: 23,
-    offgridInverterRatePerW: 15,
-    ongridInverterRatePerW: 8,
     structureRates: {
       hotDip: 6,
       galvalume: 5.3,

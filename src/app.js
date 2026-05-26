@@ -18,7 +18,7 @@ const state = {
 
 const ASSUMPTION_IDS = [
   "panelType", "structureType", "capacityOverride", "inverterOverride", "backupLoad", "backupHours",
-  "panelDcrRate", "panelNonDcrRate", "batteryRate", "hybridInverterRate", "offgridInverterRate", "ongridInverterRate",
+  "panelDcrRate", "panelNonDcrRate", "batteryRate",
   "hotDipStructureRate", "galvalumeStructureRate", "gpPurlinStructureRate", "wiringRate", "installationRate", "protectionCost",
   "netMeterCost", "consultancyFee", "liaisoningFee", "gstRate", "contingencyRate",
   "dailyGeneration", "sqftPerKw", "shadingLoss", "orientationLoss", "systemLoss", "degradationRate", "batteryDod", "inverterEfficiency",
@@ -54,9 +54,6 @@ const ids = [
   "panelDcrRate",
   "panelNonDcrRate",
   "batteryRate",
-  "hybridInverterRate",
-  "offgridInverterRate",
-  "ongridInverterRate",
   "hotDipStructureRate",
   "galvalumeStructureRate",
   "gpPurlinStructureRate",
@@ -165,9 +162,6 @@ function readConfig() {
       panelDcrRatePerWp: numberValue("panelDcrRate"),
       panelNonDcrRatePerWp: numberValue("panelNonDcrRate"),
       batteryRatePerWh: numberValue("batteryRate"),
-      hybridInverterRatePerW: numberValue("hybridInverterRate"),
-      offgridInverterRatePerW: numberValue("offgridInverterRate"),
-      ongridInverterRatePerW: numberValue("ongridInverterRate"),
       structureRates: {
         hotDip: numberValue("hotDipStructureRate"),
         galvalume: numberValue("galvalumeStructureRate"),

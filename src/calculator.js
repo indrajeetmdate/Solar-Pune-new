@@ -212,10 +212,43 @@ function getPanelRate(panelType, pricing) {
   return panelType === "dcr" ? pricing.panelDcrRatePerWp : pricing.panelNonDcrRatePerWp;
 }
 
-function getInverterRate(systemType, pricing) {
-  if (systemType.startsWith("hybrid")) return pricing.hybridInverterRatePerW;
-  if (systemType === "offgrid") return pricing.offgridInverterRatePerW;
-  return pricing.ongridInverterRatePerW;
+function getInverterRate(systemType, capacityKw) {
+  let category = "";
+  if (systemType.startsWith("hybrid")) {
+    category = "Hybrid";
+  } else if (systemType.startsWith("offgrid") || systemType === "ongrid_basic_backup" || systemType === "ongrid_standard_backup") {
+    category = "Off-Grid & UPS";
+  } else {
+    category = "On-Grid";
+  }
+
+  if (capacityKw <= 3) {
+    if (category === "On-Grid") return 8.68;
+    if (category === "Off-Grid & UPS") return 9.92;
+    if (category === "Hybrid") return 25.13;
+  } else if (capacityKw <= 5) {
+    if (category === "On-Grid") return 5.97;
+    if (category === "Off-Grid & UPS") return 10.77;
+    if (category === "Hybrid") return 17.36;
+  } else if (capacityKw <= 10) {
+    if (category === "On-Grid") return 6.15;
+    if (category === "Off-Grid & UPS") return 11.49;
+    if (category === "Hybrid") return 14.65;
+  } else if (capacityKw <= 20) {
+    if (category === "On-Grid") return 4.07;
+    if (category === "Off-Grid & UPS") return 11.73;
+    if (category === "Hybrid") return 20.99;
+  } else if (capacityKw <= 50) {
+    if (category === "On-Grid") return 2.99;
+    if (category === "Off-Grid & UPS") return 12.02;
+    if (category === "Hybrid") return 10.71;
+  } else {
+    // > 50 kW
+    if (category === "On-Grid") return 2.60;
+    if (category === "Off-Grid & UPS") return 11.18;
+    if (category === "Hybrid") return 8.30;
+  }
+  return 8.68;
 }
 
 function getBatteryCapacityKwh(systemType, input, performance) {
@@ -314,7 +347,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const pricing = config.pricing;
   const panelCost = dcCapacityWp * getPanelRate(panelType, pricing);
   const structureCost = dcCapacityWp * pricing.structureRates[input.structureType];
-  const inverterCost = inverterCapacityW * getInverterRate(systemType, pricing);
+  const inverterCost = inverterCapacityW * getInverterRate(systemType, inverterCapacityKw);
   let batteryCost = batteryCapacityWh * pricing.batteryRatePerWh;
   if (batteryCapacityWh > 0) {
     if (systemType === "ongrid_basic_backup") batteryCost = 30000;
