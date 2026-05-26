@@ -182,7 +182,6 @@ export const DEFAULT_CONFIG = {
     },
     wiringRatePerW: 3.5,
     installationRatePerW: 4,
-    protectionCost: 12000,
     netMeterCost: 7000,
     consultancyFee: 10000,
     liaisoningFee: 8000,

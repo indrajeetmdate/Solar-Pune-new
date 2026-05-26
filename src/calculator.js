@@ -251,6 +251,15 @@ function getInverterRate(systemType, capacityKw) {
   return 8.68;
 }
 
+function getProtectionCost(capacityKw) {
+  if (capacityKw <= 3) return 10000;
+  if (capacityKw <= 5) return 15000;
+  if (capacityKw <= 10) return 25000;
+  if (capacityKw <= 20) return 55000;
+  if (capacityKw <= 50) return 120000;
+  return 200000;
+}
+
 function getBatteryCapacityKwh(systemType, input, performance) {
   if (systemType === "ongrid" || !input.backupNeeded) return 0;
   if (systemType === "ongrid_basic_backup") return 1.28;
@@ -355,7 +364,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   }
   const wiringCost = dcCapacityWp * pricing.wiringRatePerW;
   const installationCost = dcCapacityWp * pricing.installationRatePerW;
-  const protectionCost = pricing.protectionCost;
+  const protectionCost = getProtectionCost(dcCapacityKw);
   const netMeterCost = systemType === "offgrid" ? 0 : pricing.netMeterCost;
   const consultancyCost = pricing.consultancyFee;
   const liaisoningCost = systemType === "offgrid" ? 0 : pricing.liaisoningFee;
