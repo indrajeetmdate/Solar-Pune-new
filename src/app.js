@@ -621,6 +621,39 @@ function renderDiagram(pl, input) {
 }
 
 
+function lockInternal() {
+  state.internalUnlocked = false;
+  $("internalPanel").classList.add("hidden");
+  $("easyModeButton").classList.add("active");
+  $("internalModeButton").classList.remove("active");
+
+  document.querySelectorAll('.wizard-actions').forEach(el => el.classList.remove('hidden'));
+  
+  if (typeof window.goToStep === 'function') {
+    window.goToStep(1);
+  }
+
+  render();
+}
+
+function openInternal() {
+  state.internalUnlocked = true;
+  $("internalPanel").classList.remove("hidden");
+  const resultsPanel = document.querySelector('.results-panel');
+  if (resultsPanel) resultsPanel.classList.remove('blurred-overlay');
+  $("easyModeButton").classList.remove("active");
+  $("internalModeButton").classList.add("active");
+
+  const step1 = document.getElementById("step1");
+  const step2 = document.getElementById("step2");
+  if (step1) step1.classList.add("hidden");
+  if (step2) step2.classList.remove("hidden");
+
+  document.querySelectorAll('.wizard-actions').forEach(el => el.classList.add('hidden'));
+
+  render();
+}
+
 function switchTab(tab) {
   state.activeTab = tab;
   document.querySelectorAll(".tab-button").forEach((button) => {
@@ -698,6 +731,9 @@ function attachEvents() {
     element.addEventListener("change", render);
   });
 
+  $("easyModeButton")?.addEventListener("click", lockInternal);
+  $("internalModeButton")?.addEventListener("click", openInternal);
+
 
   $("resetButton")?.addEventListener("click", resetForm);
   $("applyExtractedBill")?.addEventListener("click", applyExtractedBill);
@@ -724,6 +760,10 @@ function attachEvents() {
     if (label) label.textContent = `${e.target.value}%`;
     render();
   });
+
+  // Mode buttons
+  $("easyModeButton")?.addEventListener("click", lockInternal);
+  $("internalModeButton")?.addEventListener("click", openInternal);
 
   // Consumer category change: toggle conditional fields and update slab defaults
   $("consumerCategory")?.addEventListener("change", () => {
@@ -783,12 +823,6 @@ function attachEvents() {
     );
   });
 
-  $("internalPassword")?.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      unlockInternal();
-    }
-  });
 
   $("billUpload").addEventListener("change", async (event) => {
     const [file] = event.target.files;
