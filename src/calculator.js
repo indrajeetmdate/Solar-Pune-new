@@ -213,12 +213,15 @@ function getPanelRate(panelType, pricing) {
 }
 
 function getInverterRate(systemType, capacityKw) {
+  // FIX C3: Semi-hybrid uses On-Grid rates for the main inverter;
+  // the backup inverter cost is bundled in the fixed battery+inverter kit price.
   let category = "";
   if (systemType.startsWith("hybrid")) {
     category = "Hybrid";
-  } else if (systemType.startsWith("offgrid") || systemType === "ongrid_basic_backup" || systemType === "ongrid_standard_backup") {
+  } else if (systemType === "offgrid") {
     category = "Off-Grid & UPS";
   } else {
+    // ongrid, ongrid_basic_backup, ongrid_standard_backup all use On-Grid rates
     category = "On-Grid";
   }
 
@@ -260,16 +263,26 @@ function getProtectionCost(capacityKw) {
   return 200000;
 }
 
-function getBatteryCapacityKwh(systemType, input, performance) {
-  if (systemType === "ongrid" || !input.backupNeeded) return 0;
+function getBatteryCapacityKwh(systemType, dcCapacityKw, input, performance) {
+  // FIX C5: Semi-hybrid always gets its fixed battery, regardless of backupNeeded checkbox
+  if (systemType === "ongrid") return 0;
   if (systemType === "ongrid_basic_backup") return 1.28;
   if (systemType === "ongrid_standard_backup") return 2.56;
   
+  // For hybrid/offgrid, backupNeeded must be checked
+  if (!input.backupNeeded) return 0;
+  
   const dod = clamp(performance.batteryDod || 90, 1, 100) / 100;
   const efficiency = clamp(performance.inverterEfficiency || 92, 1, 100) / 100;
-  const required =
-    (Math.max(input.backupLoadKw, 0) * Math.max(input.backupHours, 0)) /
-    (dod * efficiency);
+
+  // FIX C2: Scale backup load proportionally to PV capacity
+  // For hybrid/offgrid, ensure battery is proportional to the PV installation.
+  // Minimum backup load = 50% of DC capacity (industry rule of thumb).
+  const minBackupLoadKw = dcCapacityKw * 0.5;
+  const effectiveBackupLoad = Math.max(input.backupLoadKw || 0, minBackupLoadKw);
+  const effectiveBackupHours = Math.max(input.backupHours || 0, 2); // minimum 2 hours
+
+  const required = (effectiveBackupLoad * effectiveBackupHours) / (dod * efficiency);
     
   const batteryModuleKwh = 5.12; // 51.2V 100Ah
   const modulesNeeded = Math.max(1, Math.ceil(required / batteryModuleKwh));
@@ -294,12 +307,20 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const sizing = recommendCapacity(input, config);
   const dcCapacityKw = input.capacityOverride > 0 ? input.capacityOverride : sizing.dcCapacityKw;
   const dcCapacityWp = dcCapacityKw * 1000;
+
+  // FIX C1: Apply industry-standard DC:AC clipping ratio of 1.2
+  // A 10 kWp DC array pairs with an ~8.3 kW AC inverter, not 10 kW.
+  const dcToAcRatio = 1.2;
   const inverterCapacityKw =
     input.inverterOverride > 0
       ? input.inverterOverride
-      : Math.max(dcCapacityKw, systemType === "ongrid" ? 0 : input.backupLoadKw || 0);
+      : Math.max(
+          round(dcCapacityKw / dcToAcRatio, 1),
+          systemType === "ongrid" ? 0 : input.backupLoadKw || 0
+        );
   const inverterCapacityW = inverterCapacityKw * 1000;
-  const batteryCapacityKwh = getBatteryCapacityKwh(systemType, input, config.performance);
+  // FIX C2: Pass dcCapacityKw so battery can scale with PV capacity
+  const batteryCapacityKwh = getBatteryCapacityKwh(systemType, dcCapacityKw, input, config.performance);
   const batteryCapacityWh = batteryCapacityKwh * 1000;
 
   const performanceFactor = calculatePerformanceFactor(config.performance, input);
@@ -347,7 +368,11 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const avgRate = input.monthlyUnits > 0 ? modelCurrentBill.energyCharge / input.monthlyUnits : 0;
   const todSavings = calculateTodSavings(offsetUnits, avgRate, input);
   const pfIncentive = calculatePfIncentive(input.currentPf, input.improvedPf, modelCurrentBill.energyCharge, input);
-  const promptPay = calculatePromptPayDiscount(postSolarBill.energyCharge, postSolarBill.fixedCharge);
+  // FIX M3: Prompt pay differential — customer gets this discount with or without solar.
+  // Only the difference is attributable to solar.
+  const promptPayPreSolar = calculatePromptPayDiscount(modelCurrentBill.energyCharge, modelCurrentBill.fixedCharge);
+  const promptPayPostSolar = calculatePromptPayDiscount(postSolarBill.energyCharge, postSolarBill.fixedCharge);
+  const promptPay = Math.max(promptPayPreSolar - promptPayPostSolar, 0);
 
   const monthlySavings = round(baseSavings + todSavings.totalTod + pfIncentive + promptPay, 0);
   const annualSavings = monthlySavings * 12;
