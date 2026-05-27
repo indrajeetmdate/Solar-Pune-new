@@ -391,10 +391,11 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const wiringCost = dcCapacityWp * pricing.wiringRatePerW;
   const installationCost = dcCapacityWp * pricing.installationRatePerW;
   const protectionCost = getProtectionCost(dcCapacityKw);
+  const consultancyCost = dcCapacityWp * pricing.consultancyRatePerW;
 
   const preTaxSubtotal =
     panelCost + structureCost + inverterCost + batteryCost +
-    wiringCost + installationCost + protectionCost;
+    wiringCost + installationCost + protectionCost + consultancyCost;
 
   // GST: Supply of Goods (70% @ 5%) + Supply of Services (30% @ 18%) = 8.9% effective
   const goodsShare = 0.70;
@@ -442,9 +443,9 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       structure: round(structureCost, 0),
       inverter: round(inverterCost, 0),
       battery: round(batteryCost, 0),
-      wiring: round(wiringCost, 0),
+      electricalSafetyAndWiring: round(wiringCost + protectionCost, 0),
       installation: round(installationCost, 0),
-      protection: round(protectionCost, 0),
+      consultancy: round(consultancyCost, 0),
       gst: round(gst, 0),
       effectiveGstRate: round(effectiveGstRate, 1),
       contingency: round(contingency, 0),
@@ -547,8 +548,12 @@ export function getPanelConfigurations(numPanels) {
 export function calculateEstimate(input, config = DEFAULT_CONFIG) {
   const panelType = input.panelType || "dcr";
   let ongridType = "ongrid";
-  if (input.ongridBackup === "basic") ongridType = "ongrid_basic_backup";
-  if (input.ongridBackup === "standard") ongridType = "ongrid_standard_backup";
+  const isResidential = config.tariff.consumerCategory.startsWith("LT-I");
+
+  if (isResidential) {
+    if (input.ongridBackup === "basic") ongridType = "ongrid_basic_backup";
+    if (input.ongridBackup === "standard") ongridType = "ongrid_standard_backup";
+  }
 
   const options = [
     calculateSystemOption(ongridType, panelType, input, config),

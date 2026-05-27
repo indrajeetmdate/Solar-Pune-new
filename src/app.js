@@ -19,7 +19,7 @@ const state = {
 const ASSUMPTION_IDS = [
   "panelType", "structureType", "capacityOverride", "inverterOverride", "backupLoad", "backupHours",
   "panelDcrRate", "panelNonDcrRate", "batteryRate",
-  "hotDipStructureRate", "galvalumeStructureRate", "gpPurlinStructureRate", "wiringRate", "installationRate",
+  "hotDipStructureRate", "galvalumeStructureRate", "gpPurlinStructureRate", "wiringRate", "installationRate", "consultancyRate",
   "contingencyRate",
   "dailyGeneration", "sqftPerKw", "shadingLoss", "orientationLoss", "systemLoss", "degradationRate", "batteryDod", "inverterEfficiency", "selfConsumptionPct",
   "savingsMethod", "fixedCharge", "electricityDuty", "tariffEscalation",
@@ -59,6 +59,7 @@ const ids = [
   "gpPurlinStructureRate",
   "wiringRate",
   "installationRate",
+  "consultancyRate",
   "contingencyRate",
   "dailyGeneration",
   "sqftPerKw",
@@ -165,6 +166,7 @@ function readConfig() {
       },
       wiringRatePerW: numberValue("wiringRate"),
       installationRatePerW: numberValue("installationRate"),
+      consultancyRatePerW: numberValue("consultancyRate"),
       contingencyRate: numberValue("contingencyRate"),
     },
     performance: {
@@ -242,13 +244,18 @@ function renderComparison(options, recommended) {
       let systemCell = SYSTEM_LABELS[option.systemType] || SYSTEM_LABELS[option.systemType.split('_')[0]];
       
       if (option.systemType === "ongrid" || option.systemType === "ongrid_basic_backup" || option.systemType === "ongrid_standard_backup") {
-        systemCell = `
-          <select class="table-select system-select" onclick="event.stopPropagation()">
-            <option value="none" ${state.ongridBackup === 'none' ? 'selected' : ''}>On-grid</option>
-            <option value="basic" ${state.ongridBackup === 'basic' ? 'selected' : ''}>Semi-hybrid (1100VA)</option>
-            <option value="standard" ${state.ongridBackup === 'standard' ? 'selected' : ''}>Semi-hybrid (2100VA)</option>
-          </select>
-        `;
+        const cat = $("consumerCategory")?.value || "LT-I";
+        if (cat.startsWith("LT-I")) {
+          systemCell = `
+            <select class="table-select system-select" onclick="event.stopPropagation()">
+              <option value="none" ${state.ongridBackup === 'none' ? 'selected' : ''}>On-grid</option>
+              <option value="basic" ${state.ongridBackup === 'basic' ? 'selected' : ''}>Semi-hybrid (1100VA)</option>
+              <option value="standard" ${state.ongridBackup === 'standard' ? 'selected' : ''}>Semi-hybrid (2100VA)</option>
+            </select>
+          `;
+        } else {
+          systemCell = "On-grid";
+        }
       }
 
       return `
@@ -288,9 +295,9 @@ function renderBreakup(option, input, customerView) {
     [`Structure (${STRUCTURE_LABELS[input.structureType]})`, option.costBreakup.structure],
     ["Inverter", option.costBreakup.inverter],
     ["Battery", option.costBreakup.battery],
-    ["Wiring", option.costBreakup.wiring],
+    ["Electrical safety and wiring", option.costBreakup.electricalSafetyAndWiring],
     ["Installation", option.costBreakup.installation],
-    ["Protection", option.costBreakup.protection],
+    ["Consultancy", option.costBreakup.consultancy],
     [`GST (${option.costBreakup.effectiveGstRate}%)`, option.costBreakup.gst],
     ["Contingency", option.costBreakup.contingency],
     ["Subsidy", -option.subsidy],

@@ -266,48 +266,6 @@ export async function generateProposalPDF(estimates) {
   });
   yPos = doc.lastAutoTable.finalY + 15;
 
-  // ================= Panel Array Diagram (on page 1, below panel configuration) =================
-  const panelDiagramData = canvasToImageData('panelDiagramCanvas');
-  if (panelDiagramData) {
-    // Check if we need a new page for the diagram
-    const diagramSpaceNeeded = 200;
-    if (yPos + diagramSpaceNeeded > pageHeight - 30) {
-      doc.addPage();
-      yPos = 30;
-      addHeader("Solar System Proposal");
-    }
-
-    doc.setTextColor(COLORS.black);
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text("Panel Array Visualization", margin, yPos);
-    yPos += 8;
-
-    // Add the panel diagram image
-    const imgWidth = pageWidth - (margin * 2);
-    const imgHeight = 160;
-    doc.addImage(panelDiagramData, 'PNG', margin, yPos, imgWidth, imgHeight);
-    yPos += imgHeight + 10;
-
-    // Add dimensions info if available
-    const dimLabel = document.getElementById('panelDiagramDimensions');
-    if (dimLabel && dimLabel.textContent) {
-      doc.setFontSize(10);
-      doc.setTextColor(COLORS.text);
-      doc.setFont("helvetica", "normal");
-      doc.text(dimLabel.textContent, margin, yPos);
-      yPos += 6;
-    }
-
-    // Add panel configuration summary
-    const panelLayout = estimates.panelLayout;
-    if (panelLayout) {
-      doc.setFontSize(9);
-      doc.setTextColor(COLORS.text);
-      doc.text(`Configuration: ${panelLayout.rows} × ${panelLayout.cols} | ${panelLayout.numPanels} panels | ${panelLayout.panelDimensions} (${panelLayout.panelWp} Wp) | Area: ${panelLayout.totalAreaSqft} sq ft`, margin, yPos);
-    }
-  }
-
   addFooter(1);
 
   // ================= PAGE 2: Feasible Solutions =================
@@ -375,9 +333,9 @@ export async function generateProposalPDF(estimates) {
     ["Solar Panels", formatCurrency(cBreakup.panels)],
     ["Inverter", formatCurrency(cBreakup.inverter)],
     ["Mounting Structure", formatCurrency(cBreakup.structure)],
-    ["Wiring & Electricals", formatCurrency(cBreakup.wiring)],
-    ["Protection Devices (AC/DCDB)", formatCurrency(cBreakup.protection)],
+    ["Electrical safety and wiring", formatCurrency(cBreakup.electricalSafetyAndWiring)],
     ["Installation & Commissioning", formatCurrency(cBreakup.installation)],
+    ["Consultancy", formatCurrency(cBreakup.consultancy)],
     ["Contingency", formatCurrency(cBreakup.contingency)],
   ];
 
@@ -387,8 +345,8 @@ export async function generateProposalPDF(estimates) {
 
   // Pre-tax subtotal (exclude gst and effectiveGstRate from sum)
   const preTaxSubtotal = cBreakup.panels + cBreakup.structure + cBreakup.inverter +
-    cBreakup.battery + cBreakup.wiring + cBreakup.installation +
-    cBreakup.protection + cBreakup.contingency;
+    cBreakup.battery + cBreakup.electricalSafetyAndWiring + cBreakup.installation +
+    cBreakup.consultancy + cBreakup.contingency;
   
   costData.push(["-------------------", "-------------------"]);
   costData.push(["Subtotal (Pre-Tax)", formatCurrency(preTaxSubtotal)]);
@@ -428,7 +386,7 @@ export async function generateProposalPDF(estimates) {
   doc.setFontSize(8);
   doc.setFont("helvetica", "italic");
   doc.setTextColor(COLORS.text);
-  doc.text("* Net metering, consultancy, and liaisoning costs are additional and will be quoted separately.", margin, yPos);
+  doc.text("* Net metering and liaisoning costs are additional and will be quoted separately.", margin, yPos);
   doc.text("* GST: 70% goods @ 5% + 30% services @ 18% = 8.9% effective rate.", margin, yPos + 4);
   yPos += 13;
 

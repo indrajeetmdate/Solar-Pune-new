@@ -182,6 +182,7 @@ export const DEFAULT_CONFIG = {
     },
     wiringRatePerW: 3.5,
     installationRatePerW: 4,
+    consultancyRatePerW: 3,
     contingencyRate: 3,
   },
   performance: {
