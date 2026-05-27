@@ -378,9 +378,6 @@ export async function generateProposalPDF(estimates) {
     ["Wiring & Electricals", formatCurrency(cBreakup.wiring)],
     ["Protection Devices (AC/DCDB)", formatCurrency(cBreakup.protection)],
     ["Installation & Commissioning", formatCurrency(cBreakup.installation)],
-    ["Net Meter & Testing", formatCurrency(cBreakup.netMeter)],
-    ["Consultancy & Engineering", formatCurrency(cBreakup.consultancy)],
-    ["Liaisoning", formatCurrency(cBreakup.liaisoning)],
     ["Contingency", formatCurrency(cBreakup.contingency)],
   ];
 
@@ -388,12 +385,14 @@ export async function generateProposalPDF(estimates) {
     costData.push(["Battery Storage", formatCurrency(cBreakup.battery)]);
   }
 
-  // Pre-tax subtotal
-  const preTaxSubtotal = Object.values(cBreakup).reduce((a, b) => a + b, 0) - cBreakup.gst;
+  // Pre-tax subtotal (exclude gst and effectiveGstRate from sum)
+  const preTaxSubtotal = cBreakup.panels + cBreakup.structure + cBreakup.inverter +
+    cBreakup.battery + cBreakup.wiring + cBreakup.installation +
+    cBreakup.protection + cBreakup.contingency;
   
   costData.push(["-------------------", "-------------------"]);
   costData.push(["Subtotal (Pre-Tax)", formatCurrency(preTaxSubtotal)]);
-  costData.push(["GST", formatCurrency(cBreakup.gst)]);
+  costData.push([`GST (${cBreakup.effectiveGstRate}% effective)`, formatCurrency(cBreakup.gst)]);
   costData.push(["-------------------", "-------------------"]);
   costData.push(["Total Cost (Inc. GST)", formatCurrency(recommended.totalPreSubsidy)]);
   costData.push(["Expected Subsidy", `- ${formatCurrency(recommended.subsidy)}`]);
@@ -423,7 +422,15 @@ export async function generateProposalPDF(estimates) {
     margin: { left: margin },
   });
 
-  yPos = doc.lastAutoTable.finalY + 15;
+  yPos = doc.lastAutoTable.finalY + 5;
+
+  // Additional costs note
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "italic");
+  doc.setTextColor(COLORS.text);
+  doc.text("* Net metering, consultancy, and liaisoning costs are additional and will be quoted separately.", margin, yPos);
+  doc.text("* GST: 70% goods @ 5% + 30% services @ 18% = 8.9% effective rate.", margin, yPos + 4);
+  yPos += 13;
 
   // ROI summary
   doc.setTextColor(COLORS.black);

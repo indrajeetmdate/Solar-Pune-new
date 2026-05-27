@@ -339,30 +339,14 @@
               </label>
 
               <label class="field">
-                <span>Net meter/testing <i class="info-tip" data-tip="Bidirectional meter + MSEDCL inspection fees. Required for grid-connected systems.">i</i></span>
-                <input id="netMeterCost" type="number" min="0" step="500" value="7000">
-              </label>
-
-              <label class="field">
-                <span>Consultancy <i class="info-tip" data-tip="Site survey, system design, and technical documentation fees.">i</i></span>
-                <input id="consultancyFee" type="number" min="0" step="500" value="10000">
-              </label>
-
-              <label class="field">
-                <span>Liaisoning <i class="info-tip" data-tip="Handling MSEDCL paperwork, net meter application, and subsidy claim processing.">i</i></span>
-                <input id="liaisoningFee" type="number" min="0" step="500" value="8000">
-              </label>
-
-              <label class="field">
-                <span>GST % <i class="info-tip" data-tip="Goods & Services Tax. Solar panels attract ~12% GST, services attract higher rates.">i</i></span>
-                <input id="gstRate" type="number" min="0" step="0.1" value="13.8">
-              </label>
-
-              <label class="field">
                 <span>Contingency % <i class="info-tip" data-tip="Buffer for unexpected costs like cable extensions, extra earthing, or site-specific modifications.">i</i></span>
                 <input id="contingencyRate" type="number" min="0" step="0.1" value="3">
               </label>
             </div>
+            <p style="font-size: 11px; color: var(--muted); margin: 10px 0 0; line-height: 1.5;">
+              <strong>Note:</strong> Net metering, consultancy, and liaisoning costs are additional and will be quoted separately.<br>
+              <strong>GST:</strong> Effective rate of 8.9% applied (70% goods @ 5% + 30% services @ 18%).
+            </p>
           </div>
 
           <div class="tab-panel hidden" data-panel="losses">

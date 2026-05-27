@@ -391,16 +391,18 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const wiringCost = dcCapacityWp * pricing.wiringRatePerW;
   const installationCost = dcCapacityWp * pricing.installationRatePerW;
   const protectionCost = getProtectionCost(dcCapacityKw);
-  const netMeterCost = systemType === "offgrid" ? 0 : pricing.netMeterCost;
-  const consultancyCost = pricing.consultancyFee;
-  const liaisoningCost = systemType === "offgrid" ? 0 : pricing.liaisoningFee;
 
   const preTaxSubtotal =
     panelCost + structureCost + inverterCost + batteryCost +
-    wiringCost + installationCost + protectionCost +
-    netMeterCost + consultancyCost + liaisoningCost;
+    wiringCost + installationCost + protectionCost;
 
-  const gst = preTaxSubtotal * ((pricing.gstRate || 0) / 100);
+  // GST: Supply of Goods (70% @ 5%) + Supply of Services (30% @ 18%) = 8.9% effective
+  const goodsShare = 0.70;
+  const servicesShare = 0.30;
+  const goodsGstRate = 5;
+  const servicesGstRate = 18;
+  const effectiveGstRate = (goodsShare * goodsGstRate) + (servicesShare * servicesGstRate); // 8.9%
+  const gst = preTaxSubtotal * (effectiveGstRate / 100);
   const contingency = preTaxSubtotal * ((pricing.contingencyRate || 0) / 100);
   const totalPreSubsidy = preTaxSubtotal + gst + contingency;
   const subsidyResult = calculateSubsidy(systemType, panelType, dcCapacityKw, input, config.policy);
@@ -443,10 +445,8 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       wiring: round(wiringCost, 0),
       installation: round(installationCost, 0),
       protection: round(protectionCost, 0),
-      netMeter: round(netMeterCost, 0),
-      consultancy: round(consultancyCost, 0),
-      liaisoning: round(liaisoningCost, 0),
       gst: round(gst, 0),
+      effectiveGstRate: round(effectiveGstRate, 1),
       contingency: round(contingency, 0),
     },
   };
