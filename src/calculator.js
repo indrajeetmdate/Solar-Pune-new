@@ -390,9 +390,16 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const structureCost = dcCapacityWp * pricing.structureRates[input.structureType];
   const inverterCost = inverterCapacityW * getInverterRate(systemType, inverterCapacityKw);
   let batteryCost = batteryCapacityWh * pricing.batteryRatePerWh;
+  let backupInverterCost = 0;
   if (batteryCapacityWh > 0) {
-    if (systemType === "ongrid_basic_backup") batteryCost = 30000;
-    if (systemType === "ongrid_standard_backup") batteryCost = 50000;
+    if (systemType === "ongrid_basic_backup") {
+      backupInverterCost = 10000;
+      batteryCost = 20000;
+    }
+    if (systemType === "ongrid_standard_backup") {
+      backupInverterCost = 15000;
+      batteryCost = 35000;
+    }
   }
   const wiringCost = dcCapacityWp * pricing.wiringRatePerW;
   const installationCost = dcCapacityWp * pricing.installationRatePerW;
@@ -400,7 +407,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const consultancyCost = dcCapacityWp * pricing.consultancyRatePerW;
 
   const preTaxSubtotal =
-    panelCost + structureCost + inverterCost + batteryCost +
+    panelCost + structureCost + inverterCost + backupInverterCost + batteryCost +
     wiringCost + installationCost + protectionCost + consultancyCost;
 
   // GST: Supply of Goods (70% @ 5%) + Supply of Services (30% @ 18%) = 8.9% effective
@@ -448,6 +455,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       panels: round(panelCost, 0),
       structure: round(structureCost, 0),
       inverter: round(inverterCost, 0),
+      backupInverter: round(backupInverterCost, 0),
       battery: round(batteryCost, 0),
       electricalSafetyAndWiring: round(wiringCost + protectionCost, 0),
       installation: round(installationCost, 0),

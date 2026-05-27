@@ -295,19 +295,30 @@ function renderComparison(options, recommended) {
 }
 
 function renderBreakup(option, input, customerView) {
+  let mainInverterPrefix = "On-grid";
+  if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
+  if (option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
+
   const items = [
     ["Panels", option.costBreakup.panels],
     [`Structure (${STRUCTURE_LABELS[input.structureType]})`, option.costBreakup.structure],
-    ["Inverter", option.costBreakup.inverter],
-    ["Battery", option.costBreakup.battery],
+    [`${mainInverterPrefix} Inverter`, option.costBreakup.inverter],
+  ];
+
+  if (option.costBreakup.backupInverter > 0) {
+    items.push(["Backup Off-grid Inverter", option.costBreakup.backupInverter]);
+  }
+
+  items.push(
+    [option.costBreakup.backupInverter > 0 ? "Backup Battery" : "Battery", option.costBreakup.battery],
     ["Electrical safety and wiring", option.costBreakup.electricalSafetyAndWiring],
     ["Installation", option.costBreakup.installation],
     ["Consultancy", option.costBreakup.consultancy],
     [`GST (${option.costBreakup.effectiveGstRate}%)`, option.costBreakup.gst],
     ["Contingency", option.costBreakup.contingency],
     ["Subsidy", -option.subsidy],
-    ["Net customer cost", option.netCost],
-  ];
+    ["Net customer cost", option.netCost]
+  );
 
   const visibleItems = customerView
     ? items.filter(([label]) => ["Panels", "Structure", "Inverter", "Battery", "Subsidy", "Net customer cost"].some((key) => label.includes(key)))

@@ -244,11 +244,21 @@ export async function generateProposalPDF(estimates) {
   doc.text("Battery and Inverter Specifications", margin, yPos);
   yPos += 8;
 
+  let mainInverterPrefix = "On-grid";
+  if (recommended.systemType === "hybrid") mainInverterPrefix = "Hybrid";
+  if (recommended.systemType === "offgrid") mainInverterPrefix = "Off-grid";
+
   const inverterSpecs = [
-    ["Inverter Capacity", `${recommended.inverterCapacityKw} kW`],
+    [`${mainInverterPrefix} Inverter Capacity`, `${recommended.inverterCapacityKw} kW`],
   ];
   
-  if (recommended.batteryCapacityKwh > 0) {
+  if (recommended.systemType === "ongrid_basic_backup") {
+    inverterSpecs.push(["Backup Off-grid Inverter", "1.1 kVA"]);
+    inverterSpecs.push(["Backup Battery Capacity", `${recommended.batteryCapacityKwh} kWh`]);
+  } else if (recommended.systemType === "ongrid_standard_backup") {
+    inverterSpecs.push(["Backup Off-grid Inverter", "2.1 kVA"]);
+    inverterSpecs.push(["Backup Battery Capacity", `${recommended.batteryCapacityKwh} kWh`]);
+  } else if (recommended.batteryCapacityKwh > 0) {
     inverterSpecs.push(["Battery Capacity", `${recommended.batteryCapacityKwh} kWh`]);
   } else {
     inverterSpecs.push(["Battery Capacity", "No battery (Grid-tied system)"]);
@@ -329,9 +339,13 @@ export async function generateProposalPDF(estimates) {
   yPos += 10;
 
   const cBreakup = recommended.costBreakup;
+  let mainInverterPrefix = "On-grid";
+  if (recommended.systemType === "hybrid") mainInverterPrefix = "Hybrid";
+  if (recommended.systemType === "offgrid") mainInverterPrefix = "Off-grid";
+
   const costData = [
     ["Solar Panels", formatCurrency(cBreakup.panels)],
-    ["Inverter", formatCurrency(cBreakup.inverter)],
+    [`${mainInverterPrefix} Inverter`, formatCurrency(cBreakup.inverter)],
     ["Mounting Structure", formatCurrency(cBreakup.structure)],
     ["Electrical safety and wiring", formatCurrency(cBreakup.electricalSafetyAndWiring)],
     ["Installation & Commissioning", formatCurrency(cBreakup.installation)],
@@ -339,13 +353,18 @@ export async function generateProposalPDF(estimates) {
     ["Contingency", formatCurrency(cBreakup.contingency)],
   ];
 
+  if (cBreakup.backupInverter > 0) {
+    costData.splice(2, 0, ["Backup Off-grid Inverter", formatCurrency(cBreakup.backupInverter)]);
+  }
+
   if (cBreakup.battery > 0) {
-    costData.push(["Battery Storage", formatCurrency(cBreakup.battery)]);
+    const batteryLabel = cBreakup.backupInverter > 0 ? "Backup Battery Storage" : "Battery Storage";
+    costData.push([batteryLabel, formatCurrency(cBreakup.battery)]);
   }
 
   // Pre-tax subtotal (exclude gst and effectiveGstRate from sum)
   const preTaxSubtotal = cBreakup.panels + cBreakup.structure + cBreakup.inverter +
-    cBreakup.battery + cBreakup.electricalSafetyAndWiring + cBreakup.installation +
+    (cBreakup.backupInverter || 0) + cBreakup.battery + cBreakup.electricalSafetyAndWiring + cBreakup.installation +
     cBreakup.consultancy + cBreakup.contingency;
   
   costData.push(["-------------------", "-------------------"]);
