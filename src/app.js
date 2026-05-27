@@ -754,10 +754,6 @@ function attachEvents() {
     element.addEventListener("change", render);
   });
 
-  $("easyModeButton")?.addEventListener("click", lockInternal);
-  $("internalModeButton")?.addEventListener("click", openInternal);
-
-
   $("resetButton")?.addEventListener("click", resetForm);
   $("applyExtractedBill")?.addEventListener("click", applyExtractedBill);
 
