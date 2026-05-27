@@ -276,11 +276,10 @@ function getBatteryCapacityKwh(systemType, dcCapacityKw, input, performance) {
   const efficiency = clamp(performance.inverterEfficiency || 92, 1, 100) / 100;
 
   // FIX C2: Scale backup load proportionally to PV capacity
-  // For hybrid/offgrid, ensure battery is proportional to the PV installation.
-  // Minimum backup load = 50% of DC capacity (industry rule of thumb).
-  const minBackupLoadKw = dcCapacityKw * 0.5;
-  const effectiveBackupLoad = Math.max(input.backupLoadKw || 0, minBackupLoadKw);
-  const effectiveBackupHours = Math.max(input.backupHours || 0, 2); // minimum 2 hours
+  // Use user-defined percentage, defaulting to 50%
+  const loadPercent = (input.backupLoadPercent || 50) / 100;
+  const effectiveBackupLoad = dcCapacityKw * loadPercent;
+  const effectiveBackupHours = input.backupHours || 2;
 
   const required = (effectiveBackupLoad * effectiveBackupHours) / (dod * efficiency);
     
@@ -322,7 +321,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       ? input.inverterOverride
       : Math.max(
           round(dcCapacityKw / dcToAcRatio, 1),
-          systemType === "ongrid" ? 0 : input.backupLoadKw || 0
+          systemType === "ongrid" ? 0 : dcCapacityKw * ((input.backupLoadPercent || 50) / 100)
         );
   const inverterCapacityW = inverterCapacityKw * 1000;
   // FIX C2: Pass dcCapacityKw so battery can scale with PV capacity

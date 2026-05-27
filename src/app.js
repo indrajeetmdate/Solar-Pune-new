@@ -136,7 +136,7 @@ function readInput() {
     structureType: safeStr("structureType"),
     capacityOverride: numberValue("capacityOverride"),
     inverterOverride: numberValue("inverterOverride"),
-    backupLoadKw: numberValue("backupLoad"),
+    backupLoadPercent: numberValue("backupLoad"),
     backupHours: numberValue("backupHours"),
     savingsMethod: safeStr("savingsMethod"),
     ongridBackup: state.ongridBackup,
@@ -228,7 +228,7 @@ function getOptionNotes(option, input) {
   }
 
   if (option.batteryCapacityKwh > 0) {
-    notes.push(`Estimated battery backup: ${option.batteryCapacityKwh} kWh for about ${input.backupHours} hours at ${input.backupLoadKw} kW load.`);
+    notes.push(`Estimated battery backup: ${option.batteryCapacityKwh} kWh for about ${input.backupHours} hours at ${input.backupLoadPercent}% load.`);
   }
 
   notes.push("Fixed charges and minimum charges may remain even after solar installation.");

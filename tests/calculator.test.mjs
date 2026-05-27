@@ -19,8 +19,8 @@ function makeInput(overrides = {}) {
     structureType: "hotDip",
     capacityOverride: 0,
     inverterOverride: 0,
-    backupLoadKw: 1.5,
-    backupHours: 4,
+    backupLoadPercent: 50,
+    backupHours: 2,
     savingsMethod: "auto",
     ...overrides,
   };

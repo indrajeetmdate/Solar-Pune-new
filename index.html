@@ -284,13 +284,13 @@
               </label>
 
               <label class="field">
-                <span>Backup load (kW) <i class="info-tip" data-tip="How much power (kW) the customer needs during a power cut. E.g. 1 fan + 3 lights + 1 fridge ≈ 0.5 kW.">i</i></span>
-                <input id="backupLoad" type="number" min="0" step="0.1" value="1.5">
+                <span>Backup load (%) <i class="info-tip" data-tip="Percentage of total system capacity required during a power cut. E.g. 50%.">i</i></span>
+                <input id="backupLoad" type="number" min="0" max="100" step="5" value="50">
               </label>
 
               <label class="field">
                 <span>Backup hours (hrs) <i class="info-tip" data-tip="How many hours of battery backup needed during outages. More hours = bigger battery = higher cost.">i</i></span>
-                <input id="backupHours" type="number" min="0" step="0.5" value="4">
+                <input id="backupHours" type="number" min="0" step="0.5" value="2">
               </label>
             </div>
           </div>
