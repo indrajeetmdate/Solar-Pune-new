@@ -19,10 +19,6 @@
           <h1>Solar Calculator</h1>
         </div>
       </div>
-      <div class="header-actions" aria-label="Mode selector">
-        <button class="mode-button active" id="easyModeButton" type="button">Customer</button>
-        <button class="mode-button" id="internalModeButton" type="button">Internal</button>
-      </div>
     </header>
 
     <main class="layout">
@@ -215,16 +211,7 @@
             </label>
           </div>
 
-          <div class="toggle-row" style="margin-top: 1.5rem;">
-            <label class="check-row">
-              <input id="backupNeeded" type="checkbox" checked>
-              <span>Customer wants backup comparison</span>
-            </label>
-            <label class="check-row">
-              <input id="customerView" type="checkbox" checked>
-              <span>Customer view</span>
-            </label>
-          </div>
+
 
           <div class="wizard-actions">
             <button class="ghost-button" type="button" onclick="window.goToStep(1)">← Back</button>
@@ -232,24 +219,23 @@
           </div>
         </div>
 
-        <div id="internalPanel" class="internal-panel hidden">
+        <div id="internalPanel" class="internal-panel">
           <div class="section-heading compact">
             <div>
-              <p class="eyebrow">Internal</p>
-              <h2>Editable assumptions</h2>
+              <p class="eyebrow">Settings</p>
+              <h2>Advanced Options</h2>
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
               <select id="presetSelect" style="max-width: 140px; font-size: 13px; padding: 4px;">
                 <option value="">Load Preset...</option>
               </select>
               <button class="ghost-button" id="savePresetButton" type="button" style="padding: 4px 8px;">Save</button>
-              <button class="ghost-button" id="lockInternalButton" type="button" style="padding: 4px 8px;">Lock</button>
             </div>
           </div>
 
           <div class="tabs" aria-label="Internal assumption groups">
             <button class="tab-button active" type="button" data-tab="system">System</button>
-            <button class="tab-button" type="button" data-tab="pricing">Pricing</button>
+            <button class="tab-button" type="button" data-tab="pricing" style="display: none;">Pricing</button>
             <button class="tab-button" type="button" data-tab="losses">Losses</button>
             <button class="tab-button" type="button" data-tab="tariff">Tariff</button>
           </div>
@@ -607,22 +593,7 @@
       </section>
     </main>
 
-    <dialog id="passwordDialog" class="password-dialog">
-      <form method="dialog" class="password-box">
-        <p class="eyebrow">Internal mode</p>
-        <h2 id="passwordDialogTitle">Enter passphrase</h2>
-        <p id="passwordHelp" class="muted small">Use the browser-local passphrase for this device.</p>
-        <label class="field">
-          <span>Passphrase</span>
-          <input id="internalPassword" type="password" autocomplete="current-password">
-        </label>
-        <p id="passwordError" class="error-text hidden">Incorrect password.</p>
-        <div class="dialog-actions">
-          <button class="ghost-button" value="cancel" type="submit">Cancel</button>
-          <button class="primary-button" id="unlockButton" value="default" type="button">Unlock</button>
-        </div>
-      </form>
-    </dialog>
+
 
     <footer class="app-footer">
       <div class="footer-inner">

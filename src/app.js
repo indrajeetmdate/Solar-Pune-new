@@ -130,8 +130,8 @@ function readInput() {
     orientationDir: safeStr("orientationDir"),
     optimizationStrategy: safeStr("optimizationStrategy") || "optimum",
     extractedPeakUnits: state.extractedBill?.fields?.peakUnitsKwh || null,
-    backupNeeded: safeChecked("backupNeeded"),
-    customerView: safeChecked("customerView"),
+    backupNeeded: true,
+    customerView: false,
     panelType: safeStr("panelType"),
     structureType: safeStr("structureType"),
     capacityOverride: numberValue("capacityOverride"),
@@ -620,79 +620,6 @@ function renderDiagram(pl, input) {
   });
 }
 
-function unlockInternal() {
-  const passphrase = $("internalPassword").value;
-  const storedPassphrase = window.localStorage.getItem(INTERNAL_PASSPHRASE_KEY);
-
-  if (!storedPassphrase) {
-    if (passphrase.trim().length < 6) {
-      $("passwordError").textContent = "Use at least 6 characters.";
-      $("passwordError").classList.remove("hidden");
-      return;
-    }
-    window.localStorage.setItem(INTERNAL_PASSPHRASE_KEY, passphrase);
-  } else if (passphrase !== storedPassphrase) {
-    $("passwordError").textContent = "Incorrect passphrase.";
-    $("passwordError").classList.remove("hidden");
-    return;
-  }
-
-  state.internalUnlocked = true;
-  $("passwordDialog").close();
-  $("internalPassword").value = "";
-  $("passwordError").classList.add("hidden");
-  openInternal();
-}
-
-function lockInternal() {
-  state.internalUnlocked = false;
-  $("internalPanel").classList.add("hidden");
-  $("easyModeButton").classList.add("active");
-  $("internalModeButton").classList.remove("active");
-  $("customerView").checked = true;
-
-  // Restore wizard actions
-  document.querySelectorAll('.wizard-actions').forEach(el => el.classList.remove('hidden'));
-  
-  // If we lock, restart the wizard visually, or just go to step 1
-  if (typeof window.goToStep === 'function') {
-    window.goToStep(1);
-  }
-
-  render();
-}
-
-function openInternal() {
-  if (state.internalUnlocked) {
-    $("internalPanel").classList.remove("hidden");
-    const resultsPanel = document.querySelector('.results-panel');
-    if (resultsPanel) resultsPanel.classList.remove('blurred-overlay');
-    $("easyModeButton").classList.remove("active");
-    $("internalModeButton").classList.add("active");
-    $("customerView").checked = false;
-
-    // Show step 2, hide step 1 (Customer Basics)
-    const step1 = document.getElementById("step1");
-    const step2 = document.getElementById("step2");
-    if (step1) step1.classList.add("hidden");
-    if (step2) step2.classList.remove("hidden");
-
-    // Hide wizard buttons
-    document.querySelectorAll('.wizard-actions').forEach(el => el.classList.add('hidden'));
-
-    render();
-    return;
-  }
-
-  const hasPassphrase = Boolean(window.localStorage.getItem(INTERNAL_PASSPHRASE_KEY));
-  $("passwordDialogTitle").textContent = hasPassphrase ? "Enter passphrase" : "Set internal passphrase";
-  $("passwordHelp").textContent = hasPassphrase
-    ? "Use the browser-local passphrase for this device."
-    : "Create a passphrase for this browser. Static hosting does not provide production authentication.";
-  $("passwordError").classList.add("hidden");
-  $("passwordDialog").showModal();
-  $("internalPassword").focus();
-}
 
 function switchTab(tab) {
   state.activeTab = tab;
@@ -771,10 +698,7 @@ function attachEvents() {
     element.addEventListener("change", render);
   });
 
-  $("easyModeButton")?.addEventListener("click", lockInternal);
-  $("internalModeButton")?.addEventListener("click", openInternal);
-  $("unlockButton")?.addEventListener("click", unlockInternal);
-  $("lockInternalButton")?.addEventListener("click", lockInternal);
+
   $("resetButton")?.addEventListener("click", resetForm);
   $("applyExtractedBill")?.addEventListener("click", applyExtractedBill);
 
