@@ -605,7 +605,22 @@
       </section>
     </main>
 
-
+    <dialog id="passwordDialog" class="password-dialog">
+      <form method="dialog" class="password-box">
+        <p class="eyebrow">Internal mode</p>
+        <h2 id="passwordDialogTitle">Enter passphrase</h2>
+        <p id="passwordHelp" class="muted small">Please enter the master password.</p>
+        <label class="field">
+          <span>Passphrase</span>
+          <input id="internalPassword" type="password" autocomplete="current-password">
+        </label>
+        <p id="passwordError" class="error-text hidden">Incorrect password.</p>
+        <div class="dialog-actions">
+          <button class="ghost-button" value="cancel" type="submit">Cancel</button>
+          <button class="primary-button" id="unlockButton" value="default" type="button">Unlock</button>
+        </div>
+      </form>
+    </dialog>
 
     <footer class="app-footer">
       <div class="footer-inner">

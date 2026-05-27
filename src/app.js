@@ -636,6 +636,29 @@ function lockInternal() {
   render();
 }
 
+function openInternalDialog() {
+  if (state.internalUnlocked) {
+    openInternal();
+    return;
+  }
+  const dialog = document.getElementById("passwordDialog");
+  if (dialog) {
+    document.getElementById("passwordError")?.classList.add("hidden");
+    document.getElementById("internalPassword").value = "";
+    dialog.showModal();
+  }
+}
+
+function unlockInternal() {
+  const pwd = document.getElementById("internalPassword")?.value;
+  if (pwd === "solar2026") {
+    document.getElementById("passwordDialog")?.close();
+    openInternal();
+  } else {
+    document.getElementById("passwordError")?.classList.remove("hidden");
+  }
+}
+
 function openInternal() {
   state.internalUnlocked = true;
   $("internalPanel").classList.remove("hidden");
@@ -763,7 +786,17 @@ function attachEvents() {
 
   // Mode buttons
   $("easyModeButton")?.addEventListener("click", lockInternal);
-  $("internalModeButton")?.addEventListener("click", openInternal);
+  $("internalModeButton")?.addEventListener("click", openInternalDialog);
+
+  // Dialog buttons
+  $("unlockButton")?.addEventListener("click", unlockInternal);
+  
+  $("internalPassword")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      unlockInternal();
+    }
+  });
 
   // Consumer category change: toggle conditional fields and update slab defaults
   $("consumerCategory")?.addEventListener("change", () => {
