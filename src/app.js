@@ -21,6 +21,7 @@ const ASSUMPTION_IDS = [
   "panelDcrRate", "panelNonDcrRate", "batteryRate",
   "hotDipStructureRate", "galvalumeStructureRate", "gpPurlinStructureRate", "wiringRate", "installationRate", "consultancyRate",
   "contingencyRate",
+  "panelWp", "panelEfficiency",
   "dailyGeneration", "sqftPerKw", "shadingLoss", "orientationLoss", "systemLoss", "degradationRate", "batteryDod", "inverterEfficiency", "selfConsumptionPct",
   "savingsMethod", "fixedCharge", "electricityDuty", "tariffEscalation",
   "slabRate1", "slabRate2", "slabRate3", "slabRate4"
@@ -61,6 +62,8 @@ const ids = [
   "installationRate",
   "consultancyRate",
   "contingencyRate",
+  "panelWp",
+  "panelEfficiency",
   "dailyGeneration",
   "sqftPerKw",
   "shadingLoss",
@@ -170,6 +173,8 @@ function readConfig() {
       contingencyRate: numberValue("contingencyRate"),
     },
     performance: {
+      panelWp: numberValue("panelWp") || 550,
+      panelEfficiency: numberValue("panelEfficiency") || 21.5,
       dailyGenerationPerKw: numberValue("dailyGeneration"),
       sqftPerKw: numberValue("sqftPerKw"),
       shadingLoss: numberValue("shadingLoss"),
@@ -560,7 +565,8 @@ function renderDiagram(pl, input) {
   }
 
   section.style.display = "block";
-  const configs = getPanelConfigurations(pl.numPanels);
+  const config = readConfig();
+  const configs = getPanelConfigurations(pl.numPanels, config);
 
   // Re-populate select if panel count changed
   const currentVal = select.value;
@@ -770,6 +776,14 @@ function attachEvents() {
   $("presetSelect")?.addEventListener("change", (e) => loadPreset(e.target.value));
 
   // Self-consumption slider live label
+  $("panelWp")?.addEventListener("input", (e) => {
+    $("panelWpLabel").textContent = `${e.target.value} Wp`;
+  });
+
+  $("panelEfficiency")?.addEventListener("input", (e) => {
+    $("panelEfficiencyLabel").textContent = `${e.target.value}%`;
+  });
+
   $("selfConsumptionPct")?.addEventListener("input", (e) => {
     const label = $("selfConsumptionLabel");
     if (label) label.textContent = `${e.target.value}%`;

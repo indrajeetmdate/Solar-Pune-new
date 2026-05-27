@@ -274,22 +274,22 @@
               </label>
 
               <label class="field">
-                <span>Capacity override <i class="info-tip" data-tip="Manually set the system size (kWp) instead of using the auto-calculated recommendation.">i</i></span>
+                <span>Capacity override (kWp) <i class="info-tip" data-tip="Manually set the system size (kWp) instead of using the auto-calculated recommendation.">i</i></span>
                 <input id="capacityOverride" type="number" min="0" step="0.1" placeholder="Auto">
               </label>
 
               <label class="field">
-                <span>Inverter override <i class="info-tip" data-tip="Manually set the inverter size (kW). Leave blank to auto-match panel capacity.">i</i></span>
+                <span>Inverter override (kW) <i class="info-tip" data-tip="Manually set the inverter size (kW). Leave blank to auto-match panel capacity.">i</i></span>
                 <input id="inverterOverride" type="number" min="0" step="0.1" placeholder="Auto">
               </label>
 
               <label class="field">
-                <span>Backup load <i class="info-tip" data-tip="How much power (kW) the customer needs during a power cut. E.g. 1 fan + 3 lights + 1 fridge ≈ 0.5 kW.">i</i></span>
+                <span>Backup load (kW) <i class="info-tip" data-tip="How much power (kW) the customer needs during a power cut. E.g. 1 fan + 3 lights + 1 fridge ≈ 0.5 kW.">i</i></span>
                 <input id="backupLoad" type="number" min="0" step="0.1" value="1.5">
               </label>
 
               <label class="field">
-                <span>Backup hours <i class="info-tip" data-tip="How many hours of battery backup needed during outages. More hours = bigger battery = higher cost.">i</i></span>
+                <span>Backup hours (hrs) <i class="info-tip" data-tip="How many hours of battery backup needed during outages. More hours = bigger battery = higher cost.">i</i></span>
                 <input id="backupHours" type="number" min="0" step="0.5" value="4">
               </label>
             </div>
@@ -298,53 +298,53 @@
           <div class="tab-panel hidden" data-panel="pricing">
             <div class="field-grid">
               <label class="field">
-                <span>DCR panel Rs/Wp <i class="info-tip" data-tip="Cost per watt of domestically manufactured panels. Required for government subsidy eligibility.">i</i></span>
+                <span>DCR panel (Rs/Wp) <i class="info-tip" data-tip="Cost per watt of domestically manufactured panels. Required for government subsidy eligibility.">i</i></span>
                 <input id="panelDcrRate" type="number" min="0" step="0.1" value="26">
               </label>
 
               <label class="field">
-                <span>Non-DCR panel Rs/Wp <i class="info-tip" data-tip="Cost per watt of imported panels. Cheaper but not eligible for government subsidy.">i</i></span>
+                <span>Non-DCR panel (Rs/Wp) <i class="info-tip" data-tip="Cost per watt of imported panels. Cheaper but not eligible for government subsidy.">i</i></span>
                 <input id="panelNonDcrRate" type="number" min="0" step="0.1" value="17">
               </label>
 
               <label class="field">
-                <span>Battery Rs/Wh <i class="info-tip" data-tip="Cost per watt-hour of lithium battery storage for backup during power cuts.">i</i></span>
+                <span>Battery (Rs/Wh) <i class="info-tip" data-tip="Cost per watt-hour of lithium battery storage for backup during power cuts.">i</i></span>
                 <input id="batteryRate" type="number" min="0" step="0.1" value="17.5">
               </label>
 
 
               <label class="field">
-                <span>Hot-dip structure Rs/W <i class="info-tip" data-tip="Premium zinc-coated mounting frame. Best corrosion resistance, lasts 25+ years.">i</i></span>
+                <span>Hot-dip structure (Rs/W) <i class="info-tip" data-tip="Premium zinc-coated mounting frame. Best corrosion resistance, lasts 25+ years.">i</i></span>
                 <input id="hotDipStructureRate" type="number" min="0" step="0.1" value="6">
               </label>
 
               <label class="field">
-                <span>Galvalume structure Rs/W <i class="info-tip" data-tip="Aluminium-zinc coated steel frame. Good durability at mid-range cost.">i</i></span>
+                <span>Galvalume structure (Rs/W) <i class="info-tip" data-tip="Aluminium-zinc coated steel frame. Good durability at mid-range cost.">i</i></span>
                 <input id="galvalumeStructureRate" type="number" min="0" step="0.1" value="5.3">
               </label>
 
               <label class="field">
-                <span>GP purlin structure Rs/W <i class="info-tip" data-tip="Galvanized steel purlin. Budget option, adequate for most residential installs.">i</i></span>
+                <span>GP purlin structure (Rs/W) <i class="info-tip" data-tip="Galvanized steel purlin. Budget option, adequate for most residential installs.">i</i></span>
                 <input id="gpPurlinStructureRate" type="number" min="0" step="0.1" value="4.8">
               </label>
 
               <label class="field">
-                <span>Wiring Rs/W <i class="info-tip" data-tip="Cost of DC and AC cables, connectors, and junction boxes per watt of system size.">i</i></span>
+                <span>Wiring (Rs/W) <i class="info-tip" data-tip="Cost of DC and AC cables, connectors, and junction boxes per watt of system size.">i</i></span>
                 <input id="wiringRate" type="number" min="0" step="0.1" value="3.5">
               </label>
 
               <label class="field">
-                <span>Installation Rs/W <i class="info-tip" data-tip="Labour cost for mounting panels, wiring, inverter setup, and testing.">i</i></span>
+                <span>Installation (Rs/W) <i class="info-tip" data-tip="Labour cost for mounting panels, wiring, inverter setup, and testing.">i</i></span>
                 <input id="installationRate" type="number" min="0" step="0.1" value="4">
               </label>
 
               <label class="field">
-                <span>Consultancy Rs/W <i class="info-tip" data-tip="Site survey, system design, and technical documentation fees.">i</i></span>
+                <span>Consultancy (Rs/W) <i class="info-tip" data-tip="Site survey, system design, and technical documentation fees.">i</i></span>
                 <input id="consultancyRate" type="number" min="0" step="0.1" value="3">
               </label>
 
               <label class="field">
-                <span>Contingency % <i class="info-tip" data-tip="Buffer for unexpected costs like cable extensions, extra earthing, or site-specific modifications.">i</i></span>
+                <span>Contingency (%) <i class="info-tip" data-tip="Buffer for unexpected costs like cable extensions, extra earthing, or site-specific modifications.">i</i></span>
                 <input id="contingencyRate" type="number" min="0" step="0.1" value="3">
               </label>
             </div>
@@ -356,6 +356,22 @@
 
           <div class="tab-panel hidden" data-panel="losses">
             <div class="field-grid">
+              <label class="field" style="grid-column: 1 / -1;">
+                <span>Panel Rating (Wp) <i class="info-tip" data-tip="The power output of a single panel. Slide to adjust.">i</i></span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <input id="panelWp" type="range" min="300" max="800" step="5" value="550" style="flex: 1;">
+                  <span id="panelWpLabel" style="min-width: 60px; text-align: right; font-weight: 600; font-size: 13px;">550 Wp</span>
+                </div>
+              </label>
+
+              <label class="field" style="grid-column: 1 / -1;">
+                <span>Panel Efficiency (%) <i class="info-tip" data-tip="How efficiently the panel converts sunlight to electricity. Higher efficiency means smaller panels.">i</i></span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <input id="panelEfficiency" type="range" min="15" max="25" step="0.1" value="21.5" style="flex: 1;">
+                  <span id="panelEfficiencyLabel" style="min-width: 60px; text-align: right; font-weight: 600; font-size: 13px;">21.5%</span>
+                </div>
+              </label>
+
               <label class="field">
                 <span>kWh/kWp/day <i class="info-tip" data-tip="How many units 1 kW of solar panels generate daily in Pune. Varies by season (3.5–5.0).">i</i></span>
                 <input id="dailyGeneration" type="number" min="0" step="0.1" value="4.2">
@@ -367,37 +383,37 @@
               </label>
 
               <label class="field">
-                <span>Shading loss % <i class="info-tip" data-tip="Energy lost due to shadows from trees, walls, water tanks, or nearby buildings during peak sun hours.">i</i></span>
+                <span>Shading loss (%) <i class="info-tip" data-tip="Energy lost due to shadows from trees, walls, water tanks, or nearby buildings during peak sun hours.">i</i></span>
                 <input id="shadingLoss" type="number" min="0" max="90" step="1" value="5">
               </label>
 
               <label class="field">
-                <span>Tilt/orientation loss % <i class="info-tip" data-tip="Energy lost if panels aren't tilted south at the optimal angle (~18° for Pune). East/West facing adds more loss.">i</i></span>
+                <span>Tilt/orientation loss (%) <i class="info-tip" data-tip="Energy lost if panels aren't tilted south at the optimal angle (~18° for Pune). East/West facing adds more loss.">i</i></span>
                 <input id="orientationLoss" type="number" min="0" max="90" step="1" value="4">
               </label>
 
               <label class="field">
-                <span>System loss % <i class="info-tip" data-tip="Miscellaneous losses: wiring, dust, inverter conversion, temperature. Typically 6–10%.">i</i></span>
+                <span>System loss (%) <i class="info-tip" data-tip="Miscellaneous losses: wiring, dust, inverter conversion, temperature. Typically 6–10%.">i</i></span>
                 <input id="systemLoss" type="number" min="0" max="90" step="1" value="8">
               </label>
 
               <label class="field">
-                <span>Annual degradation % <i class="info-tip" data-tip="Panels lose ~0.5% output each year. After 25 years, they still produce ~87% of original capacity.">i</i></span>
+                <span>Annual degradation (%) <i class="info-tip" data-tip="Panels lose ~0.5% output each year. After 25 years, they still produce ~87% of original capacity.">i</i></span>
                 <input id="degradationRate" type="number" min="0" step="0.1" value="0.5">
               </label>
 
               <label class="field">
-                <span>Battery DoD % <i class="info-tip" data-tip="Depth of Discharge — how much of the battery can safely be used. 90% means 10% is always reserved.">i</i></span>
+                <span>Battery DoD (%) <i class="info-tip" data-tip="Depth of Discharge — how much of the battery can safely be used. 90% means 10% is always reserved.">i</i></span>
                 <input id="batteryDod" type="number" min="1" max="100" step="1" value="90">
               </label>
 
               <label class="field">
-                <span>Inverter efficiency % <i class="info-tip" data-tip="How efficiently the inverter converts DC solar power to AC household power. Higher is better.">i</i></span>
+                <span>Inverter efficiency (%) <i class="info-tip" data-tip="How efficiently the inverter converts DC solar power to AC household power. Higher is better.">i</i></span>
                 <input id="inverterEfficiency" type="number" min="1" max="100" step="1" value="92">
               </label>
 
               <label class="field">
-                <span>Self-consumption % <i class="info-tip" data-tip="Percentage of generated solar energy consumed on-site during solar hours. Residential ~60%, Commercial ~80%. Slide to adjust.">i</i></span>
+                <span>Self-consumption (%) <i class="info-tip" data-tip="Percentage of generated solar energy consumed on-site during solar hours. Residential ~60%, Commercial ~80%. Slide to adjust.">i</i></span>
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <input id="selfConsumptionPct" type="range" min="10" max="95" step="5" value="60" style="flex: 1;">
                   <span id="selfConsumptionLabel" style="min-width: 36px; text-align: right; font-weight: 600; font-size: 13px;">60%</span>
@@ -423,12 +439,12 @@
               </label>
 
               <label class="field">
-                <span>Duty % <i class="info-tip" data-tip="Electricity duty levied by the state government as a percentage of your energy + fixed charges.">i</i></span>
+                <span>Duty (%) <i class="info-tip" data-tip="Electricity duty levied by the state government as a percentage of your energy + fixed charges.">i</i></span>
                 <input id="electricityDuty" type="number" min="0" step="0.1" value="16">
               </label>
 
               <label class="field">
-                <span>Tariff escalation % <i class="info-tip" data-tip="Expected annual increase in electricity rates. Higher escalation = more savings over 25 years.">i</i></span>
+                <span>Tariff escalation (%) <i class="info-tip" data-tip="Expected annual increase in electricity rates. Higher escalation = more savings over 25 years.">i</i></span>
                 <input id="tariffEscalation" type="number" min="0" step="0.1" value="3">
               </label>
             </div>

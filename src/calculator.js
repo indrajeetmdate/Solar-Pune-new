@@ -305,7 +305,13 @@ function calculateLifetimeSavings(annualSavings, config) {
 
 export function calculateSystemOption(systemType, panelType, input, config = DEFAULT_CONFIG) {
   const sizing = recommendCapacity(input, config);
-  const dcCapacityKw = input.capacityOverride > 0 ? input.capacityOverride : sizing.dcCapacityKw;
+  let dcCapacityKw = input.capacityOverride > 0 ? input.capacityOverride : sizing.dcCapacityKw;
+  
+  // Recalculate to actual installed capacity (multiple of panelWp)
+  const panelWp = config.performance.panelWp || 550;
+  const numPanels = Math.ceil((dcCapacityKw * 1000) / panelWp);
+  dcCapacityKw = round((numPanels * panelWp) / 1000, 2);
+
   const dcCapacityWp = dcCapacityKw * 1000;
 
   // FIX C1: Apply industry-standard DC:AC clipping ratio of 1.2
@@ -466,15 +472,21 @@ function getValidFactorPairs(n) {
   return configs;
 }
 
-export function calculatePanelLayout(dcCapacityKw, availableAreaSqft) {
-  // Standard panel: 1123mm × 2279mm = 2.559 m² ≈ 27.54 sq ft
-  const panelWidthMm = 1123;
-  const panelHeightMm = 2279;
-  const panelAreaSqm = (panelWidthMm * panelHeightMm) / 1_000_000; // 2.559 m²
-  const panelAreaSqft = panelAreaSqm * 10.7639;                     // ≈ 27.54 sq ft
-  const panelWp = 550;
+export function calculatePanelLayout(dcCapacityKw, availableAreaSqft, config = DEFAULT_CONFIG) {
+  const panelWp = config.performance?.panelWp || 550;
+  const panelEfficiency = config.performance?.panelEfficiency || 21.5;
+  
+  // Standard test conditions: 1000 W/m²
+  const panelAreaSqm = panelWp / (1000 * (panelEfficiency / 100));
+  const panelAreaSqft = panelAreaSqm * 10.7639;
 
-  // BUG #9 FIX: Include spacing multiplier for inter-row shading clearance,
+  // Assuming standard aspect ratio (~1:2), roughly calculate dimensions in mm
+  const widthM = Math.sqrt(panelAreaSqm / 2.03); 
+  const heightM = widthM * 2.03;
+  const panelWidthMm = Math.round(widthM * 1000);
+  const panelHeightMm = Math.round(heightM * 1000);
+
+  // Include spacing multiplier for inter-row shading clearance,
   // maintenance walkways, and edge setbacks. Industry standard is ~1.5×.
   // This aligns the area-fit check with the sqftPerKw sizing constraint (~120 sqft/kWp
   // vs raw panel area of ~55 sqft/kWp).
@@ -502,9 +514,15 @@ export function calculatePanelLayout(dcCapacityKw, availableAreaSqft) {
   };
 }
 
-export function getPanelConfigurations(numPanels) {
-  const panelWidthMm = 1123;
-  const panelHeightMm = 2279;
+export function getPanelConfigurations(numPanels, config = DEFAULT_CONFIG) {
+  const panelWp = config.performance?.panelWp || 550;
+  const panelEfficiency = config.performance?.panelEfficiency || 21.5;
+  const panelAreaSqm = panelWp / (1000 * (panelEfficiency / 100));
+  const widthM = Math.sqrt(panelAreaSqm / 2.03); 
+  const heightM = widthM * 2.03;
+  const panelWidthMm = Math.round(widthM * 1000);
+  const panelHeightMm = Math.round(heightM * 1000);
+  
   const configs = [];
 
   for (let rows = 1; rows <= numPanels; rows++) {

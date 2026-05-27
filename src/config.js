@@ -186,6 +186,8 @@ export const DEFAULT_CONFIG = {
     contingencyRate: 3,
   },
   performance: {
+    panelWp: 550,
+    panelEfficiency: 21.5,
     dailyGenerationPerKw: 4.2,
     sqftPerKw: 120,
     shadingLoss: 5,
