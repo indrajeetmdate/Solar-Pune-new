@@ -406,6 +406,14 @@
                 <span>Inverter efficiency % <i class="info-tip" data-tip="How efficiently the inverter converts DC solar power to AC household power. Higher is better.">i</i></span>
                 <input id="inverterEfficiency" type="number" min="1" max="100" step="1" value="92">
               </label>
+
+              <label class="field">
+                <span>Self-consumption % <i class="info-tip" data-tip="Percentage of generated solar energy consumed on-site during solar hours. Residential ~60%, Commercial ~80%. Slide to adjust.">i</i></span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <input id="selfConsumptionPct" type="range" min="10" max="95" step="5" value="60" style="flex: 1;">
+                  <span id="selfConsumptionLabel" style="min-width: 36px; text-align: right; font-weight: 600; font-size: 13px;">60%</span>
+                </div>
+              </label>
             </div>
           </div>
 

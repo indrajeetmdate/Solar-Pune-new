@@ -338,8 +338,9 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
     monthlyGeneration = round(monthlyGeneration * effectiveGenFactor, 0);
   }
 
-  // Banking deduction: MSEDCL takes % of grid-injected energy
-  const selfConsumedEstimate = Math.min(monthlyGeneration, input.monthlyUnits * 0.6);
+  // Self-consumption estimate — configurable via slider (default 60%)
+  const selfConsumptionRatio = clamp((config.performance.selfConsumptionPct || 60), 10, 95) / 100;
+  const selfConsumedEstimate = Math.min(monthlyGeneration, input.monthlyUnits * selfConsumptionRatio);
   const banking = calculateBankingDeduction(dcCapacityKw, monthlyGeneration, selfConsumedEstimate, input);
   const usableGeneration = selfConsumedEstimate + banking.usableInjected;
   const offsetUnits = Math.min(usableGeneration, input.monthlyUnits);

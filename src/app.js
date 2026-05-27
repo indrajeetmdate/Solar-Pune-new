@@ -21,7 +21,7 @@ const ASSUMPTION_IDS = [
   "panelDcrRate", "panelNonDcrRate", "batteryRate",
   "hotDipStructureRate", "galvalumeStructureRate", "gpPurlinStructureRate", "wiringRate", "installationRate",
   "netMeterCost", "consultancyFee", "liaisoningFee", "gstRate", "contingencyRate",
-  "dailyGeneration", "sqftPerKw", "shadingLoss", "orientationLoss", "systemLoss", "degradationRate", "batteryDod", "inverterEfficiency",
+  "dailyGeneration", "sqftPerKw", "shadingLoss", "orientationLoss", "systemLoss", "degradationRate", "batteryDod", "inverterEfficiency", "selfConsumptionPct",
   "savingsMethod", "fixedCharge", "electricityDuty", "tariffEscalation",
   "slabRate1", "slabRate2", "slabRate3", "slabRate4"
 ];
@@ -72,6 +72,7 @@ const ids = [
   "degradationRate",
   "batteryDod",
   "inverterEfficiency",
+  "selfConsumptionPct",
   "savingsMethod",
   "fixedCharge",
   "electricityDuty",
@@ -183,6 +184,7 @@ function readConfig() {
       degradationRate: numberValue("degradationRate"),
       batteryDod: numberValue("batteryDod"),
       inverterEfficiency: numberValue("inverterEfficiency"),
+      selfConsumptionPct: numberValue("selfConsumptionPct") || 60,
     },
     tariff: {
       consumerCategory: category,
@@ -770,6 +772,13 @@ function attachEvents() {
 
   $("savePresetButton")?.addEventListener("click", savePreset);
   $("presetSelect")?.addEventListener("change", (e) => loadPreset(e.target.value));
+
+  // Self-consumption slider live label
+  $("selfConsumptionPct")?.addEventListener("input", (e) => {
+    const label = $("selfConsumptionLabel");
+    if (label) label.textContent = `${e.target.value}%`;
+    render();
+  });
 
   // Consumer category change: toggle conditional fields and update slab defaults
   $("consumerCategory")?.addEventListener("change", () => {
