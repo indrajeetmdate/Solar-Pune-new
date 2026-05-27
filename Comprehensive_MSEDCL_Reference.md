@@ -32,7 +32,16 @@ Before calculating solar savings, the calculator must establish the consumer's c
 Solar generation primarily offsets **Energy Charges**. The following charges typically remain on the bill even with 100% solar offset:
 * **Fixed / Demand Charges:** Charged per connection, per kW, or per kVA of sanctioned load/contract demand. *(Note: EV charging stations now have a single-part tariff with 0 Fixed/Demand charges).*
 * **Meter Rent:** Fixed monthly rental (e.g., ₹35 single-phase, ₹75 three-phase).
-* **Electricity Duty & Tax on Sale:** Calculated as a percentage (typically 7%) of the remaining billed amount (Energy + Fixed + FAC) after solar offset.
+* **Electricity Duty & Tax on Sale:** Calculated as a percentage of the remaining billed amount (Energy + Fixed + FAC) after solar offset. The rates depend on the tariff category:
+  | Tariff Category | Rate of Electricity Duty |
+  | :--- | :--- |
+  | Part A : Residential | 16 % of the consumption charges |
+  | Part B : Commercial | 21 % of the consumption charges |
+  | Part C : Agriculture (Excluding AG Pump) i.e. LT IV (C) | 9.30 % of the consumption charges |
+  | Part D : Temporary | 21 % of the consumption charges |
+  | Part E : Advertisement & Hoardings | 21 % of the consumption charges |
+  | Part F : Industrial | 9.30 % of the consumption charges |
+  | Part G : Metro | 20 % of the consumption charges |
 
 ---
 
