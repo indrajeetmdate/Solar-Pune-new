@@ -17,6 +17,85 @@ MERC has laid out specific rules for consumer categorization to avoid ambiguity:
 * **Tabelas:** Dairy or cattle farming (Tabelas) dependent on the agricultural sector are classified appropriately to reflect their agricultural relation.
 * **Professionals:** Lawyers, Doctors, Engineers, and Chartered Accountants occupying premises exclusively for conducting their profession are NOT eligible for Residential/LT-I tariffs and are charged under the respective commercial/non-residential categories.
 
+### 1.3 Revised category-wise Tariffs for FY 2026-27
+
+**Summary of LT Tariff for FY 2026-27, effective from 1 April, 2026**
+
+| Category | Units | Fixed / Demand Charge | Energy Charge^ | Wheeling Charge^ | Total Variable Charge |
+| --- | --- | --- | --- | --- | --- |
+| **LT Residential** |  |  |  |  |  |
+| LT I(A): LT - Residential-BPL | Rs/conn/mth | 35 | 1.48 | - | 1.48 |
+| **LT I(B): LT - Residential** |  |  |  |  |  |
+| 1-100 units | Rs/conn/mth | 130 | 3.96 | 1.60 | 5.56 |
+| 101-300 units | Rs/conn/mth | 130 | 10.80 | 1.60 | 12.40 |
+| 301-500 units | Rs/conn/mth | 130 | 15.03 | 1.60 | 16.64 |
+| Above 500 units | Rs/conn/mth | 130 | 17.53 | 1.60 | 19.13 |
+| Three Phase Charges | Rs/conn/mth | 435 | - | - | - |
+| **LT II: LT - Non-Residential** |  |  |  |  |  |
+| (A) 0 – 20 kW | Rs/conn/mth | 540 | 8.51 | 1.60 | 10.11 |
+| (B): >20 kW and ≤ 50 kW | Rs/kVA/mth | 550 | 12.40 | 1.52 | 13.92 |
+| (C): >50 kW | Rs/kVA/mth | 550 | 14.89 | 1.52 | 16.42 |
+| **LT III: LT - Public Water Works (PWW)** |  |  |  |  |  |
+| (A): 0-20 kW | Rs/kVA/mth | 170 | 3.89 | 1.60 | 5.50 |
+| (B): >20 kW and ≤ 40 kW | Rs/kVA/mth | 210 | 5.84 | 1.52 | 7.36 |
+| (C): >40 kW | Rs/kVA/mth | 250 | 7.79 | 1.52 | 9.32 |
+| **LT IV: LT - Agriculture** |  |  |  |  |  |
+| **LT IV(A): LT - AG Un-metered - Pumpsets** |  |  |  |  |  |
+| *Category 1 Zones* |  |  |  |  |  |
+| (a) 0-5 HP | Rs/HP/mth | 416 | - | 161 | 161 |
+| (b) Above 5 HP - 7.5 HP | Rs/HP/mth | 457 | - | 161 | 161 |
+| (c) Above 7.5 HP | Rs/HP/mth | 512 | - | 161 | 161 |
+| *Category 2 Zones* |  | - | - | - | - |
+| (a) 0-5 HP | Rs/HP/mth | 333 | - | 161 | 161 |
+| (b) Above 5 HP - 7.5 HP | Rs/HP/mth | 366 | - | 161 | 161 |
+| (c) Above 7.5 HP | Rs/HP/mth | 424 | - | 161 | 161 |
+| **LT IV(B): LT - Agriculture Metered Tariff -Pumpsets** | Rs/HP/mth | 70 | 2.42 | 1.60 | 4.02 |
+| **LT IV(C): LT - Agriculture Metered – Others** | Rs/HP/mth | 157 | 5.61 | 1.60 | 7.21 |
+| **LT V: LT - Industry *** |  |  |  |  |  |
+| (i): 0-20 kW | Rs/conn/mth | 650 | 6.26 | 1.60 | 7.86 |
+| (ii): Above 20 kW | Rs/kVA/mth | 420 | 7.66 | 1.52 | 9.19 |
+| **LT VI: LT - Street Light** |  | - | - | - | - |
+| (A): Grampanchayat; A B & C Class Municipal Council | Rs/kW/mth | 160 | 6.82 | 1.60 | 8.42 |
+| (B): Municipal corporation Area | Rs/kW/mth | 160 | 8.39 | 1.60 | 9.99 |
+| **LT VII (A) - Public Services Govt.** |  |  |  |  |  |
+| (i): ≤ 20 kW | Rs/conn/mth | 455 | 2.73 | 1.60 | 4.33 |
+| (ii): >20 - ≤ 50 kW | Rs/kVA/mth | 455 | 5.95 | 1.52 | 7.48 |
+| (iii): >50 kW | Rs/kVA/mth | 455 | 6.76 | 1.52 | 8.28 |
+| **LT VII (B) - Public Services Pvt.** |  |  |  |  |  |
+| (i): ≤ 20 kW | Rs/conn/mth | 525 | 5.51 | 1.60 | 7.11 |
+| (ii): >20 - ≤ 50 kW | Rs/kVA/mth | 525 | 9.37 | 1.52 | 10.89 |
+| (iii): >50 kW | Rs/kVA/mth | 525 | 9.63 | 1.52 | 11.16 |
+| **LT VIII – Electric Vehicle Charging Station** | Rs/kVA/mth | - | 7.73 | 1.52 | 9.26 |
+
+**Summary of HT Tariff for FY 2026-27, effective from 1 April, 2026**
+
+| Category | Units | Fixed/Demand Charge | Energy Charge (Rs./kVAh) | Wheeling Charge (Rs./kVAh) | Total Variable Charge (Rs./kVAh) |
+| --- | --- | --- | --- | --- | --- |
+| **EHV** |  |  |  |  |  |
+| HT I (A): HT - Industry | Rs/kVA/mth | 650 | 8.44 | - | 8.44 |
+| HT I (B): HT - Industry (Seasonal) | Rs/kVA/mth | 650 | 8.47 | - | 8.47 |
+| HT II: HT – Commercial | Rs/kVA/mth | 650 | 13.72 | - | 13.72 |
+| HT III: HT - Railways/Metro/Monorail Traction | Rs/kVA/mth | 650 | 7.29 | - | 7.29 |
+| HT IV: HT - Public Water Works | Rs/kVA/mth | 650 | 7.98 | - | 7.98 |
+| HT V(A): HT - Agriculture Pumpsets | Rs/kVA/mth | 145 | 5.80 | - | 5.80 |
+| HT V(B): HT - Agriculture - Others | Rs/kVA/mth | 145 | 8.24 | - | 8.24 |
+| HT VI: HT - Group Housing Societies (Residential) | Rs/kVA/mth | 445 | 7.28 | - | 7.28 |
+| HT VIII: HT - Public Services | Rs/kVA/mth | 650 | 10.35 | - | 10.35 |
+| HT VIII(B): HT - Public Services-Others | Rs/kVA/mth | 650 | 11.21 | - | 11.21 |
+| HT IX: HT – Electric Vehicle Charging Station | Rs/kVA/mth | - | 8.92 | - | 8.92 |
+| **HT** |  |  |  |  |  |
+| HT I (A): HT - Industry Sub-total | Rs/kVA/mth | 650 | 8.44 | 0.81 | 9.25 |
+| HT I (B): HT - Industry (Seasonal) | Rs/kVA/mth | 650 | 8.47 | 0.81 | 9.28 |
+| HT II: HT – Commercial | Rs/kVA/mth | 650 | 13.72 | 0.81 | 14.53 |
+| HT III: HT - Railways/Metro/Monorail Traction | Rs/kVA/mth | 650 | 7.29 | 0.81 | 8.10 |
+| HT IV: HT - Public Water Works | Rs/kVA/mth | 650 | 7.98 | 0.81 | 8.79 |
+| HT V(A): HT - Agriculture Pumpsets | Rs/kVA/mth | 145 | 5.80 | 0.81 | 6.61 |
+| HT V(B): HT - Agriculture - Others | Rs/kVA/mth | 145 | 8.24 | 0.81 | 9.05 |
+| HT VI: HT - Group Housing Societies (Residential) | Rs/kVA/mth | 445 | 7.28 | 0.81 | 8.09 |
+| HT VIII: HT - Public Services | Rs/kVA/mth | 650 | 10.35 | 0.81 | 11.16 |
+| HT VIII(B): HT - Public Services-Others | Rs/kVA/mth | 650 | 11.21 | 0.81 | 12.02 |
+| HT IX: HT – Electric Vehicle Charging Station | Rs/kVA/mth | - | 8.92 | 0.81 | 9.73 |
+
 ---
 
 ## 2. Baseline Bill Computation (Pre-Solar Assessment)

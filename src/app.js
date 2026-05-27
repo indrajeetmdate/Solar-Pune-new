@@ -187,7 +187,7 @@ function readConfig() {
     },
     tariff: {
       consumerCategory: category,
-      fixedCharge: numberValue("fixedCharge") || (profile.fixedChargePerKw * (numberValue("sanctionedLoad") || 5)),
+      fixedCharge: numberValue("fixedCharge") || (profile.fixedChargePerConn !== undefined ? profile.fixedChargePerConn : (profile.fixedChargePerKw * (numberValue("sanctionedLoad") || 5))),
       electricityDuty: numberValue("electricityDuty") || profile.dutyRate || 7,
       tariffEscalation: numberValue("tariffEscalation"),
       slabs,
