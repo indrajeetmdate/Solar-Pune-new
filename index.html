@@ -214,15 +214,6 @@
               </select>
             </label>
           </div>
-          <div class="system-differences-card" style="margin-top: 2rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--line);">
-            <h3 style="margin-bottom: 0.5rem; font-size: 1rem; color: var(--text-primary);">System Differences</h3>
-            <p style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--text-secondary);">
-              <strong>On-Grid:</strong> Saves maximum on bills but turns off during power cuts.<br>
-              <strong>Off-Grid:</strong> Completely independent with battery storage, no grid export.<br>
-              <strong>Hybrid/Semi-Hybrid:</strong> Best of both—exports to grid and provides battery backup during outages.
-            </p>
-            <img src="https://ncxynrxeabkvlcirspnz.supabase.co/storage/v1/object/sign/Assets/Backup_of_Newspaper_leaflet_2.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV82YWY1NzE2OS1kZmJjLTRiMDEtOWI3ZS1jNzZkMzAwMjU4NjQiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJBc3NldHMvQmFja3VwX29mX05ld3NwYXBlcl9sZWFmbGV0XzIucG5nIiwiaWF0IjoxNzc5ODcwNDcyLCJleHAiOjQ5MDE5MzQ0NzJ9.szTtCx-XoAxQxlJEUFtf66cnUqxJHb9mylJXguWBKX4." alt="System Differences: On-Grid vs Off-Grid vs Hybrid" style="width: 100%; border-radius: 4px; border: 1px solid var(--line);">
-          </div>
 
 
           <div class="wizard-actions">
@@ -601,6 +592,31 @@
             <button class="primary-button" id="downloadProposalButtonInternal" type="button" style="width: 100%;">Download Proposal PDF ↓</button>
           </div>
 
+        </div>
+
+      <!-- System Differences Informative Section -->
+      <section class="system-differences-section">
+        <div class="system-differences-container">
+          <div class="system-differences-content">
+            <h2>Solar System Differences</h2>
+            <p>
+              Choosing the right solar system depends on your budget, energy goals, and power reliability needs. Here is a quick comparison of the options:
+            </p>
+            <ul class="system-differences-list">
+              <li>
+                <strong>On-Grid Systems:</strong> Maximizes financial savings and ROI by exporting excess generation back to the utility grid via net metering. Note: Does not function during power cuts for safety reasons.
+              </li>
+              <li>
+                <strong>Off-Grid Systems:</strong> Completely independent from the utility grid. Relies entirely on battery storage to store day-time solar power for night-time and outage usage.
+              </li>
+              <li>
+                <strong>Hybrid / Semi-Hybrid Systems:</strong> The ultimate combination. Active net-metering allows grid export for high savings, while integrated battery banks provide uninterrupted backup power during utility cuts.
+              </li>
+            </ul>
+          </div>
+          <div class="system-differences-media">
+            <img src="./src/system_differences.png" alt="System Differences: On-Grid vs Off-Grid vs Hybrid">
+          </div>
         </div>
       </section>
     </main>
