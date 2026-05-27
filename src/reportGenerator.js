@@ -339,7 +339,7 @@ export async function generateProposalPDF(estimates) {
   yPos += 10;
 
   const cBreakup = recommended.costBreakup;
-  let mainInverterPrefix = "On-grid";
+  mainInverterPrefix = "On-grid";
   if (recommended.systemType === "hybrid") mainInverterPrefix = "Hybrid";
   if (recommended.systemType === "offgrid") mainInverterPrefix = "Off-grid";
 
