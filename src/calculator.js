@@ -309,7 +309,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   
   // Recalculate to actual installed capacity (multiple of panelWp)
   const panelWp = config.performance.panelWp || 550;
-  const numPanels = Math.ceil((dcCapacityKw * 1000) / panelWp);
+  const numPanels = Math.ceil(Math.round(dcCapacityKw * 1000) / panelWp);
   dcCapacityKw = round((numPanels * panelWp) / 1000, 2);
 
   const dcCapacityWp = dcCapacityKw * 1000;
@@ -421,7 +421,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   return {
     systemType,
     panelType,
-    dcCapacityKw: round(dcCapacityKw, 1),
+    dcCapacityKw: round(dcCapacityKw, 2),
     inverterCapacityKw: round(inverterCapacityKw, 1),
     batteryCapacityKwh: round(batteryCapacityKwh, 1),
     monthlyGeneration,
@@ -492,7 +492,7 @@ export function calculatePanelLayout(dcCapacityKw, availableAreaSqft, config = D
   // vs raw panel area of ~55 sqft/kWp).
   const spacingMultiplier = 1.5;
 
-  const numPanels = Math.ceil((dcCapacityKw * 1000) / panelWp);
+  const numPanels = Math.ceil(Math.round(dcCapacityKw * 1000) / panelWp);
   const panelOnlyAreaSqft = round(numPanels * panelAreaSqft, 0);
   const panelOnlyAreaSqm = round(numPanels * panelAreaSqm, 1);
   const requiredAreaSqft = round(panelOnlyAreaSqft * spacingMultiplier, 0);

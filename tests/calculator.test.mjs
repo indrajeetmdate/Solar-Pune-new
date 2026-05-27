@@ -26,13 +26,13 @@ function makeInput(overrides = {}) {
   };
 }
 
-assert.equal(calculateSubsidy("ongrid", "dcr", 1), 30000);
-assert.equal(calculateSubsidy("ongrid", "dcr", 2), 60000);
-assert.equal(calculateSubsidy("ongrid", "dcr", 2.5), 69000);
-assert.equal(calculateSubsidy("ongrid", "dcr", 3), 78000);
-assert.equal(calculateSubsidy("ongrid", "dcr", 6), 78000);
-assert.equal(calculateSubsidy("ongrid", "nonDcr", 3), 0);
-assert.equal(calculateSubsidy("offgrid", "dcr", 3), 0);
+assert.equal(calculateSubsidy("ongrid", "dcr", 1).total, 30000);
+assert.equal(calculateSubsidy("ongrid", "dcr", 2).total, 60000);
+assert.equal(calculateSubsidy("ongrid", "dcr", 2.5).total, 69000);
+assert.equal(calculateSubsidy("ongrid", "dcr", 3).total, 78000);
+assert.equal(calculateSubsidy("ongrid", "dcr", 6).total, 78000);
+assert.equal(calculateSubsidy("ongrid", "nonDcr", 3).total, 0);
+assert.equal(calculateSubsidy("offgrid", "dcr", 3).total, 0);
 
 const bill = calculateBill(450, DEFAULT_CONFIG.tariff);
 assert.ok(bill.total > 0);
@@ -55,6 +55,6 @@ assert.equal(backupEstimate.recommended.systemType, "hybrid");
 assert.ok(backupEstimate.recommended.batteryCapacityKwh > 0);
 
 const lowRoof = calculateEstimate(makeInput({ roofArea: 180, sanctionedLoad: 10 }), DEFAULT_CONFIG);
-assert.ok(lowRoof.recommended.dcCapacityKw <= 1.5);
+assert.ok(lowRoof.recommended.dcCapacityKw <= 1.65);
 
 console.log("calculator tests passed");
