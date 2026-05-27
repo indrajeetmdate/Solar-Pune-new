@@ -5,15 +5,22 @@ const loadImage = (url) => {
     img.crossOrigin = 'Anonymous';
     img.src = url;
     img.onload = () => {
+      const maxDim = 400;
+      let scale = 1;
+      if (img.width > maxDim || img.height > maxDim) {
+        scale = Math.min(maxDim / img.width, maxDim / img.height);
+      }
       const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       resolve({
-        data: canvas.toDataURL('image/png'),
-        width: img.width,
-        height: img.height
+        data: canvas.toDataURL('image/jpeg', 0.8),
+        width: canvas.width,
+        height: canvas.height
       });
     };
     img.onerror = () => {
@@ -127,7 +134,7 @@ export async function generateProposalPDF(estimates) {
     if (logoResult) {
       const targetWidth = 16;
       const targetHeight = (logoResult.height / logoResult.width) * targetWidth;
-      doc.addImage(logoResult.data, 'PNG', pageWidth - margin - targetWidth, footerY - 8 - targetHeight, targetWidth, targetHeight);
+      doc.addImage(logoResult.data, 'JPEG', pageWidth - margin - targetWidth, footerY - 8 - targetHeight, targetWidth, targetHeight, 'companyLogo');
     }
   };
 
