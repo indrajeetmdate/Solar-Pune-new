@@ -949,6 +949,7 @@ function attachEvents() {
 }
 
 let slackSent = false;
+let whatsappSent = false;
 
 window.goToStep = function(step) {
   if (step > 1) {
@@ -958,10 +959,10 @@ window.goToStep = function(step) {
       return;
     }
 
+    const name = document.getElementById('customerName').value.trim();
+    const email = document.getElementById('emailAddress').value.trim();
+
     if (!slackSent) {
-      const name = document.getElementById('customerName').value.trim();
-      const email = document.getElementById('emailAddress').value.trim();
-      
       const payload = {
         text: `*New Solar Calculator Lead*\n*Name:* ${name || 'N/A'}\n*Mobile:* ${mobile}\n*Email:* ${email || 'N/A'}`
       };
@@ -973,6 +974,26 @@ window.goToStep = function(step) {
       }).catch(err => console.error("Slack proxy error:", err));
       
       slackSent = true;
+    }
+
+    // Send WhatsApp welcome message (once per session)
+    if (!whatsappSent) {
+      fetch('/api/whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: mobile, name: name || 'Customer' })
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            console.log("WhatsApp message sent:", data.messageId);
+          } else {
+            console.warn("WhatsApp send issue:", data.error, data.details);
+          }
+        })
+        .catch(err => console.error("WhatsApp proxy error:", err));
+
+      whatsappSent = true;
     }
     
     // Remove blur overlay when customer basics are filled
