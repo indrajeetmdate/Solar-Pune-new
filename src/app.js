@@ -978,10 +978,20 @@ window.goToStep = function(step) {
 
     // Send WhatsApp welcome message (once per session)
     if (!whatsappSent) {
+      const today = new Date().toLocaleDateString("en-IN", {
+        day: "numeric", month: "short", year: "numeric"
+      });
+
       fetch('/api/whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: mobile, name: name || 'Customer' })
+        body: JSON.stringify({
+          phone: mobile,
+          name: name || 'Customer',
+          visitType: 'solar consultation',
+          visitDate: today,
+          surveyMinutes: '2'
+        })
       })
         .then(r => r.json())
         .then(data => {

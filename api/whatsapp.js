@@ -37,7 +37,7 @@ export default async function handler(req, res) {
   }
 
   // ── Parse request body ─────────────────────────────────────────
-  const { phone, name } = req.body || {};
+  const { phone, name, visitType, visitDate, surveyMinutes } = req.body || {};
 
   if (!phone) {
     return res.status(400).json({ error: "Phone number is required" });
@@ -50,7 +50,7 @@ export default async function handler(req, res) {
   }
 
   // ── Build template message payload ─────────────────────────────
-  const templateName = process.env.WHATSAPP_TEMPLATE_NAME || "hello_world";
+  const templateName = process.env.WHATSAPP_TEMPLATE_NAME || "feedback_survey_1";
   const templateLang = process.env.WHATSAPP_TEMPLATE_LANG || "en_US";
 
   const payload = {
@@ -63,9 +63,25 @@ export default async function handler(req, res) {
     },
   };
 
-  // If using a custom template with parameters, attach them
-  // The hello_world template has no parameters, so we skip this for it
-  if (templateName !== "hello_world" && name) {
+  // ── Attach template parameters ─────────────────────────────────
+  // feedback_survey_1 has 4 body params: {{1}}=name, {{2}}=visit, {{3}}=date, {{4}}=minutes
+  if (templateName === "feedback_survey_1") {
+    const today = new Date().toLocaleDateString("en-IN", {
+      day: "numeric", month: "short", year: "numeric"
+    });
+    payload.template.components = [
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: name || "Customer" },
+          { type: "text", text: visitType || "solar consultation" },
+          { type: "text", text: visitDate || today },
+          { type: "text", text: surveyMinutes || "2" },
+        ],
+      },
+    ];
+  } else if (templateName !== "hello_world" && name) {
+    // Generic fallback for any other custom template with a single param
     payload.template.components = [
       {
         type: "body",
