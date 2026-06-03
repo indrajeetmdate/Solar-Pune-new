@@ -46,7 +46,7 @@ export function calculateSubsidy(systemType, panelType, dcCapacityKw, input = {}
   }
 
   const profile = TARIFF_PROFILES[input.consumerCategory] || TARIFF_PROFILES["LT-I"];
-  const subsidyType = profile.subsidyType || "individual";
+  const subsidyType = input.subsidyCategory || profile.subsidyType || "individual";
 
   if (subsidyType === "none") {
     return { total: 0, type: "none" };

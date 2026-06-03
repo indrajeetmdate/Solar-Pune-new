@@ -133,6 +133,7 @@ function readInput() {
     backupNeeded: true,
     customerView: false,
     panelType: safeStr("panelType"),
+    subsidyCategory: safeStr("subsidyCategory"),
     structureType: safeStr("structureType"),
     capacityOverride: numberValue("capacityOverride"),
     inverterOverride: numberValue("inverterOverride"),
@@ -801,7 +802,8 @@ function attachEvents() {
     if (!profile) return;
 
     // Toggle conditional fields
-    $("numFlatsField")?.classList.toggle("hidden", cat !== "LT-I-GHS");
+    const sub = $("subsidyCategory")?.value;
+    $("numFlatsField")?.classList.toggle("hidden", cat !== "LT-I-GHS" && sub !== "ghs");
     $("powerFactorField")?.classList.toggle("hidden", !profile.pfIncentiveApplicable);
     $("peakUsageField")?.classList.toggle("hidden", profile.todPeakPenaltyPct <= 0);
 
