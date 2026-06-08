@@ -925,12 +925,23 @@ function attachEvents() {
       btn.textContent = "Generating PDF...";
       btn.disabled = true;
 
+      // Determine the selected option (user pick or auto-recommended)
+      const est = state.estimates;
+      const selectedOption = (state.selectedSystemIndex !== null && state.selectedSystemIndex >= 0 && state.selectedSystemIndex < est.options.length)
+        ? est.options[state.selectedSystemIndex]
+        : est.recommended;
+      const hideFlags = {
+        hidePayback: $("hidePayback")?.checked || false,
+        hideAreaFit: $("hideAreaFit")?.checked || false,
+        hideSubsidy: $("hideSubsidy")?.checked || false,
+      };
+
       setTimeout(() => {
         if (window.generateProposalPDF) {
-          window.generateProposalPDF(state.estimates);
+          window.generateProposalPDF(est, selectedOption, hideFlags);
         } else {
           import("./reportGenerator.js").then(() => {
-            window.generateProposalPDF(state.estimates);
+            window.generateProposalPDF(est, selectedOption, hideFlags);
           }).catch(err => {
             console.error("Failed to load PDF generator", err);
             alert("Failed to generate PDF: " + err.message);
@@ -949,12 +960,22 @@ function attachEvents() {
       const origText = btn?.textContent;
       if (btn) { btn.textContent = "Generating PDF..."; btn.disabled = true; }
 
+      const est = state.estimates;
+      const selectedOption = (state.selectedSystemIndex !== null && state.selectedSystemIndex >= 0 && state.selectedSystemIndex < est.options.length)
+        ? est.options[state.selectedSystemIndex]
+        : est.recommended;
+      const hideFlags = {
+        hidePayback: $("hidePayback")?.checked || false,
+        hideAreaFit: $("hideAreaFit")?.checked || false,
+        hideSubsidy: $("hideSubsidy")?.checked || false,
+      };
+
       setTimeout(() => {
         if (window.generateProposalPDF) {
-          window.generateProposalPDF(state.estimates);
+          window.generateProposalPDF(est, selectedOption, hideFlags);
         } else {
           import("./reportGenerator.js").then(() => {
-            window.generateProposalPDF(state.estimates);
+            window.generateProposalPDF(est, selectedOption, hideFlags);
           }).catch(err => {
             console.error("Failed to load PDF generator", err);
             alert("Failed to generate PDF: " + err.message);

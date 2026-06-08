@@ -1,11 +1,10 @@
 // Helper to load image and get base64 data
-const loadImage = (url) => {
+const loadImage = (url, maxDim = 400) => {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'Anonymous';
     img.src = url;
     img.onload = () => {
-      const maxDim = 400;
       let scale = 1;
       if (img.width > maxDim || img.height > maxDim) {
         scale = Math.min(maxDim / img.width, maxDim / img.height);
@@ -56,7 +55,7 @@ const canvasToImageData = (canvasId) => {
   }
 };
 
-export async function generateProposalPDF(estimates) {
+export async function generateProposalPDF(estimates, selectedOption, hideFlags = {}) {
   console.log("Starting PDF generation...", estimates);
 
   // Wait for jsPDF to be available (it loads from CDN)
@@ -77,8 +76,11 @@ export async function generateProposalPDF(estimates) {
   }
 
   try {
-    // Load logo before generating document
-    const logoResult = await loadImage("https://bfkxdpripwjxenfvwpfu.supabase.co/storage/v1/object/public/Logo/DC_Energy.png");
+    // Load logo and system differences image in parallel
+    const [logoResult, sysDiffResult] = await Promise.all([
+      loadImage("https://bfkxdpripwjxenfvwpfu.supabase.co/storage/v1/object/public/Logo/DC_Energy.png"),
+      loadImage("https://solarcalculator.cnergy.co.in/src/system_differences.png", 800),
+    ]);
 
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -94,11 +96,25 @@ export async function generateProposalPDF(estimates) {
     bgLight: "#eef3ec",
   };
 
-  const { input, options, recommended, sanctionedStatus } = estimates;
+  const { input, sanctionedStatus } = estimates;
+
+  // Use the explicitly selected option (passed from UI), falling back to recommended
+  const option = selectedOption || estimates.recommended;
+
+  const { hidePayback, hideAreaFit, hideSubsidy } = hideFlags;
 
   // --- Helpers ---
   const formatCurrency = (val) =>
     "Rs " + Number(val).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+
+  const formatSysType = (t) => {
+    if (t === "ongrid") return "On-Grid";
+    if (t === "ongrid_basic_backup") return "Semi-Hybrid (1100VA)";
+    if (t === "ongrid_standard_backup") return "Semi-Hybrid (2100VA)";
+    if (t === "offgrid") return "Off-Grid";
+    if (t === "hybrid") return "Hybrid";
+    return t;
+  };
 
   const addHeader = (title) => {
     doc.setFillColor(COLORS.primary);
@@ -181,6 +197,13 @@ export async function generateProposalPDF(estimates) {
   }
   yPos += 6;
 
+  // Selected system type label
+  doc.setTextColor(COLORS.primary);
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Selected System: ${formatSysType(option.systemType)} (${option.dcCapacityKw} kWp)`, margin, yPos);
+  yPos += 10;
+
   // Sizing Requirements
   doc.setTextColor(COLORS.black);
   doc.setFontSize(14);
@@ -189,10 +212,10 @@ export async function generateProposalPDF(estimates) {
   yPos += 8;
 
   const reqData = [
-    ["Required by Consumption", `${recommended.sizing.byConsumptionKw} kW`],
-    ["Supported by Roof Area", `${recommended.sizing.byAreaKw} kW`],
-    ["Sanctioned Load Limit", recommended.sizing.byLoadKw ? `${recommended.sizing.byLoadKw} kW` : "N/A"],
-    ["Recommended Solar Capacity", `${recommended.dcCapacityKw} kWp`],
+    ["Required by Consumption", `${option.sizing.byConsumptionKw} kW`],
+    ["Supported by Roof Area", `${option.sizing.byAreaKw} kW`],
+    ["Sanctioned Load Limit", option.sizing.byLoadKw ? `${option.sizing.byLoadKw} kW` : "N/A"],
+    ["Recommended Solar Capacity", `${option.dcCapacityKw} kWp`],
     ["Sanction Status", sanctionedStatus.label]
   ];
 
@@ -217,19 +240,22 @@ export async function generateProposalPDF(estimates) {
     doc.text("Panel Configuration", margin, yPos);
     yPos += 8;
 
-    const fitStatus = panelLayout.fitsInArea === null
-      ? "Area not specified"
-      : panelLayout.fitsInArea
-        ? `Yes — fits in ${panelLayout.availableAreaSqft} sq ft`
-        : `No — needs ${panelLayout.totalAreaSqft - panelLayout.availableAreaSqft} sq ft more`;
-
     const panelData = [
       ["Panel Specification", `${panelLayout.panelDimensions} (${panelLayout.panelWp} Wp each)`],
       ["Number of Panels", `${panelLayout.numPanels} panels`],
       ["Total Area Required", `${panelLayout.totalAreaSqft} sq ft (${panelLayout.totalAreaSqm} m²)`],
       ["Available Installation Area", `${panelLayout.availableAreaSqft} sq ft`],
-      ["Fits in Available Area", fitStatus],
     ];
+
+    // Conditionally include "Fits in Available Area"
+    if (!hideAreaFit) {
+      const fitStatus = panelLayout.fitsInArea === null
+        ? "Area not specified"
+        : panelLayout.fitsInArea
+          ? `Yes — fits in ${panelLayout.availableAreaSqft} sq ft`
+          : `No — needs ${panelLayout.totalAreaSqft - panelLayout.availableAreaSqft} sq ft more`;
+      panelData.push(["Fits in Available Area", fitStatus]);
+    }
 
     doc.autoTable({
       startY: yPos,
@@ -252,21 +278,21 @@ export async function generateProposalPDF(estimates) {
   yPos += 8;
 
   let mainInverterPrefix = "On-grid";
-  if (recommended.systemType === "hybrid") mainInverterPrefix = "Hybrid";
-  if (recommended.systemType === "offgrid") mainInverterPrefix = "Off-grid";
+  if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
+  if (option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
 
   const inverterSpecs = [
-    [`${mainInverterPrefix} Inverter Capacity`, `${recommended.inverterCapacityKw} kW`],
+    [`${mainInverterPrefix} Inverter Capacity`, `${option.inverterCapacityKw} kW`],
   ];
   
-  if (recommended.systemType === "ongrid_basic_backup") {
+  if (option.systemType === "ongrid_basic_backup") {
     inverterSpecs.push(["Backup Off-grid Inverter", "1.1 kVA"]);
-    inverterSpecs.push(["Backup Battery Capacity", `${recommended.batteryCapacityKwh} kWh`]);
-  } else if (recommended.systemType === "ongrid_standard_backup") {
+    inverterSpecs.push(["Backup Battery Capacity", `${option.batteryCapacityKwh} kWh`]);
+  } else if (option.systemType === "ongrid_standard_backup") {
     inverterSpecs.push(["Backup Off-grid Inverter", "2.1 kVA"]);
-    inverterSpecs.push(["Backup Battery Capacity", `${recommended.batteryCapacityKwh} kWh`]);
-  } else if (recommended.batteryCapacityKwh > 0) {
-    inverterSpecs.push(["Battery Capacity", `${recommended.batteryCapacityKwh} kWh`]);
+    inverterSpecs.push(["Backup Battery Capacity", `${option.batteryCapacityKwh} kWh`]);
+  } else if (option.batteryCapacityKwh > 0) {
+    inverterSpecs.push(["Battery Capacity", `${option.batteryCapacityKwh} kWh`]);
   } else {
     inverterSpecs.push(["Battery Capacity", "No battery (Grid-tied system)"]);
   }
@@ -285,48 +311,61 @@ export async function generateProposalPDF(estimates) {
 
   addFooter(1);
 
-  // ================= PAGE 2: Feasible Solutions =================
+  // ================= PAGE 2: System Type Differences =================
   doc.addPage();
   yPos = 30;
-  addHeader("Feasible Solutions Comparison");
+  addHeader("Solar System Types");
 
   doc.setTextColor(COLORS.black);
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
-  doc.text("2. Feasible Solutions", margin, yPos);
+  doc.text("2. Solar System Types", margin, yPos);
+  yPos += 8;
+
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(COLORS.text);
+  doc.text("Understanding the different solar system configurations to choose the right solution for your needs.", margin, yPos);
   yPos += 10;
 
-  const formatSysType = (t) =>
-    t === "ongrid" ? "On-Grid" : t === "offgrid" ? "Off-Grid" : "Hybrid";
+  // Insert system_differences.png image
+  if (sysDiffResult) {
+    const maxWidth = pageWidth - margin * 2;
+    const imgRatio = sysDiffResult.height / sysDiffResult.width;
+    const imgWidth = maxWidth;
+    const imgHeight = imgWidth * imgRatio;
 
-  const comparisonHead = [["System Type", "Net Cost", "Subsidy", "Savings / month", "Payback (Yrs)"]];
-  const comparisonBody = options.map((opt) => [
-    `${formatSysType(opt.systemType)} (${opt.dcCapacityKw} kW)`,
-    formatCurrency(opt.netCost),
-    formatCurrency(opt.subsidy),
-    formatCurrency(opt.monthlySavings),
-    opt.paybackYears === Infinity ? "N/A" : `${opt.paybackYears.toFixed(1)} yrs`,
-  ]);
+    // Ensure image doesn't overflow the page
+    const maxHeight = pageHeight - yPos - 30;
+    const finalWidth = imgHeight > maxHeight ? maxHeight / imgRatio : imgWidth;
+    const finalHeight = imgHeight > maxHeight ? maxHeight : imgHeight;
 
-  doc.autoTable({
-    startY: yPos,
-    head: comparisonHead,
-    body: comparisonBody,
-    theme: "striped",
-    headStyles: { fillColor: COLORS.primary },
-    margin: { left: margin },
-  });
+    doc.addImage(sysDiffResult.data, 'JPEG', margin, yPos, finalWidth, finalHeight);
+    yPos += finalHeight + 10;
+  } else {
+    // Fallback: text descriptions
+    const systemDescriptions = [
+      ["On-Grid", "Connected to utility grid. Solar panels generate power during day, excess is exported via net metering. No battery backup — system shuts down during power cuts. Lowest cost, best ROI."],
+      ["Semi-Hybrid", "On-grid with a small backup inverter and battery. Provides basic backup during outages while maintaining net metering benefits. Good balance of savings and reliability."],
+      ["Hybrid", "Grid-connected with full battery storage. Solar charges batteries during the day, batteries provide backup during outages. Higher cost but complete energy independence."],
+      ["Off-Grid", "Fully independent — no grid connection. Requires larger battery banks. Best for locations without reliable grid access. Highest cost, no net metering."],
+    ];
 
-  yPos = doc.lastAutoTable.finalY + 15;
-  doc.setFontSize(11);
-  doc.setTextColor(COLORS.text);
-  doc.text(
-    `Based on your goal (${input.goal}), the recommended option is the ${formatSysType(
-      recommended.systemType
-    )} system.`,
-    margin,
-    yPos
-  );
+    systemDescriptions.forEach(([type, desc]) => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(COLORS.primary);
+      doc.text(type, margin, yPos);
+      yPos += 6;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(COLORS.text);
+      const lines = doc.splitTextToSize(desc, pageWidth - margin * 2);
+      doc.text(lines, margin, yPos);
+      yPos += lines.length * 5 + 6;
+    });
+  }
 
   addFooter(2);
 
@@ -342,13 +381,13 @@ export async function generateProposalPDF(estimates) {
   yPos += 10;
 
   doc.setFontSize(12);
-  doc.text(`Selected Option: ${formatSysType(recommended.systemType)} (${recommended.dcCapacityKw} kWp)`, margin, yPos);
+  doc.text(`Selected Option: ${formatSysType(option.systemType)} (${option.dcCapacityKw} kWp)`, margin, yPos);
   yPos += 10;
 
-  const cBreakup = recommended.costBreakup;
+  const cBreakup = option.costBreakup;
   mainInverterPrefix = "On-grid";
-  if (recommended.systemType === "hybrid") mainInverterPrefix = "Hybrid";
-  if (recommended.systemType === "offgrid") mainInverterPrefix = "Off-grid";
+  if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
+  if (option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
 
   const costData = [
     ["Solar Panels", formatCurrency(cBreakup.panels)],
@@ -378,9 +417,13 @@ export async function generateProposalPDF(estimates) {
   costData.push(["Subtotal (Pre-Tax)", formatCurrency(preTaxSubtotal)]);
   costData.push([`GST (${cBreakup.effectiveGstRate}% effective)`, formatCurrency(cBreakup.gst)]);
   costData.push(["-------------------", "-------------------"]);
-  costData.push(["Total Cost (Inc. GST)", formatCurrency(recommended.totalPreSubsidy)]);
-  costData.push(["Expected Subsidy", `- ${formatCurrency(recommended.subsidy)}`]);
-  costData.push(["Net Payable Cost", formatCurrency(recommended.netCost)]);
+  costData.push(["Total Cost (Inc. GST)", formatCurrency(option.totalPreSubsidy)]);
+
+  // Conditionally include subsidy
+  if (!hideSubsidy) {
+    costData.push(["Expected Subsidy", `- ${formatCurrency(option.subsidy)}`]);
+  }
+  costData.push(["Net Payable Cost", formatCurrency(option.netCost)]);
 
   doc.autoTable({
     startY: yPos,
@@ -426,11 +469,16 @@ export async function generateProposalPDF(estimates) {
   doc.setFontSize(11);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(COLORS.text);
-  doc.text(`Annual Savings: ${formatCurrency(recommended.annualSavings)}`, margin, yPos);
+  doc.text(`Annual Savings: ${formatCurrency(option.annualSavings)}`, margin, yPos);
   yPos += 6;
-  doc.text(`Payback Period: ${recommended.paybackYears.toFixed(1)} Years`, margin, yPos);
-  yPos += 6;
-  doc.text(`25-Year Lifetime Savings: ${formatCurrency(recommended.lifetimeSavings)}`, margin, yPos);
+
+  // Conditionally include payback
+  if (!hidePayback) {
+    doc.text(`Payback Period: ${option.paybackYears.toFixed(1)} Years`, margin, yPos);
+    yPos += 6;
+  }
+
+  doc.text(`25-Year Lifetime Savings: ${formatCurrency(option.lifetimeSavings)}`, margin, yPos);
   
   addFooter(3);
 
