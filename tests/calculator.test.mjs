@@ -55,6 +55,6 @@ assert.equal(backupEstimate.recommended.systemType, "hybrid");
 assert.ok(backupEstimate.recommended.batteryCapacityKwh > 0);
 
 const lowRoof = calculateEstimate(makeInput({ roofArea: 180, sanctionedLoad: 10 }), DEFAULT_CONFIG);
-assert.ok(lowRoof.recommended.dcCapacityKw <= 1.65);
+assert.ok(lowRoof.recommended.dcCapacityKw <= 2.2);
 
 console.log("calculator tests passed");

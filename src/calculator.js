@@ -182,9 +182,12 @@ export function recommendCapacity(input, config = DEFAULT_CONFIG) {
 
   const byConsumption =
     monthlyGenerationPerKw > 0 ? targetUnits / monthlyGenerationPerKw : 0;
+  const panelWp = config.performance?.panelWp || 550;
+  const panelAreaSqft = (1.123 * 2.279) * 10.7639; // Fixed 1123x2279 mm panel
+  const areaPerPanelWithBuffer = panelAreaSqft * 1.5;
   const byArea =
-    config.performance.sqftPerKw > 0 && input.roofArea > 0
-      ? input.roofArea / config.performance.sqftPerKw
+    input.roofArea > 0
+      ? Math.floor(input.roofArea / areaPerPanelWithBuffer) * (panelWp / 1000)
       : 0;
   const byLoad = input.sanctionedLoad > 0 ? input.sanctionedLoad : Infinity;
 
@@ -495,10 +498,8 @@ export function calculatePanelLayout(dcCapacityKw, availableAreaSqft, config = D
   const panelOnlyAreaSqft = round(numPanels * panelAreaSqft, 0);
   const panelOnlyAreaSqm = round(numPanels * panelAreaSqm, 1);
 
-  // Use sqftPerKw from config to compute total area (includes spacing, walkways, setbacks).
-  // If sqftPerKw is set, area = capacity × sqftPerKw. Otherwise fallback to 1.5× panel area.
-  const sqftPerKw = config.performance?.sqftPerKw || 120;
-  const requiredAreaSqft = round(dcCapacityKw * sqftPerKw, 0);
+  // Calculate total area required including 1.5x buffer for spacing, walkways, setbacks.
+  const requiredAreaSqft = round(numPanels * panelAreaSqft * 1.5, 0);
   const requiredAreaSqm = round(requiredAreaSqft / 10.7639, 1);
   const fitsInArea = availableAreaSqft > 0 ? requiredAreaSqft <= availableAreaSqft : null;
 

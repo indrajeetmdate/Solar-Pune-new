@@ -189,7 +189,7 @@ export const DEFAULT_CONFIG = {
     panelWp: 550,
     panelEfficiency: 21.5,
     dailyGenerationPerKw: 4.2,
-    sqftPerKw: 120,
+
     shadingLoss: 5,
     orientationLoss: 4,
     systemLoss: 8,

@@ -22,7 +22,7 @@ const ASSUMPTION_IDS = [
   "hotDipStructureRate", "galvalumeStructureRate", "gpPurlinStructureRate", "wiringRate", "installationRate", "consultancyRate",
   "contingencyRate",
   "panelWp", "panelEfficiency",
-  "dailyGeneration", "sqftPerKw", "shadingLoss", "orientationLoss", "systemLoss", "degradationRate", "batteryDod", "inverterEfficiency", "selfConsumptionPct",
+  "dailyGeneration", "shadingLoss", "orientationLoss", "systemLoss", "degradationRate", "batteryDod", "inverterEfficiency", "selfConsumptionPct",
   "savingsMethod", "fixedCharge", "electricityDuty", "tariffEscalation",
   "slabRate1", "slabRate2", "slabRate3", "slabRate4"
 ];
@@ -66,7 +66,7 @@ const ids = [
   "panelWp",
   "panelEfficiency",
   "dailyGeneration",
-  "sqftPerKw",
+
   "shadingLoss",
   "orientationLoss",
   "systemLoss",
@@ -179,7 +179,7 @@ function readConfig() {
       panelWp: numberValue("panelWp") || 550,
       panelEfficiency: numberValue("panelEfficiency") || 21.5,
       dailyGenerationPerKw: numberValue("dailyGeneration"),
-      sqftPerKw: numberValue("sqftPerKw"),
+
       shadingLoss: numberValue("shadingLoss"),
       orientationLoss: numberValue("orientationLoss"),
       systemLoss: numberValue("systemLoss"),
