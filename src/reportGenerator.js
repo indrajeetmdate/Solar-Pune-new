@@ -417,16 +417,62 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.setFontSize(11);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(COLORS.text);
-  doc.text(`Annual Savings: ${formatCurrency(option.annualSavings)}`, margin, yPos);
-  yPos += 6;
+  
+  const sb = option.savingsBreakdown;
+  const savingsData = [];
+  
+  if (sb) {
+    if (sb.baseSavings > 0) savingsData.push(["Tariff Reduction", formatCurrency(sb.baseSavings * 12), "Savings from generating your own electricity & shifting to lower MSEDCL slabs."]);
+    if (sb.todDaytimeRebate > 0) savingsData.push(["ToD Daytime Rebate", formatCurrency(sb.todDaytimeRebate * 12), "Time-of-Day credits earned for generating solar during daytime (9AM-5PM)."]);
+    if (sb.todPeakAvoided > 0) savingsData.push(["Peak Penalty Avoided", formatCurrency(sb.todPeakAvoided * 12), "Using battery during peak hours (5PM-10PM) avoids expensive MSEDCL peak tariffs."]);
+    if (sb.pfIncentive > 0) savingsData.push(["PF Incentive", formatCurrency(sb.pfIncentive * 12), "Smart inverters maintain a high Power Factor, earning a discount from MSEDCL."]);
+    if (sb.promptPayDiscount > 0) savingsData.push(["Prompt Pay Discount", formatCurrency(sb.promptPayDiscount * 12), "1% bill discount for prompt payment, easier with significantly lowered bills."]);
+    if (sb.bankingLoss > 0) savingsData.push(["Banking Charges", `-${formatCurrency(sb.bankingLoss * 12)}`, "MSEDCL grid-support charges on excess solar energy exported to the grid."]);
+    
+    savingsData.push(["-------------------", "-------------------", ""]);
+    savingsData.push(["Total Annual Savings", formatCurrency(option.annualSavings), "Projected savings in the first year of operation."]);
+  } else {
+    savingsData.push(["Total Annual Savings", formatCurrency(option.annualSavings), "Projected savings in the first year of operation."]);
+  }
+
+  doc.autoTable({
+    startY: yPos,
+    body: savingsData,
+    theme: "plain",
+    columnStyles: {
+      0: { fontStyle: "bold", width: 45 },
+      1: { halign: "right", fontStyle: "bold", textColor: COLORS.primary },
+      2: { fontStyle: "italic", fontSize: 9, textColor: COLORS.textLight }
+    },
+    didParseCell: function (data) {
+      if (data.row.raw[0].includes("Total Annual Savings")) {
+        data.cell.styles.fillColor = COLORS.bgLight;
+      }
+      if (data.row.raw[0].includes("Banking Charges")) {
+        data.row.cells[1].styles.textColor = [200, 50, 50]; // Red color for loss
+      }
+    },
+    margin: { left: margin },
+  });
+
+  yPos = doc.lastAutoTable.finalY + 8;
 
   // Conditionally include payback
   if (!hidePayback) {
-    doc.text(`Payback Period: ${option.paybackYears.toFixed(1)} Years`, margin, yPos);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(COLORS.text);
+    doc.text(`Estimated Payback Period: `, margin, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${option.paybackYears.toFixed(1)} Years`, margin + 50, yPos);
     yPos += 6;
   }
 
-  doc.text(`25-Year Lifetime Savings: ${formatCurrency(option.lifetimeSavings)}`, margin, yPos);
+  doc.setFont("helvetica", "bold");
+  doc.text(`25-Year Lifetime Savings: `, margin, yPos);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(COLORS.primary);
+  doc.text(`${formatCurrency(option.lifetimeSavings)}`, margin + 50, yPos);
+
   
   addFooter(2);
 
