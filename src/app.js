@@ -200,14 +200,14 @@ function readConfig() {
 }
 
 function getGoalReason(goal, option) {
-  if (goal === "backupSupport") {
+  if (goal === "hybrid") {
     return "Prioritizes backup support while keeping solar savings visible.";
   }
-  if (goal === "lowestUpfront") {
-    return "Lowest estimated customer cost from the compared options.";
+  if (goal === "offgrid") {
+    return "Fully independent system prioritizing complete grid independence.";
   }
-  if (goal === "bestRoi") {
-    return "Highest annual savings relative to net customer cost.";
+  if (goal === "ongrid") {
+    return "Prioritizes maximum ROI and lowest upfront cost.";
   }
   if (option.subsidy > 0) {
     return "Best payback among compared options with current subsidy assumptions.";
@@ -937,17 +937,18 @@ function attachEvents() {
       };
 
       setTimeout(() => {
-        if (window.generateProposalPDF) {
-          window.generateProposalPDF(est, selectedOption, hideFlags);
-        } else {
-          import("./reportGenerator.js").then(() => {
+        import(`./reportGenerator.js?v=${Date.now()}`).then((module) => {
+          if (module && module.generateProposalPDF) {
+            module.generateProposalPDF(est, selectedOption, hideFlags);
+          } else if (window.generateProposalPDF) {
             window.generateProposalPDF(est, selectedOption, hideFlags);
-          }).catch(err => {
-            console.error("Failed to load PDF generator", err);
-            alert("Failed to generate PDF: " + err.message);
-          });
-        }
-        if (btn) { btn.textContent = origText; btn.disabled = false; }
+          }
+        }).catch(err => {
+          console.error("Failed to load PDF generator", err);
+          alert("Failed to generate PDF: " + err.message);
+        }).finally(() => {
+          if (btn) { btn.textContent = origText; btn.disabled = false; }
+        });
       }, 100);
     } else {
       alert("Please ensure all inputs are filled to calculate the estimate before downloading.");
@@ -971,17 +972,18 @@ function attachEvents() {
       };
 
       setTimeout(() => {
-        if (window.generateProposalPDF) {
-          window.generateProposalPDF(est, selectedOption, hideFlags);
-        } else {
-          import("./reportGenerator.js").then(() => {
+        import(`./reportGenerator.js?v=${Date.now()}`).then((module) => {
+          if (module && module.generateProposalPDF) {
+            module.generateProposalPDF(est, selectedOption, hideFlags);
+          } else if (window.generateProposalPDF) {
             window.generateProposalPDF(est, selectedOption, hideFlags);
-          }).catch(err => {
-            console.error("Failed to load PDF generator", err);
-            alert("Failed to generate PDF: " + err.message);
-          });
-        }
-        if (btn) { btn.textContent = origText; btn.disabled = false; }
+          }
+        }).catch(err => {
+          console.error("Failed to load PDF generator", err);
+          alert("Failed to generate PDF: " + err.message);
+        }).finally(() => {
+          if (btn) { btn.textContent = origText; btn.disabled = false; }
+        });
       }, 100);
     } else {
       alert("Please calculate an estimate first before downloading the proposal.");

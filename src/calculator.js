@@ -600,21 +600,16 @@ export function calculateEstimate(input, config = DEFAULT_CONFIG) {
 }
 
 export function chooseRecommendedOption(options, goal) {
-  const finitePayback = (option) => (Number.isFinite(option.paybackYears) ? option.paybackYears : 999);
-
-  if (goal === "backupSupport") {
+  if (goal === "hybrid") {
     return options.find((option) => option.systemType === "hybrid") || options[0];
   }
 
-  if (goal === "lowestUpfront") {
-    return [...options].sort((a, b) => a.netCost - b.netCost)[0];
+  if (goal === "offgrid") {
+    return options.find((option) => option.systemType === "offgrid") || options[0];
   }
 
-  if (goal === "bestRoi") {
-    return [...options].sort((a, b) => b.roiPercent - a.roiPercent)[0];
-  }
-
-  return [...options].sort((a, b) => finitePayback(a) - finitePayback(b))[0];
+  // Default to ongrid
+  return options.find((option) => option.systemType.startsWith("ongrid")) || options[0];
 }
 
 export function getSanctionedStatus(dcCapacityKw, sanctionedLoadKw) {

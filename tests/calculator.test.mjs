@@ -13,7 +13,7 @@ function makeInput(overrides = {}) {
     monthlyBill: 5200,
     roofArea: 650,
     sanctionedLoad: 5,
-    goal: "maximumSavings",
+    goal: "ongrid",
     backupNeeded: true,
     panelType: "dcr",
     structureType: "hotDip",
@@ -50,7 +50,7 @@ assert.equal(estimate.options[2].systemType, "offgrid");
 assert.equal(estimate.options[2].subsidy, 0);
 assert.ok(estimate.recommended.netCost > 0);
 
-const backupEstimate = calculateEstimate(makeInput({ goal: "backupSupport" }), DEFAULT_CONFIG);
+const backupEstimate = calculateEstimate(makeInput({ goal: "hybrid" }), DEFAULT_CONFIG);
 assert.equal(backupEstimate.recommended.systemType, "hybrid");
 assert.ok(backupEstimate.recommended.batteryCapacityKwh > 0);
 
