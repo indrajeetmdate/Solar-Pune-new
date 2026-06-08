@@ -299,74 +299,153 @@ function renderComparison(options, recommended) {
 }
 
 function renderBreakup(option, input, customerView) {
-  let mainInverterPrefix = "On-grid";
-  if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
-  if (option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
-
   const isInternal = state.internalUnlocked;
   const sysType = option.systemType;
 
-  const items = [
-    { key: "panels", label: "Panels", value: option.costBreakup.panels },
-    { key: "structure", label: `Structure (${STRUCTURE_LABELS[input.structureType]})`, value: option.costBreakup.structure },
-    { key: "inverter", label: `${mainInverterPrefix} Inverter`, value: option.costBreakup.inverter },
-  ];
-
-  if (option.costBreakup.backupInverter > 0) {
-    items.push({ key: "backupInverter", label: "Backup Off-grid Inverter", value: option.costBreakup.backupInverter });
-  }
-
-  items.push(
-    { key: "battery", label: option.costBreakup.backupInverter > 0 ? "Backup Battery" : "Battery", value: option.costBreakup.battery },
-    { key: "electricalSafetyAndWiring", label: "Electrical safety and wiring", value: option.costBreakup.electricalSafetyAndWiring },
-    { key: "installation", label: "Installation", value: option.costBreakup.installation },
-    { key: "consultancy", label: "Consultancy", value: option.costBreakup.consultancy },
-    { key: "gst", label: `GST (${option.costBreakup.effectiveGstRate}%)`, value: option.costBreakup.gst },
-    { key: "contingency", label: "Contingency", value: option.costBreakup.contingency },
-    { key: "subsidy", label: "Subsidy", value: -option.subsidy, readonly: true },
-    { key: "netCost", label: "Net customer cost", value: option.netCost, readonly: true }
-  );
-
-  let visibleItems = customerView
-    ? items.filter(it => ["Panels", "Structure", "Inverter", "Battery", "Subsidy", "Net customer cost"].some((kw) => it.label.includes(kw)))
-    : items;
-
-  if ($("hideSubsidy")?.checked) {
-    visibleItems = visibleItems.filter(it => it.label !== "Subsidy");
-  }
-
-  $("costBreakup").innerHTML = visibleItems
-    .map(it => {
-      let valueHtml = money(it.value);
-      if (isInternal && !it.readonly && it.key !== "gst" && it.key !== "contingency") {
-        valueHtml = `<input type="number" class="cost-override-input" data-sys="${sysType}" data-key="${it.key}" value="${it.value}" style="width: 90px; text-align: right; padding: 2px 4px; font-size: 13px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;">`;
+  let itemsHtml = "";
+  
+  if (isInternal) {
+    let configList = state.breakupConfig[sysType] || [];
+    
+    itemsHtml = configList.map((item, index) => {
+      let labelInput = `<input type="text" class="override-label" data-sys="${sysType}" data-idx="${index}" value="${item.label}" style="width: 140px; padding: 2px 4px; font-size: 13px; border: 1px solid var(--line); border-radius: 4px; ${item.isHidden ? 'opacity: 0.5' : ''}">`;
+      
+      let valueHtml = "";
+      if (item.isHeader) {
+         valueHtml = `<span style="color:var(--text-light); font-size: 12px; font-style: italic;">Header</span>`;
+      } else {
+         let valStr = item.isOverride ? item.overrideValue : item.value;
+         valueHtml = `<input type="number" class="override-value" data-sys="${sysType}" data-idx="${index}" value="${valStr}" style="width: 80px; text-align: right; padding: 2px 4px; font-size: 13px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px; ${item.isHidden ? 'opacity: 0.5' : ''}">`;
       }
+
+      let actions = `
+        <button class="icon-btn action-btn" data-action="toggle-hide" data-idx="${index}" title="${item.isHidden ? 'Show' : 'Hide'}" style="cursor:pointer; background:none; border:none; padding:2px;">${item.isHidden ? '👁️‍🗨️' : '👁️'}</button>
+        <button class="icon-btn action-btn" data-action="add-header" data-idx="${index}" title="Add Header Above" style="cursor:pointer; background:none; border:none; padding:2px;">T</button>
+        <button class="icon-btn action-btn" data-action="add-item" data-idx="${index}" title="Add Item Above" style="cursor:pointer; background:none; border:none; padding:2px;">+</button>
+        <button class="icon-btn action-btn" data-action="delete" data-idx="${index}" title="Delete" ${item.id && !item.id.startsWith('custom') ? 'disabled style="opacity:0.2;cursor:default;border:none;background:none;padding:2px;"' : 'style="cursor:pointer; background:none; border:none; padding:2px;"'}>🗑️</button>
+      `;
+
       return `
-      <div>
-        <dt>${it.label}</dt>
-        <dd>${valueHtml}</dd>
+      <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 4px; ${item.isHeader ? 'margin-top: 8px;' : ''}">
+        <div style="display:flex; align-items:center; gap: 4px;">
+           ${labelInput}
+        </div>
+        <div style="display:flex; align-items:center; gap: 8px;">
+           ${valueHtml}
+           <div style="display:flex; gap: 2px;">${actions}</div>
+        </div>
       </div>
       `;
-    })
-    .join("");
+    }).join("");
 
-  document.querySelectorAll(".cost-override-input").forEach(inputEl => {
-    inputEl.addEventListener("change", (e) => {
-      const sys = e.target.dataset.sys;
-      const key = e.target.dataset.key;
-      const val = parseFloat(e.target.value);
-      
-      if (!state.costOverrides) state.costOverrides = {};
-      if (!state.costOverrides[sys]) state.costOverrides[sys] = {};
-      
-      if (isNaN(val)) {
-        delete state.costOverrides[sys][key];
-      } else {
-        state.costOverrides[sys][key] = val;
+    itemsHtml += `
+      <div style="display:flex; justify-content:flex-end; gap: 4px; margin-top: 8px;">
+        <button class="action-btn secondary" data-action="add-header" data-idx="${configList.length}" style="cursor:pointer; font-size:11px; padding:2px 4px; border-radius:3px;">+ Header</button>
+        <button class="action-btn secondary" data-action="add-item" data-idx="${configList.length}" style="cursor:pointer; font-size:11px; padding:2px 4px; border-radius:3px;">+ Item</button>
+      </div>
+    `;
+
+    let gstVal = state.breakupConfigGst && state.breakupConfigGst[sysType] !== undefined ? state.breakupConfigGst[sysType] : option.costBreakup.gst;
+    let contVal = state.breakupConfigContingency && state.breakupConfigContingency[sysType] !== undefined ? state.breakupConfigContingency[sysType] : option.costBreakup.contingency;
+
+    itemsHtml += `
+      <hr style="margin: 8px 0; border: none; border-top: 1px solid var(--line)">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+        <dt>GST (${option.costBreakup.effectiveGstRate}%)</dt>
+        <dd><input type="number" class="override-gst" data-sys="${sysType}" value="${gstVal}" style="width: 80px; text-align: right; padding: 2px 4px; font-size: 13px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;"></dd>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+        <dt>Contingency</dt>
+        <dd><input type="number" class="override-contingency" data-sys="${sysType}" value="${contVal}" style="width: 80px; text-align: right; padding: 2px 4px; font-size: 13px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;"></dd>
+      </div>
+      <div><dt>Subsidy</dt><dd>${money(-option.subsidy)}</dd></div>
+      <div><dt>Net customer cost</dt><dd>${money(option.netCost)}</dd></div>
+    `;
+  } else {
+    let visibleItems = option.costBreakupList.filter(it => !it.isHidden);
+
+    if (customerView) {
+      visibleItems = visibleItems.filter(it => it.isHeader || ["Panels", "Structure", "Inverter", "Battery", "Subsidy", "Net customer cost"].some((kw) => it.label.includes(kw)));
+    }
+
+    itemsHtml = visibleItems.map(it => {
+      if (it.isHeader) {
+        return `<div style="margin-top: 8px; font-weight: bold; color: var(--text); border-bottom: 1px solid var(--line); padding-bottom: 2px;">${it.label}</div>`;
       }
-      render();
+      return `<div><dt>${it.label}</dt><dd>${money(it.value)}</dd></div>`;
+    }).join("");
+
+    itemsHtml += `<div><dt>GST (${option.costBreakup.effectiveGstRate}%)</dt><dd>${money(option.costBreakup.gst)}</dd></div>`;
+    itemsHtml += `<div><dt>Contingency</dt><dd>${money(option.costBreakup.contingency)}</dd></div>`;
+    
+    if (!$("hideSubsidy")?.checked) {
+      itemsHtml += `<div><dt>Subsidy</dt><dd>${money(-option.subsidy)}</dd></div>`;
+    }
+    itemsHtml += `<div><dt>Net customer cost</dt><dd>${money(option.netCost)}</dd></div>`;
+  }
+
+  $("costBreakup").innerHTML = itemsHtml;
+
+  if (isInternal) {
+    document.querySelectorAll(".override-label").forEach(el => {
+      el.addEventListener("change", (e) => {
+        let idx = parseInt(e.target.dataset.idx);
+        state.breakupConfig[sysType][idx].label = e.target.value;
+        render();
+      });
     });
-  });
+    document.querySelectorAll(".override-value").forEach(el => {
+      el.addEventListener("change", (e) => {
+        let idx = parseInt(e.target.dataset.idx);
+        let val = parseFloat(e.target.value);
+        if (isNaN(val)) {
+          state.breakupConfig[sysType][idx].isOverride = false;
+        } else {
+          state.breakupConfig[sysType][idx].isOverride = true;
+          state.breakupConfig[sysType][idx].overrideValue = val;
+        }
+        render();
+      });
+    });
+    document.querySelectorAll(".override-gst").forEach(el => {
+      el.addEventListener("change", (e) => {
+        let val = parseFloat(e.target.value);
+        if (!state.breakupConfigGst) state.breakupConfigGst = {};
+        if (isNaN(val)) delete state.breakupConfigGst[sysType];
+        else state.breakupConfigGst[sysType] = val;
+        render();
+      });
+    });
+    document.querySelectorAll(".override-contingency").forEach(el => {
+      el.addEventListener("change", (e) => {
+        let val = parseFloat(e.target.value);
+        if (!state.breakupConfigContingency) state.breakupConfigContingency = {};
+        if (isNaN(val)) delete state.breakupConfigContingency[sysType];
+        else state.breakupConfigContingency[sysType] = val;
+        render();
+      });
+    });
+    document.querySelectorAll(".action-btn").forEach(el => {
+      el.addEventListener("click", (e) => {
+        let btn = e.target.closest("button");
+        if (!btn) return;
+        let action = btn.dataset.action;
+        let idx = parseInt(btn.dataset.idx);
+        let list = state.breakupConfig[sysType];
+
+        if (action === "toggle-hide") {
+          list[idx].isHidden = !list[idx].isHidden;
+        } else if (action === "add-header") {
+          list.splice(idx, 0, { id: 'custom_' + Date.now(), label: 'New Header', isHeader: true, isHidden: false });
+        } else if (action === "add-item") {
+          list.splice(idx, 0, { id: 'custom_' + Date.now(), label: 'New Item', value: 0, isOverride: true, overrideValue: 0, isHeader: false, isHidden: false });
+        } else if (action === "delete") {
+          list.splice(idx, 1);
+        }
+        render();
+      });
+    });
+  }
 }
 
 function renderNotes(option, input) {
@@ -520,6 +599,7 @@ function render() {
   const input = readInput();
   const config = readConfig();
   const estimate = calculateEstimate(input, config);
+  applyBreakupConfig(estimate, input);
   state.estimates = estimate;
   const option = (state.selectedSystemIndex !== null && state.selectedSystemIndex >= 0 && state.selectedSystemIndex < estimate.options.length)
     ? estimate.options[state.selectedSystemIndex]
@@ -1127,3 +1207,81 @@ window.finishWizard = function() {
 updatePresetDropdown();
 attachEvents();
 render();
+
+function applyBreakupConfig(estimate, input) {
+  if (!state.breakupConfig) state.breakupConfig = {};
+
+  estimate.options.forEach(option => {
+    let sysType = option.systemType;
+    let mainInverterPrefix = sysType === "hybrid" ? "Hybrid" : (sysType === "offgrid" ? "Off-grid" : "On-grid");
+
+    let defaultItems = [
+      { id: 'panels', label: 'Solar Panels', value: option.costBreakup.panels },
+      { id: 'structure', label: `Mounting Structure (${STRUCTURE_LABELS[input.structureType]})`, value: option.costBreakup.structure },
+      { id: 'inverter', label: `${mainInverterPrefix} Inverter`, value: option.costBreakup.inverter },
+    ];
+    if (option.costBreakup.backupInverter > 0) {
+      defaultItems.push({ id: 'backupInverter', label: 'Backup Off-grid Inverter', value: option.costBreakup.backupInverter });
+    }
+    if (option.costBreakup.battery > 0) {
+      defaultItems.push({ id: 'battery', label: option.costBreakup.backupInverter > 0 ? 'Backup Battery Storage' : 'Battery Storage', value: option.costBreakup.battery });
+    }
+    defaultItems.push(
+      { id: 'electricalSafetyAndWiring', label: 'Electrical safety and wiring', value: option.costBreakup.electricalSafetyAndWiring },
+      { id: 'installation', label: 'Installation & Commissioning', value: option.costBreakup.installation },
+      { id: 'consultancy', label: 'Consultancy', value: option.costBreakup.consultancy }
+    );
+
+    // If config doesn't exist for this sysType, seed it
+    if (!state.breakupConfig[sysType]) {
+      state.breakupConfig[sysType] = defaultItems.map(di => ({
+        id: di.id,
+        label: di.label,
+        isHeader: false,
+        isHidden: false,
+        isOverride: false,
+        overrideValue: di.value
+      }));
+    }
+
+    let configList = state.breakupConfig[sysType];
+    let preTaxSubtotal = 0;
+    let finalItems = [];
+
+    configList.forEach(c => {
+      let item = { ...c };
+      if (!c.isHeader) {
+        let di = defaultItems.find(x => x.id === c.id);
+        let computedValue = di ? di.value : 0;
+        item.value = c.isOverride ? c.overrideValue : computedValue;
+        if (!c.isHidden) {
+          preTaxSubtotal += item.value;
+        }
+      }
+      finalItems.push(item);
+    });
+
+    const goodsShare = 0.70;
+    const servicesShare = 0.30;
+    const effectiveGstRate = (goodsShare * 5) + (servicesShare * 18);
+    
+    // Check if GST is overridden
+    let configGst = state.breakupConfigGst && state.breakupConfigGst[sysType] !== undefined ? state.breakupConfigGst[sysType] : null;
+    const gst = configGst !== null ? configGst : preTaxSubtotal * (effectiveGstRate / 100);
+    
+    // Contingency
+    let configContingency = state.breakupConfigContingency && state.breakupConfigContingency[sysType] !== undefined ? state.breakupConfigContingency[sysType] : null;
+    const contingency = configContingency !== null ? configContingency : preTaxSubtotal * ((input.contingencyRate || 0) / 100);
+
+    option.costBreakup.effectiveGstRate = effectiveGstRate;
+    option.costBreakup.gst = gst;
+    option.costBreakup.contingency = contingency;
+
+    option.totalPreSubsidy = preTaxSubtotal + gst + contingency;
+    option.netCost = Math.max(option.totalPreSubsidy - option.subsidy, 0);
+    option.paybackYears = option.annualSavings > 0 ? option.netCost / option.annualSavings : Infinity;
+    option.roiPercent = option.netCost > 0 ? (option.annualSavings / option.netCost) * 100 : 0;
+
+    option.costBreakupList = finalItems;
+  });
+}
