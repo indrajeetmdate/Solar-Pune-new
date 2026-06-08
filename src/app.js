@@ -112,7 +112,7 @@ function readInput() {
   const safeStr = (id) => { const el = $(id); return el ? el.value.trim() : ""; };
   const safeChecked = (id) => { const el = $(id); return el ? el.checked : false; };
   return {
-    customerName: safeStr("customerName"),
+    customerName: state.internalUnlocked ? (safeStr("internalCustomerName") || safeStr("customerName")) : safeStr("customerName"),
     mobileNumber: safeStr("mobileNumber"),
     emailAddress: safeStr("emailAddress"),
     monthlyUnits: numberValue("monthlyUnits"),
@@ -138,6 +138,7 @@ function readInput() {
     structureType: safeStr("structureType"),
     capacityOverride: numberValue("capacityOverride"),
     inverterOverride: numberValue("inverterOverride"),
+    costOverrides: state.costOverrides || {},
     batteryOverride: numberValue("batteryOverride"),
     backupLoadPercent: numberValue("backupLoad"),
     backupHours: numberValue("backupHours"),
@@ -302,44 +303,70 @@ function renderBreakup(option, input, customerView) {
   if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
   if (option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
 
+  const isInternal = state.internalUnlocked;
+  const sysType = option.systemType;
+
   const items = [
-    ["Panels", option.costBreakup.panels],
-    [`Structure (${STRUCTURE_LABELS[input.structureType]})`, option.costBreakup.structure],
-    [`${mainInverterPrefix} Inverter`, option.costBreakup.inverter],
+    { key: "panels", label: "Panels", value: option.costBreakup.panels },
+    { key: "structure", label: `Structure (${STRUCTURE_LABELS[input.structureType]})`, value: option.costBreakup.structure },
+    { key: "inverter", label: `${mainInverterPrefix} Inverter`, value: option.costBreakup.inverter },
   ];
 
   if (option.costBreakup.backupInverter > 0) {
-    items.push(["Backup Off-grid Inverter", option.costBreakup.backupInverter]);
+    items.push({ key: "backupInverter", label: "Backup Off-grid Inverter", value: option.costBreakup.backupInverter });
   }
 
   items.push(
-    [option.costBreakup.backupInverter > 0 ? "Backup Battery" : "Battery", option.costBreakup.battery],
-    ["Electrical safety and wiring", option.costBreakup.electricalSafetyAndWiring],
-    ["Installation", option.costBreakup.installation],
-    ["Consultancy", option.costBreakup.consultancy],
-    [`GST (${option.costBreakup.effectiveGstRate}%)`, option.costBreakup.gst],
-    ["Contingency", option.costBreakup.contingency],
-    ["Subsidy", -option.subsidy],
-    ["Net customer cost", option.netCost]
+    { key: "battery", label: option.costBreakup.backupInverter > 0 ? "Backup Battery" : "Battery", value: option.costBreakup.battery },
+    { key: "electricalSafetyAndWiring", label: "Electrical safety and wiring", value: option.costBreakup.electricalSafetyAndWiring },
+    { key: "installation", label: "Installation", value: option.costBreakup.installation },
+    { key: "consultancy", label: "Consultancy", value: option.costBreakup.consultancy },
+    { key: "gst", label: `GST (${option.costBreakup.effectiveGstRate}%)`, value: option.costBreakup.gst },
+    { key: "contingency", label: "Contingency", value: option.costBreakup.contingency },
+    { key: "subsidy", label: "Subsidy", value: -option.subsidy, readonly: true },
+    { key: "netCost", label: "Net customer cost", value: option.netCost, readonly: true }
   );
 
   let visibleItems = customerView
-    ? items.filter(([label]) => ["Panels", "Structure", "Inverter", "Battery", "Subsidy", "Net customer cost"].some((key) => label.includes(key)))
+    ? items.filter(it => ["Panels", "Structure", "Inverter", "Battery", "Subsidy", "Net customer cost"].some((kw) => it.label.includes(kw)))
     : items;
 
-  // Hide subsidy row from cost breakup if toggled
   if ($("hideSubsidy")?.checked) {
-    visibleItems = visibleItems.filter(([label]) => label !== "Subsidy");
+    visibleItems = visibleItems.filter(it => it.label !== "Subsidy");
   }
 
   $("costBreakup").innerHTML = visibleItems
-    .map(([label, value]) => `
+    .map(it => {
+      let valueHtml = money(it.value);
+      if (isInternal && !it.readonly && it.key !== "gst" && it.key !== "contingency") {
+        valueHtml = `<input type="number" class="cost-override-input" data-sys="${sysType}" data-key="${it.key}" value="${it.value}" style="width: 90px; text-align: right; padding: 2px 4px; font-size: 13px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;">`;
+      }
+      return `
       <div>
-        <dt>${label}</dt>
-        <dd>${money(value)}</dd>
+        <dt>${it.label}</dt>
+        <dd>${valueHtml}</dd>
       </div>
-    `)
+      `;
+    })
     .join("");
+
+  document.querySelectorAll(".cost-override-input").forEach(inputEl => {
+    inputEl.addEventListener("change", (e) => {
+      const sys = e.target.dataset.sys;
+      const key = e.target.dataset.key;
+      const val = parseFloat(e.target.value);
+      
+      if (!state.costOverrides) state.costOverrides = {};
+      if (!state.costOverrides[sys]) state.costOverrides[sys] = {};
+      
+      if (isNaN(val)) {
+        delete state.costOverrides[sys][key];
+      } else {
+        state.costOverrides[sys][key] = val;
+      }
+      render();
+    });
+  });
 }
 
 function renderNotes(option, input) {
@@ -690,6 +717,12 @@ function openInternal() {
   if (resultsPanel) resultsPanel.classList.remove('blurred-overlay');
   $("easyModeButton").classList.remove("active");
   $("internalModeButton").classList.add("active");
+
+  const intCustName = document.getElementById("internalCustomerName");
+  const extCustName = document.getElementById("customerName");
+  if (intCustName && extCustName && !intCustName.value) {
+    intCustName.value = extCustName.value;
+  }
 
   const step1 = document.getElementById("step1");
   const step2 = document.getElementById("step2");

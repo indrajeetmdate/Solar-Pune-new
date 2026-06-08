@@ -388,14 +388,18 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const monthlySavings = round(baseSavings + todSavings.totalTod + pfIncentive + promptPay, 0);
   const annualSavings = monthlySavings * 12;
 
-  // Cost breakup
+  // Cost breakup with optional overrides from internal mode
+  const overrides = (input.costOverrides && input.costOverrides[systemType]) || {};
   const pricing = config.pricing;
-  const panelCost = dcCapacityWp * getPanelRate(panelType, pricing);
-  const structureCost = dcCapacityWp * pricing.structureRates[input.structureType];
-  const inverterCost = inverterCapacityW * getInverterRate(systemType, inverterCapacityKw);
-  let batteryCost = batteryCapacityWh * pricing.batteryRatePerWh;
-  let backupInverterCost = 0;
-  if (batteryCapacityWh > 0) {
+  
+  const panelCost = overrides.panels !== undefined ? overrides.panels : dcCapacityWp * getPanelRate(panelType, pricing);
+  const structureCost = overrides.structure !== undefined ? overrides.structure : dcCapacityWp * pricing.structureRates[input.structureType];
+  const inverterCost = overrides.inverter !== undefined ? overrides.inverter : inverterCapacityW * getInverterRate(systemType, inverterCapacityKw);
+  
+  let backupInverterCost = overrides.backupInverter !== undefined ? overrides.backupInverter : 0;
+  let batteryCost = overrides.battery !== undefined ? overrides.battery : batteryCapacityWh * pricing.batteryRatePerWh;
+  
+  if (batteryCapacityWh > 0 && overrides.battery === undefined && overrides.backupInverter === undefined) {
     if (systemType === "ongrid_basic_backup") {
       backupInverterCost = 10000;
       batteryCost = 20000;
@@ -405,14 +409,14 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       batteryCost = 35000;
     }
   }
-  const wiringCost = dcCapacityWp * pricing.wiringRatePerW;
-  const installationCost = dcCapacityWp * pricing.installationRatePerW;
-  const protectionCost = getProtectionCost(dcCapacityKw);
-  const consultancyCost = dcCapacityWp * pricing.consultancyRatePerW;
+
+  const electricalSafetyAndWiring = overrides.electricalSafetyAndWiring !== undefined ? overrides.electricalSafetyAndWiring : (dcCapacityWp * pricing.wiringRatePerW) + getProtectionCost(dcCapacityKw);
+  const installationCost = overrides.installation !== undefined ? overrides.installation : dcCapacityWp * pricing.installationRatePerW;
+  const consultancyCost = overrides.consultancy !== undefined ? overrides.consultancy : dcCapacityWp * pricing.consultancyRatePerW;
 
   const preTaxSubtotal =
     panelCost + structureCost + inverterCost + backupInverterCost + batteryCost +
-    wiringCost + installationCost + protectionCost + consultancyCost;
+    electricalSafetyAndWiring + installationCost + consultancyCost;
 
   // GST: Supply of Goods (70% @ 5%) + Supply of Services (30% @ 18%) = 8.9% effective
   const goodsShare = 0.70;
@@ -421,7 +425,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const servicesGstRate = 18;
   const effectiveGstRate = (goodsShare * goodsGstRate) + (servicesShare * servicesGstRate); // 8.9%
   const gst = preTaxSubtotal * (effectiveGstRate / 100);
-  const contingency = preTaxSubtotal * ((pricing.contingencyRate || 0) / 100);
+  const contingency = overrides.contingency !== undefined ? overrides.contingency : preTaxSubtotal * ((pricing.contingencyRate || 0) / 100);
   const totalPreSubsidy = preTaxSubtotal + gst + contingency;
   const subsidyResult = calculateSubsidy(systemType, panelType, dcCapacityKw, input, config.policy);
   const subsidy = subsidyResult.total;
@@ -461,7 +465,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       inverter: round(inverterCost, 0),
       backupInverter: round(backupInverterCost, 0),
       battery: round(batteryCost, 0),
-      electricalSafetyAndWiring: round(wiringCost + protectionCost, 0),
+      electricalSafetyAndWiring: round(electricalSafetyAndWiring, 0),
       installation: round(installationCost, 0),
       consultancy: round(consultancyCost, 0),
       gst: round(gst, 0),
