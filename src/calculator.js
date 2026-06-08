@@ -485,15 +485,11 @@ export function calculatePanelLayout(dcCapacityKw, availableAreaSqft, config = D
   const panelWp = config.performance?.panelWp || 550;
   const panelEfficiency = config.performance?.panelEfficiency || 21.5;
   
-  // Standard test conditions: 1000 W/m²
-  const panelAreaSqm = panelWp / (1000 * (panelEfficiency / 100));
+  // Fixed physical panel dimensions regardless of Wp (standard for modern high-power panels)
+  const panelWidthMm = 1123;
+  const panelHeightMm = 2279;
+  const panelAreaSqm = (panelWidthMm / 1000) * (panelHeightMm / 1000);
   const panelAreaSqft = panelAreaSqm * 10.7639;
-
-  // Assuming standard aspect ratio (~1:2), roughly calculate dimensions in mm
-  const widthM = Math.sqrt(panelAreaSqm / 2.03); 
-  const heightM = widthM * 2.03;
-  const panelWidthMm = Math.round(widthM * 1000);
-  const panelHeightMm = Math.round(heightM * 1000);
 
   const numPanels = Math.ceil(Math.round(dcCapacityKw * 1000) / panelWp);
   const panelOnlyAreaSqft = round(numPanels * panelAreaSqft, 0);
