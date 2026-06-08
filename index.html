@@ -281,6 +281,11 @@
               </label>
 
               <label class="field">
+                <span>Battery override (kWh) <i class="info-tip" data-tip="Manually set the battery capacity (kWh). Leave blank to auto-calculate based on backup load and hours.">i</i></span>
+                <input id="batteryOverride" type="number" min="0" step="0.1" placeholder="Auto">
+              </label>
+
+              <label class="field">
                 <span>Backup load (%) <i class="info-tip" data-tip="Percentage of total system capacity required during a power cut. E.g. 50%.">i</i></span>
                 <input id="backupLoad" type="number" min="0" max="100" step="5" value="50">
               </label>

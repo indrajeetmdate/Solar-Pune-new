@@ -12,12 +12,12 @@ const state = {
   internalUnlocked: false,
   activeTab: "system",
   extractedBill: null,
-  ongridBackup: "basic",
+  ongridBackup: "none",
   selectedSystemIndex: null,
 };
 
 const ASSUMPTION_IDS = [
-  "panelType", "structureType", "capacityOverride", "inverterOverride", "backupLoad", "backupHours",
+  "panelType", "structureType", "capacityOverride", "inverterOverride", "batteryOverride", "backupLoad", "backupHours",
   "panelDcrRate", "panelNonDcrRate", "batteryRate",
   "hotDipStructureRate", "galvalumeStructureRate", "gpPurlinStructureRate", "wiringRate", "installationRate", "consultancyRate",
   "contingencyRate",
@@ -50,6 +50,7 @@ const ids = [
   "structureType",
   "capacityOverride",
   "inverterOverride",
+  "batteryOverride",
   "backupLoad",
   "backupHours",
   "panelDcrRate",
@@ -137,6 +138,7 @@ function readInput() {
     structureType: safeStr("structureType"),
     capacityOverride: numberValue("capacityOverride"),
     inverterOverride: numberValue("inverterOverride"),
+    batteryOverride: numberValue("batteryOverride"),
     backupLoadPercent: numberValue("backupLoad"),
     backupHours: numberValue("backupHours"),
     savingsMethod: safeStr("savingsMethod"),

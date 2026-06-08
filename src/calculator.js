@@ -264,6 +264,8 @@ function getProtectionCost(capacityKw) {
 }
 
 function getBatteryCapacityKwh(systemType, dcCapacityKw, input, performance) {
+  if (input.batteryOverride > 0) return input.batteryOverride;
+
   // FIX C5: Semi-hybrid always gets its fixed battery, regardless of backupNeeded checkbox
   if (systemType === "ongrid") return 0;
   if (systemType === "ongrid_basic_backup") return 1.28;
