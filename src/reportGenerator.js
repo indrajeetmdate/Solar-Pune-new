@@ -79,7 +79,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     // Load logo and system differences image in parallel
     const [logoResult, sysDiffResult] = await Promise.all([
       loadImage("https://bfkxdpripwjxenfvwpfu.supabase.co/storage/v1/object/public/Logo/DC_Energy.png"),
-      loadImage("https://solarcalculator.cnergy.co.in/src/system_differences.png", 800),
+      loadImage("https://solarcalculator.cnergy.co.in/src/system_differences.png", 2400),
     ]);
 
   const doc = new jsPDF();
@@ -311,65 +311,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
 
   addFooter(1);
 
-  // ================= PAGE 2: System Type Differences =================
-  doc.addPage();
-  yPos = 30;
-  addHeader("Solar System Types");
-
-  doc.setTextColor(COLORS.black);
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
-  doc.text("2. Solar System Types", margin, yPos);
-  yPos += 8;
-
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(COLORS.text);
-  doc.text("Understanding the different solar system configurations to choose the right solution for your needs.", margin, yPos);
-  yPos += 10;
-
-  // Insert system_differences.png image
-  if (sysDiffResult) {
-    const maxWidth = pageWidth - margin * 2;
-    const imgRatio = sysDiffResult.height / sysDiffResult.width;
-    const imgWidth = maxWidth;
-    const imgHeight = imgWidth * imgRatio;
-
-    // Ensure image doesn't overflow the page
-    const maxHeight = pageHeight - yPos - 30;
-    const finalWidth = imgHeight > maxHeight ? maxHeight / imgRatio : imgWidth;
-    const finalHeight = imgHeight > maxHeight ? maxHeight : imgHeight;
-
-    doc.addImage(sysDiffResult.data, 'JPEG', margin, yPos, finalWidth, finalHeight);
-    yPos += finalHeight + 10;
-  } else {
-    // Fallback: text descriptions
-    const systemDescriptions = [
-      ["On-Grid", "Connected to utility grid. Solar panels generate power during day, excess is exported via net metering. No battery backup — system shuts down during power cuts. Lowest cost, best ROI."],
-      ["Semi-Hybrid", "On-grid with a small backup inverter and battery. Provides basic backup during outages while maintaining net metering benefits. Good balance of savings and reliability."],
-      ["Hybrid", "Grid-connected with full battery storage. Solar charges batteries during the day, batteries provide backup during outages. Higher cost but complete energy independence."],
-      ["Off-Grid", "Fully independent — no grid connection. Requires larger battery banks. Best for locations without reliable grid access. Highest cost, no net metering."],
-    ];
-
-    systemDescriptions.forEach(([type, desc]) => {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(COLORS.primary);
-      doc.text(type, margin, yPos);
-      yPos += 6;
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(COLORS.text);
-      const lines = doc.splitTextToSize(desc, pageWidth - margin * 2);
-      doc.text(lines, margin, yPos);
-      yPos += lines.length * 5 + 6;
-    });
-  }
-
-  addFooter(2);
-
-  // ================= PAGE 3: Financial Quote =================
+  // ================= PAGE 2: Financial Quote =================
   doc.addPage();
   yPos = 30;
   addHeader("Financial Quote");
@@ -377,7 +319,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.setTextColor(COLORS.black);
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
-  doc.text("3. Financial Quote & Breakup", margin, yPos);
+  doc.text("2. Financial Quote & Breakup", margin, yPos);
   yPos += 10;
 
   doc.setFontSize(12);
@@ -480,6 +422,64 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
 
   doc.text(`25-Year Lifetime Savings: ${formatCurrency(option.lifetimeSavings)}`, margin, yPos);
   
+  addFooter(2);
+
+  // ================= PAGE 3: System Type Differences =================
+  doc.addPage();
+  yPos = 30;
+  addHeader("Solar System Types");
+
+  doc.setTextColor(COLORS.black);
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text("3. Solar System Types", margin, yPos);
+  yPos += 8;
+
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(COLORS.text);
+  doc.text("Understanding the different solar system configurations to choose the right solution for your needs.", margin, yPos);
+  yPos += 10;
+
+  // Insert system_differences.png image
+  if (sysDiffResult) {
+    const maxWidth = pageWidth - margin * 2;
+    const imgRatio = sysDiffResult.height / sysDiffResult.width;
+    const imgWidth = maxWidth;
+    const imgHeight = imgWidth * imgRatio;
+
+    // Ensure image doesn't overflow the page
+    const maxHeight = pageHeight - yPos - 30;
+    const finalWidth = imgHeight > maxHeight ? maxHeight / imgRatio : imgWidth;
+    const finalHeight = imgHeight > maxHeight ? maxHeight : imgHeight;
+
+    doc.addImage(sysDiffResult.data, 'JPEG', margin, yPos, finalWidth, finalHeight);
+    yPos += finalHeight + 10;
+  } else {
+    // Fallback: text descriptions
+    const systemDescriptions = [
+      ["On-Grid", "Connected to utility grid. Solar panels generate power during day, excess is exported via net metering. No battery backup — system shuts down during power cuts. Lowest cost, best ROI."],
+      ["Semi-Hybrid", "On-grid with a small backup inverter and battery. Provides basic backup during outages while maintaining net metering benefits. Good balance of savings and reliability."],
+      ["Hybrid", "Grid-connected with full battery storage. Solar charges batteries during the day, batteries provide backup during outages. Higher cost but complete energy independence."],
+      ["Off-Grid", "Fully independent — no grid connection. Requires larger battery banks. Best for locations without reliable grid access. Highest cost, no net metering."],
+    ];
+
+    systemDescriptions.forEach(([type, desc]) => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(COLORS.primary);
+      doc.text(type, margin, yPos);
+      yPos += 6;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(COLORS.text);
+      const lines = doc.splitTextToSize(desc, pageWidth - margin * 2);
+      doc.text(lines, margin, yPos);
+      yPos += lines.length * 5 + 6;
+    });
+  }
+
   addFooter(3);
 
   const filename = input.customerName
