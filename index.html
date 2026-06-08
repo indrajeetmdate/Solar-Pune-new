@@ -295,6 +295,21 @@
                 <input id="backupHours" type="number" min="0" step="0.5" value="2">
               </label>
             </div>
+
+            <fieldset style="border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; margin-top: 12px;">
+              <legend style="font-size: 12px; font-weight: 600; padding: 0 6px; color: var(--text-muted);">Report Display</legend>
+              <div style="display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px;">
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="hidePayback"> Hide Payback (Yrs)
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="hideAreaFit"> Hide Area Fit
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="hideSubsidy"> Hide Subsidy
+                </label>
+              </div>
+            </fieldset>
           </div>
 
           <div class="tab-panel hidden" data-panel="pricing">
@@ -527,7 +542,7 @@
                 <span style="font-size: 11px;">Save/mo <i class="info-tip" data-tip="How much your monthly electricity bill will reduce. Includes tariff savings, ToD rebates, and other applicable benefits.">i</i></span>
                 <strong id="monthlySavings" style="font-size: 15px;">Rs 0</strong>
               </div>
-              <div class="metric-card" style="padding: 10px;">
+              <div id="paybackCard" class="metric-card" style="padding: 10px;">
                 <span style="font-size: 11px;">Payback <i class="info-tip" data-tip="Time to recover your investment. After this period, your solar system generates pure profit through bill savings.">i</i></span>
                 <strong id="payback" style="font-size: 15px;">0 years</strong>
               </div>
@@ -552,9 +567,9 @@
                     <th style="padding: 8px;">Inverter <i class="info-tip" data-tip="Recommended inverter size in kW to match the panel capacity.">i</i></th>
                     <th style="padding: 8px;">Battery <i class="info-tip" data-tip="Battery storage size in kWh. Only for hybrid/off-grid systems with backup.">i</i></th>
                     <th style="padding: 8px;">Net cost <i class="info-tip" data-tip="Total system cost after subtracting government subsidy.">i</i></th>
-                    <th style="padding: 8px;">Subsidy <i class="info-tip" data-tip="Government incentive to reduce your upfront cost. Only for DCR panels on grid-connected systems.">i</i></th>
+                    <th style="padding: 8px;" class="subsidy-col">Subsidy <i class="info-tip" data-tip="Government incentive to reduce your upfront cost. Only for DCR panels on grid-connected systems.">i</i></th>
                     <th style="padding: 8px;">Savings/mo <i class="info-tip" data-tip="Estimated monthly reduction in your electricity bill after solar.">i</i></th>
-                    <th style="padding: 8px;">Payback <i class="info-tip" data-tip="Years to recover your investment through monthly bill savings.">i</i></th>
+                    <th style="padding: 8px;" class="payback-col">Payback <i class="info-tip" data-tip="Years to recover your investment through monthly bill savings.">i</i></th>
                   </tr>
                 </thead>
                 <tbody id="comparisonRows"></tbody>

@@ -274,9 +274,9 @@ function renderComparison(options, recommended) {
           <td>${option.inverterCapacityKw} kW</td>
           <td>${option.batteryCapacityKwh > 0 ? option.batteryCapacityKwh + ' kWh' : '—'}</td>
           <td>${money(option.netCost)}</td>
-          <td>${money(option.subsidy)}</td>
+          <td class="subsidy-col">${money(option.subsidy)}</td>
           <td>${money(option.monthlySavings)}</td>
-          <td>${years(option.paybackYears)}</td>
+          <td class="payback-col">${years(option.paybackYears)}</td>
         </tr>
       `;
     })
@@ -323,9 +323,14 @@ function renderBreakup(option, input, customerView) {
     ["Net customer cost", option.netCost]
   );
 
-  const visibleItems = customerView
+  let visibleItems = customerView
     ? items.filter(([label]) => ["Panels", "Structure", "Inverter", "Battery", "Subsidy", "Net customer cost"].some((key) => label.includes(key)))
     : items;
+
+  // Hide subsidy row from cost breakup if toggled
+  if ($("hideSubsidy")?.checked) {
+    visibleItems = visibleItems.filter(([label]) => label !== "Subsidy");
+  }
 
   $("costBreakup").innerHTML = visibleItems
     .map(([label, value]) => `
@@ -564,6 +569,22 @@ function render() {
   renderNotes(option, input);
   renderExtractedBill(state.extractedBill);
   renderDiagram(pl, input);
+
+  // Report Display: toggle visibility of optional sections
+  const hidePayback = $("hidePayback")?.checked;
+  const hideAreaFit = $("hideAreaFit")?.checked;
+  const hideSubsidy = $("hideSubsidy")?.checked;
+
+  // Payback card in summary metrics
+  if ($("paybackCard")) $("paybackCard").style.display = hidePayback ? "none" : "";
+  // Payback column in comparison table
+  document.querySelectorAll(".payback-col").forEach(el => el.style.display = hidePayback ? "none" : "");
+
+  // Area fit status pill
+  if ($("areaFitStatus")) $("areaFitStatus").style.display = hideAreaFit ? "none" : "";
+
+  // Subsidy column in comparison table + subsidy row in cost breakup
+  document.querySelectorAll(".subsidy-col").forEach(el => el.style.display = hideSubsidy ? "none" : "");
 }
 
 function renderDiagram(pl, input) {
@@ -781,6 +802,11 @@ function attachEvents() {
     const label = $("selfConsumptionLabel");
     if (label) label.textContent = `${e.target.value}%`;
     render();
+  });
+
+  // Report Display hide toggles
+  ["hidePayback", "hideAreaFit", "hideSubsidy"].forEach(id => {
+    $(id)?.addEventListener("change", render);
   });
 
   // Mode buttons

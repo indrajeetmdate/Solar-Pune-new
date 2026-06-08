@@ -495,17 +495,15 @@ export function calculatePanelLayout(dcCapacityKw, availableAreaSqft, config = D
   const panelWidthMm = Math.round(widthM * 1000);
   const panelHeightMm = Math.round(heightM * 1000);
 
-  // Include spacing multiplier for inter-row shading clearance,
-  // maintenance walkways, and edge setbacks. Industry standard is ~1.5×.
-  // This aligns the area-fit check with the sqftPerKw sizing constraint (~120 sqft/kWp
-  // vs raw panel area of ~55 sqft/kWp).
-  const spacingMultiplier = 1.5;
-
   const numPanels = Math.ceil(Math.round(dcCapacityKw * 1000) / panelWp);
   const panelOnlyAreaSqft = round(numPanels * panelAreaSqft, 0);
   const panelOnlyAreaSqm = round(numPanels * panelAreaSqm, 1);
-  const requiredAreaSqft = round(panelOnlyAreaSqft * spacingMultiplier, 0);
-  const requiredAreaSqm = round(panelOnlyAreaSqm * spacingMultiplier, 1);
+
+  // Use sqftPerKw from config to compute total area (includes spacing, walkways, setbacks).
+  // If sqftPerKw is set, area = capacity × sqftPerKw. Otherwise fallback to 1.5× panel area.
+  const sqftPerKw = config.performance?.sqftPerKw || 120;
+  const requiredAreaSqft = round(dcCapacityKw * sqftPerKw, 0);
+  const requiredAreaSqm = round(requiredAreaSqft / 10.7639, 1);
   const fitsInArea = availableAreaSqft > 0 ? requiredAreaSqft <= availableAreaSqft : null;
 
   return {
@@ -590,7 +588,7 @@ export function calculateEstimate(input, config = DEFAULT_CONFIG) {
 
   const recommended = chooseRecommendedOption(options, input.goal);
   const sanctionedStatus = getSanctionedStatus(recommended.dcCapacityKw, input.sanctionedLoad);
-  const panelLayout = calculatePanelLayout(recommended.dcCapacityKw, input.roofArea || 0);
+  const panelLayout = calculatePanelLayout(recommended.dcCapacityKw, input.roofArea || 0, config);
 
   return {
     input,
