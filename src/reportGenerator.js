@@ -331,41 +331,37 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
   if (option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
 
-  const costData = [];
+  const includedItems = [];
   
   if (option.costBreakupList) {
     option.costBreakupList.forEach(it => {
-      if (!it.isHidden) {
-        if (it.isHeader) {
-          costData.push([{ content: it.label, colSpan: 2, styles: { fontStyle: 'bold', textColor: COLORS.primary } }]);
-        } else {
-          costData.push([it.label, formatCurrency(it.value)]);
-        }
+      if (!it.isHidden && !it.isHeader) {
+        includedItems.push(it.label);
       }
     });
   } else {
     // Fallback if list not found
-    costData.push(
-      ["Solar Panels", formatCurrency(cBreakup.panels)],
-      [`${mainInverterPrefix} Inverter`, formatCurrency(cBreakup.inverter)],
-      ["Mounting Structure", formatCurrency(cBreakup.structure)],
-      ["Electrical safety and wiring", formatCurrency(cBreakup.electricalSafetyAndWiring)],
-      ["Installation & Commissioning", formatCurrency(cBreakup.installation)],
-      ["Consultancy", formatCurrency(cBreakup.consultancy)],
-      ["Contingency", formatCurrency(cBreakup.contingency)]
+    includedItems.push(
+      "Solar Panels",
+      `${mainInverterPrefix} Inverter`,
+      "Mounting Structure",
+      "Electrical safety and wiring",
+      "Installation & Commissioning",
+      "Consultancy"
     );
-    if (cBreakup.backupInverter > 0) costData.splice(2, 0, ["Backup Off-grid Inverter", formatCurrency(cBreakup.backupInverter)]);
-    if (cBreakup.battery > 0) costData.push(["Battery Storage", formatCurrency(cBreakup.battery)]);
+    if (cBreakup.backupInverter > 0) includedItems.push("Backup Off-grid Inverter");
+    if (cBreakup.battery > 0) includedItems.push("Battery Storage");
   }
 
-  const preTaxSubtotal = option.totalPreSubsidy - cBreakup.gst - cBreakup.contingency;
-  
-  costData.push(["-------------------", "-------------------"]);
-  costData.push(["Subtotal (Pre-Tax)", formatCurrency(preTaxSubtotal)]);
-  costData.push([`GST (${cBreakup.effectiveGstRate}% effective)`, formatCurrency(cBreakup.gst)]);
-  costData.push(["Contingency", formatCurrency(cBreakup.contingency)]);
-  costData.push(["-------------------", "-------------------"]);
-  costData.push(["Total Cost (Inc. GST)", formatCurrency(option.totalPreSubsidy)]);
+  doc.setFontSize(10);
+  doc.setTextColor(COLORS.text);
+  const includesText = "System Includes: " + includedItems.join(", ") + ", GST, and Contingency.";
+  const splitIncludes = doc.splitTextToSize(includesText, 210 - margin * 2);
+  doc.text(splitIncludes, margin, yPos);
+  yPos += (splitIncludes.length * 5) + 5;
+
+  const costData = [];
+  costData.push(["Total System Cost (Inc. GST)", formatCurrency(option.totalPreSubsidy)]);
 
   // Conditionally include subsidy
   if (!hideSubsidy) {

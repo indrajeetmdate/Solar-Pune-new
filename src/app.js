@@ -362,26 +362,24 @@ function renderBreakup(option, input, customerView) {
       <div><dt>Net customer cost</dt><dd>${money(option.netCost)}</dd></div>
     `;
   } else {
-    let visibleItems = option.costBreakupList.filter(it => !it.isHidden);
+    let visibleItems = option.costBreakupList.filter(it => !it.isHidden && !it.isHeader);
 
-    if (customerView) {
-      visibleItems = visibleItems.filter(it => it.isHeader || ["Panels", "Structure", "Inverter", "Battery", "Subsidy", "Net customer cost"].some((kw) => it.label.includes(kw)));
-    }
+    const includesText = visibleItems.map(it => it.label).join(", ");
 
-    itemsHtml = visibleItems.map(it => {
-      if (it.isHeader) {
-        return `<div style="margin-top: 8px; font-weight: bold; color: var(--text); border-bottom: 1px solid var(--line); padding-bottom: 2px;">${it.label}</div>`;
-      }
-      return `<div><dt>${it.label}</dt><dd>${money(it.value)}</dd></div>`;
-    }).join("");
+    itemsHtml = `<div style="margin-bottom: 12px; font-size: 13px; color: var(--text-light); line-height: 1.4;">
+      <strong>Includes:</strong> ${includesText}, GST, and Contingency.
+    </div>`;
 
-    itemsHtml += `<div><dt>GST (${option.costBreakup.effectiveGstRate}%)</dt><dd>${money(option.costBreakup.gst)}</dd></div>`;
-    itemsHtml += `<div><dt>Contingency</dt><dd>${money(option.costBreakup.contingency)}</dd></div>`;
+    itemsHtml += `<div><dt style="font-weight: bold; color: var(--text);">Total System Cost (Inc. GST)</dt><dd style="font-weight: bold;">${money(option.totalPreSubsidy)}</dd></div>`;
     
     if (!$("hideSubsidy")?.checked) {
-      itemsHtml += `<div><dt>Subsidy</dt><dd>${money(-option.subsidy)}</dd></div>`;
+      itemsHtml += `<div><dt>Expected Subsidy</dt><dd style="color: var(--primary);">- ${money(option.subsidy)}</dd></div>`;
     }
-    itemsHtml += `<div><dt>Net customer cost</dt><dd>${money(option.netCost)}</dd></div>`;
+    
+    itemsHtml += `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line);">
+      <dt style="font-weight: bold; color: var(--text); font-size: 1.1em;">Net customer cost</dt>
+      <dd style="font-weight: bold; font-size: 1.1em;">${money(option.netCost)}</dd>
+    </div>`;
   }
 
   $("costBreakup").innerHTML = itemsHtml;
