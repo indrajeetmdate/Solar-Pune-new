@@ -308,7 +308,7 @@ function renderBreakup(option, input, customerView) {
     let configList = state.breakupConfig[sysType] || [];
     
     itemsHtml = configList.map((item, index) => {
-      let labelInput = `<input type="text" class="override-label" data-sys="${sysType}" data-idx="${index}" value="${item.label}" style="width: 140px; padding: 2px 4px; font-size: 13px; border: 1px solid var(--line); border-radius: 4px; ${item.isHidden ? 'opacity: 0.5' : ''}">`;
+      let labelHtml = `<span style="width: 140px; padding: 2px 4px; font-size: 13px; ${item.isHidden ? 'opacity: 0.5; text-decoration: line-through;' : ''}">${item.label}</span>`;
       
       let valueHtml = "";
       if (item.isHeader) {
@@ -320,15 +320,12 @@ function renderBreakup(option, input, customerView) {
 
       let actions = `
         <button class="icon-btn action-btn" data-action="toggle-hide" data-idx="${index}" title="${item.isHidden ? 'Show' : 'Hide'}" style="cursor:pointer; background:none; border:none; padding:2px;">${item.isHidden ? '👁️‍🗨️' : '👁️'}</button>
-        <button class="icon-btn action-btn" data-action="add-header" data-idx="${index}" title="Add Header Above" style="cursor:pointer; background:none; border:none; padding:2px;">T</button>
-        <button class="icon-btn action-btn" data-action="add-item" data-idx="${index}" title="Add Item Above" style="cursor:pointer; background:none; border:none; padding:2px;">+</button>
-        <button class="icon-btn action-btn" data-action="delete" data-idx="${index}" title="Delete" ${item.id && !item.id.startsWith('custom') ? 'disabled style="opacity:0.2;cursor:default;border:none;background:none;padding:2px;"' : 'style="cursor:pointer; background:none; border:none; padding:2px;"'}>🗑️</button>
       `;
 
       return `
       <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 4px; ${item.isHeader ? 'margin-top: 8px;' : ''}">
         <div style="display:flex; align-items:center; gap: 4px;">
-           ${labelInput}
+           ${labelHtml}
         </div>
         <div style="display:flex; align-items:center; gap: 8px;">
            ${valueHtml}
@@ -337,13 +334,6 @@ function renderBreakup(option, input, customerView) {
       </div>
       `;
     }).join("");
-
-    itemsHtml += `
-      <div style="display:flex; justify-content:flex-end; gap: 4px; margin-top: 8px;">
-        <button class="action-btn secondary" data-action="add-header" data-idx="${configList.length}" style="cursor:pointer; font-size:11px; padding:2px 4px; border-radius:3px;">+ Header</button>
-        <button class="action-btn secondary" data-action="add-item" data-idx="${configList.length}" style="cursor:pointer; font-size:11px; padding:2px 4px; border-radius:3px;">+ Item</button>
-      </div>
-    `;
 
     let gstVal = state.breakupConfigGst && state.breakupConfigGst[sysType] !== undefined ? state.breakupConfigGst[sysType] : option.costBreakup.gst;
     let contVal = state.breakupConfigContingency && state.breakupConfigContingency[sysType] !== undefined ? state.breakupConfigContingency[sysType] : option.costBreakup.contingency;
@@ -385,13 +375,6 @@ function renderBreakup(option, input, customerView) {
   $("costBreakup").innerHTML = itemsHtml;
 
   if (isInternal) {
-    document.querySelectorAll(".override-label").forEach(el => {
-      el.addEventListener("change", (e) => {
-        let idx = parseInt(e.target.dataset.idx);
-        state.breakupConfig[sysType][idx].label = e.target.value;
-        render();
-      });
-    });
     document.querySelectorAll(".override-value").forEach(el => {
       el.addEventListener("change", (e) => {
         let idx = parseInt(e.target.dataset.idx);
@@ -433,12 +416,6 @@ function renderBreakup(option, input, customerView) {
 
         if (action === "toggle-hide") {
           list[idx].isHidden = !list[idx].isHidden;
-        } else if (action === "add-header") {
-          list.splice(idx, 0, { id: 'custom_' + Date.now(), label: 'New Header', isHeader: true, isHidden: false });
-        } else if (action === "add-item") {
-          list.splice(idx, 0, { id: 'custom_' + Date.now(), label: 'New Item', value: 0, isOverride: true, overrideValue: 0, isHeader: false, isHidden: false });
-        } else if (action === "delete") {
-          list.splice(idx, 1);
         }
         render();
       });
