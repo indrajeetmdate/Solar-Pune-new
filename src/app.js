@@ -311,58 +311,93 @@ function renderBreakup(option, input, customerView) {
   
   if (isInternal) {
     let configList = state.breakupConfig[sysType] || [];
+
+    // Build the default "System Includes" text from visible items
+    let visibleLabels = configList.filter(it => !it.isHidden && !it.isHeader).map(it => it.label);
+    let defaultIncludesText = visibleLabels.join(", ") + ", GST, and Contingency.";
+    let currentIncludesText = (state.systemIncludesText && state.systemIncludesText[sysType]) || defaultIncludesText;
+
+    // System Includes editable textarea
+    itemsHtml += `
+    <div style="margin-bottom: 10px;">
+      <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">System Includes (shown in report)</label>
+      <textarea class="system-includes-text" data-sys="${sysType}" rows="2" style="width: 100%; font-size: 12px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); resize: vertical; line-height: 1.4; font-family: inherit;">${currentIncludesText}</textarea>
+    </div>`;
+
+    // Compact cost table
+    itemsHtml += `<table style="width: 100%; border-collapse: collapse; font-size: 13px;">`;
     
-    itemsHtml = configList.map((item, index) => {
-      let labelHtml = `<span style="width: 140px; padding: 2px 4px; font-size: 13px; ${item.isHidden ? 'opacity: 0.5; text-decoration: line-through;' : ''}">${item.label}</span>`;
-      
-      let valueHtml = "";
-      if (item.isHeader) {
-         valueHtml = `<span style="color:var(--text-light); font-size: 12px; font-style: italic;">Header</span>`;
-      } else {
-         let valStr = item.isOverride ? item.overrideValue : item.value;
-         valueHtml = `<input type="number" class="override-value" data-sys="${sysType}" data-idx="${index}" value="${valStr}" style="width: 80px; text-align: right; padding: 2px 4px; font-size: 13px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px; ${item.isHidden ? 'opacity: 0.5' : ''}">`;
-      }
+    configList.forEach((item, index) => {
+      if (item.isHeader) return; // skip headers in the compact view
+      let displayVal = item.isOverride ? item.overrideValue : (item.value || 0);
+      let formattedVal = money(displayVal);
+      let hiddenStyle = item.isHidden ? 'opacity: 0.45; text-decoration: line-through;' : '';
+      let rowBg = index % 2 === 0 ? 'background: var(--bg-alt, #fafafa);' : '';
 
-      let actions = `
-        <button class="icon-btn action-btn" data-action="toggle-hide" data-idx="${index}" title="${item.isHidden ? 'Show' : 'Hide'}" style="cursor:pointer; background:none; border:none; padding:2px;">${item.isHidden ? '👁️‍🗨️' : '👁️'}</button>
-      `;
-
-      return `
-      <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 4px; ${item.isHeader ? 'margin-top: 8px;' : ''}">
-        <div style="display:flex; align-items:center; gap: 4px;">
-           ${labelHtml}
-        </div>
-        <div style="display:flex; align-items:center; gap: 8px;">
-           ${valueHtml}
-           <div style="display:flex; gap: 2px;">${actions}</div>
-        </div>
-      </div>
-      `;
-    }).join("");
+      itemsHtml += `
+      <tr style="${rowBg}">
+        <td style="padding: 5px 6px; ${hiddenStyle} white-space: nowrap;">${item.label}</td>
+        <td style="padding: 3px 2px; text-align: right; width: 95px;">
+          <input type="number" class="override-value" data-sys="${sysType}" data-idx="${index}" value="${displayVal}"
+            style="width: 88px; text-align: right; padding: 3px 6px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px; ${item.isHidden ? 'opacity: 0.45;' : ''}">
+        </td>
+        <td style="padding: 3px 4px; text-align: right; font-size: 11px; color: var(--text-muted); width: 80px; ${hiddenStyle}">${formattedVal}</td>
+        <td style="width: 28px; text-align: center; padding: 0;">
+          <button class="icon-btn action-btn" data-action="toggle-hide" data-idx="${index}" title="${item.isHidden ? 'Show' : 'Hide'}" style="cursor:pointer; background:none; border:none; padding:2px; font-size: 14px;">${item.isHidden ? '🙈' : '👁️'}</button>
+        </td>
+      </tr>`;
+    });
 
     let gstVal = state.breakupConfigGst && state.breakupConfigGst[sysType] !== undefined ? state.breakupConfigGst[sysType] : option.costBreakup.gst;
     let contVal = state.breakupConfigContingency && state.breakupConfigContingency[sysType] !== undefined ? state.breakupConfigContingency[sysType] : option.costBreakup.contingency;
 
     itemsHtml += `
-      <hr style="margin: 8px 0; border: none; border-top: 1px solid var(--line)">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-        <dt>GST (${option.costBreakup.effectiveGstRate}%)</dt>
-        <dd><input type="number" class="override-gst" data-sys="${sysType}" value="${gstVal}" style="width: 80px; text-align: right; padding: 2px 4px; font-size: 13px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;"></dd>
+      <tr style="border-top: 1px solid var(--line);">
+        <td style="padding: 5px 6px;">GST (${option.costBreakup.effectiveGstRate}%)</td>
+        <td style="padding: 3px 2px; text-align: right;">
+          <input type="number" class="override-gst" data-sys="${sysType}" value="${Math.round(gstVal)}"
+            style="width: 88px; text-align: right; padding: 3px 6px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;">
+        </td>
+        <td style="padding: 3px 4px; text-align: right; font-size: 11px; color: var(--text-muted);">${money(gstVal)}</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td style="padding: 5px 6px;">Contingency</td>
+        <td style="padding: 3px 2px; text-align: right;">
+          <input type="number" class="override-contingency" data-sys="${sysType}" value="${Math.round(contVal)}"
+            style="width: 88px; text-align: right; padding: 3px 6px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;">
+        </td>
+        <td style="padding: 3px 4px; text-align: right; font-size: 11px; color: var(--text-muted);">${money(contVal)}</td>
+        <td></td>
+      </tr>
+    </table>`;
+
+    // Totals summary (non-editable)
+    itemsHtml += `
+    <div style="margin-top: 8px; padding-top: 8px; border-top: 2px solid var(--line); font-size: 13px;">
+      <div style="display:flex; justify-content:space-between; margin-bottom: 3px;">
+        <span style="font-weight: 600;">Total (Inc. GST)</span><span style="font-weight: 600;">${money(option.totalPreSubsidy)}</span>
       </div>
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-        <dt>Contingency</dt>
-        <dd><input type="number" class="override-contingency" data-sys="${sysType}" value="${contVal}" style="width: 80px; text-align: right; padding: 2px 4px; font-size: 13px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;"></dd>
+      <div style="display:flex; justify-content:space-between; margin-bottom: 3px; color: var(--primary);">
+        <span>Subsidy</span><span>- ${money(option.subsidy)}</span>
       </div>
-      <div><dt>Subsidy</dt><dd>${money(-option.subsidy)}</dd></div>
-      <div><dt>Net customer cost</dt><dd>${money(option.netCost)}</dd></div>
-    `;
+      <div style="display:flex; justify-content:space-between; font-weight: 700; font-size: 14px; padding-top: 4px; border-top: 1px solid var(--line);">
+        <span>Net Customer Cost</span><span>${money(option.netCost)}</span>
+      </div>
+    </div>`;
   } else {
     let visibleItems = option.costBreakupList.filter(it => !it.isHidden && !it.isHeader);
 
-    const includesText = visibleItems.map(it => it.label).join(", ");
+    // Use custom system includes text if set, otherwise auto-generate
+    let includesText;
+    if (state.systemIncludesText && state.systemIncludesText[option.systemType]) {
+      includesText = state.systemIncludesText[option.systemType];
+    } else {
+      includesText = visibleItems.map(it => it.label).join(", ") + ", GST, and Contingency.";
+    }
 
     itemsHtml = `<div style="margin-bottom: 12px; font-size: 13px; color: var(--text-light); line-height: 1.4;">
-      <strong>Includes:</strong> ${includesText}, GST, and Contingency.
+      <strong>Includes:</strong> ${includesText}
     </div>`;
 
     itemsHtml += `<div><dt style="font-weight: bold; color: var(--text);">Total System Cost (Inc. GST)</dt><dd style="font-weight: bold;">${money(option.totalPreSubsidy)}</dd></div>`;
@@ -423,6 +458,13 @@ function renderBreakup(option, input, customerView) {
           list[idx].isHidden = !list[idx].isHidden;
         }
         render();
+      });
+    });
+    // System Includes text editor
+    document.querySelectorAll(".system-includes-text").forEach(el => {
+      el.addEventListener("input", (e) => {
+        if (!state.systemIncludesText) state.systemIncludesText = {};
+        state.systemIncludesText[e.target.dataset.sys] = e.target.value;
       });
     });
   }
@@ -1039,6 +1081,9 @@ function attachEvents() {
       if (state.internalUnlocked && state.costBreakupList) {
         selectedOption.costBreakupList = state.costBreakupList;
       }
+      if (state.systemIncludesText && state.systemIncludesText[selectedOption.systemType]) {
+        selectedOption.systemIncludesText = state.systemIncludesText[selectedOption.systemType];
+      }
       const hideFlags = {
         hidePayback: $("hidePayback")?.checked || false,
         hideAreaFit: $("hideAreaFit")?.checked || false,
@@ -1077,6 +1122,9 @@ function attachEvents() {
         
       if (state.internalUnlocked && state.costBreakupList) {
         selectedOption.costBreakupList = state.costBreakupList;
+      }
+      if (state.systemIncludesText && state.systemIncludesText[selectedOption.systemType]) {
+        selectedOption.systemIncludesText = state.systemIncludesText[selectedOption.systemType];
       }
       const hideFlags = {
         hidePayback: $("hidePayback")?.checked || false,

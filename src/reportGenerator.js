@@ -337,31 +337,36 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
   if (option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
 
-  const includedItems = [];
-  
-  if (option.costBreakupList) {
-    option.costBreakupList.forEach(it => {
-      if (!it.isHidden && !it.isHeader) {
-        includedItems.push(it.label);
-      }
-    });
+  // Build system includes text - use custom text if provided, otherwise auto-generate
+  let includesText;
+  if (option.systemIncludesText) {
+    includesText = "System Includes: " + option.systemIncludesText;
   } else {
-    // Fallback if list not found
-    includedItems.push(
-      "Solar Panels",
-      `${mainInverterPrefix} Inverter`,
-      "Mounting Structure",
-      "Electrical safety and wiring",
-      "Installation & Commissioning",
-      "Consultancy"
-    );
-    if (cBreakup.backupInverter > 0) includedItems.push("Backup Off-grid Inverter");
-    if (cBreakup.battery > 0) includedItems.push("Battery Storage");
+    const includedItems = [];
+    if (option.costBreakupList) {
+      option.costBreakupList.forEach(it => {
+        if (!it.isHidden && !it.isHeader) {
+          includedItems.push(it.label);
+        }
+      });
+    } else {
+      // Fallback if list not found
+      includedItems.push(
+        "Solar Panels",
+        `${mainInverterPrefix} Inverter`,
+        "Mounting Structure",
+        "Electrical safety and wiring",
+        "Installation & Commissioning",
+        "Consultancy"
+      );
+      if (cBreakup.backupInverter > 0) includedItems.push("Backup Off-grid Inverter");
+      if (cBreakup.battery > 0) includedItems.push("Battery Storage");
+    }
+    includesText = "System Includes: " + includedItems.join(", ") + ", GST, and Contingency.";
   }
 
   doc.setFontSize(10);
   doc.setTextColor(COLORS.text);
-  const includesText = "System Includes: " + includedItems.join(", ") + ", GST, and Contingency.";
   const splitIncludes = doc.splitTextToSize(includesText, 210 - margin * 2);
   doc.text(splitIncludes, margin, yPos);
   yPos += (splitIncludes.length * 5) + 5;
