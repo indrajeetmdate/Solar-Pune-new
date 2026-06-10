@@ -504,6 +504,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   // Insert system_differences.png image
   if (sysDiffResult) {
     // Ensure image doesn't overflow the page
+    const maxWidth = pageWidth - margin * 2;
     const maxHeight = pageHeight - yPos - 30;
     const imgRatio = (sysDiffResult.width > 0) ? sysDiffResult.height / sysDiffResult.width : 1;
     const imgWidth = maxWidth;
