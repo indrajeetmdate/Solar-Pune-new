@@ -403,11 +403,17 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.text("* GST: 70% goods @ 5% + 30% services @ 18% = 8.9% effective rate.", margin, yPos + 4);
   yPos += 13;
 
-  // ROI summary
+  // Estimated Savings summary
   doc.setTextColor(COLORS.black);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text("Return on Investment (ROI)", margin, yPos);
+  doc.text("Estimated Savings", margin, yPos);
+  yPos += 5;
+  
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "italic");
+  doc.setTextColor(COLORS.textLight);
+  doc.text("* Note: These are system-generated estimates and actual figures may vary.", margin, yPos);
   yPos += 8;
 
   doc.setFontSize(11);
