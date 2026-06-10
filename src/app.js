@@ -1035,6 +1035,10 @@ function attachEvents() {
       const selectedOption = (state.selectedSystemIndex !== null && state.selectedSystemIndex >= 0 && state.selectedSystemIndex < est.options.length)
         ? est.options[state.selectedSystemIndex]
         : est.recommended;
+        
+      if (state.internalUnlocked && state.costBreakupList) {
+        selectedOption.costBreakupList = state.costBreakupList;
+      }
       const hideFlags = {
         hidePayback: $("hidePayback")?.checked || false,
         hideAreaFit: $("hideAreaFit")?.checked || false,
@@ -1070,6 +1074,10 @@ function attachEvents() {
       const selectedOption = (state.selectedSystemIndex !== null && state.selectedSystemIndex >= 0 && state.selectedSystemIndex < est.options.length)
         ? est.options[state.selectedSystemIndex]
         : est.recommended;
+        
+      if (state.internalUnlocked && state.costBreakupList) {
+        selectedOption.costBreakupList = state.costBreakupList;
+      }
       const hideFlags = {
         hidePayback: $("hidePayback")?.checked || false,
         hideAreaFit: $("hideAreaFit")?.checked || false,

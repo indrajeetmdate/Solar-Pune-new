@@ -6,6 +6,11 @@ const loadImage = (url, maxDim = 400) => {
     img.src = url;
     img.onload = () => {
       let scale = 1;
+      if (!img.width || !img.height) {
+        console.warn(`Image loaded but has no dimensions: ${url}`);
+        resolve(null);
+        return;
+      }
       if (img.width > maxDim || img.height > maxDim) {
         scale = Math.min(maxDim / img.width, maxDim / img.height);
       }
@@ -91,6 +96,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     primary: "#63923E",
     secondary: "#92B56B",
     text: "#4C4C4C",
+    textLight: "#777777",
     black: "#000000",
     white: "#FFFFFF",
     bgLight: "#eef3ec",
@@ -497,18 +503,21 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
 
   // Insert system_differences.png image
   if (sysDiffResult) {
-    const maxWidth = pageWidth - margin * 2;
-    const imgRatio = sysDiffResult.height / sysDiffResult.width;
+    // Ensure image doesn't overflow the page
+    const maxHeight = pageHeight - yPos - 30;
+    const imgRatio = (sysDiffResult.width > 0) ? sysDiffResult.height / sysDiffResult.width : 1;
     const imgWidth = maxWidth;
     const imgHeight = imgWidth * imgRatio;
 
-    // Ensure image doesn't overflow the page
-    const maxHeight = pageHeight - yPos - 30;
     const finalWidth = imgHeight > maxHeight ? maxHeight / imgRatio : imgWidth;
     const finalHeight = imgHeight > maxHeight ? maxHeight : imgHeight;
 
-    doc.addImage(sysDiffResult.data, 'JPEG', margin, yPos, finalWidth, finalHeight);
-    yPos += finalHeight + 10;
+    if (!isNaN(finalWidth) && !isNaN(finalHeight)) {
+      doc.addImage(sysDiffResult.data, 'JPEG', margin, yPos, finalWidth, finalHeight);
+      yPos += finalHeight + 10;
+    } else {
+      yPos += 10;
+    }
   } else {
     // Fallback: text descriptions
     const systemDescriptions = [
