@@ -31,6 +31,11 @@ const PRESETS_STORAGE_KEY = "solar_calculator_presets";
 
 const ids = [
   "customerName",
+  "mobileNumber",
+  "emailAddress",
+  "internalCustomerName",
+  "internalMobileNumber",
+  "internalEmailAddress",
   "monthlyUnits",
   "monthlyBill",
   "roofArea",
@@ -113,8 +118,8 @@ function readInput() {
   const safeChecked = (id) => { const el = $(id); return el ? el.checked : false; };
   return {
     customerName: state.internalUnlocked ? (safeStr("internalCustomerName") || safeStr("customerName")) : safeStr("customerName"),
-    mobileNumber: safeStr("mobileNumber"),
-    emailAddress: safeStr("emailAddress"),
+    mobileNumber: state.internalUnlocked ? (safeStr("internalMobileNumber") || safeStr("mobileNumber")) : safeStr("mobileNumber"),
+    emailAddress: state.internalUnlocked ? (safeStr("internalEmailAddress") || safeStr("emailAddress")) : safeStr("emailAddress"),
     monthlyUnits: numberValue("monthlyUnits"),
     monthlyBill: numberValue("monthlyBill"),
     roofArea: numberValue("roofArea"),
@@ -777,6 +782,18 @@ function openInternal() {
   const extCustName = document.getElementById("customerName");
   if (intCustName && extCustName && !intCustName.value) {
     intCustName.value = extCustName.value;
+  }
+  
+  const intMobile = document.getElementById("internalMobileNumber");
+  const extMobile = document.getElementById("mobileNumber");
+  if (intMobile && extMobile && !intMobile.value) {
+    intMobile.value = extMobile.value;
+  }
+
+  const intEmail = document.getElementById("internalEmailAddress");
+  const extEmail = document.getElementById("emailAddress");
+  if (intEmail && extEmail && !intEmail.value) {
+    intEmail.value = extEmail.value;
   }
 
   const step1 = document.getElementById("step1");
