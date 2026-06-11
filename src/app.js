@@ -303,17 +303,19 @@ function renderComparison(options, recommended) {
   });
 }
 
-function renderBreakup(option, input, customerView) {
+function renderBreakup(option, input, customerView, config) {
   const isInternal = state.internalUnlocked;
   const sysType = option.systemType;
 
   let itemsHtml = "";
   
   if (isInternal) {
+    // Use costBreakupList (has computed .value) for display, state.breakupConfig for mutations
+    let displayList = option.costBreakupList || [];
     let configList = state.breakupConfig[sysType] || [];
 
     // Build the default "System Includes" text from visible items
-    let visibleLabels = configList.filter(it => !it.isHidden && !it.isHeader).map(it => it.label);
+    let visibleLabels = displayList.filter(it => !it.isHidden && !it.isHeader).map(it => it.label);
     let defaultIncludesText = visibleLabels.join(", ") + ", GST, and Contingency.";
     let currentIncludesText = (state.systemIncludesText && state.systemIncludesText[sysType]) || defaultIncludesText;
 
@@ -324,26 +326,52 @@ function renderBreakup(option, input, customerView) {
       <textarea class="system-includes-text" data-sys="${sysType}" rows="2" style="width: 100%; font-size: 12px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); resize: vertical; line-height: 1.4; font-family: inherit;">${currentIncludesText}</textarea>
     </div>`;
 
+    // Build calculation detail map for each cost item
+    const dcWp = option.dcCapacityKw * 1000;
+    const pricing = config?.pricing || {};
+    const calcDetails = {};
+    const panelRate = input.panelType === 'nonDcr' ? pricing.panelNonDcrRatePerWp : pricing.panelDcrRatePerWp;
+    calcDetails['panels'] = `${panelRate} Rs/Wp × ${dcWp.toLocaleString('en-IN')} Wp`;
+    const structRate = pricing.structureRates?.[input.structureType] || 0;
+    calcDetails['structure'] = `${structRate} Rs/W × ${dcWp.toLocaleString('en-IN')} W`;
+    const invKw = option.inverterCapacityKw;
+    calcDetails['inverter'] = `${invKw} kW inverter (rate by capacity tier)`;
+    if (option.costBreakup.backupInverter > 0) {
+      calcDetails['backupInverter'] = `Fixed cost for backup inverter`;
+    }
+    if (option.costBreakup.battery > 0) {
+      const battKwh = option.batteryCapacityKwh;
+      calcDetails['battery'] = `${battKwh} kWh × ${pricing.batteryRatePerWh || 0} Rs/Wh`;
+    }
+    calcDetails['electricalSafetyAndWiring'] = `${pricing.wiringRatePerW || 0} Rs/W × ${dcWp.toLocaleString('en-IN')} W + protection`;
+    calcDetails['installation'] = `${pricing.installationRatePerW || 0} Rs/W × ${dcWp.toLocaleString('en-IN')} W`;
+    calcDetails['consultancy'] = `${pricing.consultancyRatePerW || 0} Rs/W × ${dcWp.toLocaleString('en-IN')} W`;
+
     // Compact cost table
     itemsHtml += `<table style="width: 100%; border-collapse: collapse; font-size: 13px;">`;
     
-    configList.forEach((item, index) => {
-      if (item.isHeader) return; // skip headers in the compact view
-      let displayVal = item.isOverride ? item.overrideValue : (item.value || 0);
+    displayList.forEach((item, index) => {
+      if (item.isHeader) return;
+      let displayVal = item.value || 0;
       let formattedVal = money(displayVal);
+      let isOverridden = configList[index]?.isOverride;
       let hiddenStyle = item.isHidden ? 'opacity: 0.45; text-decoration: line-through;' : '';
       let rowBg = index % 2 === 0 ? 'background: var(--bg-alt, #fafafa);' : '';
+      let detail = calcDetails[item.id] || '';
 
       itemsHtml += `
       <tr style="${rowBg}">
-        <td style="padding: 5px 6px; ${hiddenStyle} white-space: nowrap;">${item.label}</td>
-        <td style="padding: 3px 2px; text-align: right; width: 95px;">
-          <input type="number" class="override-value" data-sys="${sysType}" data-idx="${index}" value="${displayVal}"
-            style="width: 88px; text-align: right; padding: 3px 6px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px; ${item.isHidden ? 'opacity: 0.45;' : ''}">
+        <td style="padding: 5px 6px 0; ${hiddenStyle} white-space: nowrap; vertical-align: top;">
+          ${item.label}
+          ${detail ? `<div style="font-size: 10px; font-style: italic; color: var(--text-muted); padding: 1px 0 4px; ${isOverridden ? 'text-decoration: line-through; opacity: 0.5;' : ''}">${detail}</div>` : ''}
         </td>
-        <td style="padding: 3px 4px; text-align: right; font-size: 11px; color: var(--text-muted); width: 80px; ${hiddenStyle}">${formattedVal}</td>
-        <td style="width: 28px; text-align: center; padding: 0;">
-          <button class="icon-btn action-btn" data-action="toggle-hide" data-idx="${index}" title="${item.isHidden ? 'Show' : 'Hide'}" style="cursor:pointer; background:none; border:none; padding:2px; font-size: 14px;">${item.isHidden ? '🙈' : '👁️'}</button>
+        <td style="padding: 5px 2px 0; text-align: right; width: 95px; vertical-align: top;">
+          <input type="number" class="override-value" data-sys="${sysType}" data-idx="${index}" value="${Math.round(displayVal)}"
+            style="width: 88px; text-align: right; padding: 3px 6px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid ${isOverridden ? 'var(--primary)' : 'var(--line)'}; border-radius: 4px; ${item.isHidden ? 'opacity: 0.45;' : ''}">
+        </td>
+        <td style="padding: 5px 4px 0; text-align: right; font-size: 11px; color: var(--text-muted); width: 80px; ${hiddenStyle} vertical-align: top;">${formattedVal}</td>
+        <td style="width: 28px; text-align: center; padding: 0; vertical-align: top;">
+          <button class="icon-btn action-btn" data-action="toggle-hide" data-idx="${index}" title="${item.isHidden ? 'Show' : 'Hide'}" style="cursor:pointer; background:none; border:none; padding:2px; font-size: 14px; margin-top: 3px;">${item.isHidden ? '🙈' : '👁️'}</button>
         </td>
       </tr>`;
     });
@@ -353,21 +381,27 @@ function renderBreakup(option, input, customerView) {
 
     itemsHtml += `
       <tr style="border-top: 1px solid var(--line);">
-        <td style="padding: 5px 6px;">GST (${option.costBreakup.effectiveGstRate}%)</td>
-        <td style="padding: 3px 2px; text-align: right;">
+        <td style="padding: 5px 6px;">
+          GST (${option.costBreakup.effectiveGstRate}%)
+          <div style="font-size: 10px; font-style: italic; color: var(--text-muted);">70% goods @ 5% + 30% services @ 18%</div>
+        </td>
+        <td style="padding: 3px 2px; text-align: right; vertical-align: top;">
           <input type="number" class="override-gst" data-sys="${sysType}" value="${Math.round(gstVal)}"
             style="width: 88px; text-align: right; padding: 3px 6px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;">
         </td>
-        <td style="padding: 3px 4px; text-align: right; font-size: 11px; color: var(--text-muted);">${money(gstVal)}</td>
+        <td style="padding: 3px 4px; text-align: right; font-size: 11px; color: var(--text-muted); vertical-align: top;">${money(gstVal)}</td>
         <td></td>
       </tr>
       <tr>
-        <td style="padding: 5px 6px;">Contingency</td>
-        <td style="padding: 3px 2px; text-align: right;">
+        <td style="padding: 5px 6px;">
+          Contingency
+          <div style="font-size: 10px; font-style: italic; color: var(--text-muted);">${pricing.contingencyRate || 0}% of pre-tax subtotal</div>
+        </td>
+        <td style="padding: 3px 2px; text-align: right; vertical-align: top;">
           <input type="number" class="override-contingency" data-sys="${sysType}" value="${Math.round(contVal)}"
             style="width: 88px; text-align: right; padding: 3px 6px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;">
         </td>
-        <td style="padding: 3px 4px; text-align: right; font-size: 11px; color: var(--text-muted);">${money(contVal)}</td>
+        <td style="padding: 3px 4px; text-align: right; font-size: 11px; color: var(--text-muted); vertical-align: top;">${money(contVal)}</td>
         <td></td>
       </tr>
     </table>`;
@@ -694,7 +728,7 @@ function render() {
   }
 
   renderComparison(estimate.options, option);
-  renderBreakup(option, input, input.customerView);
+  renderBreakup(option, input, input.customerView, config);
   renderNotes(option, input);
   renderExtractedBill(state.extractedBill);
   renderDiagram(pl, input);
