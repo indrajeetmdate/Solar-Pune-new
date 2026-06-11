@@ -46,6 +46,6 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error('Error loading proposals:', error);
-    return res.status(500).json({ error: 'Failed to load proposals' });
+    return res.status(500).json({ error: 'Failed to load proposals: ' + error.message });
   }
 }
