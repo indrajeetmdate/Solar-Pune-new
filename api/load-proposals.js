@@ -1,10 +1,8 @@
-import pg from 'pg';
-const { Pool } = pg;
+import { createClient } from '@supabase/supabase-js';
 
-const pool = new Pool({
-  connectionString: process.env.POSTGRES_URL,
-  ssl: process.env.POSTGRES_URL ? { rejectUnauthorized: false } : false
-});
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -13,36 +11,24 @@ export default async function handler(req, res) {
 
   try {
     const { search } = req.query;
-    
-    let query;
-    let values = [];
+    let query = supabase
+      .from('proposals')
+      .select('id, customer_name, mobile_number, email_address, created_at, state_data')
+      .order('created_at', { ascending: false })
+      .limit(50);
 
     if (search && search.trim() !== '') {
       const searchTerm = `%${search.trim()}%`;
-      query = `
-        SELECT id, customer_name, mobile_number, email_address, created_at, state_data
-        FROM proposals
-        WHERE customer_name ILIKE $1 
-           OR mobile_number ILIKE $1 
-           OR email_address ILIKE $1
-        ORDER BY created_at DESC
-        LIMIT 50;
-      `;
-      values = [searchTerm];
-    } else {
-      query = `
-        SELECT id, customer_name, mobile_number, email_address, created_at, state_data
-        FROM proposals
-        ORDER BY created_at DESC
-        LIMIT 50;
-      `;
+      query = query.or(`customer_name.ilike.${searchTerm},mobile_number.ilike.${searchTerm},email_address.ilike.${searchTerm}`);
     }
 
-    const result = await pool.query(query, values);
+    const { data, error } = await query;
+
+    if (error) throw error;
     
     return res.status(200).json({ 
       success: true, 
-      data: result.rows 
+      data: data 
     });
   } catch (error) {
     console.error('Error loading proposals:', error);

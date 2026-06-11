@@ -1,12 +1,8 @@
-import pg from 'pg';
-const { Pool } = pg;
+import { createClient } from '@supabase/supabase-js';
 
-// Use standard PG environment variables like POSTGRES_URL
-// If not present, it will try to use PGHOST, PGUSER, PGPASSWORD, PGDATABASE
-const pool = new Pool({
-  connectionString: process.env.POSTGRES_URL,
-  ssl: process.env.POSTGRES_URL ? { rejectUnauthorized: false } : false
-});
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -20,24 +16,24 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'stateData is required' });
     }
 
-    const query = `
-      INSERT INTO proposals (customer_name, mobile_number, email_address, state_data)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id;
-    `;
-    
-    const values = [
-      customerName || '',
-      mobileNumber || '',
-      emailAddress || '',
-      JSON.stringify(stateData)
-    ];
+    const { data, error } = await supabase
+      .from('proposals')
+      .insert([
+        {
+          customer_name: customerName || '',
+          mobile_number: mobileNumber || '',
+          email_address: emailAddress || '',
+          state_data: stateData
+        }
+      ])
+      .select('id')
+      .single();
 
-    const result = await pool.query(query, values);
+    if (error) throw error;
     
     return res.status(200).json({ 
       success: true, 
-      id: result.rows[0].id,
+      id: data.id,
       message: 'Proposal saved successfully'
     });
   } catch (error) {
