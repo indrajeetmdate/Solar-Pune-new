@@ -361,15 +361,15 @@ function renderBreakup(option, input, customerView, config) {
 
       itemsHtml += `
       <tr style="${rowBg}">
-        <td style="padding: 5px 6px 0; ${hiddenStyle} white-space: nowrap; vertical-align: top;">
+        <td style="padding: 5px 6px 0; ${hiddenStyle} vertical-align: top;">
           ${item.label}
           ${detail ? `<div style="font-size: 10px; font-style: italic; color: var(--text-muted); padding: 1px 0 4px; ${isOverridden ? 'text-decoration: line-through; opacity: 0.5;' : ''}">${detail}</div>` : ''}
         </td>
-        <td style="padding: 5px 2px 0; text-align: right; width: 95px; vertical-align: top;">
+        <td style="padding: 5px 2px 0; text-align: right; width: 85px; vertical-align: top;">
           <input type="number" class="override-value" data-sys="${sysType}" data-idx="${index}" value="${Math.round(displayVal)}"
-            style="width: 88px; text-align: right; padding: 3px 6px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid ${isOverridden ? 'var(--primary)' : 'var(--line)'}; border-radius: 4px; ${item.isHidden ? 'opacity: 0.45;' : ''}">
+            style="width: 78px; text-align: right; padding: 3px 4px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid ${isOverridden ? 'var(--primary)' : 'var(--line)'}; border-radius: 4px; ${item.isHidden ? 'opacity: 0.45;' : ''}">
         </td>
-        <td style="padding: 5px 4px 0; text-align: right; font-size: 11px; color: var(--text-muted); width: 80px; ${hiddenStyle} vertical-align: top;">${formattedVal}</td>
+        <td style="padding: 5px 4px 0; text-align: right; font-size: 11px; color: var(--text-muted); width: 72px; ${hiddenStyle} vertical-align: top;">${formattedVal}</td>
         <td style="width: 28px; text-align: center; padding: 0; vertical-align: top;">
           <button class="icon-btn action-btn" data-action="toggle-hide" data-idx="${index}" title="${item.isHidden ? 'Show' : 'Hide'}" style="cursor:pointer; background:none; border:none; padding:2px; font-size: 14px; margin-top: 3px;">${item.isHidden ? '🙈' : '👁️'}</button>
         </td>
@@ -387,7 +387,7 @@ function renderBreakup(option, input, customerView, config) {
         </td>
         <td style="padding: 3px 2px; text-align: right; vertical-align: top;">
           <input type="number" class="override-gst" data-sys="${sysType}" value="${Math.round(gstVal)}"
-            style="width: 88px; text-align: right; padding: 3px 6px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;">
+            style="width: 78px; text-align: right; padding: 3px 4px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;">
         </td>
         <td style="padding: 3px 4px; text-align: right; font-size: 11px; color: var(--text-muted); vertical-align: top;">${money(gstVal)}</td>
         <td></td>
@@ -399,7 +399,7 @@ function renderBreakup(option, input, customerView, config) {
         </td>
         <td style="padding: 3px 2px; text-align: right; vertical-align: top;">
           <input type="number" class="override-contingency" data-sys="${sysType}" value="${Math.round(contVal)}"
-            style="width: 88px; text-align: right; padding: 3px 6px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;">
+            style="width: 78px; text-align: right; padding: 3px 4px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;">
         </td>
         <td style="padding: 3px 4px; text-align: right; font-size: 11px; color: var(--text-muted); vertical-align: top;">${money(contVal)}</td>
         <td></td>

@@ -456,11 +456,10 @@ button {
   opacity: 1;
 }
 
-/* Allow tooltips to escape parent overflow */
+/* Allow tooltips to escape parent overflow — but NOT table-wrap (needs scroll) */
 .detail-card,
 .metric-card,
 .metric-grid,
-.table-wrap,
 .summary-band,
 thead,
 th {
@@ -817,22 +816,28 @@ th {
   overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
   width: 100%;
-  min-width: 720px;
+  min-width: 580px;
   border-collapse: collapse;
   background: var(--surface);
 }
 
 th,
 td {
-  padding: 13px 14px;
+  padding: 8px 8px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+/* Allow cost breakup table cells to wrap */
+#costBreakup table td {
+  white-space: normal;
 }
 
 th {
