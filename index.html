@@ -228,6 +228,8 @@
               <h2>Advanced Options</h2>
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
+              <button class="secondary-button" id="openLoadProposalModalButton" type="button" style="padding: 4px 12px; font-size: 12px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; cursor: pointer;">Load Data 📂</button>
+              <div style="width: 1px; height: 16px; background: var(--line); margin: 0 4px;"></div>
               <select id="presetSelect" style="max-width: 140px; font-size: 13px; padding: 4px;">
                 <option value="">Load Preset...</option>
               </select>
@@ -622,9 +624,10 @@
             </div>
           </details>
 
-          <!-- Download Proposal Button for Internal Mode -->
-          <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line);">
-            <button class="primary-button" id="downloadProposalButtonInternal" type="button" style="width: 100%;">Download Proposal PDF ↓</button>
+          <!-- Download & Save Proposal Buttons for Internal Mode -->
+          <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); display: flex; gap: 12px;">
+            <button class="primary-button" id="downloadProposalButtonInternal" type="button" style="flex: 1;">Download Proposal PDF ↓</button>
+            <button class="secondary-button" id="saveProposalButtonInternal" type="button" style="padding: 10px 16px; font-weight: 600; border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; background: white;">Save Data 💾</button>
           </div>
 
         </div>
@@ -672,6 +675,25 @@
         </div>
       </form>
     </dialog>
+
+    <!-- Load Proposal Modal -->
+    <div id="loadProposalModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+      <div style="background: var(--surface); border-radius: var(--radius-lg); width: 90%; max-width: 600px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: var(--shadow-lg);">
+        <div style="padding: 16px 24px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0; font-size: 16px;">Load Saved Data</h3>
+          <button id="closeLoadProposalModal" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted);">&times;</button>
+        </div>
+        <div style="padding: 16px 24px; display: flex; flex-direction: column; overflow: hidden;">
+          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+            <input type="text" id="searchProposalInput" placeholder="Search by Name, Mobile, or Email..." style="flex: 1; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius); font-size: 14px;">
+            <button id="searchProposalBtn" class="primary-button" style="padding: 10px 16px;">Search</button>
+          </div>
+          <div id="proposalList" style="overflow-y: auto; max-height: 400px; display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px;">
+            <div style="text-align: center; color: var(--text-muted); padding: 20px;">Search to load data...</div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <footer class="app-footer">
       <div class="footer-inner">

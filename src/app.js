@@ -1101,6 +1101,7 @@ function attachEvents() {
 
   $("downloadProposalButton")?.addEventListener("click", () => {
     if (state.estimates) {
+      saveProposalData(); // Automatically save data when downloading report
       const btn = $("downloadProposalButton");
       const origText = btn?.textContent;
       btn.textContent = "Generating PDF...";
@@ -1140,6 +1141,38 @@ function attachEvents() {
       }, 100);
     } else {
       alert("Please ensure all inputs are filled to calculate the estimate before downloading.");
+    }
+  });
+
+  $("saveProposalButtonInternal")?.addEventListener("click", () => {
+    if (state.estimates) {
+      saveProposalData();
+    } else {
+      alert("Please ensure all inputs are filled to calculate the estimate before saving.");
+    }
+  });
+
+  $("openLoadProposalModalButton")?.addEventListener("click", () => {
+    const modal = $("loadProposalModal");
+    if (modal) {
+      modal.style.display = "flex";
+      searchProposals('');
+    }
+  });
+
+  $("closeLoadProposalModal")?.addEventListener("click", () => {
+    const modal = $("loadProposalModal");
+    if (modal) modal.style.display = "none";
+  });
+
+  $("searchProposalBtn")?.addEventListener("click", () => {
+    const query = $("searchProposalInput")?.value || '';
+    searchProposals(query);
+  });
+
+  $("searchProposalInput")?.addEventListener("keyup", (e) => {
+    if (e.key === 'Enter') {
+      searchProposals(e.target.value);
     }
   });
 
@@ -1367,3 +1400,91 @@ function applyBreakupConfig(estimate, input) {
     option.costBreakupList = finalItems;
   });
 }
+
+async function saveProposalData() {
+  const input = readInput();
+  const stateData = { state, input };
+  try {
+    const res = await fetch('/api/save-proposal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerName: input.customerName,
+        mobileNumber: input.mobileNumber,
+        emailAddress: input.emailAddress,
+        stateData
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      console.log('Proposal saved successfully:', data.id);
+      showToast('Data Saved Successfully');
+    } else {
+      console.error('Save failed:', data.error);
+      showToast('Error saving data: ' + data.error);
+    }
+  } catch (e) {
+    console.error('Error saving proposal:', e);
+    showToast('Error saving data');
+  }
+}
+
+async function searchProposals(query) {
+  const listEl = $("proposalList");
+  if (!listEl) return;
+  listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">Searching...</div>';
+  try {
+    const res = await fetch('/api/load-proposals?search=' + encodeURIComponent(query));
+    const json = await res.json();
+    if (json.success && json.data.length > 0) {
+      listEl.innerHTML = json.data.map(p => `
+        <div style="padding: 10px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong>${p.customer_name || 'Unknown'}</strong><br>
+            <span style="font-size: 12px; color: var(--text-muted);">${p.mobile_number || ''} | ${p.email_address || ''}</span><br>
+            <span style="font-size: 11px; color: var(--text-muted);">${new Date(p.created_at).toLocaleString()}</span>
+          </div>
+          <button class="primary-button" style="padding: 6px 12px; font-size: 12px;" onclick='window.loadProposalState(${JSON.stringify(p.state_data).replace(/'/g, "&apos;")})'>Load</button>
+        </div>
+      `).join('');
+    } else {
+      listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">No results found.</div>';
+    }
+  } catch (e) {
+    console.error(e);
+    listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">Error loading data.</div>';
+  }
+}
+
+window.loadProposalState = function(data) {
+  if (data.state) {
+    Object.assign(state, data.state);
+  }
+  if (data.input) {
+    // Populate DOM inputs based on data.input
+    Object.keys(data.input).forEach(key => {
+       const el = $(key);
+       if (el && el.type !== 'radio' && el.type !== 'checkbox') {
+         el.value = data.input[key] || "";
+       } else if (el && el.type === 'checkbox') {
+         el.checked = data.input[key];
+       }
+    });
+    if (data.input.customerName) {
+      if ($('customerName')) $('customerName').value = data.input.customerName;
+      if ($('internalCustomerName')) $('internalCustomerName').value = data.input.customerName;
+    }
+    if (data.input.mobileNumber) {
+      if ($('mobileNumber')) $('mobileNumber').value = data.input.mobileNumber;
+      if ($('internalMobileNumber')) $('internalMobileNumber').value = data.input.mobileNumber;
+    }
+    if (data.input.emailAddress) {
+      if ($('emailAddress')) $('emailAddress').value = data.input.emailAddress;
+      if ($('internalEmailAddress')) $('internalEmailAddress').value = data.input.emailAddress;
+    }
+  }
+  
+  if ($('loadProposalModal')) $('loadProposalModal').style.display = 'none';
+  render();
+  showToast('Data Loaded Successfully');
+};
