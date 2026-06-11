@@ -1402,6 +1402,10 @@ function applyBreakupConfig(estimate, input) {
 }
 
 async function saveProposalData() {
+  const btn = $("saveProposalButtonInternal");
+  const origText = btn ? btn.textContent : "Save Data 💾";
+  if (btn) btn.textContent = "Saving...";
+
   const input = readInput();
   const stateData = { state, input };
   try {
@@ -1418,14 +1422,30 @@ async function saveProposalData() {
     const data = await res.json();
     if (data.success) {
       console.log('Proposal saved successfully:', data.id);
-      showToast('Data Saved Successfully');
+      if (btn) {
+        btn.textContent = "Saved! ✅";
+        btn.style.borderColor = "var(--primary-green, #10b981)";
+        btn.style.color = "var(--primary-green, #10b981)";
+        setTimeout(() => {
+          btn.textContent = origText;
+          btn.style.borderColor = "var(--line)";
+          btn.style.color = "";
+        }, 2500);
+      }
     } else {
       console.error('Save failed:', data.error);
-      showToast('Error saving data: ' + data.error);
+      if (btn) {
+        btn.textContent = "Error! ❌";
+        setTimeout(() => btn.textContent = origText, 2500);
+      }
+      alert('Error saving data: ' + data.error);
     }
   } catch (e) {
     console.error('Error saving proposal:', e);
-    showToast('Error saving data');
+    if (btn) {
+      btn.textContent = "Error! ❌";
+      setTimeout(() => btn.textContent = origText, 2500);
+    }
   }
 }
 
@@ -1486,5 +1506,4 @@ window.loadProposalState = function(data) {
   
   if ($('loadProposalModal')) $('loadProposalModal').style.display = 'none';
   render();
-  showToast('Data Loaded Successfully');
 };
