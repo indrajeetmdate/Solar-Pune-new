@@ -786,7 +786,7 @@ function render() {
   renderDiagram(pl, input);
 
   // Report Display: toggle visibility of optional sections
-  const hidePayback = $("hidePayback")?.checked || $("hideCost")?.checked || $("solarInstalled")?.checked;
+  const hidePayback = $("hidePayback")?.checked || $("hideCost")?.checked;
   const hideAreaFit = $("hideAreaFit")?.checked;
   const hideSubsidy = $("hideSubsidy")?.checked;
   
@@ -1506,7 +1506,7 @@ function applyBreakupConfig(estimate, input) {
 
     let effectiveSubsidy = $("hideSubsidy")?.checked ? 0 : option.subsidy;
     
-    if ($("hideCost")?.checked || $("solarInstalled")?.checked) {
+    if ($("hideCost")?.checked) {
       option.totalPreSubsidy = 0;
       effectiveSubsidy = 0;
       option.subsidy = 0;
@@ -1514,7 +1514,7 @@ function applyBreakupConfig(estimate, input) {
 
     option.totalPreSubsidy = preTaxSubtotal + gst + contingency;
     
-    if ($("hideCost")?.checked || $("solarInstalled")?.checked) {
+    if ($("hideCost")?.checked) {
       option.totalPreSubsidy = 0;
       effectiveSubsidy = 0;
       option.subsidy = 0;
