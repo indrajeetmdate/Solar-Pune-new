@@ -655,6 +655,7 @@ function render() {
   const input = readInput();
   const config = readConfig();
   const estimate = calculateEstimate(input, config);
+  applySavingsConfig(estimate, input);
   applyBreakupConfig(estimate, input);
   state.estimates = estimate;
   const option = (state.selectedSystemIndex !== null && state.selectedSystemIndex >= 0 && state.selectedSystemIndex < estimate.options.length)
@@ -673,38 +674,89 @@ function render() {
   $("sanctionStatus").textContent = estimate.sanctionedStatus.label;
   $("sanctionStatus").className = `status-pill ${estimate.sanctionedStatus.level}`;
 
-  // Savings breakdown (category-aware bonuses)
-  const sbEl = $("savingsBreakdownPanel");
-  if (sbEl && option.savingsBreakdown) {
-    const sb = option.savingsBreakdown;
-    const tipMap = {
-      "Slab/tariff offset": "Savings from reducing units in expensive MSEDCL slab tiers. More solar = lower per-unit rate.",
-      "ToD daytime rebate": "Solar generates during 9AM–5PM when MSEDCL offers a rebate on Time-of-Day tariff. You earn credits at a lower cost.",
-      "Peak penalty avoided": "Battery discharges during expensive peak hours (5PM–10PM), avoiding the highest tariff rates.",
-      "PF improvement": "Smart inverters improve your Power Factor, earning a discount from MSEDCL on your bill.",
-      "Prompt pay discount": "1% discount for paying your reduced bill on time. Solar makes this easier with lower bills.",
-      "Banking loss": "MSEDCL charges a grid-support fee on excess solar units exported to the grid.",
-    };
-    const items = [
-      ["Slab/tariff offset", sb.baseSavings],
-      ["ToD daytime rebate", sb.todDaytimeRebate],
-      ["Peak penalty avoided", sb.todPeakAvoided],
-      ["PF improvement", sb.pfIncentive],
-      ["Prompt pay discount", sb.promptPayDiscount],
-      ["Banking loss", -sb.bankingLoss],
-    ].filter(([, v]) => v !== 0);
+  const isInstalled = $("solarInstalled")?.checked;
+  if (isInstalled) {
+    $("recommendationTitle").textContent = `${SYSTEM_LABELS[option.systemType] || SYSTEM_LABELS[option.systemType.split('_')[0]]} ${PANEL_LABELS[option.panelType]} solar`;
+    $("recommendedCapacity").previousElementSibling.innerHTML = `Installed capacity <i class="info-tip" data-tip="The capacity of the solar system already installed.">i</i>`;
+  } else {
+    $("recommendationTitle").textContent = `${SYSTEM_LABELS[option.systemType] || SYSTEM_LABELS[option.systemType.split('_')[0]]} ${PANEL_LABELS[option.panelType]} solar`;
+    $("recommendedCapacity").previousElementSibling.innerHTML = `Size <i class="info-tip" data-tip="Recommended solar system capacity in kilowatts peak (kWp). Based on your consumption, roof area, and sanctioned load.">i</i>`;
+  }
 
-    if (items.length > 1) {
+  // Savings breakdown
+  const sbEl = $("savingsBreakdownPanel");
+  if (sbEl && option.savingsBreakdownList) {
+    if (state.internalUnlocked) {
+      let html = `<table style="width: 100%; border-collapse: collapse; font-size: 13px;">`;
+      option.savingsBreakdownList.forEach((item, index) => {
+        let isOverridden = state.savingsConfig[option.systemType][index]?.isOverride;
+        let hiddenStyle = item.isHidden ? 'opacity: 0.45; text-decoration: line-through;' : '';
+        let rowBg = index % 2 === 0 ? 'background: var(--bg-alt, #fafafa);' : '';
+        
+        html += `
+        <tr style="${rowBg}">
+          <td style="padding: 5px 6px 0; ${hiddenStyle}">${item.label}</td>
+          <td style="padding: 5px 2px 0; text-align: right; width: 85px;">
+            <input type="number" class="override-savings" data-sys="${option.systemType}" data-idx="${index}" value="${Math.round(item.value)}"
+              style="width: 78px; text-align: right; padding: 3px 4px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid ${isOverridden ? 'var(--primary)' : 'var(--line)'}; border-radius: 4px; ${item.isHidden ? 'opacity: 0.45;' : ''}">
+          </td>
+          <td style="padding: 5px 4px 0; text-align: right; font-size: 11px; color: var(--text-muted); width: 72px; ${hiddenStyle}">${money(item.value)}/mo</td>
+          <td style="width: 28px; text-align: center; padding: 0;">
+            <button class="icon-btn action-btn savings-toggle-hide" data-idx="${index}" data-sys="${option.systemType}" title="${item.isHidden ? 'Show' : 'Hide'}" style="cursor:pointer; background:none; border:none; padding:2px; font-size: 14px; margin-top: 3px;">${item.isHidden ? '🙈' : '👁️'}</button>
+          </td>
+        </tr>`;
+      });
+      html += `</table>`;
+      sbEl.innerHTML = html;
       sbEl.classList.remove("hidden");
-      sbEl.innerHTML = items
-        .map(([label, value]) => {
-          const tip = tipMap[label] || "";
-          const icon = tip ? ` <i class="info-tip" data-tip="${tip}">i</i>` : "";
-          return `<div><dt>${label}${icon}</dt><dd>${value > 0 ? "+" : ""}${money(Math.abs(value))}${value < 0 ? " loss" : ""}/mo</dd></div>`;
-        })
-        .join("");
+      
+      sbEl.querySelectorAll(".override-savings").forEach(el => {
+        el.addEventListener("change", (e) => {
+          let sys = e.target.dataset.sys;
+          let idx = parseInt(e.target.dataset.idx);
+          let val = parseFloat(e.target.value);
+          if (isNaN(val)) {
+            state.savingsConfig[sys][idx].isOverride = false;
+          } else {
+            state.savingsConfig[sys][idx].isOverride = true;
+            state.savingsConfig[sys][idx].overrideValue = val;
+          }
+          render();
+        });
+      });
+      
+      sbEl.querySelectorAll(".savings-toggle-hide").forEach(el => {
+        el.addEventListener("click", (e) => {
+          let btn = e.target.closest("button");
+          if (!btn) return;
+          let sys = btn.dataset.sys;
+          let idx = parseInt(btn.dataset.idx);
+          state.savingsConfig[sys][idx].isHidden = !state.savingsConfig[sys][idx].isHidden;
+          render();
+        });
+      });
     } else {
-      sbEl.classList.add("hidden");
+      const tipMap = {
+        "Slab/tariff offset": "Savings from reducing units in expensive MSEDCL slab tiers. More solar = lower per-unit rate.",
+        "ToD daytime rebate": "Solar generates during 9AM-5PM when MSEDCL offers a rebate on Time-of-Day tariff. You earn credits at a lower cost.",
+        "Peak penalty avoided": "Battery discharges during expensive peak hours (5PM-10PM), avoiding the highest tariff rates.",
+        "PF improvement": "Smart inverters improve your Power Factor, earning a discount from MSEDCL on your bill.",
+        "Prompt pay discount": "1% discount for paying your reduced bill on time. Solar makes this easier with lower bills.",
+        "Banking loss": "MSEDCL charges a grid-support fee on excess solar units exported to the grid.",
+      };
+      const items = option.savingsBreakdownList.filter(it => !it.isHidden && it.value !== 0);
+      if (items.length > 0) {
+        sbEl.classList.remove("hidden");
+        sbEl.innerHTML = items
+          .map(item => {
+            const tip = tipMap[item.label] || "";
+            const icon = tip ? ` <i class="info-tip" data-tip="${tip}">i</i>` : "";
+            return `<div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><div><span style="font-weight: 600;">${item.label}</span>${icon}</div><div>${item.value > 0 ? "+" : ""}${money(Math.abs(item.value))}${item.value < 0 ? " loss" : ""}/mo</div></div>`;
+          })
+          .join("");
+      } else {
+        sbEl.classList.add("hidden");
+      }
     }
   }
 
@@ -734,9 +786,13 @@ function render() {
   renderDiagram(pl, input);
 
   // Report Display: toggle visibility of optional sections
-  const hidePayback = $("hidePayback")?.checked;
+  const hidePayback = $("hidePayback")?.checked || $("hideCost")?.checked || $("solarInstalled")?.checked;
   const hideAreaFit = $("hideAreaFit")?.checked;
   const hideSubsidy = $("hideSubsidy")?.checked;
+  
+  if ($("costBreakup")?.closest("details")) {
+    $("costBreakup").closest("details").style.display = $("hideCost")?.checked ? "none" : "";
+  }
 
   // Payback card in summary metrics
   if ($("paybackCard")) $("paybackCard").style.display = hidePayback ? "none" : "";
@@ -986,7 +1042,7 @@ function attachEvents() {
   });
 
   // Report Display hide toggles
-  ["hidePayback", "hideAreaFit", "hideSubsidy"].forEach(id => {
+  ["hidePayback", "hideAreaFit", "hideSubsidy", "hideCost", "solarInstalled"].forEach(id => {
     $(id)?.addEventListener("change", render);
   });
 
@@ -1123,6 +1179,8 @@ function attachEvents() {
         hidePayback: $("hidePayback")?.checked || false,
         hideAreaFit: $("hideAreaFit")?.checked || false,
         hideSubsidy: $("hideSubsidy")?.checked || false,
+        hideCost: $("hideCost")?.checked || false,
+        solarInstalled: $("solarInstalled")?.checked || false,
       };
 
       setTimeout(() => {
@@ -1197,6 +1255,8 @@ function attachEvents() {
         hidePayback: $("hidePayback")?.checked || false,
         hideAreaFit: $("hideAreaFit")?.checked || false,
         hideSubsidy: $("hideSubsidy")?.checked || false,
+        hideCost: $("hideCost")?.checked || false,
+        solarInstalled: $("solarInstalled")?.checked || false,
       };
 
       setTimeout(() => {
@@ -1323,6 +1383,58 @@ updatePresetDropdown();
 attachEvents();
 render();
 
+function applySavingsConfig(estimate, input) {
+  if (!state.savingsConfig) state.savingsConfig = {};
+  
+  estimate.options.forEach(option => {
+    let sysType = option.systemType;
+    let sb = option.savingsBreakdown;
+    
+    let defaultItems = [
+      { id: 'baseSavings', label: 'Slab/tariff offset', value: sb.baseSavings },
+      { id: 'todDaytimeRebate', label: 'ToD daytime rebate', value: sb.todDaytimeRebate },
+      { id: 'todPeakAvoided', label: 'Peak penalty avoided', value: sb.todPeakAvoided },
+      { id: 'pfIncentive', label: 'PF improvement', value: sb.pfIncentive },
+      { id: 'promptPayDiscount', label: 'Prompt pay discount', value: sb.promptPayDiscount },
+      { id: 'bankingLoss', label: 'Banking loss', value: -sb.bankingLoss },
+    ];
+    
+    if (!state.savingsConfig[sysType]) {
+      state.savingsConfig[sysType] = defaultItems.map(di => ({
+        id: di.id,
+        label: di.label,
+        isHidden: false,
+        isOverride: false,
+        overrideValue: di.value
+      }));
+    }
+    
+    let configList = state.savingsConfig[sysType];
+    let finalSavingsItems = [];
+    let totalMonthlySavings = 0;
+    
+    configList.forEach(c => {
+      let item = { ...c };
+      let di = defaultItems.find(x => x.id === c.id);
+      let computedValue = di ? di.value : 0;
+      item.value = c.isOverride ? c.overrideValue : computedValue;
+      
+      if (!c.isHidden && item.value !== 0) {
+        totalMonthlySavings += item.value;
+      }
+      finalSavingsItems.push(item);
+    });
+    
+    option.savingsBreakdownList = finalSavingsItems;
+    
+    // Update calculated totals based on visible savings components
+    option.monthlySavings = totalMonthlySavings;
+    option.annualSavings = totalMonthlySavings * 12;
+    // Basic recalculation of lifetime assuming default escalation, or just simple multiple
+    option.lifetimeSavings = option.annualSavings * 25; 
+  });
+}
+
 function applyBreakupConfig(estimate, input) {
   if (!state.breakupConfig) state.breakupConfig = {};
 
@@ -1392,10 +1504,27 @@ function applyBreakupConfig(estimate, input) {
     option.costBreakup.gst = gst;
     option.costBreakup.contingency = contingency;
 
+    let effectiveSubsidy = $("hideSubsidy")?.checked ? 0 : option.subsidy;
+    
+    if ($("hideCost")?.checked || $("solarInstalled")?.checked) {
+      option.totalPreSubsidy = 0;
+      effectiveSubsidy = 0;
+      option.subsidy = 0;
+    }
+
     option.totalPreSubsidy = preTaxSubtotal + gst + contingency;
-    option.netCost = Math.max(option.totalPreSubsidy - option.subsidy, 0);
-    option.paybackYears = option.annualSavings > 0 ? option.netCost / option.annualSavings : Infinity;
-    option.roiPercent = option.netCost > 0 ? (option.annualSavings / option.netCost) * 100 : 0;
+    
+    if ($("hideCost")?.checked || $("solarInstalled")?.checked) {
+      option.totalPreSubsidy = 0;
+      effectiveSubsidy = 0;
+      option.subsidy = 0;
+      option.netCost = 0;
+    } else {
+      option.netCost = Math.max(option.totalPreSubsidy - effectiveSubsidy, 0);
+    }
+    
+    option.paybackYears = option.annualSavings > 0 && option.netCost > 0 ? option.netCost / option.annualSavings : 0;
+    option.roiPercent = option.netCost > 0 ? (option.annualSavings / option.netCost) * 100 : Infinity;
 
     option.costBreakupList = finalItems;
   });

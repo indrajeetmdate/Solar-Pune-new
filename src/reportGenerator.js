@@ -107,7 +107,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   // Use the explicitly selected option (passed from UI), falling back to recommended
   const option = selectedOption || estimates.recommended;
 
-  const { hidePayback, hideAreaFit, hideSubsidy } = hideFlags;
+  const { hidePayback, hideAreaFit, hideSubsidy, hideCost, solarInstalled } = hideFlags;
 
   // --- Helpers ---
   const formatCurrency = (val) =>
@@ -221,7 +221,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     ["Required by Consumption", `${option.sizing.byConsumptionKw} kW`],
     ["Supported by Roof Area", `${option.sizing.byAreaKw} kW`],
     ["Sanctioned Load Limit", option.sizing.byLoadKw ? `${option.sizing.byLoadKw} kW` : "N/A"],
-    ["Recommended Solar Capacity", `${option.dcCapacityKw} kWp`],
+    [solarInstalled ? "Installed Solar Capacity" : "Recommended Solar Capacity", `${option.dcCapacityKw} kWp`],
     ["Sanction Status", sanctionedStatus.label]
   ];
 
@@ -318,101 +318,107 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   addFooter(1);
 
   // ================= PAGE 2: Financial Quote =================
-  doc.addPage();
-  yPos = 30;
-  addHeader("Financial Quote");
-
-  doc.setTextColor(COLORS.black);
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
-  doc.text("2. Financial Quote & Breakup", margin, yPos);
-  yPos += 10;
-
-  doc.setFontSize(12);
-  doc.text(`Selected Option: ${formatSysType(option.systemType)} (${option.dcCapacityKw} kWp)`, margin, yPos);
-  yPos += 10;
-
-  const cBreakup = option.costBreakup;
-  mainInverterPrefix = "On-grid";
-  if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
-  if (option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
-
-  // Build system includes text - use custom text if provided, otherwise auto-generate
-  let includesText;
-  if (option.systemIncludesText) {
-    includesText = "System Includes: " + option.systemIncludesText;
-  } else {
-    const includedItems = [];
-    if (option.costBreakupList) {
-      option.costBreakupList.forEach(it => {
-        if (!it.isHidden && !it.isHeader) {
-          includedItems.push(it.label);
-        }
-      });
+  if (!hideCost) {
+    doc.addPage();
+    yPos = 30;
+    addHeader("Financial Quote");
+  
+    doc.setTextColor(COLORS.black);
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("2. Financial Quote & Breakup", margin, yPos);
+    yPos += 10;
+  
+    doc.setFontSize(12);
+    doc.text(`Selected Option: ${formatSysType(option.systemType)} (${option.dcCapacityKw} kWp)`, margin, yPos);
+    yPos += 10;
+  
+    const cBreakup = option.costBreakup;
+    mainInverterPrefix = "On-grid";
+    if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
+    if (option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
+  
+    // Build system includes text - use custom text if provided, otherwise auto-generate
+    let includesText;
+    if (option.systemIncludesText) {
+      includesText = "System Includes: " + option.systemIncludesText;
     } else {
-      // Fallback if list not found
-      includedItems.push(
-        "Solar Panels",
-        `${mainInverterPrefix} Inverter`,
-        "Mounting Structure",
-        "Electrical safety and wiring",
-        "Installation & Commissioning",
-        "Consultancy"
-      );
-      if (cBreakup.backupInverter > 0) includedItems.push("Backup Off-grid Inverter");
-      if (cBreakup.battery > 0) includedItems.push("Battery Storage");
+      const includedItems = [];
+      if (option.costBreakupList) {
+        option.costBreakupList.forEach(it => {
+          if (!it.isHidden && !it.isHeader) {
+            includedItems.push(it.label);
+          }
+        });
+      } else {
+        // Fallback if list not found
+        includedItems.push(
+          "Solar Panels",
+          `${mainInverterPrefix} Inverter`,
+          "Mounting Structure",
+          "Electrical safety and wiring",
+          "Installation & Commissioning",
+          "Consultancy"
+        );
+        if (cBreakup.backupInverter > 0) includedItems.push("Backup Off-grid Inverter");
+        if (cBreakup.battery > 0) includedItems.push("Battery Storage");
+      }
+      includesText = "System Includes: " + includedItems.join(", ") + ", GST, and Contingency.";
     }
-    includesText = "System Includes: " + includedItems.join(", ") + ", GST, and Contingency.";
+  
+    doc.setFontSize(10);
+    doc.setTextColor(COLORS.text);
+    const splitIncludes = doc.splitTextToSize(includesText, 210 - margin * 2);
+    doc.text(splitIncludes, margin, yPos);
+    yPos += (splitIncludes.length * 5) + 5;
+  
+    const costData = [];
+    costData.push(["Total System Cost (Inc. GST)", formatCurrency(option.totalPreSubsidy)]);
+  
+    // Conditionally include subsidy
+    if (!hideSubsidy) {
+      costData.push(["Expected Subsidy", `- ${formatCurrency(option.subsidy)}`]);
+    }
+    costData.push(["Net Payable Cost", formatCurrency(option.netCost)]);
+  
+    doc.autoTable({
+      startY: yPos,
+      body: costData,
+      theme: "plain",
+      columnStyles: {
+        0: { fontStyle: "normal", width: 120 },
+        1: { halign: "right" },
+      },
+      didParseCell: function (data) {
+        // Bold the total rows
+        if (
+          data.row.raw[0].includes("Subtotal") ||
+          data.row.raw[0].includes("Total Cost") ||
+          data.row.raw[0].includes("Net Payable")
+        ) {
+          data.cell.styles.fontStyle = "bold";
+        }
+        if (data.row.raw[0].includes("Expected Subsidy")) {
+          data.cell.styles.textColor = COLORS.primary;
+        }
+      },
+      margin: { left: margin },
+    });
+  
+    yPos = doc.lastAutoTable.finalY + 5;
+  
+    // Additional costs note
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(COLORS.text);
+    doc.text("* Net metering and liaisoning costs are additional and will be quoted separately.", margin, yPos);
+    doc.text("* GST: 70% goods @ 5% + 30% services @ 18% = 8.9% effective rate.", margin, yPos + 4);
+    yPos += 13;
+  } else {
+    doc.addPage();
+    yPos = 30;
+    addHeader("Estimated Savings");
   }
-
-  doc.setFontSize(10);
-  doc.setTextColor(COLORS.text);
-  const splitIncludes = doc.splitTextToSize(includesText, 210 - margin * 2);
-  doc.text(splitIncludes, margin, yPos);
-  yPos += (splitIncludes.length * 5) + 5;
-
-  const costData = [];
-  costData.push(["Total System Cost (Inc. GST)", formatCurrency(option.totalPreSubsidy)]);
-
-  // Conditionally include subsidy
-  if (!hideSubsidy) {
-    costData.push(["Expected Subsidy", `- ${formatCurrency(option.subsidy)}`]);
-  }
-  costData.push(["Net Payable Cost", formatCurrency(option.netCost)]);
-
-  doc.autoTable({
-    startY: yPos,
-    body: costData,
-    theme: "plain",
-    columnStyles: {
-      0: { fontStyle: "normal", width: 120 },
-      1: { halign: "right" },
-    },
-    didParseCell: function (data) {
-      // Bold the total rows
-      if (
-        data.row.raw[0].includes("Subtotal") ||
-        data.row.raw[0].includes("Total Cost") ||
-        data.row.raw[0].includes("Net Payable")
-      ) {
-        data.cell.styles.fontStyle = "bold";
-      }
-      if (data.row.raw[0].includes("Expected Subsidy")) {
-        data.cell.styles.textColor = COLORS.primary;
-      }
-    },
-    margin: { left: margin },
-  });
-
-  yPos = doc.lastAutoTable.finalY + 5;
-
-  // Additional costs note
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "italic");
-  doc.setTextColor(COLORS.text);
-  doc.text("* Net metering and liaisoning costs are additional and will be quoted separately.", margin, yPos);
-  doc.text("* GST: 70% goods @ 5% + 30% services @ 18% = 8.9% effective rate.", margin, yPos + 4);
-  yPos += 13;
 
   // Estimated Savings summary
   doc.setTextColor(COLORS.black);
@@ -431,16 +437,25 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.setFont("helvetica", "normal");
   doc.setTextColor(COLORS.text);
   
-  const sb = option.savingsBreakdown;
   const savingsData = [];
   
-  if (sb) {
-    if (sb.baseSavings > 0) savingsData.push(["Tariff Reduction", formatCurrency(sb.baseSavings * 12), "Savings from generating your own electricity & shifting to lower MSEDCL slabs."]);
-    if (sb.todDaytimeRebate > 0) savingsData.push(["ToD Daytime Rebate", formatCurrency(sb.todDaytimeRebate * 12), "Time-of-Day credits earned for generating solar during daytime (9AM-5PM)."]);
-    if (sb.todPeakAvoided > 0) savingsData.push(["Peak Penalty Avoided", formatCurrency(sb.todPeakAvoided * 12), "Using battery during peak hours (5PM-10PM) avoids expensive MSEDCL peak tariffs."]);
-    if (sb.pfIncentive > 0) savingsData.push(["PF Incentive", formatCurrency(sb.pfIncentive * 12), "Smart inverters maintain a high Power Factor, earning a discount from MSEDCL."]);
-    if (sb.promptPayDiscount > 0) savingsData.push(["Prompt Pay Discount", formatCurrency(sb.promptPayDiscount * 12), "1% bill discount for prompt payment, easier with significantly lowered bills."]);
-    if (sb.bankingLoss > 0) savingsData.push(["Banking Charges", `-${formatCurrency(sb.bankingLoss * 12)}`, "MSEDCL grid-support charges on excess solar energy exported to the grid."]);
+  if (option.savingsBreakdownList) {
+    const tipMap = {
+      "Slab/tariff offset": "Savings from generating your own electricity & shifting to lower MSEDCL slabs.",
+      "ToD daytime rebate": "Time-of-Day credits earned for generating solar during daytime (9AM-5PM).",
+      "Peak penalty avoided": "Using battery during peak hours (5PM-10PM) avoids expensive MSEDCL peak tariffs.",
+      "PF improvement": "Smart inverters maintain a high Power Factor, earning a discount from MSEDCL.",
+      "Prompt pay discount": "1% bill discount for prompt payment, easier with significantly lowered bills.",
+      "Banking loss": "MSEDCL grid-support charges on excess solar energy exported to the grid.",
+    };
+    option.savingsBreakdownList.forEach(item => {
+      if (!item.isHidden && item.value !== 0) {
+        let label = item.label;
+        let valueStr = item.value < 0 ? `-${formatCurrency(Math.abs(item.value * 12))}` : formatCurrency(item.value * 12);
+        let tip = tipMap[item.label] || "";
+        savingsData.push([label, valueStr, tip]);
+      }
+    });
     
     savingsData.push(["-------------------", "-------------------", ""]);
     savingsData.push(["Total Annual Savings", formatCurrency(option.annualSavings), "Projected savings in the first year of operation."]);
