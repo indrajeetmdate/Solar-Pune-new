@@ -420,6 +420,47 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     addHeader("Estimated Savings");
   }
 
+  // Current Bill Breakdown
+  if (option.currentBillBreakdownList) {
+    doc.setTextColor(COLORS.black);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Current Bill Breakdown", margin, yPos);
+    yPos += 6;
+    
+    const billData = [];
+    option.currentBillBreakdownList.forEach(item => {
+      if (!item.isHidden && item.value !== 0) {
+        billData.push([item.label, formatCurrency(item.value)]);
+      }
+    });
+    billData.push(["-------------------", "-------------------"]);
+    billData.push(["Estimated Current Bill", formatCurrency(option.currentBillBreakdown.total)]);
+    
+    doc.autoTable({
+      startY: yPos,
+      body: billData,
+      theme: "plain",
+      columnStyles: {
+        0: { fontStyle: "normal", width: 120 },
+        1: { halign: "right", fontStyle: "normal" }
+      },
+      didParseCell: function (data) {
+        if (data.row.raw[0].includes("Estimated Current Bill")) {
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.fillColor = COLORS.bgLight;
+        } else {
+          const matchedItem = option.currentBillBreakdownList.find(i => i.label === data.row.raw[0]);
+          if (matchedItem && matchedItem.isRed) {
+            data.cell.styles.textColor = [211, 47, 47];
+          }
+        }
+      },
+      margin: { left: margin },
+    });
+    yPos = doc.lastAutoTable.finalY + 12;
+  }
+
   // Estimated Savings summary
   doc.setTextColor(COLORS.black);
   doc.setFontSize(14);

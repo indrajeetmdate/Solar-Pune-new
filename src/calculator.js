@@ -447,6 +447,13 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
     paybackYears: Number.isFinite(paybackYears) ? round(paybackYears, 1) : Infinity,
     roiPercent: round(roiPercent, 1),
     sizing,
+    currentBillBreakdown: {
+      energyCharge: round(modelCurrentBill.energyCharge, 0),
+      fixedCharge: round(modelCurrentBill.fixedCharge, 0),
+      duty: round(modelCurrentBill.duty, 0),
+      todPenalty: round(todSavings.peakPenaltyAvoided, 0),
+      total: round(modelCurrentBill.total + todSavings.peakPenaltyAvoided, 0)
+    },
     savingsBreakdown: {
       baseSavings: round(baseSavings, 0),
       bankingLoss: round(banking.deductedUnits * avgRate, 0),

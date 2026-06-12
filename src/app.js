@@ -655,6 +655,7 @@ function render() {
   const input = readInput();
   const config = readConfig();
   const estimate = calculateEstimate(input, config);
+  applyBillConfig(estimate, input);
   applySavingsConfig(estimate, input);
   applyBreakupConfig(estimate, input);
   state.estimates = estimate;
@@ -681,6 +682,79 @@ function render() {
   } else {
     $("recommendationTitle").textContent = `${SYSTEM_LABELS[option.systemType] || SYSTEM_LABELS[option.systemType.split('_')[0]]} ${PANEL_LABELS[option.panelType]} solar`;
     $("recommendedCapacity").previousElementSibling.innerHTML = `Size <i class="info-tip" data-tip="Recommended solar system capacity in kilowatts peak (kWp). Based on your consumption, roof area, and sanctioned load.">i</i>`;
+  }
+
+  // Bill breakdown
+  const bbEl = $("billBreakdownPanel");
+  if (bbEl && option.currentBillBreakdownList) {
+    if (state.internalUnlocked) {
+      let html = `<div style="font-weight: 600; margin-bottom: 8px;">Current Bill Breakdown</div><table style="width: 100%; border-collapse: collapse; font-size: 13px;">`;
+      option.currentBillBreakdownList.forEach((item, index) => {
+        let isOverridden = state.billConfig[option.systemType][index]?.isOverride;
+        let hiddenStyle = item.isHidden ? 'opacity: 0.45; text-decoration: line-through;' : '';
+        let rowBg = index % 2 === 0 ? 'background: var(--bg-alt, #fafafa);' : '';
+        let colorStyle = item.isRed && !item.isHidden ? 'color: #d32f2f;' : '';
+        
+        html += `
+        <tr style="${rowBg}">
+          <td style="padding: 5px 6px 0; ${hiddenStyle} ${colorStyle}">${item.label}</td>
+          <td style="padding: 5px 2px 0; text-align: right; width: 85px;">
+            <input type="number" class="override-bill" data-sys="${option.systemType}" data-idx="${index}" value="${Math.round(item.value)}"
+              style="width: 78px; text-align: right; padding: 3px 4px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid ${isOverridden ? 'var(--primary)' : 'var(--line)'}; border-radius: 4px; ${item.isHidden ? 'opacity: 0.45;' : ''} ${colorStyle}">
+          </td>
+          <td style="padding: 5px 4px 0; text-align: right; font-size: 11px; color: var(--text-muted); width: 72px; ${hiddenStyle}">${money(item.value)}/mo</td>
+          <td style="width: 28px; text-align: center; padding: 0;">
+            <button class="icon-btn action-btn bill-toggle-hide" data-idx="${index}" data-sys="${option.systemType}" title="${item.isHidden ? 'Show' : 'Hide'}" style="cursor:pointer; background:none; border:none; padding:2px; font-size: 14px; margin-top: 3px;">${item.isHidden ? '👁️' : '🚫'}</button>
+          </td>
+        </tr>`;
+      });
+      html += `
+        <tr>
+          <td style="padding: 8px 6px 4px; font-weight: bold;">Estimated Current Bill</td>
+          <td colspan="3" style="padding: 8px 4px 4px; text-align: right; font-weight: bold;">${money(option.currentBillBreakdown.total)}/mo</td>
+        </tr>
+      </table>`;
+      bbEl.innerHTML = html;
+      bbEl.classList.remove("hidden");
+      
+      bbEl.querySelectorAll(".override-bill").forEach(el => {
+        el.addEventListener("change", (e) => {
+          let sys = e.target.dataset.sys;
+          let idx = parseInt(e.target.dataset.idx);
+          let val = parseFloat(e.target.value);
+          if (!isNaN(val)) {
+            state.billConfig[sys][idx].isOverride = true;
+            state.billConfig[sys][idx].overrideValue = val;
+            render();
+          }
+        });
+      });
+      
+      bbEl.querySelectorAll(".bill-toggle-hide").forEach(el => {
+        el.addEventListener("click", (e) => {
+          let btn = e.target.closest("button");
+          if (!btn) return;
+          let sys = btn.dataset.sys;
+          let idx = parseInt(btn.dataset.idx);
+          state.billConfig[sys][idx].isHidden = !state.billConfig[sys][idx].isHidden;
+          render();
+        });
+      });
+    } else {
+      const items = option.currentBillBreakdownList.filter(it => !it.isHidden && it.value !== 0);
+      if (items.length > 0) {
+        bbEl.classList.remove("hidden");
+        let html = `<div style="font-weight: 600; margin-bottom: 8px; font-size: 13px;">Estimated Current Bill</div>`;
+        html += items.map(item => {
+          let colorStyle = item.isRed ? 'color: #d32f2f; font-weight: 500;' : '';
+          return `<div style="display: flex; justify-content: space-between; margin-bottom: 4px; ${colorStyle}"><div><span>${item.label}</span></div><div>${money(Math.abs(item.value))}/mo</div></div>`;
+        }).join("");
+        html += `<div style="display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); font-weight: bold;"><div>Total</div><div>${money(option.currentBillBreakdown.total)}/mo</div></div>`;
+        bbEl.innerHTML = html;
+      } else {
+        bbEl.classList.add("hidden");
+      }
+    }
   }
 
   // Savings breakdown
@@ -1432,6 +1506,53 @@ function applySavingsConfig(estimate, input) {
     option.annualSavings = totalMonthlySavings * 12;
     // Basic recalculation of lifetime assuming default escalation, or just simple multiple
     option.lifetimeSavings = option.annualSavings * 25; 
+  });
+}
+
+function applyBillConfig(estimate, input) {
+  if (!state.billConfig) state.billConfig = {};
+  
+  estimate.options.forEach(option => {
+    let sysType = option.systemType;
+    let cb = option.currentBillBreakdown;
+    if (!cb) return;
+    
+    let defaultItems = [
+      { id: 'fixedCharge', label: 'Fixed Charges', value: cb.fixedCharge, isRed: false },
+      { id: 'energyCharge', label: 'Energy Charges', value: cb.energyCharge, isRed: true },
+      { id: 'duty', label: 'Electricity Duty', value: cb.duty, isRed: true },
+      { id: 'todPenalty', label: 'ToD Peak Penalty', value: cb.todPenalty, isRed: true },
+    ];
+    
+    if (!state.billConfig[sysType]) {
+      state.billConfig[sysType] = defaultItems.map(di => ({
+        id: di.id,
+        label: di.label,
+        isHidden: false,
+        isOverride: false,
+        overrideValue: di.value,
+        isRed: di.isRed
+      }));
+    }
+    
+    let configList = state.billConfig[sysType];
+    let finalBillItems = [];
+    let totalBill = 0;
+    
+    configList.forEach(c => {
+      let item = { ...c };
+      let di = defaultItems.find(x => x.id === c.id);
+      let computedValue = di ? di.value : 0;
+      item.value = c.isOverride ? c.overrideValue : computedValue;
+      
+      if (!c.isHidden && item.value !== 0) {
+        totalBill += item.value;
+      }
+      finalBillItems.push(item);
+    });
+    
+    option.currentBillBreakdownList = finalBillItems;
+    option.currentBillBreakdown.total = totalBill;
   });
 }
 
