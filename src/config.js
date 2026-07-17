@@ -117,7 +117,7 @@ export const TARIFF_PROFILES = {
     bankingExemptUptoKw: Infinity,
     bankingChargePctLT: 0,
     bankingChargePctHT: 0,
-    subsidyType: "individual",
+    subsidyType: "none",
     pfIncentiveApplicable: false,
   },
 

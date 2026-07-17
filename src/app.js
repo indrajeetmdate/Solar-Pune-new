@@ -1145,6 +1145,8 @@ function attachEvents() {
     $("numFlatsField")?.classList.toggle("hidden", cat !== "LT-I-GHS" && sub !== "ghs");
     $("powerFactorField")?.classList.toggle("hidden", !profile.pfIncentiveApplicable);
     $("peakUsageField")?.classList.toggle("hidden", profile.todPeakPenaltyPct <= 0);
+    $("subsidyCategoryContainer")?.classList.toggle("hidden", profile.subsidyType === "none");
+    $("panelType")?.closest("label")?.classList.toggle("hidden", profile.subsidyType === "none");
 
     // Update slab rate fields to reflect profile defaults
     const slabs = profile.slabs || [];
