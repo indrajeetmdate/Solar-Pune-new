@@ -24,7 +24,8 @@ const ASSUMPTION_IDS = [
   "panelWp", "panelEfficiency",
   "dailyGeneration", "shadingLoss", "orientationLoss", "systemLoss", "degradationRate", "batteryDod", "inverterEfficiency", "selfConsumptionPct",
   "savingsMethod", "fixedCharge", "electricityDuty", "tariffEscalation",
-  "slabRate1", "slabRate2", "slabRate3", "slabRate4"
+  "slabRate1", "slabRate2", "slabRate3", "slabRate4",
+  "internalPaymentMode", "internalLoanInterestRate", "internalLoanAmount", "internalLoanMonthlyEmi", "internalLoanTenureMonths"
 ];
 
 const PRESETS_STORAGE_KEY = "solar_calculator_presets";
@@ -51,6 +52,16 @@ const ids = [
   "orientationDir",
   "backupNeeded",
   "customerView",
+  "paymentMode",
+  "internalPaymentMode",
+  "loanAmount",
+  "internalLoanAmount",
+  "loanInterestRate",
+  "internalLoanInterestRate",
+  "loanMonthlyEmi",
+  "internalLoanMonthlyEmi",
+  "internalLoanTenureMonths",
+  "hideFinancing",
   "panelType",
   "structureType",
   "capacityOverride",
@@ -149,6 +160,21 @@ function readInput() {
     backupHours: numberValue("backupHours"),
     savingsMethod: safeStr("savingsMethod"),
     ongridBackup: state.ongridBackup,
+    paymentMode: state.internalUnlocked
+      ? (safeStr("internalPaymentMode") || safeStr("paymentMode") || "upfront")
+      : (safeStr("paymentMode") || "upfront"),
+    loanAmount: state.internalUnlocked
+      ? (numberValue("internalLoanAmount") || numberValue("loanAmount"))
+      : numberValue("loanAmount"),
+    loanInterestRate: state.internalUnlocked
+      ? (numberValue("internalLoanInterestRate") || numberValue("loanInterestRate") || 9.5)
+      : (numberValue("loanInterestRate") || 9.5),
+    loanMonthlyEmi: state.internalUnlocked
+      ? (numberValue("internalLoanMonthlyEmi") || numberValue("loanMonthlyEmi"))
+      : numberValue("loanMonthlyEmi"),
+    loanTenureMonths: state.internalUnlocked
+      ? numberValue("internalLoanTenureMonths")
+      : 0,
   };
 }
 
@@ -247,6 +273,9 @@ function getOptionNotes(option, input) {
 }
 
 function renderComparison(options, recommended) {
+  const input = readInput();
+  const isLoan = input.paymentMode === "loan";
+
   $("comparisonRows").innerHTML = options
     .map((option, index) => {
       const isSelected = state.selectedSystemIndex !== null 
@@ -272,6 +301,18 @@ function renderComparison(options, recommended) {
         }
       }
 
+      const costDisplay = isLoan && option.financing
+        ? `${money(option.netCost)}<br><small style="color:var(--brand-green);font-weight:600;">EMI: ${money(option.financing.monthlyEmi)}/mo</small>`
+        : money(option.netCost);
+
+      const savingsDisplay = isLoan && option.financing
+        ? `${money(option.financing.monthlyEmi)}<br><small style="color:var(--text-muted);">(EMI)</small>`
+        : money(option.monthlySavings);
+
+      const paybackDisplay = isLoan && option.financing
+        ? `<span title="Loan Payoff: ${option.financing.tenureFormatted}">${option.financing.tenureFormatted}</span>`
+        : years(option.paybackYears);
+
       return `
         <tr class="${selectedClass}" style="cursor: pointer;" data-index="${index}">
           <td style="text-align: center;"><input type="radio" name="systemSelection" ${isSelected ? 'checked' : ''} style="cursor: pointer;" onclick="event.stopPropagation(); this.closest('tr').click();"></td>
@@ -279,10 +320,10 @@ function renderComparison(options, recommended) {
           <td>${PANEL_LABELS[option.panelType]}</td>
           <td>${option.inverterCapacityKw} kW</td>
           <td>${option.batteryCapacityKwh > 0 ? option.batteryCapacityKwh + ' kWh' : '—'}</td>
-          <td>${money(option.netCost)}</td>
+          <td>${costDisplay}</td>
           <td class="subsidy-col">${money(option.subsidy)}</td>
-          <td>${money(option.monthlySavings)}</td>
-          <td class="payback-col">${years(option.paybackYears)}</td>
+          <td>${savingsDisplay}</td>
+          <td class="payback-col">${paybackDisplay}</td>
         </tr>
       `;
     })
@@ -504,6 +545,104 @@ function renderBreakup(option, input, customerView, config) {
   }
 }
 
+function renderFinancing(option, input) {
+  const fin = option.financing;
+  const container = $("financingBreakdownContent");
+  const badge = $("financingStatusBadge");
+  const card = $("financingProposalCard");
+  const hideFin = $("hideFinancing")?.checked || $("hideCost")?.checked;
+
+  if (card) {
+    card.style.display = hideFin ? "none" : "";
+  }
+  if (!fin || !container) return;
+
+  if (badge) {
+    badge.textContent = fin.isZeroOutOfPocket ? "Zero Out-of-Pocket" : "Bank Partner Loan";
+    badge.className = fin.isZeroOutOfPocket ? "status-pill" : "status-pill review";
+  }
+
+  // Update customer live preview badge in Step 2 if present
+  const custPreview = $("customerLoanTenurePreview");
+  if (custPreview) {
+    custPreview.textContent = `${fin.tenureFormatted} (at ${money(fin.monthlyEmi)}/mo)`;
+  }
+
+  // Value proposition hero box
+  let html = `
+  <div style="background: var(--surface-soft, #eef3ec); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px;">
+    <div style="font-weight: 700; color: var(--brand-green, #63923E); font-size: 14px; margin-bottom: 4px;">
+      💡 Pay Your Electricity Bill to the Bank &rarr; Free Solar in ${fin.tenureFormatted}
+    </div>
+    <div style="font-size: 12px; color: var(--ink); line-height: 1.5;">
+      ${fin.isZeroOutOfPocket 
+        ? `Your regular monthly electricity bill of <strong>${money(fin.targetBillAmount)}/mo</strong> is redirected to pay the loan installment (<strong>${money(fin.monthlyEmi)}/mo</strong>). You incur <strong>₹0 extra monthly burden</strong>, and after <strong>${fin.tenureFormatted}</strong>, the system is 100% paid off, generating pure free electricity for the remaining <strong>${fin.freeElectricityYears} years</strong> of system life!`
+        : `Pay <strong>${money(fin.monthlyEmi)}/mo</strong> EMI for <strong>${fin.tenureFormatted}</strong>, after which you enjoy 100% free solar power for the remaining <strong>${fin.freeElectricityYears} years</strong> of system life.`}
+    </div>
+  </div>`;
+
+  // Comparison Table: Upfront Cash vs Bank Partner Loan
+  html += `
+  <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+    <thead>
+      <tr style="border-bottom: 2px solid var(--line); background: var(--surface-alt, #f8f9f7);">
+        <th style="text-align: left; padding: 6px 8px;">Commercial Feature</th>
+        <th style="text-align: right; padding: 6px 8px;">Option A: Upfront Cash</th>
+        <th style="text-align: right; padding: 6px 8px; color: var(--brand-green, #63923E);">Option B: Bank Partner Loan (EMI)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom: 1px solid var(--line);">
+        <td style="padding: 6px 8px;">Upfront Customer Payment</td>
+        <td style="text-align: right; padding: 6px 8px; font-weight: 600;">${money(fin.upfrontNetCost)}</td>
+        <td style="text-align: right; padding: 6px 8px; font-weight: 600; color: var(--brand-green);">${money(fin.downPayment)}</td>
+      </tr>
+      <tr style="border-bottom: 1px solid var(--line); background: var(--bg-alt, #fafafa);">
+        <td style="padding: 6px 8px;">Loan Principal Amount</td>
+        <td style="text-align: right; padding: 6px 8px; color: var(--text-muted);">—</td>
+        <td style="text-align: right; padding: 6px 8px;">${money(fin.principal)}</td>
+      </tr>
+      <tr style="border-bottom: 1px solid var(--line);">
+        <td style="padding: 6px 8px;">Bank Partner Interest Rate</td>
+        <td style="text-align: right; padding: 6px 8px; color: var(--text-muted);">—</td>
+        <td style="text-align: right; padding: 6px 8px;">${fin.interestRatePct}% p.a.</td>
+      </tr>
+      <tr style="border-bottom: 1px solid var(--line); background: var(--bg-alt, #fafafa);">
+        <td style="padding: 6px 8px; font-weight: 600;">Monthly Installment (EMI)</td>
+        <td style="text-align: right; padding: 6px 8px; color: var(--text-muted); font-weight: 600;">₹0 / mo</td>
+        <td style="text-align: right; padding: 6px 8px; font-weight: 700; color: var(--brand-green);">${money(fin.monthlyEmi)} / mo</td>
+      </tr>
+      <tr style="border-bottom: 1px solid var(--line);">
+        <td style="padding: 6px 8px;">Loan Duration (Payoff Period)</td>
+        <td style="text-align: right; padding: 6px 8px; color: var(--text-muted);">Immediate</td>
+        <td style="text-align: right; padding: 6px 8px; font-weight: 600;">${fin.tenureFormatted}</td>
+      </tr>
+      <tr style="border-bottom: 1px solid var(--line); background: var(--bg-alt, #fafafa);">
+        <td style="padding: 6px 8px;">Total Interest Paid</td>
+        <td style="text-align: right; padding: 6px 8px; color: var(--text-muted);">₹0</td>
+        <td style="text-align: right; padding: 6px 8px;">${money(fin.totalInterest)}</td>
+      </tr>
+      <tr style="border-bottom: 1px solid var(--line);">
+        <td style="padding: 6px 8px;">Total Outflow over Life</td>
+        <td style="text-align: right; padding: 6px 8px;">${money(fin.upfrontNetCost)}</td>
+        <td style="text-align: right; padding: 6px 8px;">${money(fin.totalLoanCost)}</td>
+      </tr>
+      <tr style="border-bottom: 1px solid var(--line); background: var(--bg-alt, #fafafa);">
+        <td style="padding: 6px 8px; font-weight: 600;">100% Free Solar Years</td>
+        <td style="text-align: right; padding: 6px 8px; font-weight: 600;">25.0 yrs</td>
+        <td style="text-align: right; padding: 6px 8px; font-weight: 700; color: var(--brand-green);">${fin.freeElectricityYears} yrs</td>
+      </tr>
+      <tr style="border-top: 2px solid var(--line); font-weight: bold; background: var(--surface-soft, #eef3ec);">
+        <td style="padding: 8px;">25-Year Net Financial Gain</td>
+        <td style="text-align: right; padding: 8px; color: var(--brand-green);">${money(fin.lifetimeNetGainUpfront)}</td>
+        <td style="text-align: right; padding: 8px; color: var(--brand-green);">${money(fin.lifetimeNetGainWithLoan)}</td>
+      </tr>
+    </tbody>
+  </table>`;
+
+  container.innerHTML = html;
+}
+
 function renderNotes(option, input) {
   $("notesList").innerHTML = getOptionNotes(option, input)
     .map((note) => `<li>${note}</li>`)
@@ -670,8 +809,29 @@ function render() {
   $("recommendationReason").textContent = reasonText;
   $("recommendedCapacity").textContent = `${option.dcCapacityKw.toFixed(1)} kWp`;
   $("monthlyGeneration").textContent = units(option.monthlyGeneration);
-  $("monthlySavings").textContent = money(option.monthlySavings);
-  $("payback").textContent = years(option.paybackYears);
+  
+  const isLoan = input.paymentMode === "loan";
+  const fin = option.financing;
+  if (isLoan && fin) {
+    $("monthlySavings").textContent = money(fin.monthlyEmi);
+    if ($("monthlySavings")?.previousElementSibling) {
+      $("monthlySavings").previousElementSibling.innerHTML = `Loan EMI <i class="info-tip" data-tip="Monthly loan installment to bank partner, matched with your average electricity bill.">i</i>`;
+    }
+    $("payback").textContent = fin.tenureFormatted;
+    if ($("payback")?.previousElementSibling) {
+      $("payback").previousElementSibling.innerHTML = `Loan Payoff <i class="info-tip" data-tip="Time to 100% free solar system ownership. After this, your electricity is completely free.">i</i>`;
+    }
+  } else {
+    $("monthlySavings").textContent = money(option.monthlySavings);
+    if ($("monthlySavings")?.previousElementSibling) {
+      $("monthlySavings").previousElementSibling.innerHTML = `Save/mo <i class="info-tip" data-tip="How much your monthly electricity bill will reduce. Includes tariff savings, ToD rebates, and other applicable benefits.">i</i>`;
+    }
+    $("payback").textContent = years(option.paybackYears);
+    if ($("payback")?.previousElementSibling) {
+      $("payback").previousElementSibling.innerHTML = `Payback <i class="info-tip" data-tip="Time to recover your investment. After this period, your solar system generates pure profit through bill savings.">i</i>`;
+    }
+  }
+
   $("sanctionStatus").textContent = estimate.sanctionedStatus.label;
   $("sanctionStatus").className = `status-pill ${estimate.sanctionedStatus.level}`;
 
@@ -855,6 +1015,7 @@ function render() {
 
   renderComparison(estimate.options, option);
   renderBreakup(option, input, input.customerView, config);
+  renderFinancing(option, input);
   renderNotes(option, input);
   renderExtractedBill(state.extractedBill);
   renderDiagram(pl, input);
@@ -863,9 +1024,14 @@ function render() {
   const hidePayback = $("hidePayback")?.checked || $("hideCost")?.checked;
   const hideAreaFit = $("hideAreaFit")?.checked;
   const hideSubsidy = $("hideSubsidy")?.checked;
+  const hideFinancing = $("hideFinancing")?.checked || $("hideCost")?.checked;
   
   if ($("costBreakup")?.closest("details")) {
     $("costBreakup").closest("details").style.display = $("hideCost")?.checked ? "none" : "";
+  }
+
+  if ($("financingProposalCard")) {
+    $("financingProposalCard").style.display = hideFinancing ? "none" : "";
   }
 
   // Payback card in summary metrics
@@ -1116,8 +1282,41 @@ function attachEvents() {
   });
 
   // Report Display hide toggles
-  ["hidePayback", "hideAreaFit", "hideSubsidy", "hideCost", "solarInstalled"].forEach(id => {
+  ["hidePayback", "hideAreaFit", "hideSubsidy", "hideCost", "hideFinancing", "solarInstalled"].forEach(id => {
     $(id)?.addEventListener("change", render);
+  });
+
+  // Payment & Financing sync listeners
+  $("paymentMode")?.addEventListener("change", (e) => {
+    const isLoan = e.target.value === "loan";
+    $("customerLoanFields")?.classList.toggle("hidden", !isLoan);
+    if ($("internalPaymentMode")) $("internalPaymentMode").value = e.target.value;
+    render();
+  });
+  $("internalPaymentMode")?.addEventListener("change", (e) => {
+    if ($("paymentMode")) {
+      $("paymentMode").value = e.target.value;
+      $("customerLoanFields")?.classList.toggle("hidden", e.target.value !== "loan");
+    }
+    render();
+  });
+  $("loanInterestRate")?.addEventListener("input", (e) => {
+    if ($("internalLoanInterestRate")) $("internalLoanInterestRate").value = e.target.value;
+  });
+  $("internalLoanInterestRate")?.addEventListener("input", (e) => {
+    if ($("loanInterestRate")) $("loanInterestRate").value = e.target.value;
+  });
+  $("loanAmount")?.addEventListener("input", (e) => {
+    if ($("internalLoanAmount")) $("internalLoanAmount").value = e.target.value;
+  });
+  $("internalLoanAmount")?.addEventListener("input", (e) => {
+    if ($("loanAmount")) $("loanAmount").value = e.target.value;
+  });
+  $("loanMonthlyEmi")?.addEventListener("input", (e) => {
+    if ($("internalLoanMonthlyEmi")) $("internalLoanMonthlyEmi").value = e.target.value;
+  });
+  $("internalLoanMonthlyEmi")?.addEventListener("input", (e) => {
+    if ($("loanMonthlyEmi")) $("loanMonthlyEmi").value = e.target.value;
   });
 
   // Mode buttons
@@ -1256,6 +1455,7 @@ function attachEvents() {
         hideAreaFit: $("hideAreaFit")?.checked || false,
         hideSubsidy: $("hideSubsidy")?.checked || false,
         hideCost: $("hideCost")?.checked || false,
+        hideFinancing: $("hideFinancing")?.checked || false,
         solarInstalled: $("solarInstalled")?.checked || false,
       };
 
@@ -1332,6 +1532,7 @@ function attachEvents() {
         hideAreaFit: $("hideAreaFit")?.checked || false,
         hideSubsidy: $("hideSubsidy")?.checked || false,
         hideCost: $("hideCost")?.checked || false,
+        hideFinancing: $("hideFinancing")?.checked || false,
         solarInstalled: $("solarInstalled")?.checked || false,
       };
 

@@ -57,4 +57,11 @@ assert.ok(backupEstimate.recommended.batteryCapacityKwh > 0);
 const lowRoof = calculateEstimate(makeInput({ roofArea: 180, sanctionedLoad: 10 }), DEFAULT_CONFIG);
 assert.ok(lowRoof.recommended.dcCapacityKw <= 2.2);
 
+// Financing assertions
+assert.ok(estimate.recommended.financing);
+assert.equal(estimate.recommended.financing.principal, estimate.recommended.netCost);
+assert.equal(estimate.recommended.financing.monthlyEmi, 5200);
+assert.ok(estimate.recommended.financing.tenureYears > 0);
+assert.ok(estimate.recommended.financing.freeElectricityYears > 0);
+
 console.log("calculator tests passed");

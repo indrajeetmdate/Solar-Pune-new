@@ -214,6 +214,42 @@
             </label>
           </div>
 
+          <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--line);">
+
+          <div class="section-heading compact">
+            <div>
+              <h2>Payment & Financing</h2>
+              <p class="muted small" style="margin-top: 2px;">Calculate based on upfront payment vs zero out-of-pocket bank partner loan</p>
+            </div>
+          </div>
+
+          <div class="field-grid">
+            <label class="field" style="grid-column: 1 / -1;">
+              <span>Payment Option <i class="info-tip" data-tip="Choose between full upfront payment or an EMI bank loan where your monthly installment matches your current electricity bill.">i</i></span>
+              <select id="paymentMode">
+                <option value="upfront" selected>Upfront Cash Payment</option>
+                <option value="loan">Bank Partner Loan (Zero Out-of-Pocket EMI)</option>
+              </select>
+            </label>
+          </div>
+
+          <div id="customerLoanFields" class="field-grid hidden" style="margin-top: 0.75rem; background: var(--surface-soft); padding: 12px; border-radius: var(--radius); border: 1px solid var(--brand-green-light);">
+            <label class="field">
+              <span>Loan Amount (₹) <i class="info-tip" data-tip="Bank loan principal amount. Defaults to 100% of Net System Cost after subsidy.">i</i></span>
+              <input id="loanAmount" type="number" min="0" step="5000" placeholder="Auto (Net Cost)">
+            </label>
+            <label class="field">
+              <span>Bank Interest Rate (%) <i class="info-tip" data-tip="Annual interest rate for solar loan partners (e.g. SBI Surya Ghar, Union Bank). Default is 9.5% p.a.">i</i></span>
+              <input id="loanInterestRate" type="number" min="1" max="25" step="0.1" value="9.5">
+            </label>
+            <label class="field">
+              <span>Monthly Installment (EMI Target) <i class="info-tip" data-tip="Target monthly payment to bank. Automatically matches your current electricity bill so your monthly cash outflow does not increase.">i</i></span>
+              <input id="loanMonthlyEmi" type="number" min="0" step="100" placeholder="Auto (Matches Monthly Bill)">
+            </label>
+            <div style="grid-column: 1 / -1; font-size: 12px; color: var(--brand-green); font-weight: 500; display: flex; align-items: center; gap: 6px;" id="customerLoanLivePreview">
+              <span>✨ Pay what you already pay for electricity → System becomes 100% free in <strong id="customerLoanTenurePreview">~4 years</strong>!</span>
+            </div>
+          </div>
 
           <div class="wizard-actions">
             <button class="ghost-button" type="button" onclick="window.goToStep(1)">← Back</button>
@@ -240,6 +276,7 @@
           <div class="tabs" aria-label="Internal assumption groups">
             <button class="tab-button active" type="button" data-tab="system">System</button>
             <button class="tab-button" type="button" data-tab="pricing">Pricing</button>
+            <button class="tab-button" type="button" data-tab="financing">Financing</button>
             <button class="tab-button" type="button" data-tab="losses">Losses</button>
             <button class="tab-button" type="button" data-tab="tariff">Tariff</button>
           </div>
@@ -325,6 +362,9 @@
                   <input type="checkbox" id="hideCost"> Hide Cost
                 </label>
                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="hideFinancing"> Hide Loan Options
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
                   <input type="checkbox" id="solarInstalled"> Solar Already Installed
                 </label>
               </div>
@@ -387,6 +427,41 @@
             <p style="font-size: 11px; color: var(--muted); margin: 10px 0 0; line-height: 1.5;">
               <strong>Note:</strong> Net metering and liaisoning costs are additional and will be quoted separately.<br>
               <strong>GST:</strong> Effective rate of 8.9% applied (70% goods @ 5% + 30% services @ 18%).
+            </p>
+          </div>
+
+          <div class="tab-panel hidden" data-panel="financing">
+            <div class="field-grid">
+              <label class="field">
+                <span>Payment mode <i class="info-tip" data-tip="Switch between upfront cash payment or bank partner zero out-of-pocket EMI loan.">i</i></span>
+                <select id="internalPaymentMode">
+                  <option value="upfront" selected>Upfront cash</option>
+                  <option value="loan">Bank partner loan</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>Bank interest rate (% p.a.) <i class="info-tip" data-tip="Annual loan interest rate from bank partners (e.g. SBI Surya Ghar, Union Bank). Default 9.5%.">i</i></span>
+                <input id="internalLoanInterestRate" type="number" min="1" max="25" step="0.1" value="9.5">
+              </label>
+
+              <label class="field">
+                <span>Loan amount override (₹) <i class="info-tip" data-tip="Override total loan principal. Leave blank to auto-fund 100% of Net System Cost.">i</i></span>
+                <input id="internalLoanAmount" type="number" min="0" step="5000" placeholder="Auto (Net Cost)">
+              </label>
+
+              <label class="field">
+                <span>Monthly EMI override (₹/mo) <i class="info-tip" data-tip="Override monthly installment amount. Leave blank to auto-match customer's monthly electricity bill.">i</i></span>
+                <input id="internalLoanMonthlyEmi" type="number" min="0" step="100" placeholder="Auto (Monthly Bill)">
+              </label>
+
+              <label class="field">
+                <span>Loan tenure override (Months) <i class="info-tip" data-tip="Override loan duration in months. Leave blank to auto-calculate duration from EMI.">i</i></span>
+                <input id="internalLoanTenureMonths" type="number" min="1" max="240" step="6" placeholder="Auto">
+              </label>
+            </div>
+            <p style="font-size: 11px; color: var(--muted); margin: 10px 0 0; line-height: 1.5;">
+              <strong>Zero Out-of-Pocket Principle:</strong> Bank partner solar loans align monthly installments with the customer's average electricity bill so their monthly outflow stays unchanged, while the solar system pays for itself.
             </p>
           </div>
 
@@ -620,6 +695,17 @@
             <summary style="font-weight: 600; font-size: 14px; outline: none;">Cost Breakup <i class="info-tip" data-tip="Detailed breakdown of all costs: panels, inverter, battery, structure, wiring, installation, fees, taxes, and contingency.">i</i></summary>
             <div style="margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px;">
               <dl id="costBreakup" class="breakup-list" style="margin: 0; font-size: 13px;"></dl>
+            </div>
+          </details>
+
+          <!-- Financing & Commercial Proposal Accordion -->
+          <details id="financingProposalCard" class="detail-card" style="padding: 12px 16px; cursor: pointer; border: 1px solid var(--line); border-radius: var(--radius); background: #fff;" open>
+            <summary style="font-weight: 600; font-size: 14px; outline: none; display: flex; justify-content: space-between; align-items: center;">
+              <span>Bank Partner Loan vs Upfront Payment <i class="info-tip" data-tip="Commercial comparison: Upfront purchase vs Bank Loan where monthly installment matches your electricity bill.">i</i></span>
+              <span class="status-pill" id="financingStatusBadge" style="font-size: 11px; margin-left: 8px;">Zero Out-of-Pocket</span>
+            </summary>
+            <div id="financingBreakdownContent" style="margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px;">
+              <!-- Rendered dynamically -->
             </div>
           </details>
 

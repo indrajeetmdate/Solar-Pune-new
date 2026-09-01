@@ -213,6 +213,10 @@ export const DEFAULT_CONFIG = {
     ghsSubsidyMaxKw: 500,
     ghsPerFlatCapKw: 3,
   },
+  financing: {
+    defaultInterestRatePct: 9.5,
+    defaultPaymentMode: "upfront", // 'upfront' | 'loan'
+  },
 };
 
 export const SYSTEM_LABELS = {

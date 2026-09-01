@@ -107,7 +107,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   // Use the explicitly selected option (passed from UI), falling back to recommended
   const option = selectedOption || estimates.recommended;
 
-  const { hidePayback, hideAreaFit, hideSubsidy, hideCost, solarInstalled } = hideFlags;
+  const { hidePayback, hideAreaFit, hideSubsidy, hideCost, hideFinancing, solarInstalled } = hideFlags;
 
   // --- Helpers ---
   const formatCurrency = (val) =>
@@ -541,8 +541,64 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.setFont("helvetica", "normal");
   doc.setTextColor(COLORS.primary);
   doc.text(`${formatCurrency(option.lifetimeSavings)}`, margin + 50, yPos);
+  yPos += 8;
 
-  
+  // Commercial Financing Proposal: Upfront vs Bank Partner Loan
+  if (!hideFinancing && !hideCost && option.financing) {
+    const fin = option.financing;
+
+    doc.setTextColor(COLORS.black);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("Bank Partner Loan Proposal (Zero Out-of-Pocket)", margin, yPos);
+    yPos += 5;
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(COLORS.text);
+    const zeroPocketDesc = fin.isZeroOutOfPocket
+      ? `Redirect your regular electricity bill (${formatCurrency(fin.targetBillAmount)}/mo) to the bank EMI (${formatCurrency(fin.monthlyEmi)}/mo). Enjoy ₹0 extra monthly burden & own the system 100% free in ${fin.tenureFormatted}!`
+      : `Pay ${formatCurrency(fin.monthlyEmi)}/mo EMI for ${fin.tenureFormatted}, after which you enjoy 100% free solar power for the remaining ${fin.freeElectricityYears} years.`;
+    const splitFinDesc = doc.splitTextToSize(zeroPocketDesc, pageWidth - margin * 2);
+    doc.text(splitFinDesc, margin, yPos);
+    yPos += (splitFinDesc.length * 3.5) + 3;
+
+    const finTableBody = [
+      ["Upfront Customer Payment", formatCurrency(fin.upfrontNetCost), formatCurrency(fin.downPayment)],
+      ["Loan Principal Amount", "—", formatCurrency(fin.principal)],
+      ["Bank Partner Interest Rate", "—", `${fin.interestRatePct}% p.a.`],
+      ["Monthly Installment (EMI)", "₹0 / mo", `${formatCurrency(fin.monthlyEmi)} / mo`],
+      ["Loan Repayment Period", "Immediate", fin.tenureFormatted],
+      ["Total Interest Paid", "₹0", formatCurrency(fin.totalInterest)],
+      ["Total Outflow over Life", formatCurrency(fin.upfrontNetCost), formatCurrency(fin.totalLoanCost)],
+      ["100% Free Solar Years", "25.0 Years", `${fin.freeElectricityYears} Years`],
+      ["25-Year Net Financial Gain", formatCurrency(fin.lifetimeNetGainUpfront), formatCurrency(fin.lifetimeNetGainWithLoan)],
+    ];
+
+    doc.autoTable({
+      startY: yPos,
+      head: [["Commercial Feature", "Option A: Upfront Cash", "Option B: Bank Loan (EMI)"]],
+      body: finTableBody,
+      theme: "grid",
+      headStyles: { fillColor: COLORS.primary, fontSize: 8, cellPadding: 1.5 },
+      bodyStyles: { fontSize: 7.5, cellPadding: 1.5 },
+      columnStyles: {
+        0: { fontStyle: "normal", width: 85 },
+        1: { halign: "right", width: 45 },
+        2: { halign: "right", width: 50, fontStyle: "bold", textColor: COLORS.primary },
+      },
+      didParseCell: function (data) {
+        if (data.row.index === finTableBody.length - 1) {
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.fillColor = COLORS.bgLight;
+        }
+      },
+      margin: { left: margin },
+    });
+
+    yPos = doc.lastAutoTable.finalY + 6;
+  }
+
   addFooter(2);
 
   // ================= PAGE 3: System Type Differences =================

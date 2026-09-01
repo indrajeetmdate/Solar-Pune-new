@@ -1,4 +1,5 @@
 import { DEFAULT_CONFIG, TARIFF_PROFILES } from "./config.js";
+import { calculateSolarFinancing } from "./loanEngine.js";
 
 const round = (value, decimals = 2) => {
   const factor = 10 ** decimals;
@@ -478,6 +479,19 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       effectiveGstRate: round(effectiveGstRate, 1),
       contingency: round(contingency, 0),
     },
+    financing: calculateSolarFinancing({
+      netCost,
+      totalPreSubsidy,
+      subsidy,
+      monthlyBill: input?.monthlyBill || 0,
+      monthlySavings,
+      lifetimeSavings: calculateLifetimeSavings(annualSavings, config),
+      paymentMode: input?.paymentMode || config.financing?.defaultPaymentMode || "upfront",
+      loanAmountOverride: input?.loanAmount,
+      interestRatePct: input?.loanInterestRate ?? config.financing?.defaultInterestRatePct ?? 9.5,
+      loanMonthlyEmiOverride: input?.loanMonthlyEmi,
+      loanTenureMonthsOverride: input?.loanTenureMonths,
+    }),
   };
 }
 
@@ -642,3 +656,6 @@ export function getSanctionedStatus(dcCapacityKw, sanctionedLoadKw) {
     message: "Recommended capacity is above the entered sanctioned load.",
   };
 }
+
+export { calculateSolarFinancing };
+
