@@ -170,7 +170,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   if (input.coordinates || input.tiltAngle !== null || input.orientationDir) {
     const geoInfo = [];
     if (input.coordinates) geoInfo.push(`Coordinates: ${input.coordinates}`);
-    if (input.tiltAngle !== null) geoInfo.push(`Tilt: ${input.tiltAngle}°`);
+    if (input.tiltAngle !== null) geoInfo.push(`Tilt: ${input.tiltAngle} deg`);
     if (input.orientationDir) geoInfo.push(`Orientation: ${input.orientationDir}`);
     if (geoInfo.length > 0) {
       doc.text(geoInfo.join(" | "), margin, yPos);
@@ -225,7 +225,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     const panelData = [
       ["Panel Specification", `${panelLayout.panelDimensions} (${panelLayout.panelWp} Wp each)`],
       ["Number of Panels", `${panelLayout.numPanels} panels`],
-      ["Total Area Required", `${panelLayout.totalAreaSqft} sq ft (${panelLayout.totalAreaSqm} m²)`],
+      ["Total Area Required", `${panelLayout.totalAreaSqft} sq ft (${panelLayout.totalAreaSqm} sq m)`],
       ["Available Installation Area", `${panelLayout.availableAreaSqft} sq ft`],
     ];
 
@@ -234,8 +234,8 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
       const fitStatus = panelLayout.fitsInArea === null
         ? "Area not specified"
         : panelLayout.fitsInArea
-          ? `Yes — fits in ${panelLayout.availableAreaSqft} sq ft`
-          : `No — needs ${panelLayout.totalAreaSqft - panelLayout.availableAreaSqft} sq ft more`;
+          ? `Yes - fits in ${panelLayout.availableAreaSqft} sq ft`
+          : `No - needs ${panelLayout.totalAreaSqft - panelLayout.availableAreaSqft} sq ft more`;
       panelData.push(["Fits in Available Area", fitStatus]);
     }
 
@@ -549,7 +549,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9.5);
     doc.setTextColor(COLORS.primary);
-    doc.text("💡 Zero Out-of-Pocket Principle", margin + 5, yPos + 6);
+    doc.text("Zero Out-of-Pocket Principle", margin + 5, yPos + 6);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
@@ -621,11 +621,11 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     // Commercial Comparison Table
     const finTableBody = [
       ["Upfront Customer Payment (Down Payment)", formatCurrency(fin.upfrontNetCost), formatCurrency(fin.downPayment)],
-      ["Loan Principal Amount (Bank Funded)", "—", formatCurrency(fin.principal)],
-      ["Bank Partner Interest Rate", "—", `${fin.interestRatePct}% p.a.`],
-      ["Monthly Installment (EMI)", "₹0 / mo", `${formatCurrency(fin.monthlyEmi)} / mo`],
+      ["Loan Principal Amount (Bank Funded)", "-", formatCurrency(fin.principal)],
+      ["Bank Partner Interest Rate", "-", `${fin.interestRatePct}% p.a.`],
+      ["Monthly Installment (EMI)", "Rs 0 / mo", `${formatCurrency(fin.monthlyEmi)} / mo`],
       ["Loan Repayment Period (Payoff Duration)", "Immediate", fin.tenureFormatted],
-      ["Total Interest Paid to Bank", "₹0", formatCurrency(fin.totalInterest)],
+      ["Total Interest Paid to Bank", "Rs 0", formatCurrency(fin.totalInterest)],
       ["Total Outflow over Life", formatCurrency(fin.upfrontNetCost), formatCurrency(fin.totalLoanCost)],
       ["100% Free Solar Electricity Period", "25.0 Years", `${fin.freeElectricityYears} Years`],
       ["25-Year Net Financial Gain", formatCurrency(fin.lifetimeNetGainUpfront), formatCurrency(fin.lifetimeNetGainWithLoan)],
@@ -672,7 +672,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.setFontSize(8.5);
     doc.setTextColor(COLORS.text);
     benefits.forEach((benefit) => {
-      doc.text(`• ${benefit}`, margin + 2, yPos);
+      doc.text(`- ${benefit}`, margin + 2, yPos);
       yPos += 4.5;
     });
   }
@@ -715,10 +715,10 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   } else {
     // Fallback: text descriptions
     const systemDescriptions = [
-      ["On-Grid", "Connected to utility grid. Solar panels generate power during day, excess is exported via net metering. No battery backup — system shuts down during power cuts. Lowest cost, best ROI."],
+      ["On-Grid", "Connected to utility grid. Solar panels generate power during day, excess is exported via net metering. No battery backup - system shuts down during power cuts. Lowest cost, best ROI."],
       ["Semi-Hybrid", "On-grid with a small backup inverter and battery. Provides basic backup during outages while maintaining net metering benefits. Good balance of savings and reliability."],
       ["Hybrid", "Grid-connected with full battery storage. Solar charges batteries during the day, batteries provide backup during outages. Higher cost but complete energy independence."],
-      ["Off-Grid", "Fully independent — no grid connection. Requires larger battery banks. Best for locations without reliable grid access. Highest cost, no net metering."],
+      ["Off-Grid", "Fully independent - no grid connection. Requires larger battery banks. Best for locations without reliable grid access. Highest cost, no net metering."],
     ];
 
     systemDescriptions.forEach(([type, desc]) => {
