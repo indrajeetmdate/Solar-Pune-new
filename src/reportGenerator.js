@@ -136,30 +136,6 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.text(title, pageWidth - margin, 14, { align: "right" });
   };
 
-  const addFooter = (pageNum) => {
-    const footerY = pageHeight - 10;
-    doc.setTextColor(COLORS.text);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    
-    // Left: URL
-    doc.text("www.cnergy.co.in", margin, footerY);
-    
-    // Center: Page number
-    doc.text(`Page ${pageNum}`, pageWidth / 2, footerY, { align: "center" });
-    
-    // Right: Logo, Company Name, Location
-    doc.setFontSize(8);
-    doc.text("Datlion Cnergy Pvt. Ltd.", pageWidth - margin, footerY - 4, { align: "right" });
-    doc.text("Pune, Maharashtra", pageWidth - margin, footerY, { align: "right" });
-    
-    if (logoResult) {
-      const targetWidth = 16;
-      const targetHeight = (logoResult.height / logoResult.width) * targetWidth;
-      doc.addImage(logoResult.data, 'JPEG', pageWidth - margin - targetWidth, footerY - 8 - targetHeight, targetWidth, targetHeight, 'companyLogo');
-    }
-  };
-
   // ================= PAGE 1: System Design Considerations =================
   let yPos = 30;
   addHeader("Solar System Proposal");
@@ -314,8 +290,6 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     margin: { left: margin },
   });
   yPos = doc.lastAutoTable.finalY + 15;
-
-  addFooter(1);
 
   // ================= PAGE 2: Financial Quote =================
   if (!hideCost) {
@@ -541,47 +515,129 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.setFont("helvetica", "normal");
   doc.setTextColor(COLORS.primary);
   doc.text(`${formatCurrency(option.lifetimeSavings)}`, margin + 50, yPos);
-  yPos += 8;
+  yPos += 10;
 
-  // Commercial Financing Proposal: Upfront vs Bank Partner Loan
+  let sectionNumber = 3;
+
+  // ================= SECTION 3 (PAGE 3): Bank Partner Loan Proposal =================
   if (!hideFinancing && !hideCost && option.financing) {
     const fin = option.financing;
+    doc.addPage();
+    yPos = 30;
+    addHeader("Commercial Proposal");
 
     doc.setTextColor(COLORS.black);
-    doc.setFontSize(12);
+    doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text("Bank Partner Loan Proposal (Zero Out-of-Pocket)", margin, yPos);
-    yPos += 5;
+    doc.text(`${sectionNumber}. Bank Partner Loan Proposal (Zero Out-of-Pocket)`, margin, yPos);
+    yPos += 7;
+    sectionNumber++;
 
-    doc.setFontSize(8);
+    doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(COLORS.text);
-    const zeroPocketDesc = fin.isZeroOutOfPocket
-      ? `Redirect your regular electricity bill (${formatCurrency(fin.targetBillAmount)}/mo) to the bank EMI (${formatCurrency(fin.monthlyEmi)}/mo). Enjoy ₹0 extra monthly burden & own the system 100% free in ${fin.tenureFormatted}!`
-      : `Pay ${formatCurrency(fin.monthlyEmi)}/mo EMI for ${fin.tenureFormatted}, after which you enjoy 100% free solar power for the remaining ${fin.freeElectricityYears} years.`;
-    const splitFinDesc = doc.splitTextToSize(zeroPocketDesc, pageWidth - margin * 2);
-    doc.text(splitFinDesc, margin, yPos);
-    yPos += (splitFinDesc.length * 3.5) + 3;
+    doc.text("Convert your monthly electricity bill into an appreciating rooftop solar asset with zero incremental budget.", margin, yPos);
+    yPos += 7;
 
+    // Zero Out-of-Pocket Hero Box
+    const bannerHeight = 24;
+    doc.setFillColor(242, 248, 238); // Soft green background
+    doc.setDrawColor(99, 146, 62);  // Primary border
+    doc.setLineWidth(0.4);
+    doc.roundedRect(margin, yPos, pageWidth - margin * 2, bannerHeight, 2, 2, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(COLORS.primary);
+    doc.text("💡 Zero Out-of-Pocket Principle", margin + 5, yPos + 6);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(COLORS.text);
+    const zeroPocketDesc = fin.isZeroOutOfPocket
+      ? `Instead of paying MSEDCL Rs ${formatCurrency(fin.targetBillAmount)}/mo, you redirect that exact amount as a bank EMI (${formatCurrency(fin.monthlyEmi)}/mo). You incur Rs 0 extra monthly burden, and after ${fin.tenureFormatted}, the entire system is 100% owned, giving you free electricity for the next ${fin.freeElectricityYears} years!`
+      : `Finance your solar plant with an affordable bank EMI of ${formatCurrency(fin.monthlyEmi)}/mo for ${fin.tenureFormatted}, after which you enjoy 100% free solar power for the remaining ${fin.freeElectricityYears} years of system life.`;
+    const splitFinDesc = doc.splitTextToSize(zeroPocketDesc, pageWidth - margin * 2 - 10);
+    doc.text(splitFinDesc, margin + 5, yPos + 12);
+    yPos += bannerHeight + 8;
+
+    // 3 Mini KPI Summary Cards
+    const totalW = pageWidth - margin * 2;
+    const cardW = (totalW - 8) / 3;
+    const cardH = 20;
+
+    // Card 1: Monthly EMI
+    doc.setFillColor(COLORS.bgLight);
+    doc.setDrawColor(220, 220, 220);
+    doc.roundedRect(margin, yPos, cardW, cardH, 2, 2, "FD");
+    doc.setFontSize(8);
+    doc.setTextColor(COLORS.textLight);
+    doc.text("Monthly Installment (EMI)", margin + 4, yPos + 5);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(COLORS.primary);
+    doc.text(`${formatCurrency(fin.monthlyEmi)} / mo`, margin + 4, yPos + 12);
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(COLORS.textLight);
+    doc.text("(Matches electricity bill)", margin + 4, yPos + 17);
+
+    // Card 2: Payoff Tenure
+    const card2X = margin + cardW + 4;
+    doc.setFillColor(COLORS.bgLight);
+    doc.roundedRect(card2X, yPos, cardW, cardH, 2, 2, "FD");
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(COLORS.textLight);
+    doc.text("Loan Payoff Period", card2X + 4, yPos + 5);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(COLORS.black);
+    doc.text(fin.tenureFormatted, card2X + 4, yPos + 12);
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(COLORS.textLight);
+    doc.text("(Time to 100% free solar)", card2X + 4, yPos + 17);
+
+    // Card 3: Free Solar Life
+    const card3X = card2X + cardW + 4;
+    doc.setFillColor(COLORS.bgLight);
+    doc.roundedRect(card3X, yPos, cardW, cardH, 2, 2, "FD");
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(COLORS.textLight);
+    doc.text("100% Free Electricity", card3X + 4, yPos + 5);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(COLORS.primary);
+    doc.text(`${fin.freeElectricityYears} Years`, card3X + 4, yPos + 12);
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(COLORS.textLight);
+    doc.text("(Post-loan generation)", card3X + 4, yPos + 17);
+
+    yPos += cardH + 8;
+
+    // Commercial Comparison Table
     const finTableBody = [
-      ["Upfront Customer Payment", formatCurrency(fin.upfrontNetCost), formatCurrency(fin.downPayment)],
-      ["Loan Principal Amount", "—", formatCurrency(fin.principal)],
+      ["Upfront Customer Payment (Down Payment)", formatCurrency(fin.upfrontNetCost), formatCurrency(fin.downPayment)],
+      ["Loan Principal Amount (Bank Funded)", "—", formatCurrency(fin.principal)],
       ["Bank Partner Interest Rate", "—", `${fin.interestRatePct}% p.a.`],
       ["Monthly Installment (EMI)", "₹0 / mo", `${formatCurrency(fin.monthlyEmi)} / mo`],
-      ["Loan Repayment Period", "Immediate", fin.tenureFormatted],
-      ["Total Interest Paid", "₹0", formatCurrency(fin.totalInterest)],
+      ["Loan Repayment Period (Payoff Duration)", "Immediate", fin.tenureFormatted],
+      ["Total Interest Paid to Bank", "₹0", formatCurrency(fin.totalInterest)],
       ["Total Outflow over Life", formatCurrency(fin.upfrontNetCost), formatCurrency(fin.totalLoanCost)],
-      ["100% Free Solar Years", "25.0 Years", `${fin.freeElectricityYears} Years`],
+      ["100% Free Solar Electricity Period", "25.0 Years", `${fin.freeElectricityYears} Years`],
       ["25-Year Net Financial Gain", formatCurrency(fin.lifetimeNetGainUpfront), formatCurrency(fin.lifetimeNetGainWithLoan)],
     ];
 
     doc.autoTable({
       startY: yPos,
-      head: [["Commercial Feature", "Option A: Upfront Cash", "Option B: Bank Loan (EMI)"]],
+      head: [["Commercial Feature", "Option A: Upfront Cash", "Option B: Bank Loan (Zero Out-of-Pocket)"]],
       body: finTableBody,
       theme: "grid",
-      headStyles: { fillColor: COLORS.primary, fontSize: 8, cellPadding: 1.5 },
-      bodyStyles: { fontSize: 7.5, cellPadding: 1.5 },
+      headStyles: { fillColor: COLORS.primary, fontSize: 8.5, cellPadding: 2.5 },
+      bodyStyles: { fontSize: 8, cellPadding: 2.2 },
       columnStyles: {
         0: { fontStyle: "normal", width: 85 },
         1: { halign: "right", width: 45 },
@@ -596,12 +652,32 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
       margin: { left: margin },
     });
 
-    yPos = doc.lastAutoTable.finalY + 6;
+    yPos = doc.lastAutoTable.finalY + 8;
+
+    // Loan Advantages Box
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10.5);
+    doc.setTextColor(COLORS.black);
+    doc.text("Key Advantages of Bank Partner Solar Financing:", margin, yPos);
+    yPos += 5;
+
+    const benefits = [
+      "Zero Incremental Monthly Budget: Redirect your existing electricity bill to pay off the solar plant.",
+      "Nationalized Bank Schemes: Easy processing under PM Surya Ghar with subsidized interest rates.",
+      "Asset Creation & Long-Term Wealth: Switch from a perpetual utility expense to owning a high-ROI power plant.",
+      "No Prepayment Penalty: Option to prepay or foreclose at any time to eliminate interest and accelerate free power."
+    ];
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(COLORS.text);
+    benefits.forEach((benefit) => {
+      doc.text(`• ${benefit}`, margin + 2, yPos);
+      yPos += 4.5;
+    });
   }
 
-  addFooter(2);
-
-  // ================= PAGE 3: System Type Differences =================
+  // ================= SECTION 4 (or 3): Solar System Types =================
   doc.addPage();
   yPos = 30;
   addHeader("Solar System Types");
@@ -609,7 +685,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.setTextColor(COLORS.black);
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
-  doc.text("3. Solar System Types", margin, yPos);
+  doc.text(`${sectionNumber}. Solar System Types`, margin, yPos);
   yPos += 8;
 
   doc.setFontSize(11);
@@ -661,7 +737,32 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     });
   }
 
-  addFooter(3);
+  // ================= APPLY DYNAMIC FOOTERS TO ALL PAGES =================
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    const footerY = pageHeight - 10;
+    doc.setTextColor(COLORS.text);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+
+    // Left: URL
+    doc.text("www.cnergy.co.in", margin, footerY);
+
+    // Center: Page X of Y
+    doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, footerY, { align: "center" });
+
+    // Right: Company Name, Location & Logo
+    doc.setFontSize(8);
+    doc.text("Datlion Cnergy Pvt. Ltd.", pageWidth - margin, footerY - 4, { align: "right" });
+    doc.text("Pune, Maharashtra", pageWidth - margin, footerY, { align: "right" });
+
+    if (logoResult) {
+      const targetWidth = 16;
+      const targetHeight = (logoResult.height / logoResult.width) * targetWidth;
+      doc.addImage(logoResult.data, 'JPEG', pageWidth - margin - targetWidth, footerY - 8 - targetHeight, targetWidth, targetHeight, 'companyLogo');
+    }
+  }
 
   const filename = input.customerName
     ? `DC_Energy_Proposal_${input.customerName.replace(/\s+/g, "_")}.pdf`
