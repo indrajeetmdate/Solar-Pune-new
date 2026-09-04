@@ -606,6 +606,31 @@
           </div>
 
           <div class="cad-panel-container">
+            <!-- TOOLBAR ROW 0: Multi-View Elevation Switcher & North Alignment -->
+            <div class="cad-toolbar cad-view-toolbar" style="background: #0f172a; border-color: #334155; color: #f8fafc; padding: 6px 12px;">
+              <div class="cad-view-switcher" style="display: flex; gap: 4px; align-items: center;">
+                <span style="font-size: 11px; color: #94a3b8; font-weight: 600; margin-right: 4px;">View:</span>
+                <button type="button" class="cad-btn active" id="cadViewTopBtn" data-view="top" title="Top Down CAD Plan">📐 Top Plan</button>
+                <button type="button" class="cad-btn" id="cadViewFrontBtn" data-view="front" title="Front Elevation (Building height & solar altitude)">🏢 Front Elevation</button>
+                <button type="button" class="cad-btn" id="cadViewSideBtn" data-view="side" title="Side Elevation (Array tilt & seasonal declination)">🏛️ Side Elevation</button>
+              </div>
+
+              <div class="cad-north-controls" style="display: flex; gap: 6px; align-items: center; margin-left: 12px; border-left: 1px solid #334155; padding-left: 12px;">
+                <span style="font-size: 11px; color: #f87171; font-weight: 700;">🧭 North:</span>
+                <input type="number" id="cadNorthAngleInput" value="0" min="0" max="359" step="1" style="width: 52px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; padding: 3px 6px; border-radius: 4px; font-weight: 700; font-size: 11.5px;">
+                <span style="font-size: 11px; color: #94a3b8;">°</span>
+                <button type="button" class="cad-btn" id="cadNorthMinus15Btn" title="Rotate North 15° CCW" style="padding: 2px 7px;">↺ 15°</button>
+                <button type="button" class="cad-btn" id="cadNorthPlus15Btn" title="Rotate North 15° CW" style="padding: 2px 7px;">↻ 15°</button>
+                <button type="button" class="cad-btn" id="cadNorthResetBtn" title="Reset North to 0°" style="padding: 2px 8px; font-size: 11px;">Reset</button>
+              </div>
+
+              <div class="cad-input-group" style="margin-left: 12px; border-left: 1px solid #334155; padding-left: 12px;" title="Building height from ground to roof slab">
+                <label for="cadBuildingHeightInput" style="color: #94a3b8;">Bldg H:</label>
+                <input type="number" id="cadBuildingHeightInput" value="18" min="5" max="120" step="1" style="width: 50px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; padding: 3px 6px; border-radius: 4px; font-weight: 600; font-size: 11.5px;">
+                <span style="color: #94a3b8; font-size: 11px;">ft</span>
+              </div>
+            </div>
+
             <!-- TOOLBAR ROW 1: Dimensions & Active Drawing Tool -->
             <div class="cad-toolbar">
               <div class="cad-input-group">
@@ -639,6 +664,41 @@
                 <button type="button" class="cad-btn" id="cadToolPanelBtn" data-tool="panel" title="Move & snap solar panels">☀️ Move Panels</button>
                 <button type="button" class="cad-btn" id="cadToolPanBtn" data-tool="image_pan" title="Drag to move imported image inside roof">✋ Move Image</button>
                 <button type="button" class="cad-btn active" id="cadToggleLayersBtn" title="Toggle Layers & Components Panel (L)" style="border-color: #38bdf8; color: #38bdf8;">📚 Layers</button>
+              </div>
+            </div>
+
+            <!-- TOOLBAR ROW 1.5: Surrounding Obstacles in Yard -->
+            <div class="cad-toolbar" style="background: #111827; border-color: #1f2937; padding: 6px 12px;">
+              <span style="font-size: 11px; font-weight: 700; color: #94a3b8;">Surrounding Obstacles:</span>
+              <button type="button" class="cad-btn" id="cadAddTreeBtn" title="Add external tree in yard for shadow analysis">+ 🌳 Tree</button>
+              <button type="button" class="cad-btn" id="cadAddPoleBtn" title="Add utility / electric pole in yard">+ 🗼 Pole</button>
+              <button type="button" class="cad-btn" id="cadAddNeighborBtn" title="Add neighboring building structure">+ 🏢 Neighbor Bldg</button>
+              <button type="button" class="cad-btn" id="cadAddWallBtn" title="Add boundary / setback wall">+ 🧱 Wall</button>
+              <button type="button" class="cad-btn" id="cadClearObstaclesBtn" style="color: #f87171; margin-left: auto; border-color: rgba(239, 68, 68, 0.3);">Clear Obstacles</button>
+            </div>
+
+            <!-- TOOLBAR ROW 1.75: Astronomical 2D Sun Path & Shadow Simulation Toolbar -->
+            <div class="cad-toolbar cad-sun-toolbar" id="cadSunToolbar" style="background: #090e1a; border-color: #1e293b; padding: 7px 12px;">
+              <button type="button" class="cad-btn" id="cadToggleSunSimBtn" style="border-color: #f59e0b; color: #f59e0b; font-weight: 700;">☀️ Sun Simulation: OFF</button>
+
+              <div id="cadSunControls" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <span style="font-size: 11px; color: #94a3b8; font-weight: 600; margin-left: 6px;">Season:</span>
+                <button type="button" class="cad-btn active" id="cadSeasonWinterBtn" data-day="355" title="Dec 21 (Lowest Solar Altitude ~48°)">❄️ Dec 21</button>
+                <button type="button" class="cad-btn" id="cadSeasonEquinoxBtn" data-day="80" title="Mar 21 / Sep 23 (Equinox ~71.5°)">🌱 Mar 21</button>
+                <button type="button" class="cad-btn" id="cadSeasonSummerBtn" data-day="172" title="Jun 21 (Highest Solar Altitude ~85°)">☀️ Jun 21</button>
+
+                <div style="display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; border-left: 1px solid #334155; padding-left: 10px;">
+                  <span style="font-size: 11px; color: #f8fafc; font-weight: 600;">Time:</span>
+                  <button type="button" class="cad-btn" id="cadPlaySunBtn" style="padding: 2px 8px; font-weight: 700; color: #38bdf8;">▶ Play</button>
+                  <input type="range" id="cadSunTimeSlider" min="6" max="18" step="0.25" value="10.5" style="width: 105px; cursor: pointer;">
+                  <strong id="cadSunTimeLabel" style="font-size: 11.5px; color: #fef08a; min-width: 62px; font-variant-numeric: tabular-nums;">10:30 AM</strong>
+                </div>
+
+                <div class="cad-stats-pill" id="cadSolarTelemetryPill" style="background: #0f172a; border-color: #f59e0b; color: #fef08a; padding: 3px 10px; margin-left: auto;">
+                  Alt: <strong id="cadSolarAlt" style="color: #fef08a;">48.2°</strong> &nbsp;|&nbsp;
+                  Az: <strong id="cadSolarAz" style="color: #38bdf8;">155.4°</strong> &nbsp;|&nbsp;
+                  Shading Loss: <strong id="cadShadingLossVal" style="color: #4ade80;">0.0%</strong>
+                </div>
               </div>
             </div>
 
@@ -686,6 +746,24 @@
               <div class="cad-input-group" id="inspectorDiameterGroup" style="display: none;">
                 <label for="inspectorDiameter">Diameter:</label>
                 <input type="number" id="inspectorDiameter" value="6" min="1" step="0.5" style="width: 58px;">
+                <span>ft</span>
+              </div>
+
+              <div class="cad-input-group" id="inspectorDistXGroup" style="display: none;">
+                <label for="inspectorDistX">Dist X:</label>
+                <input type="number" id="inspectorDistX" value="-15" step="1" style="width: 52px;">
+                <span>ft</span>
+              </div>
+
+              <div class="cad-input-group" id="inspectorDistYGroup" style="display: none;">
+                <label for="inspectorDistY">Dist Y:</label>
+                <input type="number" id="inspectorDistY" value="5" step="1" style="width: 52px;">
+                <span>ft</span>
+              </div>
+
+              <div class="cad-input-group" id="inspectorHeightGroup" style="display: none;">
+                <label for="inspectorHeight">Height:</label>
+                <input type="number" id="inspectorHeight" value="20" min="1" step="1" style="width: 52px;">
                 <span>ft</span>
               </div>
 

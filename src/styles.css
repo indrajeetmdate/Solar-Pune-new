@@ -1321,6 +1321,41 @@ tr:hover td {
   box-shadow: 0 1px 4px rgba(99, 146, 62, 0.3);
 }
 
+.cad-view-toolbar {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+.cad-view-switcher .cad-btn.active {
+  background: #0284c7 !important;
+  border-color: #38bdf8 !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 6px rgba(56, 189, 248, 0.4) !important;
+}
+
+.cad-sun-toolbar {
+  background: #090e1a !important;
+  border-color: #1e293b !important;
+  color: #f8fafc !important;
+}
+
+#cadToggleSunSimBtn.active {
+  background: rgba(245, 158, 11, 0.15) !important;
+  border-color: #f59e0b !important;
+  color: #fbbf24 !important;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.3) !important;
+}
+
+#cadSeasonWinterBtn.active,
+#cadSeasonEquinoxBtn.active,
+#cadSeasonSummerBtn.active {
+  background: #f59e0b !important;
+  border-color: #d97706 !important;
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
 .cad-inventory-pill {
   display: inline-flex;
   align-items: center;

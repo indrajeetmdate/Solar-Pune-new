@@ -21,7 +21,12 @@ class MockContext2D {
   rect() {}
   setLineDash() {}
   fillText() {}
+  quadraticCurveTo() {}
+  bezierCurveTo() {}
   createLinearGradient() {
+    return { addColorStop: () => {} };
+  }
+  createRadialGradient() {
     return { addColorStop: () => {} };
   }
 }
@@ -306,6 +311,96 @@ console.log("Running RooftopCAD tests...");
   assert.equal(cad.cutouts[1].id, c1.id, "Cutout 1 moved up");
 
   console.log("✓ Test 6 Passed: Component selection, z-ordering (move up/down/front/back) & universal component opacity (including solar panels)");
+}
+
+// Test 7: North Alignment, Multi-View Elevation, External Obstacles & Astronomical Sun Simulation
+{
+  const canvas = new MockCanvas();
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 35,
+    roofBreadthFt: 25,
+    requiredPanels: 12,
+  });
+
+  // 1. North Alignment & Rotation Wrapping
+  assert.equal(cad.northAngleDeg, 0, "Default North orientation must be 0°");
+  cad.setNorthAngle(60);
+  assert.equal(cad.northAngleDeg, 60, "North angle should be 60°");
+  cad.rotateNorth(-90);
+  assert.equal(cad.northAngleDeg, 330, "North angle after -90° rotation should wrap to 330°");
+  cad.setNorthAngle(0);
+
+  // 2. Multi-View Elevation Switching
+  assert.equal(cad.activeView, "top", "Default active view must be 'top'");
+  let reportedView = null;
+  cad.onViewChange = (v) => { reportedView = v; };
+
+  cad.setActiveView("front");
+  assert.equal(cad.activeView, "front");
+  assert.equal(reportedView, "front");
+
+  cad.setActiveView("side");
+  assert.equal(cad.activeView, "side");
+  assert.equal(reportedView, "side");
+
+  cad.setActiveView("top");
+  assert.equal(cad.activeView, "top");
+
+  cad.setBuildingHeight(24);
+  assert.equal(cad.buildingHeightFt, 24, "Building height should be updated to 24 ft");
+
+  // 3. External Obstacles CRUD
+  assert.equal(cad.externalObstacles.length, 0, "Initial external obstacles must be 0");
+
+  const tree = cad.addExternalObstacle("tree", { label: "Neem Tree", heightFt: 25 });
+  assert.equal(cad.externalObstacles.length, 1);
+  assert.equal(tree.type, "tree");
+  assert.equal(tree.heightFt, 25);
+  assert.equal(tree.shape, "circle");
+
+  const bldg = cad.addExternalObstacle("building", { label: "Neighbor House", heightFt: 32 });
+  assert.equal(cad.externalObstacles.length, 2);
+  assert.equal(bldg.type, "building");
+  assert.equal(bldg.heightFt, 32);
+
+  const pole = cad.addExternalObstacle("pole", { label: "Electric Pole", heightFt: 28 });
+  const wall = cad.addExternalObstacle("wall", { label: "Boundary Wall", heightFt: 8 });
+  assert.equal(cad.externalObstacles.length, 4);
+
+  // Update obstacle properties
+  cad.updateExternalObstacle(tree.id, { heightFt: 30, diameterFt: 14 });
+  assert.equal(tree.heightFt, 30);
+  assert.equal(tree.diameterFt, 14);
+
+  // 4. Astronomical Sun Simulation & Shadow Engine
+  assert.equal(cad.sunSim.enabled, false, "Sun simulation disabled initially");
+  cad.toggleSunSimulation(true);
+  assert.equal(cad.sunSim.enabled, true, "Sun simulation enabled");
+
+  // Winter Solstice at 10:30 AM
+  cad.setSunDate(355);
+  cad.setSunTime(10.5);
+  assert.equal(cad.sunSim.dayOfYear, 355);
+  assert.equal(cad.sunSim.timeHour, 10.5);
+
+  const solarPos = cad.getSolarPosition();
+  assert.ok(solarPos.isDaylight, "Should be daylight at 10:30 AM in Pune");
+  assert.ok(solarPos.altitudeDeg > 35 && solarPos.altitudeDeg < 55, "Solar altitude should be between 35° and 55°");
+
+  // Place a panel on the roof
+  const p1 = cad.placePanel("portrait", cad.roofX + 10, cad.roofY + 10);
+  assert.ok(p1, "Panel should be placed");
+
+  // Compute shadow loss stats
+  const lossStats = cad.getShadingLossStats();
+  assert.ok(lossStats.shadowPolygons.length > 0, "External obstacles should cast shadow polygons");
+  assert.equal(lossStats.totalPanels, 1, "Total panels evaluated should be 1");
+
+  // Remove obstacle
+  cad.removeExternalObstacle(pole.id);
+  assert.equal(cad.externalObstacles.length, 3, "External obstacles count should be 3 after removal");
+
+  console.log("✓ Test 7 Passed: North Alignment, Multi-View Elevation, External Obstacles & Astronomical Sun Simulation");
 }
 
 console.log("All RooftopCAD tests passed successfully!");

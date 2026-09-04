@@ -1,3 +1,14 @@
+import {
+  PUNE_COORDINATES,
+  SEASONAL_DAYS,
+  getDayOfYear,
+  calculateSolarPosition,
+  generate2DYearlySunPathData,
+  calculateObstacleShadow,
+  calculateArrayShadingLoss,
+  calculateDailyHourlyProfile,
+} from "./sunSimulation.js";
+
 // ================================================================
 // DC Energy — Interactive Rooftop Solar CAD & Multi-Shape Engine
 // Features:
@@ -8,6 +19,7 @@
 // 5. Collision-Free Grid Auto-Placement (Zero panel overlap)
 // 6. 4-Sided Magnetic Edge Snapping for Manual Placement & Multi-Islands
 // 7. Aerial/Drone Image Import with Pan, Zoom, Rotate & Opacity
+// 8. North Orientation & Multi-View Astronomical Sun Path & Shadow Engine
 // ================================================================
 
 export class RooftopCAD {
@@ -63,22 +75,50 @@ export class RooftopCAD {
     this.addShapeCategory = "cutout"; // 'cutout' | 'pathway' | 'roof'
     this.addShapeType = "rectangle";  // 'rectangle' | 'circle' | 'l_shape'
 
+    // True North Alignment (0° = North straight UP, 90° = East, 180° = South, 270° = West)
+    this.northAngleDeg = options.northAngleDeg ?? 0;
+    this.compassWidget = { x: 0, y: 0, radius: 28, isHovered: false };
+
+    // Multi-View Elevation System: 'top' | 'front' | 'side'
+    this.activeView = options.activeView || "top";
+    this.buildingHeightFt = options.buildingHeightFt || 18; // building elevation from ground to roof slab
+
+    // External Obstacles (Trees, Utility Poles, Buildings, Walls placed outside the roof in yard/setback)
+    // Item: { id, type: 'tree'|'pole'|'building'|'wall', shape: 'circle'|'rectangle', label, lengthFt, breadthFt, diameterFt, heightFt, distanceFromRoofX, distanceFromRoofY, opacity, baseElevationFt }
+    this.externalObstacles = [];
+
+    // Astronomical Sun Path Simulation & Shadow Analysis State
+    this.sunSim = {
+      enabled: false,
+      isPlaying: false,
+      dayOfYear: options.dayOfYear || SEASONAL_DAYS.WINTER_SOLSTICE, // default winter solstice
+      timeHour: options.timeHour || 10.5, // 10:30 AM
+      speed: 1.0,
+      latitude: options.latitude || PUNE_COORDINATES.latitude,
+      longitude: options.longitude || PUNE_COORDINATES.longitude,
+      animId: null,
+    };
+    this.yearlySunPathData = generate2DYearlySunPathData(this.sunSim.latitude, this.sunSim.longitude);
+
     // Interaction state
-    this.dragMode = null; // 'drag_item', 'resize_item', 'draw_shape', 'pan_image'
+    this.dragMode = null; // 'drag_item', 'resize_item', 'draw_shape', 'pan_image', 'rotate_compass', 'drag_obstacle', 'drag_height_front', 'drag_height_side'
     this.dragItem = null;
-    this.activeResizeHandle = null; // 'nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'radius'
+    this.activeResizeHandle = null; // 'nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'radius', 'height'
     this.dragStart = { x: 0, y: 0 };
     this.dragOffset = { x: 0, y: 0 };
     this.initialBounds = null; // snapshot of bounds at drag start for accurate resizing
     this.drawPreview = null;
     this.activeSnapGuide = null;
-    this.selectedItem = null; // { type: 'panel'|'cutout'|'pathway'|'roof', item }
+    this.selectedItem = null; // { type: 'panel'|'cutout'|'pathway'|'roof'|'obstacle', item }
 
     // Callbacks
     this.onStatsChange = options.onStatsChange || null;
     this.onPanelsChange = options.onPanelsChange || null;
     this.onSelectionChange = options.onSelectionChange || null;
     this.onLayersChange = options.onLayersChange || null;
+    this.onSunChange = options.onSunChange || null;
+    this.onViewChange = options.onViewChange || null;
+    this.onNorthChange = options.onNorthChange || null;
 
     // Layer Stack Ordering, Visibility & Opacity (Order from back to front)
     this.layerOrder = ["image", "roof", "pathways", "cutouts", "panels"];
@@ -115,13 +155,49 @@ export class RooftopCAD {
     const availW = Math.max(100, logicalW - padX * 2);
     const availH = Math.max(100, logicalH - padY * 2);
 
-    this.scalePxPerFt = Math.min(availW / Math.max(5, this.roofLengthFt), availH / Math.max(5, this.roofBreadthFt));
-    this.scalePxPerFt = Math.max(4, Math.min(32, this.scalePxPerFt));
+    if (!this.externalObstacles || this.externalObstacles.length === 0) {
+      this.scalePxPerFt = Math.min(availW / Math.max(5, this.roofLengthFt), availH / Math.max(5, this.roofBreadthFt));
+      this.scalePxPerFt = Math.max(4, Math.min(32, this.scalePxPerFt));
 
-    this.roofW = this.roofLengthFt * this.scalePxPerFt;
-    this.roofH = this.roofBreadthFt * this.scalePxPerFt;
-    this.roofX = (logicalW - this.roofW) / 2;
-    this.roofY = (logicalH - this.roofH) / 2;
+      this.roofW = this.roofLengthFt * this.scalePxPerFt;
+      this.roofH = this.roofBreadthFt * this.scalePxPerFt;
+      this.roofX = (logicalW - this.roofW) / 2;
+      this.roofY = (logicalH - this.roofH) / 2;
+    } else {
+      let minXFt = 0;
+      let maxXFt = this.roofLengthFt;
+      let minYFt = 0;
+      let maxYFt = this.roofBreadthFt;
+
+      for (const obs of this.externalObstacles) {
+        const wFt = obs.shape === "circle" ? (obs.diameterFt || 8) : (obs.lengthFt || 10);
+        const hFt = obs.shape === "circle" ? (obs.diameterFt || 8) : (obs.breadthFt || 10);
+        minXFt = Math.min(minXFt, obs.distanceFromRoofX);
+        maxXFt = Math.max(maxXFt, obs.distanceFromRoofX + wFt);
+        minYFt = Math.min(minYFt, obs.distanceFromRoofY);
+        maxYFt = Math.max(maxYFt, obs.distanceFromRoofY + hFt);
+      }
+
+      const marginFt = 4;
+      minXFt -= marginFt;
+      maxXFt += marginFt;
+      minYFt -= marginFt;
+      maxYFt += marginFt;
+
+      const totalWFt = Math.max(12, maxXFt - minXFt);
+      const totalHFt = Math.max(12, maxYFt - minYFt);
+
+      this.scalePxPerFt = Math.min(availW / totalWFt, availH / totalHFt);
+      this.scalePxPerFt = Math.max(4, Math.min(32, this.scalePxPerFt));
+
+      this.roofW = this.roofLengthFt * this.scalePxPerFt;
+      this.roofH = this.roofBreadthFt * this.scalePxPerFt;
+
+      const bboxPxW = totalWFt * this.scalePxPerFt;
+      const bboxPxH = totalHFt * this.scalePxPerFt;
+      this.roofX = (logicalW - bboxPxW) / 2 - minXFt * this.scalePxPerFt;
+      this.roofY = (logicalH - bboxPxH) / 2 - minYFt * this.scalePxPerFt;
+    }
 
     this.clampItemsToRoof();
   }
@@ -463,6 +539,234 @@ export class RooftopCAD {
     this.render();
   }
 
+  // ================= EXTERNAL OBSTACLES (Trees, Poles, Buildings, Walls) =================
+  addExternalObstacle(type = "tree", props = {}) {
+    const id = `obs_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    let defaultObstacle = {
+      id,
+      type,
+      shape: type === "tree" || type === "pole" ? "circle" : "rectangle",
+      label: type === "tree" ? "Tree" : type === "pole" ? "Utility Pole" : type === "building" ? "Neighbor" : "Boundary Wall",
+      lengthFt: 10,
+      breadthFt: 10,
+      diameterFt: 10,
+      heightFt: 20,
+      distanceFromRoofX: -15,
+      distanceFromRoofY: 4,
+      opacity: 1.0,
+      baseElevationFt: 0,
+    };
+
+    if (type === "tree") {
+      defaultObstacle.diameterFt = 10;
+      defaultObstacle.lengthFt = 10;
+      defaultObstacle.breadthFt = 10;
+      defaultObstacle.heightFt = 22;
+      defaultObstacle.distanceFromRoofX = -16;
+      defaultObstacle.distanceFromRoofY = 5;
+    } else if (type === "pole") {
+      defaultObstacle.diameterFt = 2.5;
+      defaultObstacle.lengthFt = 2.5;
+      defaultObstacle.breadthFt = 2.5;
+      defaultObstacle.heightFt = 26;
+      defaultObstacle.distanceFromRoofX = 8;
+      defaultObstacle.distanceFromRoofY = -15;
+    } else if (type === "building") {
+      defaultObstacle.lengthFt = 24;
+      defaultObstacle.breadthFt = 20;
+      defaultObstacle.heightFt = 28;
+      defaultObstacle.distanceFromRoofX = this.roofLengthFt + 10;
+      defaultObstacle.distanceFromRoofY = 0;
+    } else if (type === "wall") {
+      defaultObstacle.lengthFt = this.roofLengthFt + 8;
+      defaultObstacle.breadthFt = 2;
+      defaultObstacle.heightFt = 7;
+      defaultObstacle.distanceFromRoofX = -4;
+      defaultObstacle.distanceFromRoofY = -8;
+    }
+
+    const obstacle = { ...defaultObstacle, ...props };
+    this.externalObstacles.push(obstacle);
+    this.autoFitRoof();
+    this.selectItem("obstacle", obstacle);
+    this.notifyChanges();
+    this.render();
+    return obstacle;
+  }
+
+  updateExternalObstacle(id, props = {}) {
+    const obs = this.externalObstacles.find((o) => o.id === id);
+    if (!obs) return;
+    Object.assign(obs, props);
+    if (obs.shape === "circle" && obs.diameterFt) {
+      obs.lengthFt = obs.diameterFt;
+      obs.breadthFt = obs.diameterFt;
+    }
+    this.notifyChanges();
+    this.render();
+  }
+
+  removeExternalObstacle(id) {
+    this.externalObstacles = this.externalObstacles.filter((o) => o.id !== id);
+    if (this.selectedItem && this.selectedItem.item?.id === id) {
+      this.selectItem(null, null);
+    }
+    this.autoFitRoof();
+    this.notifyChanges();
+    this.render();
+  }
+
+  clearAllObstacles() {
+    this.externalObstacles = [];
+    if (this.selectedItem && this.selectedItem.type === "obstacle") {
+      this.selectItem(null, null);
+    }
+    this.autoFitRoof();
+    this.notifyChanges();
+    this.render();
+  }
+
+  getObstacleScreenBounds(obs) {
+    const x = this.roofX + obs.distanceFromRoofX * this.scalePxPerFt;
+    const y = this.roofY + obs.distanceFromRoofY * this.scalePxPerFt;
+    const w = (obs.shape === "circle" ? (obs.diameterFt || 8) : (obs.lengthFt || 10)) * this.scalePxPerFt;
+    const h = (obs.shape === "circle" ? (obs.diameterFt || 8) : (obs.breadthFt || 10)) * this.scalePxPerFt;
+    const radius = obs.shape === "circle" ? w / 2 : undefined;
+    return { x, y, w, h, radius };
+  }
+
+  // ================= TRUE NORTH ALIGNMENT =================
+  setNorthAngle(deg) {
+    this.northAngleDeg = ((Math.round(Number(deg)) % 360) + 360) % 360;
+    this.notifyChanges();
+    this.render();
+  }
+
+  rotateNorth(deltaDeg) {
+    this.setNorthAngle(this.northAngleDeg + deltaDeg);
+  }
+
+  // ================= MULTI-VIEW ELEVATION SYSTEM =================
+  setActiveView(view) {
+    if (!["top", "front", "side"].includes(view)) return;
+    this.activeView = view;
+    if (this.onViewChange) {
+      this.onViewChange(view);
+    }
+    this.render();
+  }
+
+  setBuildingHeight(heightFt) {
+    this.buildingHeightFt = Math.max(5, Number(heightFt) || 18);
+    this.notifyChanges();
+    this.render();
+  }
+
+  // ================= ASTRONOMICAL SUN SIMULATION & SHADOW ENGINE =================
+  toggleSunSimulation(enabled = null) {
+    if (enabled === null) {
+      this.sunSim.enabled = !this.sunSim.enabled;
+    } else {
+      this.sunSim.enabled = Boolean(enabled);
+    }
+    if (!this.sunSim.enabled && this.sunSim.isPlaying) {
+      this.pauseSunAnimation();
+    }
+    this.notifySunChange();
+    this.render();
+    return this.sunSim.enabled;
+  }
+
+  setSunTime(hour) {
+    this.sunSim.timeHour = Math.max(5.5, Math.min(18.5, Number(hour)));
+    this.notifySunChange();
+    this.render();
+  }
+
+  setSunDate(dayOfYear) {
+    this.sunSim.dayOfYear = Math.max(1, Math.min(365, Number(dayOfYear)));
+    this.notifySunChange();
+    this.render();
+  }
+
+  playSunAnimation(speed = 1.0) {
+    this.sunSim.enabled = true;
+    this.sunSim.isPlaying = true;
+    this.sunSim.speed = speed;
+
+    if (this.sunSim.animId) {
+      cancelAnimationFrame(this.sunSim.animId);
+    }
+
+    let lastTimestamp = performance.now();
+    const animate = (timestamp) => {
+      if (!this.sunSim.isPlaying) return;
+      const dt = (timestamp - lastTimestamp) / 1000;
+      lastTimestamp = timestamp;
+
+      this.sunSim.timeHour += dt * 0.45 * this.sunSim.speed;
+      if (this.sunSim.timeHour > 18.5) {
+        this.sunSim.timeHour = 5.5; // Loop back
+      }
+
+      this.notifySunChange();
+      this.render();
+      this.sunSim.animId = requestAnimationFrame(animate);
+    };
+
+    this.sunSim.animId = requestAnimationFrame(animate);
+  }
+
+  pauseSunAnimation() {
+    this.sunSim.isPlaying = false;
+    if (this.sunSim.animId) {
+      cancelAnimationFrame(this.sunSim.animId);
+      this.sunSim.animId = null;
+    }
+    this.notifySunChange();
+    this.render();
+  }
+
+  getSolarPosition() {
+    return calculateSolarPosition(
+      this.sunSim.dayOfYear,
+      this.sunSim.timeHour,
+      this.sunSim.latitude,
+      this.sunSim.longitude
+    );
+  }
+
+  getShadingLossStats() {
+    const solarPos = this.getSolarPosition();
+    const lossStats = calculateArrayShadingLoss(
+      this.panels,
+      this.externalObstacles,
+      this.roofX,
+      this.roofY,
+      this.scalePxPerFt,
+      solarPos,
+      this.northAngleDeg
+    );
+
+    return {
+      solarPos,
+      ...lossStats,
+    };
+  }
+
+  notifySunChange() {
+    if (this.onSunChange) {
+      this.onSunChange({
+        enabled: this.sunSim.enabled,
+        isPlaying: this.sunSim.isPlaying,
+        timeHour: this.sunSim.timeHour,
+        dayOfYear: this.sunSim.dayOfYear,
+        solarPos: this.getSolarPosition(),
+        stats: this.getShadingLossStats(),
+      });
+    }
+  }
+
   // Selection & Properties Inspector Synchronization
   selectItem(type, item) {
     if (!type || !item) {
@@ -504,6 +808,28 @@ export class RooftopCAD {
       return;
     }
 
+    if (type === "obstacle") {
+      if (props.heightFt !== undefined) it.heightFt = Math.max(1, Number(props.heightFt));
+      if (props.distanceFromRoofX !== undefined) it.distanceFromRoofX = Number(props.distanceFromRoofX);
+      if (props.distanceFromRoofY !== undefined) it.distanceFromRoofY = Number(props.distanceFromRoofY);
+      if (it.shape === "circle" && props.diameterFt !== undefined) {
+        const diaFt = Math.max(1, Number(props.diameterFt));
+        it.diameterFt = diaFt;
+        it.lengthFt = diaFt;
+        it.breadthFt = diaFt;
+      } else {
+        if (props.lengthFt !== undefined) it.lengthFt = Math.max(1, Number(props.lengthFt));
+        if (props.breadthFt !== undefined) it.breadthFt = Math.max(1, Number(props.breadthFt));
+      }
+      this.autoFitRoof();
+      if (this.onSelectionChange) {
+        this.onSelectionChange(this.selectedItem);
+      }
+      this.notifyChanges();
+      this.render();
+      return;
+    }
+
     if (it.shape === "circle" && props.diameterFt !== undefined) {
       const diaFt = Math.max(1, Number(props.diameterFt));
       it.diameterFt = diaFt;
@@ -542,6 +868,9 @@ export class RooftopCAD {
       this.cutouts = this.cutouts.filter((c) => c.id !== item.id);
     } else if (type === "pathway") {
       this.pathways = this.pathways.filter((p) => p.id !== item.id);
+    } else if (type === "obstacle") {
+      this.externalObstacles = this.externalObstacles.filter((o) => o.id !== item.id);
+      this.autoFitRoof();
     }
 
     this.selectItem(null, null);
@@ -660,6 +989,9 @@ export class RooftopCAD {
     } else if (type === "pathway") {
       this.pathways = this.pathways.filter((pw) => pw.id !== item.id);
       this.pathways.push(item);
+    } else if (type === "obstacle") {
+      this.externalObstacles = this.externalObstacles.filter((o) => o.id !== item.id);
+      this.externalObstacles.push(item);
     }
     this.notifyLayersChange();
     this.render();
@@ -677,6 +1009,9 @@ export class RooftopCAD {
     } else if (type === "pathway") {
       this.pathways = this.pathways.filter((pw) => pw.id !== item.id);
       this.pathways.unshift(item);
+    } else if (type === "obstacle") {
+      this.externalObstacles = this.externalObstacles.filter((o) => o.id !== item.id);
+      this.externalObstacles.unshift(item);
     }
     this.notifyLayersChange();
     this.render();
@@ -695,11 +1030,15 @@ export class RooftopCAD {
       visible: { ...this.layerVisible },
       cutouts: this.cutouts.map((c) => ({ ...c })),
       pathways: this.pathways.map((pw) => ({ ...pw })),
+      obstacles: this.externalObstacles.map((o) => ({ ...o })),
       panelsCount: this.panels.length,
       panels: this.panels.map((p, idx) => ({ ...p, index: idx + 1 })),
       imageLoaded: this.image.isLoaded,
       roofLengthFt: this.roofLengthFt,
       roofBreadthFt: this.roofBreadthFt,
+      northAngleDeg: this.northAngleDeg,
+      activeView: this.activeView,
+      sunSim: { ...this.sunSim },
       selectedItem: this.selectedItem
         ? {
             type: this.selectedItem.type,
@@ -751,6 +1090,11 @@ export class RooftopCAD {
       if (pw) this.selectItem("pathway", pw);
       return;
     }
+    if (type === "obstacle") {
+      const obs = this.externalObstacles.find((item) => item.id === id);
+      if (obs) this.selectItem("obstacle", obs);
+      return;
+    }
   }
 
   setComponentOpacity(type, id, opacity) {
@@ -767,6 +1111,7 @@ export class RooftopCAD {
     if (type === "panel") target = this.panels.find((p) => p.id === id);
     else if (type === "cutout") target = this.cutouts.find((c) => c.id === id);
     else if (type === "pathway") target = this.pathways.find((pw) => pw.id === id);
+    else if (type === "obstacle") target = this.externalObstacles.find((o) => o.id === id);
 
     if (target) {
       target.opacity = op;
@@ -784,6 +1129,7 @@ export class RooftopCAD {
     if (type === "panel") arr = this.panels;
     else if (type === "cutout") arr = this.cutouts;
     else if (type === "pathway") arr = this.pathways;
+    else if (type === "obstacle") arr = this.externalObstacles;
     if (!arr) return;
 
     const idx = arr.findIndex((item) => item.id === id);
@@ -809,6 +1155,9 @@ export class RooftopCAD {
       this.cutouts = this.cutouts.filter((c) => c.id !== id);
     } else if (type === "pathway") {
       this.pathways = this.pathways.filter((pw) => pw.id !== id);
+    } else if (type === "obstacle") {
+      this.removeExternalObstacle(id);
+      return;
     }
     if (this.selectedItem && this.selectedItem.item && this.selectedItem.item.id === id) {
       this.selectItem(null, null);
@@ -1066,13 +1415,22 @@ export class RooftopCAD {
       });
     }
     this.notifyLayersChange();
+    if (this.onNorthChange) {
+      this.onNorthChange(this.northAngleDeg);
+    }
   }
 
   // ================= 8-POINT RESIZE HANDLES & EVENT LOGIC =================
   getResizeHandles(item) {
     if (!item) return [];
-    const { x, y, w, h } = item;
-    const handleSize = 8;
+    let { x, y, w, h } = item;
+    if (this.selectedItem && this.selectedItem.type === "obstacle") {
+      const b = this.getObstacleScreenBounds(item);
+      x = b.x;
+      y = b.y;
+      w = b.w;
+      h = b.h;
+    }
 
     if (item.shape === "circle") {
       const cx = x + w / 2;
@@ -1162,14 +1520,96 @@ export class RooftopCAD {
 
   handlePointerDown(x, y, e) {
     this.dragStart = { x, y };
+    const logicalH = 460;
+    const groundY = logicalH - 75;
 
-    // Check if clicked an interactive resize handle on the selected item
+    // Check Elevation Views (Front / Side)
+    if (this.activeView === "front") {
+      for (let i = this.externalObstacles.length - 1; i >= 0; i--) {
+        const obs = this.externalObstacles[i];
+        const obsX = this.roofX + obs.distanceFromRoofX * this.scalePxPerFt;
+        const obsW = (obs.shape === "circle" ? (obs.diameterFt || 8) : (obs.lengthFt || 10)) * this.scalePxPerFt;
+        const obsHPx = obs.heightFt * this.scalePxPerFt;
+        const topY = groundY - obsHPx;
+
+        // Height drag handle on top
+        if (Math.hypot(x - (obsX + obsW / 2), y - topY) <= 14) {
+          this.selectItem("obstacle", obs);
+          this.dragMode = "drag_height_front";
+          this.dragItem = obs;
+          return;
+        }
+
+        // Obstacle body click
+        if (x >= obsX && x <= obsX + obsW && y >= topY && y <= groundY) {
+          this.selectItem("obstacle", obs);
+          return;
+        }
+      }
+      this.selectItem(null, null);
+      return;
+    }
+
+    if (this.activeView === "side") {
+      const logicalW = this.canvas.parentElement ? Math.max(300, this.canvas.parentElement.clientWidth) : 800;
+      const bldgW = this.roofBreadthFt * this.scalePxPerFt;
+      const bldgX = (logicalW - bldgW) / 2;
+
+      for (let i = this.externalObstacles.length - 1; i >= 0; i--) {
+        const obs = this.externalObstacles[i];
+        const obsX = bldgX + obs.distanceFromRoofY * this.scalePxPerFt;
+        const obsW = (obs.shape === "circle" ? (obs.diameterFt || 8) : (obs.breadthFt || 10)) * this.scalePxPerFt;
+        const obsHPx = obs.heightFt * this.scalePxPerFt;
+        const topY = groundY - obsHPx;
+
+        // Height drag handle on top
+        if (Math.hypot(x - (obsX + obsW / 2), y - topY) <= 14) {
+          this.selectItem("obstacle", obs);
+          this.dragMode = "drag_height_side";
+          this.dragItem = obs;
+          return;
+        }
+
+        // Obstacle body click
+        if (x >= obsX && x <= obsX + obsW && y >= topY && y <= groundY) {
+          this.selectItem("obstacle", obs);
+          return;
+        }
+      }
+      this.selectItem(null, null);
+      return;
+    }
+
+    // TOP PLAN VIEW:
+    // 1. Check True North Compass Dial click / rotate
+    if (this.compassWidget) {
+      const distToCompass = Math.hypot(x - this.compassWidget.x, y - this.compassWidget.y);
+      if (distToCompass <= this.compassWidget.radius + 8) {
+        this.dragMode = "rotate_compass";
+        return;
+      }
+    }
+
+    // 2. Check if clicked an interactive resize handle on the selected item
     const clickedHandle = this.findHandleAt(x, y);
     if (clickedHandle && this.selectedItem) {
       this.dragMode = "resize_item";
       this.activeResizeHandle = clickedHandle.handle;
       const it = this.selectedItem.item;
-      this.initialBounds = { x: it.x, y: it.y, w: it.w, h: it.h, radius: it.radius || it.w / 2 };
+      if (this.selectedItem.type === "obstacle") {
+        const b = this.getObstacleScreenBounds(it);
+        this.initialBounds = {
+          x: b.x,
+          y: b.y,
+          w: b.w,
+          h: b.h,
+          radius: b.radius || b.w / 2,
+          distanceFromRoofX: it.distanceFromRoofX,
+          distanceFromRoofY: it.distanceFromRoofY,
+        };
+      } else {
+        this.initialBounds = { x: it.x, y: it.y, w: it.w, h: it.h, radius: it.radius || it.w / 2 };
+      }
       return;
     }
 
@@ -1205,7 +1645,31 @@ export class RooftopCAD {
       return;
     }
 
-    // Hit-test interactive elements according to dynamic layerOrder (topmost visible layer tested first)
+    // 3. Check External Obstacles in Yard
+    for (let i = this.externalObstacles.length - 1; i >= 0; i--) {
+      const obs = this.externalObstacles[i];
+      const b = this.getObstacleScreenBounds(obs);
+      let inside = false;
+      if (obs.shape === "circle") {
+        const cx = b.x + b.w / 2;
+        const cy = b.y + b.h / 2;
+        const r = b.radius || b.w / 2;
+        inside = (x - cx) ** 2 + (y - cy) ** 2 <= r ** 2;
+      } else {
+        inside = x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+      }
+
+      if (inside) {
+        this.selectItem("obstacle", obs);
+        this.dragItem = obs;
+        this.dragStartSnapshot = { x: obs.distanceFromRoofX, y: obs.distanceFromRoofY };
+        this.dragMode = "drag_obstacle";
+        this.dragOffset = { x: x - b.x, y: y - b.y };
+        return;
+      }
+    }
+
+    // 4. Hit-test internal roof layers according to dynamic layerOrder
     for (let lIdx = this.layerOrder.length - 1; lIdx >= 0; lIdx--) {
       const layer = this.layerOrder[lIdx];
       if (!this.layerVisible[layer]) continue;
@@ -1276,13 +1740,29 @@ export class RooftopCAD {
       }
     }
 
-    // Clicked empty canvas outside roof
+    // Clicked empty canvas
     this.selectItem(null, null);
   }
 
   handlePointerMove(x, y, e) {
+    const logicalH = 460;
+    const groundY = logicalH - 75;
+
     // Hover handle cursor detection when idle
     if (!this.dragMode) {
+      if (this.activeView === "top" && this.compassWidget) {
+        const distToCompass = Math.hypot(x - this.compassWidget.x, y - this.compassWidget.y);
+        if (distToCompass <= this.compassWidget.radius + 8) {
+          this.canvas.style.cursor = "crosshair";
+          return;
+        }
+      }
+
+      if (this.activeView === "front" || this.activeView === "side") {
+        this.canvas.style.cursor = "default";
+        return;
+      }
+
       const hoveredHandle = this.findHandleAt(x, y);
       if (hoveredHandle) {
         this.canvas.style.cursor = hoveredHandle.cursor;
@@ -1291,6 +1771,39 @@ export class RooftopCAD {
       } else if (this.activeTool === "select") {
         this.canvas.style.cursor = "default";
       }
+    }
+
+    if (this.dragMode === "rotate_compass" && this.compassWidget) {
+      const dx = x - this.compassWidget.x;
+      const dy = y - this.compassWidget.y;
+      const deg = Math.round((Math.atan2(dx, -dy) * 180) / Math.PI);
+      this.northAngleDeg = ((deg % 360) + 360) % 360;
+      this.notifyChanges();
+      this.render();
+      return;
+    }
+
+    if (this.dragMode === "drag_obstacle" && this.dragItem) {
+      const rawX = x - this.dragOffset.x;
+      const rawY = y - this.dragOffset.y;
+      this.dragItem.distanceFromRoofX = Number(((rawX - this.roofX) / this.scalePxPerFt).toFixed(1));
+      this.dragItem.distanceFromRoofY = Number(((rawY - this.roofY) / this.scalePxPerFt).toFixed(1));
+      if (this.onSelectionChange) {
+        this.onSelectionChange(this.selectedItem);
+      }
+      this.render();
+      return;
+    }
+
+    if ((this.dragMode === "drag_height_front" || this.dragMode === "drag_height_side") && this.dragItem) {
+      const hPx = Math.max(10, groundY - y);
+      const hFt = Math.max(1, Math.round(hPx / this.scalePxPerFt));
+      this.dragItem.heightFt = hFt;
+      if (this.onSelectionChange) {
+        this.onSelectionChange(this.selectedItem);
+      }
+      this.render();
+      return;
     }
 
     if (this.dragMode === "pan_image") {
@@ -1332,6 +1845,7 @@ export class RooftopCAD {
   }
 
   applyResize(mouseX, mouseY) {
+    const isObs = this.selectedItem && this.selectedItem.type === "obstacle";
     const it = this.selectedItem.item;
     const b = this.initialBounds;
     const dx = mouseX - this.dragStart.x;
@@ -1341,21 +1855,55 @@ export class RooftopCAD {
     if (it.shape === "circle") {
       if (this.activeResizeHandle === "radius_e") {
         const newR = Math.max(8, b.radius + dx);
-        it.radius = newR;
-        it.w = newR * 2;
-        it.h = newR * 2;
-        it.diameterFt = (newR * 2) / this.scalePxPerFt;
-        it.lengthFt = it.diameterFt;
-        it.breadthFt = it.diameterFt;
+        if (isObs) {
+          it.diameterFt = Number(((newR * 2) / this.scalePxPerFt).toFixed(1));
+          it.lengthFt = it.diameterFt;
+          it.breadthFt = it.diameterFt;
+        } else {
+          it.radius = newR;
+          it.w = newR * 2;
+          it.h = newR * 2;
+          it.diameterFt = (newR * 2) / this.scalePxPerFt;
+          it.lengthFt = it.diameterFt;
+          it.breadthFt = it.diameterFt;
+        }
       } else if (this.activeResizeHandle === "radius_s") {
         const newR = Math.max(8, b.radius + dy);
-        it.radius = newR;
-        it.w = newR * 2;
-        it.h = newR * 2;
-        it.diameterFt = (newR * 2) / this.scalePxPerFt;
-        it.lengthFt = it.diameterFt;
-        it.breadthFt = it.diameterFt;
+        if (isObs) {
+          it.diameterFt = Number(((newR * 2) / this.scalePxPerFt).toFixed(1));
+          it.lengthFt = it.diameterFt;
+          it.breadthFt = it.diameterFt;
+        } else {
+          it.radius = newR;
+          it.w = newR * 2;
+          it.h = newR * 2;
+          it.diameterFt = (newR * 2) / this.scalePxPerFt;
+          it.lengthFt = it.diameterFt;
+          it.breadthFt = it.diameterFt;
+        }
       }
+      if (this.onSelectionChange) {
+        this.onSelectionChange(this.selectedItem);
+      }
+      this.notifyChanges();
+      return;
+    }
+
+    if (isObs) {
+      let wPx = b.w;
+      let hPx = b.h;
+      if (this.activeResizeHandle.includes("e")) wPx = Math.max(minDim, b.w + dx);
+      if (this.activeResizeHandle.includes("s")) hPx = Math.max(minDim, b.h + dy);
+      if (this.activeResizeHandle.includes("w")) {
+        wPx = Math.max(minDim, b.w - dx);
+        it.distanceFromRoofX = Number((b.distanceFromRoofX + dx / this.scalePxPerFt).toFixed(1));
+      }
+      if (this.activeResizeHandle.includes("n")) {
+        hPx = Math.max(minDim, b.h - dy);
+        it.distanceFromRoofY = Number((b.distanceFromRoofY + dy / this.scalePxPerFt).toFixed(1));
+      }
+      it.lengthFt = Number((wPx / this.scalePxPerFt).toFixed(1));
+      it.breadthFt = Number((hPx / this.scalePxPerFt).toFixed(1));
       if (this.onSelectionChange) {
         this.onSelectionChange(this.selectedItem);
       }
@@ -1489,8 +2037,27 @@ export class RooftopCAD {
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, logicalW, logicalH);
 
+    if (this.activeView === "front") {
+      this.renderFrontView(logicalW, logicalH);
+    } else if (this.activeView === "side") {
+      this.renderSideView(logicalW, logicalH);
+    } else {
+      this.renderTopView(logicalW, logicalH);
+    }
+
+    ctx.restore();
+  }
+
+  renderTopView(logicalW, logicalH) {
+    const ctx = this.ctx;
+
     // Layer 1: Modern Dark Engineering Grid Background
     this.drawGrid(logicalW, logicalH);
+
+    // If sun simulation is enabled: draw polar celestial dome underlay
+    if (this.sunSim.enabled) {
+      this.drawTopSunPathArc(logicalW, logicalH);
+    }
 
     // Dynamic Layer Ordering from this.layerOrder
     for (const layer of this.layerOrder) {
@@ -1515,10 +2082,991 @@ export class RooftopCAD {
       ctx.restore();
     }
 
+    // Cast Shadows on ground & roof when sun simulation is active
+    let shadedPanelIds = new Set();
+    if (this.sunSim.enabled) {
+      const stats = this.getShadingLossStats();
+      shadedPanelIds = stats.shadedPanelIds || new Set();
+      this.drawCastShadows(stats.shadowPolygons, shadedPanelIds);
+    }
+
+    // External Obstacles in Yard
+    this.drawExternalObstaclesTop();
+
     // Overlays, gizmos and annotations
     this.drawInteractiveOverlays();
     this.drawSelectionGizmo();
     this.drawDimensions();
+
+    // True North Compass Dial
+    this.drawCompass(logicalW, logicalH);
+  }
+
+  drawCompass(logicalW, logicalH) {
+    const ctx = this.ctx;
+    const cx = logicalW - 52;
+    const cy = 52;
+    const r = 26;
+    this.compassWidget = { x: cx, y: cy, radius: r };
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Bezel
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(15, 23, 42, 0.92)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.5)";
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    // Degree tick marks
+    for (let deg = 0; deg < 360; deg += 30) {
+      const rad = (deg * Math.PI) / 180;
+      const isCard = deg % 90 === 0;
+      const rInner = isCard ? r - 6 : r - 3;
+      ctx.beginPath();
+      ctx.moveTo(rInner * Math.sin(rad), -rInner * Math.cos(rad));
+      ctx.lineTo((r - 2) * Math.sin(rad), -(r - 2) * Math.cos(rad));
+      ctx.strokeStyle = isCard ? "#38bdf8" : "rgba(255, 255, 255, 0.3)";
+      ctx.lineWidth = isCard ? 1.5 : 1;
+      ctx.stroke();
+    }
+
+    // Needle rotated by this.northAngleDeg
+    ctx.rotate((this.northAngleDeg * Math.PI) / 180);
+
+    // North arrow (Bright Red)
+    ctx.beginPath();
+    ctx.moveTo(0, -r + 5);
+    ctx.lineTo(5.5, 0);
+    ctx.lineTo(0, -2);
+    ctx.lineTo(-5.5, 0);
+    ctx.closePath();
+    ctx.fillStyle = "#ef4444";
+    ctx.fill();
+
+    // South arrow (Silver / Slate)
+    ctx.beginPath();
+    ctx.moveTo(0, r - 5);
+    ctx.lineTo(5, 0);
+    ctx.lineTo(0, 2);
+    ctx.lineTo(-5, 0);
+    ctx.closePath();
+    ctx.fillStyle = "#94a3b8";
+    ctx.fill();
+
+    // Center pivot
+    ctx.beginPath();
+    ctx.arc(0, 0, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+
+    // North 'N' letter
+    ctx.font = "bold 9px Inter, sans-serif";
+    ctx.fillStyle = "#f87171";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillText("N", 0, -r + 3);
+
+    ctx.restore();
+
+    // North angle text badge below compass
+    ctx.font = "bold 9.5px Inter, sans-serif";
+    ctx.fillStyle = "#38bdf8";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(`North: ${this.northAngleDeg}°`, cx, cy + r + 5);
+  }
+
+  drawTopSunPathArc(logicalW, logicalH) {
+    const ctx = this.ctx;
+    const cx = this.roofX + this.roofW / 2;
+    const cy = this.roofY + this.roofH / 2;
+    const domeR = Math.max(150, Math.min(logicalW, logicalH) * 0.42);
+
+    ctx.save();
+
+    // 1. Concentric Altitude Rings (Horizon 0°, 30°, 60°)
+    const rings = [
+      { r: domeR, label: "0° Horizon" },
+      { r: domeR * (2 / 3), label: "30°" },
+      { r: domeR * (1 / 3), label: "60°" },
+    ];
+
+    rings.forEach((ring) => {
+      ctx.beginPath();
+      ctx.arc(cx, cy, ring.r, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.12)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    // 2. Cardinal Crosshairs aligned with True North
+    const nRad = (this.northAngleDeg * Math.PI) / 180;
+    const cardinals = [
+      { label: "N", angle: nRad, color: "#f87171" },
+      { label: "E", angle: nRad + Math.PI / 2, color: "#94a3b8" },
+      { label: "S", angle: nRad + Math.PI, color: "#94a3b8" },
+      { label: "W", angle: nRad + (3 * Math.PI) / 2, color: "#94a3b8" },
+    ];
+
+    cardinals.forEach((c) => {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      const ex = cx + domeR * Math.sin(c.angle);
+      const ey = cy - domeR * Math.cos(c.angle);
+      ctx.lineTo(ex, ey);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.font = "bold 9px Inter, sans-serif";
+      ctx.fillStyle = c.color;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(c.label, cx + (domeR + 10) * Math.sin(c.angle), cy - (domeR + 10) * Math.cos(c.angle));
+    });
+
+    // Helper: Map (alt, az) to Polar (x, y)
+    const mapToPolar = (altDeg, azDeg) => {
+      const altClamped = Math.max(0, altDeg);
+      const r = domeR * (1 - altClamped / 90);
+      const angleRad = ((azDeg - this.northAngleDeg) * Math.PI) / 180;
+      return {
+        x: cx + r * Math.sin(angleRad),
+        y: cy - r * Math.cos(angleRad),
+      };
+    };
+
+    // 3. 2D Seasonal Curves (Summer Solstice, Equinox, Winter Solstice)
+    if (this.yearlySunPathData && this.yearlySunPathData.seasonalArcs) {
+      this.yearlySunPathData.seasonalArcs.forEach((arc) => {
+        if (!arc.points || arc.points.length === 0) return;
+        ctx.beginPath();
+        let started = false;
+        arc.points.forEach((pt) => {
+          if (pt.altitude <= 0) return;
+          const pos = mapToPolar(pt.altitude, pt.azimuth);
+          if (!started) {
+            ctx.moveTo(pos.x, pos.y);
+            started = true;
+          } else {
+            ctx.lineTo(pos.x, pos.y);
+          }
+        });
+        ctx.strokeStyle = arc.color || "#38bdf8";
+        ctx.lineWidth = arc.strokeWidth || 1.5;
+        ctx.stroke();
+      });
+
+      // 4. 2D Hourly Analemma / Time Lines (6 AM to 6 PM connecting seasons)
+      if (this.yearlySunPathData.hourlyGrid) {
+        this.yearlySunPathData.hourlyGrid.forEach((hLine) => {
+          if (!hLine.points || hLine.points.length < 2) return;
+          ctx.beginPath();
+          let started = false;
+          hLine.points.forEach((pt) => {
+            const pos = mapToPolar(pt.altitude, pt.azimuth);
+            if (!started) {
+              ctx.moveTo(pos.x, pos.y);
+              started = true;
+            } else {
+              ctx.lineTo(pos.x, pos.y);
+            }
+          });
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 3]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        });
+      }
+    }
+
+    // 5. Current Sun Position Marker
+    const solarPos = this.getSolarPosition();
+    if (solarPos && solarPos.isDaylight) {
+      const sunCoord = mapToPolar(solarPos.altitudeDeg, solarPos.azimuthDeg);
+
+      // Incoming Sun Ray towards roof center
+      ctx.beginPath();
+      ctx.moveTo(sunCoord.x, sunCoord.y);
+      ctx.lineTo(cx, cy);
+      ctx.strokeStyle = "rgba(251, 191, 36, 0.4)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Sun Glow & Disk
+      const sunGrad = ctx.createRadialGradient(sunCoord.x, sunCoord.y, 2, sunCoord.x, sunCoord.y, 14);
+      sunGrad.addColorStop(0, "rgba(253, 224, 71, 1)");
+      sunGrad.addColorStop(0.5, "rgba(245, 158, 11, 0.7)");
+      sunGrad.addColorStop(1, "rgba(245, 158, 11, 0)");
+      ctx.fillStyle = sunGrad;
+      ctx.beginPath();
+      ctx.arc(sunCoord.x, sunCoord.y, 14, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(sunCoord.x, sunCoord.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = "#fef08a";
+      ctx.fill();
+      ctx.strokeStyle = "#ea580c";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Tooltip
+      ctx.font = "bold 9px Inter, sans-serif";
+      ctx.fillStyle = "#fef08a";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(`☀️ ${solarPos.altitudeDeg.toFixed(1)}° Alt | ${solarPos.azimuthDeg.toFixed(1)}° Az`, sunCoord.x, sunCoord.y - 12);
+    }
+
+    ctx.restore();
+  }
+
+  drawExternalObstaclesTop() {
+    const ctx = this.ctx;
+
+    this.externalObstacles.forEach((obs) => {
+      const isSelected = this.selectedItem && this.selectedItem.item?.id === obs.id;
+      const b = this.getObstacleScreenBounds(obs);
+
+      ctx.save();
+      ctx.globalAlpha = obs.opacity ?? 1.0;
+
+      if (obs.shape === "circle" || obs.type === "tree") {
+        const cx = b.x + b.w / 2;
+        const cy = b.y + b.h / 2;
+        const r = b.radius || b.w / 2;
+
+        if (obs.type === "tree") {
+          // Lush layered foliage
+          const treeGrad = ctx.createRadialGradient(cx - r * 0.2, cy - r * 0.2, r * 0.1, cx, cy, r);
+          treeGrad.addColorStop(0, "#22c55e");
+          treeGrad.addColorStop(0.7, "#15803d");
+          treeGrad.addColorStop(1, "#14532d");
+          ctx.fillStyle = treeGrad;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Trunk center ring
+          ctx.beginPath();
+          ctx.arc(cx, cy, Math.max(3, r * 0.22), 0, Math.PI * 2);
+          ctx.fillStyle = "#78350f";
+          ctx.fill();
+
+          ctx.strokeStyle = isSelected ? "#38bdf8" : "rgba(34, 197, 94, 0.7)";
+          ctx.lineWidth = isSelected ? 2.5 : 1.5;
+          ctx.stroke();
+        } else {
+          // Utility Pole / Round structure
+          ctx.fillStyle = "#475569";
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Crossarm lines
+          ctx.strokeStyle = "#94a3b8";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(cx - r * 1.5, cy);
+          ctx.lineTo(cx + r * 1.5, cy);
+          ctx.moveTo(cx, cy - r * 1.5);
+          ctx.lineTo(cx, cy + r * 1.5);
+          ctx.stroke();
+
+          ctx.strokeStyle = isSelected ? "#38bdf8" : "#64748b";
+          ctx.lineWidth = isSelected ? 2.5 : 1.5;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // Label
+        ctx.font = "bold 9px Inter, sans-serif";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(`${obs.label} (${obs.heightFt}ft)`, cx, cy);
+      } else {
+        // Rectangle: Neighbor Building or Wall
+        if (obs.type === "building") {
+          ctx.fillStyle = "rgba(71, 85, 105, 0.75)";
+          ctx.fillRect(b.x, b.y, b.w, b.h);
+
+          // Roof parapet outline
+          ctx.strokeStyle = "rgba(148, 163, 184, 0.4)";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(b.x + 3, b.y + 3, b.w - 6, b.h - 6);
+
+          ctx.strokeStyle = isSelected ? "#38bdf8" : "#94a3b8";
+          ctx.lineWidth = isSelected ? 2.5 : 1.8;
+          ctx.strokeRect(b.x, b.y, b.w, b.h);
+        } else {
+          // Boundary Wall
+          ctx.fillStyle = "rgba(168, 85, 247, 0.35)";
+          ctx.fillRect(b.x, b.y, b.w, b.h);
+          ctx.strokeStyle = isSelected ? "#38bdf8" : "#c084fc";
+          ctx.lineWidth = isSelected ? 2.5 : 1.5;
+          ctx.strokeRect(b.x, b.y, b.w, b.h);
+        }
+
+        // Label
+        ctx.font = "bold 9.5px Inter, sans-serif";
+        ctx.fillStyle = "#f8fafc";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(`${obs.label} (${obs.heightFt}ft H)`, b.x + b.w / 2, b.y + b.h / 2);
+      }
+
+      ctx.restore();
+    });
+  }
+
+  drawCastShadows(shadowPolygons = [], shadedPanelIds = new Set()) {
+    const ctx = this.ctx;
+    ctx.save();
+
+    // 1. Draw 3D Extruded Shadow Polygons
+    shadowPolygons.forEach((sh) => {
+      const poly = sh.shadowPolygon;
+      if (!poly || poly.length < 3) return;
+
+      ctx.beginPath();
+      ctx.moveTo(poly[0].x, poly[0].y);
+      for (let i = 1; i < poly.length; i++) {
+        ctx.lineTo(poly[i].x, poly[i].y);
+      }
+      ctx.closePath();
+
+      ctx.fillStyle = "rgba(10, 15, 30, 0.48)";
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(15, 23, 42, 0.75)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Shadow Length Tag
+      if (sh.tipX && sh.tipY) {
+        ctx.font = "bold 8.5px Inter, sans-serif";
+        ctx.fillStyle = "rgba(226, 232, 240, 0.75)";
+        ctx.textAlign = "center";
+        ctx.fillText(`${sh.label} Shadow (${sh.shadowLengthFt.toFixed(1)}ft)`, sh.tipX, sh.tipY + 10);
+      }
+    });
+
+    // 2. Highlight Panels Covered by Shadows
+    this.panels.forEach((p) => {
+      if (shadedPanelIds.has(p.id)) {
+        ctx.fillStyle = "rgba(239, 68, 68, 0.3)";
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+
+        ctx.strokeStyle = "#f87171";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 3]);
+        ctx.strokeRect(p.x, p.y, p.w, p.h);
+        ctx.setLineDash([]);
+
+        ctx.font = "bold 8px Inter, sans-serif";
+        ctx.fillStyle = "#fee2e2";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("⚠️ Shaded", p.x + p.w / 2, p.y + p.h / 2);
+      }
+    });
+
+    ctx.restore();
+  }
+
+  // ================= FRONT ELEVATION VIEW =================
+  renderFrontView(logicalW, logicalH) {
+    const ctx = this.ctx;
+    const groundY = logicalH - 75;
+
+    // Sky gradient
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, groundY);
+    skyGrad.addColorStop(0, "#081026");
+    skyGrad.addColorStop(0.75, "#152238");
+    skyGrad.addColorStop(1, "#1e293b");
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, logicalW, groundY);
+
+    // Ground platform
+    const groundGrad = ctx.createLinearGradient(0, groundY, 0, logicalH);
+    groundGrad.addColorStop(0, "#1c2e24");
+    groundGrad.addColorStop(1, "#0d1712");
+    ctx.fillStyle = groundGrad;
+    ctx.fillRect(0, groundY, logicalW, logicalH - groundY);
+
+    ctx.strokeStyle = "#22c55e";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, groundY);
+    ctx.lineTo(logicalW, groundY);
+    ctx.stroke();
+
+    // 2D Elevation Sun Path Arc across the sky dome
+    this.drawFrontSunPathArc(logicalW, logicalH, groundY);
+
+    // Building Front Facade
+    const bldgW = this.roofLengthFt * this.scalePxPerFt;
+    const bldgH = this.buildingHeightFt * this.scalePxPerFt;
+    const bldgX = (logicalW - bldgW) / 2;
+    const roofTopY = groundY - bldgH;
+
+    // Facade Body
+    const facadeGrad = ctx.createLinearGradient(bldgX, roofTopY, bldgX + bldgW, groundY);
+    facadeGrad.addColorStop(0, "#1e293b");
+    facadeGrad.addColorStop(1, "#0f172a");
+    ctx.fillStyle = facadeGrad;
+    ctx.fillRect(bldgX, roofTopY, bldgW, bldgH);
+
+    // Architectural Window Grid & Floor Slab Line
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.25)";
+    ctx.lineWidth = 1;
+    const floors = Math.max(1, Math.round(this.buildingHeightFt / 10));
+    for (let f = 1; f < floors; f++) {
+      const fy = groundY - (bldgH * f) / floors;
+      ctx.beginPath();
+      ctx.moveTo(bldgX, fy);
+      ctx.lineTo(bldgX + bldgW, fy);
+      ctx.stroke();
+    }
+
+    // Windows
+    ctx.fillStyle = "rgba(56, 189, 248, 0.15)";
+    const winCols = Math.max(2, Math.round(this.roofLengthFt / 8));
+    const winW = (bldgW / winCols) * 0.55;
+    const winH = Math.min(22, (bldgH / floors) * 0.45);
+    for (let f = 0; f < floors; f++) {
+      const floorBaseY = groundY - (bldgH * (f + 0.3)) / floors;
+      for (let c = 0; c < winCols; c++) {
+        const wx = bldgX + (c + 0.22) * (bldgW / winCols);
+        ctx.fillRect(wx, floorBaseY, winW, winH);
+        ctx.strokeRect(wx, floorBaseY, winW, winH);
+      }
+    }
+
+    // Concrete Roof Slab
+    ctx.fillStyle = "#334155";
+    ctx.fillRect(bldgX - 6, roofTopY - 6, bldgW + 12, 8);
+    ctx.strokeStyle = "#64748b";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(bldgX - 6, roofTopY - 6, bldgW + 12, 8);
+
+    // Parapet Wall
+    ctx.fillStyle = "#1e293b";
+    ctx.fillRect(bldgX - 6, roofTopY - 14, 8, 8);
+    ctx.fillRect(bldgX + bldgW - 2, roofTopY - 14, 8, 8);
+
+    // Solar Panels Mounted on Roof (Front Profile)
+    if (this.panels.length > 0) {
+      const panelCols = Math.min(this.panels.length, Math.max(2, Math.round(this.roofLengthFt / 3.8)));
+      const pUnitW = (bldgW - 20) / panelCols;
+      for (let i = 0; i < panelCols; i++) {
+        const px = bldgX + 10 + i * pUnitW;
+        const py = roofTopY - 18;
+
+        // Racking legs
+        ctx.strokeStyle = "#94a3b8";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(px + 4, roofTopY - 6);
+        ctx.lineTo(px + 4, py + 8);
+        ctx.moveTo(px + pUnitW - 6, roofTopY - 6);
+        ctx.lineTo(px + pUnitW - 6, py + 8);
+        ctx.stroke();
+
+        // Panel Module
+        ctx.fillStyle = "#0284c7";
+        ctx.fillRect(px + 2, py, pUnitW - 4, 8);
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px + 2, py, pUnitW - 4, 8);
+      }
+    }
+
+    // External Obstacles in Front View
+    this.externalObstacles.forEach((obs) => {
+      const isSelected = this.selectedItem && this.selectedItem.item?.id === obs.id;
+      const obsX = bldgX + obs.distanceFromRoofX * this.scalePxPerFt;
+      const obsW = (obs.shape === "circle" ? (obs.diameterFt || 8) : (obs.lengthFt || 10)) * this.scalePxPerFt;
+      const obsH = obs.heightFt * this.scalePxPerFt;
+      const topY = groundY - obsH;
+
+      ctx.save();
+      if (obs.type === "tree") {
+        // Trunk
+        const trunkW = Math.max(5, obsW * 0.2);
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(obsX + (obsW - trunkW) / 2, groundY - obsH * 0.45, trunkW, obsH * 0.45);
+
+        // Foliage Layers
+        const foliageGrad = ctx.createLinearGradient(obsX, topY, obsX + obsW, groundY - obsH * 0.4);
+        foliageGrad.addColorStop(0, "#22c55e");
+        foliageGrad.addColorStop(1, "#14532d");
+        ctx.fillStyle = foliageGrad;
+
+        ctx.beginPath();
+        ctx.arc(obsX + obsW / 2, topY + obsH * 0.35, obsW / 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = isSelected ? "#38bdf8" : "#166534";
+        ctx.lineWidth = isSelected ? 2.5 : 1.5;
+        ctx.stroke();
+      } else if (obs.type === "pole") {
+        // Utility Pole
+        const poleW = Math.max(3, obsW * 0.15);
+        ctx.fillStyle = "#64748b";
+        ctx.fillRect(obsX + (obsW - poleW) / 2, topY, poleW, obsH);
+
+        // Crossarms
+        ctx.strokeStyle = "#94a3b8";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(obsX, topY + 8);
+        ctx.lineTo(obsX + obsW, topY + 8);
+        ctx.stroke();
+
+        ctx.strokeStyle = isSelected ? "#38bdf8" : "#475569";
+        ctx.lineWidth = isSelected ? 2.5 : 1;
+        ctx.strokeRect(obsX + (obsW - poleW) / 2, topY, poleW, obsH);
+      } else if (obs.type === "building") {
+        // Neighbor Building
+        ctx.fillStyle = "#334155";
+        ctx.fillRect(obsX, topY, obsW, obsH);
+        ctx.strokeStyle = isSelected ? "#38bdf8" : "#64748b";
+        ctx.lineWidth = isSelected ? 2.5 : 1.5;
+        ctx.strokeRect(obsX, topY, obsW, obsH);
+      } else {
+        // Boundary Wall
+        ctx.fillStyle = "#7c3aed";
+        ctx.fillRect(obsX, topY, obsW, obsH);
+        ctx.strokeStyle = isSelected ? "#38bdf8" : "#a855f7";
+        ctx.lineWidth = isSelected ? 2.5 : 1.5;
+        ctx.strokeRect(obsX, topY, obsW, obsH);
+      }
+
+      // Height Drag Handle on Top
+      ctx.fillStyle = isSelected ? "#38bdf8" : "#ffffff";
+      ctx.beginPath();
+      ctx.arc(obsX + obsW / 2, topY, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#0284c7";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Height Tag Pill
+      ctx.font = "bold 9px Inter, sans-serif";
+      ctx.fillStyle = isSelected ? "#38bdf8" : "#f1f5f9";
+      ctx.textAlign = "center";
+      ctx.fillText(`${obs.label}: ${obs.heightFt} ft`, obsX + obsW / 2, topY - 10);
+
+      ctx.restore();
+    });
+
+    // Front View Header & Telemetry
+    const solarPos = this.getSolarPosition();
+    const stats = this.getShadingLossStats();
+    ctx.font = "bold 11.5px Inter, sans-serif";
+    ctx.fillStyle = "#f8fafc";
+    ctx.textAlign = "left";
+    ctx.fillText(`🏢 FRONT ELEVATION (Length: ${this.roofLengthFt} ft | Building Height: ${this.buildingHeightFt} ft)`, 16, 24);
+
+    ctx.font = "600 10.5px Inter, sans-serif";
+    ctx.fillStyle = "#38bdf8";
+    ctx.fillText(`☀️ Solar Alt: ${solarPos.altitudeDeg.toFixed(1)}° | Az: ${solarPos.azimuthDeg.toFixed(1)}° | Array Shading: ${stats.lossPercentage}%`, 16, 42);
+  }
+
+  drawFrontSunPathArc(logicalW, logicalH, groundY) {
+    const ctx = this.ctx;
+    const arcCx = logicalW / 2;
+    const domeR = Math.min(logicalW * 0.45, 250);
+
+    ctx.save();
+
+    // Sky Dome Arc (Horizon to Horizon)
+    ctx.beginPath();
+    ctx.arc(arcCx, groundY, domeR, Math.PI, 0, false);
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.12)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Horizon Labels
+    ctx.font = "bold 9.5px Inter, sans-serif";
+    ctx.fillStyle = "#f59e0b";
+    ctx.textAlign = "left";
+    ctx.fillText("🌅 EAST (Sunrise)", arcCx - domeR + 10, groundY - 6);
+
+    ctx.fillStyle = "#f97316";
+    ctx.textAlign = "right";
+    ctx.fillText("🌇 WEST (Sunset)", arcCx + domeR - 10, groundY - 6);
+
+    // 2D Yearly Solstice & Equinox Curves:
+    const curves = [
+      { label: "Summer Solstice (~85°)", peakAlt: 85, color: "#f59e0b", width: 2 },
+      { label: "Equinox (~71.5°)", peakAlt: 71.5, color: "#38bdf8", width: 1.5 },
+      { label: "Winter Solstice (~48°)", peakAlt: 48, color: "#60a5fa", width: 1.8 },
+    ];
+
+    curves.forEach((c) => {
+      ctx.beginPath();
+      const peakY = groundY - domeR * Math.sin((c.peakAlt * Math.PI) / 180);
+      ctx.moveTo(arcCx - domeR * 0.92, groundY);
+      ctx.quadraticCurveTo(arcCx, peakY, arcCx + domeR * 0.92, groundY);
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = c.width;
+      ctx.stroke();
+
+      ctx.font = "bold 8.5px Inter, sans-serif";
+      ctx.fillStyle = c.color;
+      ctx.textAlign = "center";
+      ctx.fillText(c.label, arcCx, peakY - 6);
+    });
+
+    // 2D Hourly Diurnal Grid Lines connecting seasons (6 AM, 9 AM, 12 PM, 3 PM, 6 PM)
+    const hours = [
+      { h: 7, label: "7 AM" },
+      { h: 9, label: "9 AM" },
+      { h: 12, label: "12 PM" },
+      { h: 15, label: "3 PM" },
+      { h: 17, label: "5 PM" },
+    ];
+
+    hours.forEach((hr) => {
+      const frac = (hr.h - 6) / 12;
+      const theta = Math.PI - frac * Math.PI;
+      const hx = arcCx + domeR * Math.cos(theta) * 0.88;
+      const hy = groundY - domeR * Math.sin(theta) * 0.88;
+
+      ctx.beginPath();
+      ctx.moveTo(arcCx, groundY);
+      ctx.lineTo(hx, hy);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.font = "bold 8px Inter, sans-serif";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+      ctx.textAlign = "center";
+      ctx.fillText(hr.label, hx, hy - 4);
+    });
+
+    // Current Sun Position
+    const solarPos = this.getSolarPosition();
+    if (solarPos && solarPos.isDaylight) {
+      const frac = Math.max(0, Math.min(1, (this.sunSim.timeHour - 6) / 12));
+      const theta = Math.PI - frac * Math.PI;
+      const altFrac = Math.max(0, solarPos.altitudeDeg / 90);
+      const sunR = domeR * (0.2 + 0.78 * altFrac);
+      const sunX = arcCx + sunR * Math.cos(theta);
+      const sunY = groundY - domeR * Math.sin(altFrac * (Math.PI / 2));
+
+      // Beam to building roof
+      const bldgH = this.buildingHeightFt * this.scalePxPerFt;
+      const roofTopY = groundY - bldgH;
+      ctx.beginPath();
+      ctx.moveTo(sunX, sunY);
+      ctx.lineTo(arcCx, roofTopY - 8);
+      ctx.strokeStyle = "rgba(251, 191, 36, 0.45)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Glowing Sun
+      const sunGrad = ctx.createRadialGradient(sunX, sunY, 2, sunX, sunY, 16);
+      sunGrad.addColorStop(0, "rgba(253, 224, 71, 1)");
+      sunGrad.addColorStop(0.5, "rgba(245, 158, 11, 0.7)");
+      sunGrad.addColorStop(1, "rgba(245, 158, 11, 0)");
+      ctx.fillStyle = sunGrad;
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, 16, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, 6.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#fef08a";
+      ctx.fill();
+      ctx.strokeStyle = "#ea580c";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.font = "bold 9px Inter, sans-serif";
+      ctx.fillStyle = "#fef08a";
+      ctx.textAlign = "center";
+      ctx.fillText(`☀️ ${solarPos.altitudeDeg.toFixed(1)}° Alt | ${solarPos.azimuthDeg.toFixed(1)}° Az`, sunX, sunY - 12);
+    }
+
+    ctx.restore();
+  }
+
+  // ================= SIDE ELEVATION VIEW =================
+  renderSideView(logicalW, logicalH) {
+    const ctx = this.ctx;
+    const groundY = logicalH - 75;
+
+    // Sky gradient
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, groundY);
+    skyGrad.addColorStop(0, "#081026");
+    skyGrad.addColorStop(0.75, "#152238");
+    skyGrad.addColorStop(1, "#1e293b");
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, logicalW, groundY);
+
+    // Ground platform
+    const groundGrad = ctx.createLinearGradient(0, groundY, 0, logicalH);
+    groundGrad.addColorStop(0, "#1c2e24");
+    groundGrad.addColorStop(1, "#0d1712");
+    ctx.fillStyle = groundGrad;
+    ctx.fillRect(0, groundY, logicalW, logicalH - groundY);
+
+    ctx.strokeStyle = "#22c55e";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, groundY);
+    ctx.lineTo(logicalW, groundY);
+    ctx.stroke();
+
+    // 2D Declination Sun Path Arc
+    this.drawSideSunPathArc(logicalW, logicalH, groundY);
+
+    // Building Side Facade
+    const bldgW = this.roofBreadthFt * this.scalePxPerFt;
+    const bldgH = this.buildingHeightFt * this.scalePxPerFt;
+    const bldgX = (logicalW - bldgW) / 2;
+    const roofTopY = groundY - bldgH;
+
+    // Facade Body
+    const facadeGrad = ctx.createLinearGradient(bldgX, roofTopY, bldgX + bldgW, groundY);
+    facadeGrad.addColorStop(0, "#1e293b");
+    facadeGrad.addColorStop(1, "#0f172a");
+    ctx.fillStyle = facadeGrad;
+    ctx.fillRect(bldgX, roofTopY, bldgW, bldgH);
+
+    // Architectural Side Division Lines
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.2)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bldgX, roofTopY, bldgW, bldgH);
+
+    // Concrete Roof Slab
+    ctx.fillStyle = "#334155";
+    ctx.fillRect(bldgX - 6, roofTopY - 6, bldgW + 12, 8);
+    ctx.strokeStyle = "#64748b";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(bldgX - 6, roofTopY - 6, bldgW + 12, 8);
+
+    // Solar Panels on Roof (Side Profile with 18° South-facing Tilt)
+    if (this.panels.length > 0) {
+      const panelRows = Math.min(4, Math.max(1, Math.round(this.roofBreadthFt / 6)));
+      const rowGap = (bldgW - 20) / panelRows;
+
+      for (let r = 0; r < panelRows; r++) {
+        const rx = bldgX + 10 + r * rowGap;
+        const ry = roofTopY - 6;
+
+        // Angled solar module (tilted South towards right)
+        ctx.strokeStyle = "#94a3b8";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(rx, ry);
+        ctx.lineTo(rx + 6, ry - 14);
+        ctx.lineTo(rx + 22, ry - 7);
+        ctx.lineTo(rx + 16, ry);
+        ctx.stroke();
+
+        ctx.fillStyle = "#0284c7";
+        ctx.beginPath();
+        ctx.moveTo(rx + 4, ry - 14);
+        ctx.lineTo(rx + 24, ry - 7);
+        ctx.lineTo(rx + 23, ry - 5);
+        ctx.lineTo(rx + 3, ry - 12);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // External Obstacles in Side View
+    this.externalObstacles.forEach((obs) => {
+      const isSelected = this.selectedItem && this.selectedItem.item?.id === obs.id;
+      const obsX = bldgX + obs.distanceFromRoofY * this.scalePxPerFt;
+      const obsW = (obs.shape === "circle" ? (obs.diameterFt || 8) : (obs.breadthFt || 10)) * this.scalePxPerFt;
+      const obsH = obs.heightFt * this.scalePxPerFt;
+      const topY = groundY - obsH;
+
+      ctx.save();
+      if (obs.type === "tree") {
+        const trunkW = Math.max(5, obsW * 0.2);
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(obsX + (obsW - trunkW) / 2, groundY - obsH * 0.45, trunkW, obsH * 0.45);
+
+        const foliageGrad = ctx.createLinearGradient(obsX, topY, obsX + obsW, groundY - obsH * 0.4);
+        foliageGrad.addColorStop(0, "#22c55e");
+        foliageGrad.addColorStop(1, "#14532d");
+        ctx.fillStyle = foliageGrad;
+
+        ctx.beginPath();
+        ctx.arc(obsX + obsW / 2, topY + obsH * 0.35, obsW / 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = isSelected ? "#38bdf8" : "#166534";
+        ctx.lineWidth = isSelected ? 2.5 : 1.5;
+        ctx.stroke();
+      } else if (obs.type === "pole") {
+        const poleW = Math.max(3, obsW * 0.15);
+        ctx.fillStyle = "#64748b";
+        ctx.fillRect(obsX + (obsW - poleW) / 2, topY, poleW, obsH);
+        ctx.strokeStyle = isSelected ? "#38bdf8" : "#475569";
+        ctx.lineWidth = isSelected ? 2.5 : 1;
+        ctx.strokeRect(obsX + (obsW - poleW) / 2, topY, poleW, obsH);
+      } else if (obs.type === "building") {
+        ctx.fillStyle = "#334155";
+        ctx.fillRect(obsX, topY, obsW, obsH);
+        ctx.strokeStyle = isSelected ? "#38bdf8" : "#64748b";
+        ctx.lineWidth = isSelected ? 2.5 : 1.5;
+        ctx.strokeRect(obsX, topY, obsW, obsH);
+      } else {
+        ctx.fillStyle = "#7c3aed";
+        ctx.fillRect(obsX, topY, obsW, obsH);
+        ctx.strokeStyle = isSelected ? "#38bdf8" : "#a855f7";
+        ctx.lineWidth = isSelected ? 2.5 : 1.5;
+        ctx.strokeRect(obsX, topY, obsW, obsH);
+      }
+
+      // Height Drag Handle on Top
+      ctx.fillStyle = isSelected ? "#38bdf8" : "#ffffff";
+      ctx.beginPath();
+      ctx.arc(obsX + obsW / 2, topY, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#0284c7";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Height Tag Pill
+      ctx.font = "bold 9px Inter, sans-serif";
+      ctx.fillStyle = isSelected ? "#38bdf8" : "#f1f5f9";
+      ctx.textAlign = "center";
+      ctx.fillText(`${obs.label}: ${obs.heightFt} ft`, obsX + obsW / 2, topY - 10);
+
+      ctx.restore();
+    });
+
+    // Side View Header & Telemetry
+    const solarPos = this.getSolarPosition();
+    ctx.font = "bold 11.5px Inter, sans-serif";
+    ctx.fillStyle = "#f8fafc";
+    ctx.textAlign = "left";
+    ctx.fillText(`🏛️ SIDE ELEVATION (Breadth: ${this.roofBreadthFt} ft | Building Height: ${this.buildingHeightFt} ft)`, 16, 24);
+
+    ctx.font = "600 10.5px Inter, sans-serif";
+    ctx.fillStyle = "#38bdf8";
+    ctx.fillText(`☀️ Array Tilt: South-Facing ~18° | Solar Alt: ${solarPos.altitudeDeg.toFixed(1)}° | Az: ${solarPos.azimuthDeg.toFixed(1)}°`, 16, 42);
+  }
+
+  drawSideSunPathArc(logicalW, logicalH, groundY) {
+    const ctx = this.ctx;
+    const bldgW = this.roofBreadthFt * this.scalePxPerFt;
+    const bldgX = (logicalW - bldgW) / 2;
+    const bldgH = this.buildingHeightFt * this.scalePxPerFt;
+    const roofTopY = groundY - bldgH;
+    const arcCx = bldgX + bldgW / 2;
+    const domeR = Math.min(logicalW * 0.42, 230);
+
+    ctx.save();
+
+    // Side sky dome: shows North-South seasonal declination variation
+    ctx.beginPath();
+    ctx.arc(arcCx, groundY, domeR, Math.PI, 0, false);
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.12)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // North / South indicators on ground horizon
+    ctx.font = "bold 9px Inter, sans-serif";
+    ctx.fillStyle = "#f87171";
+    ctx.textAlign = "right";
+    ctx.fillText("← NORTH", arcCx - domeR + 10, groundY - 6);
+
+    ctx.fillStyle = "#38bdf8";
+    ctx.textAlign = "left";
+    ctx.fillText("SOUTH (Solar Panel Tilt) →", arcCx + 30, groundY - 6);
+
+    // 2D Declination Arcs:
+    const seasonalCurves = [
+      { label: "Summer (+23.5°)", peakAlt: 85, color: "#f59e0b", tiltDir: -1 },
+      { label: "Equinox (0°)", peakAlt: 71.5, color: "#38bdf8", tiltDir: 1 },
+      { label: "Winter (-23.5°)", peakAlt: 48, color: "#60a5fa", tiltDir: 1 },
+    ];
+
+    seasonalCurves.forEach((sc) => {
+      ctx.beginPath();
+      const peakRad = (sc.peakAlt * Math.PI) / 180;
+      const peakY = groundY - domeR * Math.sin(peakRad);
+      const peakX = arcCx + sc.tiltDir * domeR * Math.cos(peakRad) * 0.5;
+
+      ctx.moveTo(arcCx - domeR * 0.85, groundY);
+      ctx.quadraticCurveTo(peakX, peakY, arcCx + domeR * 0.85, groundY);
+      ctx.strokeStyle = sc.color;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+
+    // Current Sun marker in Side View
+    const solarPos = this.getSolarPosition();
+    if (solarPos && solarPos.isDaylight) {
+      const altRad = (solarPos.altitudeDeg * Math.PI) / 180;
+      const azRad = (solarPos.azimuthDeg * Math.PI) / 180;
+      const nsComponent = -Math.cos(azRad);
+      const sunX = arcCx + nsComponent * (domeR * Math.cos(altRad) * 0.8);
+      const sunY = groundY - domeR * Math.sin(altRad);
+
+      // Sun ray pointing to roof
+      ctx.beginPath();
+      ctx.moveTo(sunX, sunY);
+      ctx.lineTo(arcCx, roofTopY - 10);
+      ctx.strokeStyle = "rgba(251, 191, 36, 0.4)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Glowing Sun Disk
+      const sunGrad = ctx.createRadialGradient(sunX, sunY, 2, sunX, sunY, 15);
+      sunGrad.addColorStop(0, "rgba(253, 224, 71, 1)");
+      sunGrad.addColorStop(0.5, "rgba(245, 158, 11, 0.6)");
+      sunGrad.addColorStop(1, "rgba(245, 158, 11, 0)");
+      ctx.fillStyle = sunGrad;
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, 15, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, 6, 0, Math.PI * 2);
+      ctx.fillStyle = "#fef08a";
+      ctx.fill();
+      ctx.strokeStyle = "#ea580c";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.font = "bold 9px Inter, sans-serif";
+      ctx.fillStyle = "#fef08a";
+      ctx.textAlign = "center";
+      ctx.fillText(`☀️ Alt ${solarPos.altitudeDeg.toFixed(1)}°`, sunX, sunY - 12);
+    }
 
     ctx.restore();
   }

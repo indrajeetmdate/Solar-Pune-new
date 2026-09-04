@@ -1385,6 +1385,12 @@ function setupCadEventListeners(cad) {
     const brInput = $("inspectorBreadth");
     const diaGroup = $("inspectorDiameterGroup");
     const diaInput = $("inspectorDiameter");
+    const distXGroup = $("inspectorDistXGroup");
+    const distXInput = $("inspectorDistX");
+    const distYGroup = $("inspectorDistYGroup");
+    const distYInput = $("inspectorDistY");
+    const heightGroup = $("inspectorHeightGroup");
+    const heightInput = $("inspectorHeight");
     const areaVal = $("inspectorAreaValue");
     const delBtn = $("inspectorDeleteBtn");
     const deselectBtn = $("inspectorDeselectBtn");
@@ -1401,6 +1407,9 @@ function setupCadEventListeners(cad) {
       if (brGroup) brGroup.style.display = "flex";
       if (brInput) brInput.value = cad.roofBreadthFt;
       if (diaGroup) diaGroup.style.display = "none";
+      if (distXGroup) distXGroup.style.display = "none";
+      if (distYGroup) distYGroup.style.display = "none";
+      if (heightGroup) heightGroup.style.display = "none";
       if (areaVal) areaVal.textContent = `${Math.round(cad.roofLengthFt * cad.roofBreadthFt)} sq ft`;
       if (delBtn) delBtn.style.display = "none";
       if (deselectBtn) deselectBtn.style.display = sel ? "inline-flex" : "none";
@@ -1418,6 +1427,11 @@ function setupCadEventListeners(cad) {
     if (opacityInput) opacityInput.value = itemOpacity;
     if (opacityVal) opacityVal.textContent = `${Math.round(itemOpacity * 100)}%`;
     if (zOrderGroup) zOrderGroup.style.display = "flex";
+
+    // By default hide obstacle-only fields
+    if (distXGroup) distXGroup.style.display = "none";
+    if (distYGroup) distYGroup.style.display = "none";
+    if (heightGroup) heightGroup.style.display = "none";
 
     if (sel.type === "cutout") {
       if (it.shape === "circle") {
@@ -1485,6 +1499,40 @@ function setupCadEventListeners(cad) {
       if (areaVal) areaVal.textContent = "Site Photo";
       if (delBtn) delBtn.style.display = "none";
       if (zOrderGroup) zOrderGroup.style.display = "none";
+    } else if (sel.type === "obstacle") {
+      const obsIcons = {
+        tree: "🌳",
+        pole: "🗼",
+        building: "🏢",
+        wall: "🧱",
+      };
+      if (icon) icon.textContent = obsIcons[it.type] || "🌲";
+      if (title) title.textContent = `Obstacle (${it.label || it.type})`;
+      if (labelGroup) labelGroup.style.display = "flex";
+      if (labelInput) labelInput.value = it.label || it.type;
+
+      if (it.shape === "circle") {
+        if (lenGroup) lenGroup.style.display = "none";
+        if (brGroup) brGroup.style.display = "none";
+        if (diaGroup) diaGroup.style.display = "flex";
+        if (diaInput) diaInput.value = it.diameterFt || 10;
+      } else {
+        if (lenGroup) lenGroup.style.display = "flex";
+        if (lenInput) lenInput.value = it.lengthFt;
+        if (brGroup) brGroup.style.display = "flex";
+        if (brInput) brInput.value = it.breadthFt;
+        if (diaGroup) diaGroup.style.display = "none";
+      }
+
+      if (distXGroup) distXGroup.style.display = "flex";
+      if (distXInput) distXInput.value = it.distanceFromRoofX;
+      if (distYGroup) distYGroup.style.display = "flex";
+      if (distYInput) distYInput.value = it.distanceFromRoofY;
+      if (heightGroup) heightGroup.style.display = "flex";
+      if (heightInput) heightInput.value = it.heightFt;
+
+      if (areaVal) areaVal.textContent = `${it.lengthFt}×${it.breadthFt} ft (H: ${it.heightFt} ft)`;
+      if (zOrderGroup) zOrderGroup.style.display = "none";
     }
   };
 
@@ -1524,6 +1572,24 @@ function setupCadEventListeners(cad) {
     cad.updateSelectedItem({ diameterFt: Number(e.target.value) });
   });
 
+  $("inspectorDistX")?.addEventListener("input", (e) => {
+    if (cad.selectedItem && cad.selectedItem.type === "obstacle") {
+      cad.updateSelectedItem({ distanceFromRoofX: Number(e.target.value) });
+    }
+  });
+
+  $("inspectorDistY")?.addEventListener("input", (e) => {
+    if (cad.selectedItem && cad.selectedItem.type === "obstacle") {
+      cad.updateSelectedItem({ distanceFromRoofY: Number(e.target.value) });
+    }
+  });
+
+  $("inspectorHeight")?.addEventListener("input", (e) => {
+    if (cad.selectedItem && cad.selectedItem.type === "obstacle") {
+      cad.updateSelectedItem({ heightFt: Number(e.target.value) });
+    }
+  });
+
   $("inspectorLabel")?.addEventListener("input", (e) => {
     cad.updateSelectedItem({ label: e.target.value });
   });
@@ -1553,6 +1619,167 @@ function setupCadEventListeners(cad) {
   $("inspectorDeselectBtn")?.addEventListener("click", () => {
     cad.selectItem(null, null);
   });
+
+  // Multi-View Elevation Switcher (Top Plan, Front Elevation, Side Elevation)
+  const viewBtns = [
+    { id: "cadViewTopBtn", view: "top" },
+    { id: "cadViewFrontBtn", view: "front" },
+    { id: "cadViewSideBtn", view: "side" },
+  ];
+
+  const updateActiveViewButtons = (currentView) => {
+    viewBtns.forEach(({ id, view }) => {
+      const btn = $(id);
+      if (btn) {
+        btn.classList.toggle("active", view === currentView);
+      }
+    });
+  };
+
+  viewBtns.forEach(({ id, view }) => {
+    $(id)?.addEventListener("click", () => {
+      cad.setActiveView(view);
+      updateActiveViewButtons(view);
+    });
+  });
+
+  cad.onViewChange = (view) => {
+    updateActiveViewButtons(view);
+  };
+
+  // True North Alignment Controls
+  const northAngleInput = $("cadNorthAngleInput");
+  const updateNorth = (deg) => {
+    cad.setNorthAngle(deg);
+    if (northAngleInput) northAngleInput.value = cad.northAngleDeg;
+  };
+
+  northAngleInput?.addEventListener("input", (e) => {
+    cad.setNorthAngle(Number(e.target.value));
+  });
+  northAngleInput?.addEventListener("change", (e) => {
+    cad.setNorthAngle(Number(e.target.value));
+  });
+
+  $("cadNorthMinus15Btn")?.addEventListener("click", () => {
+    cad.rotateNorth(-15);
+    if (northAngleInput) northAngleInput.value = cad.northAngleDeg;
+  });
+
+  $("cadNorthPlus15Btn")?.addEventListener("click", () => {
+    cad.rotateNorth(15);
+    if (northAngleInput) northAngleInput.value = cad.northAngleDeg;
+  });
+
+  $("cadNorthResetBtn")?.addEventListener("click", () => {
+    cad.setNorthAngle(0);
+    if (northAngleInput) northAngleInput.value = 0;
+  });
+
+  cad.onNorthChange = (deg) => {
+    if (northAngleInput && !northAngleInput.matches(":focus")) {
+      northAngleInput.value = deg;
+    }
+  };
+
+  // Building Height Input
+  const bldgHInput = $("cadBuildingHeightInput");
+  bldgHInput?.addEventListener("input", (e) => {
+    cad.setBuildingHeight(Number(e.target.value));
+  });
+
+  // Surrounding Obstacles in Yard
+  $("cadAddTreeBtn")?.addEventListener("click", () => cad.addExternalObstacle("tree"));
+  $("cadAddPoleBtn")?.addEventListener("click", () => cad.addExternalObstacle("pole"));
+  $("cadAddNeighborBtn")?.addEventListener("click", () => cad.addExternalObstacle("building"));
+  $("cadAddWallBtn")?.addEventListener("click", () => cad.addExternalObstacle("wall"));
+  $("cadClearObstaclesBtn")?.addEventListener("click", () => cad.clearAllObstacles());
+
+  // Astronomical 2D Sun Path & Shadow Simulation Controls
+  const toggleSunSimBtn = $("cadToggleSunSimBtn");
+  const sunControls = $("cadSunControls");
+  const playSunBtn = $("cadPlaySunBtn");
+  const sunTimeSlider = $("cadSunTimeSlider");
+  const sunTimeLabel = $("cadSunTimeLabel");
+
+  const seasonBtns = [
+    { id: "cadSeasonWinterBtn", day: 355 },
+    { id: "cadSeasonEquinoxBtn", day: 80 },
+    { id: "cadSeasonSummerBtn", day: 172 },
+  ];
+
+  seasonBtns.forEach(({ id, day }) => {
+    $(id)?.addEventListener("click", () => {
+      seasonBtns.forEach((s) => $(s.id)?.classList.remove("active"));
+      $(id)?.classList.add("active");
+      cad.setSunDate(day);
+    });
+  });
+
+  toggleSunSimBtn?.addEventListener("click", () => {
+    const isEnabled = cad.toggleSunSimulation();
+    if (toggleSunSimBtn) {
+      toggleSunSimBtn.textContent = isEnabled ? "☀️ Sun Simulation: ON" : "☀️ Sun Simulation: OFF";
+      toggleSunSimBtn.classList.toggle("active", isEnabled);
+    }
+    if (sunControls) {
+      sunControls.style.display = isEnabled ? "inline-flex" : "none";
+    }
+  });
+
+  playSunBtn?.addEventListener("click", () => {
+    if (cad.sunSim.isPlaying) {
+      cad.pauseSunAnimation();
+      if (playSunBtn) playSunBtn.textContent = "▶ Play";
+    } else {
+      cad.playSunAnimation();
+      if (playSunBtn) playSunBtn.textContent = "⏸ Pause";
+    }
+  });
+
+  sunTimeSlider?.addEventListener("input", (e) => {
+    cad.setSunTime(Number(e.target.value));
+  });
+
+  cad.onSunChange = ({ enabled, isPlaying, timeHour, dayOfYear, solarPos, stats }) => {
+    if (toggleSunSimBtn) {
+      toggleSunSimBtn.textContent = enabled ? "☀️ Sun Simulation: ON" : "☀️ Sun Simulation: OFF";
+      toggleSunSimBtn.classList.toggle("active", enabled);
+    }
+    if (sunControls) {
+      sunControls.style.display = enabled ? "inline-flex" : "none";
+    }
+    if (playSunBtn) {
+      playSunBtn.textContent = isPlaying ? "⏸ Pause" : "▶ Play";
+    }
+    if (sunTimeSlider && !sunTimeSlider.matches(":active")) {
+      sunTimeSlider.value = timeHour.toFixed(2);
+    }
+    if (sunTimeLabel) {
+      const h = Math.floor(timeHour);
+      const m = Math.round((timeHour - h) * 60);
+      const ampm = h >= 12 ? "PM" : "AM";
+      const displayH = h % 12 === 0 ? 12 : h % 12;
+      sunTimeLabel.textContent = `${displayH}:${m.toString().padStart(2, "0")} ${ampm}`;
+    }
+    if ($("cadSolarAlt") && solarPos) {
+      $("cadSolarAlt").textContent = `${solarPos.altitudeDeg.toFixed(1)}°`;
+    }
+    if ($("cadSolarAz") && solarPos) {
+      $("cadSolarAz").textContent = `${solarPos.azimuthDeg.toFixed(1)}°`;
+    }
+    const lossEl = $("cadShadingLossVal");
+    if (lossEl && stats) {
+      lossEl.textContent = `${stats.arrayShadingLossPct.toFixed(1)}%`;
+      if (stats.arrayShadingLossPct > 15) {
+        lossEl.style.color = "#f87171";
+      } else if (stats.arrayShadingLossPct > 0) {
+        lossEl.style.color = "#fbbf24";
+      } else {
+        lossEl.style.color = "#4ade80";
+      }
+    }
+  };
 
   // Panel placement actions
   $("cadAddSinglePanelBtn")?.addEventListener("click", () => cad.placePanel());
@@ -1687,6 +1914,8 @@ function renderDiagram(pl, input) {
   if ($("cadGrossArea")) $("cadGrossArea").textContent = stats.grossSqft;
   if ($("cadCutoutArea")) $("cadCutoutArea").textContent = stats.cutoutSqft + stats.pathwaySqft;
   if ($("cadNetArea")) $("cadNetArea").textContent = stats.netUsableSqft;
+  if ($("cadNorthAngleInput")) $("cadNorthAngleInput").value = cad.northAngleDeg;
+  if ($("cadBuildingHeightInput")) $("cadBuildingHeightInput").value = cad.buildingHeightFt;
   if ($("cadInventoryCount")) {
     const remaining = Math.max(0, pl.numPanels - cad.panels.length);
     $("cadInventoryCount").textContent = `${cad.panels.length} / ${pl.numPanels} Placed (${remaining} Remaining)`;
