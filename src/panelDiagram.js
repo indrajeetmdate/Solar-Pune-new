@@ -68,6 +68,7 @@ export class RooftopCAD {
       rotation: 0, // degrees: 0, 90, 180, 270
       opacity: 0.85,
       isLoaded: false,
+      locked: true, // Locked to roof by default to prevent accidental zoom/pan
     };
 
     // Active Tool: 'select' | 'roof' | 'subtract_rect' | 'subtract_circle' | 'pathway' | 'panel' | 'image_pan'
@@ -1219,9 +1220,9 @@ export class RooftopCAD {
     };
   }
 
-  selectComponent(type, id) {
+  selectComponent(type, id, isMulti = false) {
     if (!type) {
-      this.selectItem(null, null);
+      this.clearSelection();
       return;
     }
     if (type === "roof") {
@@ -1233,7 +1234,7 @@ export class RooftopCAD {
         breadthFt: this.roofBreadthFt,
         label: "Base Roof",
         opacity: this.roofOpacity,
-      });
+      }, isMulti);
       return;
     }
     if (type === "image") {
@@ -1243,27 +1244,27 @@ export class RooftopCAD {
         label: "Aerial Image",
         opacity: this.image.opacity,
         scale: this.image.scale,
-      });
+      }, isMulti);
       return;
     }
     if (type === "panel") {
       const p = this.panels.find((item) => item.id === id);
-      if (p) this.selectItem("panel", p);
+      if (p) this.selectItem("panel", p, isMulti);
       return;
     }
     if (type === "cutout") {
       const c = this.cutouts.find((item) => item.id === id);
-      if (c) this.selectItem("cutout", c);
+      if (c) this.selectItem("cutout", c, isMulti);
       return;
     }
     if (type === "pathway") {
       const pw = this.pathways.find((item) => item.id === id);
-      if (pw) this.selectItem("pathway", pw);
+      if (pw) this.selectItem("pathway", pw, isMulti);
       return;
     }
     if (type === "obstacle") {
       const obs = this.externalObstacles.find((item) => item.id === id);
-      if (obs) this.selectItem("obstacle", obs);
+      if (obs) this.selectItem("obstacle", obs, isMulti);
       return;
     }
   }
@@ -1385,8 +1386,10 @@ export class RooftopCAD {
       const scaleY = this.roofH / this.image.origHeight;
       this.image.scale = Math.max(scaleX, scaleY);
       this.image.isLoaded = true;
+      this.image.locked = true; // Automatically lock inside green roof area upon upload
       this.render();
       this.notifyChanges();
+      this.notifyLayersChange();
     };
 
     if (typeof fileOrUrl === "string") {
@@ -1402,36 +1405,51 @@ export class RooftopCAD {
     }
   }
 
+  setImageLocked(locked) {
+    this.image.locked = !!locked;
+    this.render();
+    this.notifyChanges();
+    this.notifyLayersChange();
+  }
+
   removeCustomImage() {
     this.image.element = null;
     this.image.src = null;
     this.image.isLoaded = false;
     this.render();
     this.notifyChanges();
+    this.notifyLayersChange();
   }
 
   setImageZoom(scale) {
+    if (this.image.locked) return;
     this.image.scale = Math.max(0.1, Math.min(5.0, Number(scale)));
     this.render();
+    this.notifyChanges();
   }
 
   setImageRotation(deg) {
+    if (this.image.locked) return;
     this.image.rotation = (Number(deg) + 360) % 360;
     this.render();
+    this.notifyChanges();
   }
 
   rotateImage90() {
+    if (this.image.locked) return;
     this.image.rotation = (this.image.rotation + 90) % 360;
     this.render();
+    this.notifyChanges();
   }
 
   setImageOpacity(op) {
     this.image.opacity = Math.max(0.05, Math.min(1.0, Number(op)));
     this.render();
+    this.notifyChanges();
   }
 
   resetImageTransform() {
-    if (!this.image.element) return;
+    if (!this.image.element || this.image.locked) return;
     this.image.x = 0;
     this.image.y = 0;
     const scaleX = this.roofW / this.image.origWidth;
@@ -1439,6 +1457,7 @@ export class RooftopCAD {
     this.image.scale = Math.max(scaleX, scaleY);
     this.image.rotation = 0;
     this.render();
+    this.notifyChanges();
   }
 
   // 4-Side Magnetic Snapping Engine
@@ -1646,9 +1665,14 @@ export class RooftopCAD {
 
     const getPos = (e) => {
       const rect = this.canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const logicalW = this.canvas.width / dpr;
+      const logicalH = this.canvas.height / dpr;
+      const scaleX = rect.width > 0 ? logicalW / rect.width : 1;
+      const scaleY = rect.height > 0 ? logicalH / rect.height : 1;
       return {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY,
       };
     };
 
@@ -1670,14 +1694,40 @@ export class RooftopCAD {
     this.canvas.addEventListener(
       "wheel",
       (e) => {
-        e.preventDefault();
-        if (this.image.isLoaded) {
-          const delta = e.deltaY < 0 ? 1.08 : 0.92;
+        if (this.image.isLoaded && !this.image.locked && (this.activeTool === "image_pan" || e.altKey || e.ctrlKey)) {
+          e.preventDefault();
+          const delta = e.deltaY < 0 ? 1.02 : 0.98;
           this.setImageZoom(this.image.scale * delta);
+          const slider = document.getElementById("cadZoomSlider");
+          if (slider) slider.value = this.image.scale.toFixed(3);
         }
       },
       { passive: false }
     );
+
+    // Deselect any active component when clicking anywhere outside the CAD canvas and toolbars
+    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+      document.addEventListener("pointerdown", (e) => {
+        if (!this.canvas) return;
+        if (
+          e.target &&
+          typeof this.canvas.contains === "function" &&
+          !this.canvas.contains(e.target) &&
+          (!e.target.closest || (
+            !e.target.closest("#cadLayersPanel") &&
+            !e.target.closest(".cad-top-bar") &&
+            !e.target.closest(".cad-drawer") &&
+            !e.target.closest("#cadInspectorToolbar") &&
+            !e.target.closest(".cad-btn") &&
+            !e.target.closest(".cad-btn-mini")
+          ))
+        ) {
+          if (this.selectedItem || (this.selectedItems && this.selectedItems.length > 0)) {
+            this.clearSelection();
+          }
+        }
+      });
+    }
 
     window.addEventListener("keydown", (e) => {
       if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
@@ -1801,6 +1851,9 @@ export class RooftopCAD {
     }
 
     if (this.activeTool === "image_pan") {
+      if (this.image.locked) {
+        return;
+      }
       this.dragMode = "pan_image";
       this.dragOffset = { x: this.image.x, y: this.image.y };
       this.canvas.style.cursor = "grabbing";
@@ -1983,34 +2036,16 @@ export class RooftopCAD {
             return;
           }
         }
-      } else if (layer === "roof") {
-        if (x >= this.roofX && x <= this.roofX + this.roofW && y >= this.roofY && y <= this.roofY + this.roofH) {
-          this.selectItem("roof", {
-            id: "roof_main",
-            type: "roof",
-            shape: "rectangle",
-            lengthFt: this.roofLengthFt,
-            breadthFt: this.roofBreadthFt,
-            label: "Base Roof",
-            opacity: this.roofOpacity,
-          });
-          return;
-        }
       }
     }
 
-    // Clicked empty canvas: start rubber-band marquee selection in select/panel mode
-    if (this.activeTool === "select" || this.activeTool === "panel") {
-      if (!e.shiftKey) {
-        this.selectItem(null, null);
-      }
-      this.dragMode = "marquee_select";
-      this.selectionMarquee = { startX: x, startY: y, currentX: x, currentY: y };
-      this.render();
-      return;
+    // Clicked empty canvas or empty roof space: start rubber-band marquee selection
+    if (!e.shiftKey) {
+      this.selectItem(null, null);
     }
-
-    this.selectItem(null, null);
+    this.dragMode = "marquee_select";
+    this.selectionMarquee = { startX: x, startY: y, currentX: x, currentY: y };
+    this.render();
   }
 
   handlePointerMove(x, y, e) {
@@ -2281,6 +2316,11 @@ export class RooftopCAD {
             found.push({ type: "cutout", item: c });
           }
         });
+        this.pathways.forEach((pw) => {
+          if (!(pw.x + pw.w < rx || pw.x > rx + rw || pw.y + pw.h < ry || pw.y > ry + rh)) {
+            found.push({ type: "pathway", item: pw });
+          }
+        });
         this.externalObstacles.forEach((o) => {
           const b = this.getObstacleScreenBounds(o);
           if (!(b.x + b.w < rx || b.x > rx + rw || b.y + b.h < ry || b.y > ry + rh)) {
@@ -2299,7 +2339,12 @@ export class RooftopCAD {
           } else {
             this.selectMultiple(found);
           }
+        } else {
+          this.clearSelection();
         }
+      } else {
+        // Simple click without dragging: deselect all components
+        this.clearSelection();
       }
       this.selectionMarquee = null;
       this.dragMode = null;
@@ -3946,6 +3991,7 @@ export class RooftopCAD {
       layerVisible: { ...this.layerVisible },
       image: {
         isLoaded: !!this.image.isLoaded,
+        locked: this.image.locked !== undefined ? !!this.image.locked : true,
         src: this.image.src || (this.image.element && this.image.element.src ? this.image.element.src : null),
         x: this.image.x || 0,
         y: this.image.y || 0,
@@ -4010,6 +4056,7 @@ export class RooftopCAD {
 
     if (savedData.image && savedData.image.isLoaded && savedData.image.src) {
       this.image.src = savedData.image.src;
+      this.image.locked = savedData.image.locked !== undefined ? !!savedData.image.locked : true;
       this.image.x = savedData.image.x || 0;
       this.image.y = savedData.image.y || 0;
       this.image.scale = savedData.image.scale || 1.0;

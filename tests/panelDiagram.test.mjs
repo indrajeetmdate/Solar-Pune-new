@@ -60,6 +60,8 @@ globalThis.window = {
 
 globalThis.document = {
   activeElement: { tagName: "BODY" },
+  addEventListener: () => {},
+  getElementById: () => null,
 };
 
 const { RooftopCAD } = await import("../src/panelDiagram.js");
@@ -554,6 +556,83 @@ console.log("Running RooftopCAD tests...");
   assert.equal(cad2.getAreaStats().netUsableSqft, cad.getAreaStats().netUsableSqft);
 
   console.log("✓ Test 9 Passed: Complete Serialization & State Loading (Round-Trip Persistence)");
+}
+
+// Test 10: Image Locking, Refined Zooming, Multi-Selection & Deselection
+{
+  const canvas = new MockCanvas();
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 30,
+    roofBreadthFt: 20,
+    requiredPanels: 6,
+  });
+
+  // 1. Initial image state
+  assert.equal(cad.image.locked, true, "Image should default to locked");
+
+  // Load mock image
+  cad.image.isLoaded = true;
+  cad.image.origWidth = 600;
+  cad.image.origHeight = 400;
+  cad.image.scale = 1.0;
+  cad.image.x = 100;
+  cad.image.y = 100;
+
+  // Zoom while locked should be blocked
+  cad.setImageZoom(1.5);
+  assert.equal(cad.image.scale, 1.0, "Zooming locked image should be blocked");
+
+  // Unlock image
+  cad.setImageLocked(false);
+  assert.equal(cad.image.locked, false, "Image should be unlocked");
+
+  // Zoom when unlocked should succeed with fine steps
+  cad.setImageZoom(1.02);
+  assert.equal(cad.image.scale, 1.02, "Zooming unlocked image should succeed");
+
+  // Relock image
+  cad.setImageLocked(true);
+  assert.equal(cad.image.locked, true, "Image should be relocked");
+
+  // 2. Serialization preserves locked state
+  const state = cad.serialize();
+  assert.equal(state.image.locked, true, "Serialized state should record image.locked: true");
+
+  const canvas2 = new MockCanvas();
+  const cad2 = new RooftopCAD(canvas2, {});
+  cad2.loadState(state);
+  assert.equal(cad2.image.locked, true, "Restored state should preserve image.locked: true");
+
+  // 3. Multi-selection via selectComponent
+  cad.placePanel("portrait", cad.roofX + 10, cad.roofY + 10);
+  cad.placePanel("portrait", cad.roofX + 60, cad.roofY + 10);
+  assert.equal(cad.panels.length, 2);
+
+  const p1 = cad.panels[0];
+  const p2 = cad.panels[1];
+
+  // Single select
+  cad.selectComponent("panel", p1.id, false);
+  assert.equal(cad.selectedItems.length, 1);
+  assert.equal(cad.selectedItem.item.id, p1.id);
+
+  // Multi select second panel (e.g. Shift/Ctrl click)
+  cad.selectComponent("panel", p2.id, true);
+  assert.equal(cad.selectedItems.length, 2);
+  assert.ok(cad.isSelected("panel", p1));
+  assert.ok(cad.isSelected("panel", p2));
+
+  // Toggle off p1
+  cad.selectComponent("panel", p1.id, true);
+  assert.equal(cad.selectedItems.length, 1);
+  assert.equal(cad.selectedItems[0].item.id, p2.id);
+
+  // 4. Click outside / clear selection
+  cad.clearSelection();
+  assert.equal(cad.selectedItems.length, 0);
+  assert.equal(cad.selectedItem, null);
+
+  console.log("✓ Test 10 Passed: Image Locking, Refined Zooming, Multi-Selection & Deselection");
 }
 
 console.log("All RooftopCAD tests passed successfully!");

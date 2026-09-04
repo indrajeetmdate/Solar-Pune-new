@@ -696,10 +696,11 @@
                   <input type="file" id="cadImageInput" accept="image/*" style="display: none;">
                 </label>
                 <div id="cadImageControls" style="display: none; align-items: center; gap: 6px; flex-wrap: wrap;">
+                  <button type="button" class="cad-btn-mini" id="cadLockImageBtn" title="Toggle Image Lock (prevents accidental zoom/pan)" style="color: #38bdf8; font-weight: 600;">🔒 Locked</button>
                   <span style="font-size: 11px; color: #94a3b8;">Zoom:</span>
-                  <button type="button" class="cad-btn-mini" id="cadZoomOutBtn">−</button>
-                  <input type="range" id="cadZoomSlider" min="0.2" max="3.0" step="0.05" value="1.0" style="width: 70px;">
-                  <button type="button" class="cad-btn-mini" id="cadZoomInBtn">+</button>
+                  <button type="button" class="cad-btn-mini" id="cadZoomOutBtn" title="Zoom Out (fine 2% step)">−</button>
+                  <input type="range" id="cadZoomSlider" min="0.2" max="3.0" step="0.005" value="1.0" style="width: 70px;">
+                  <button type="button" class="cad-btn-mini" id="cadZoomInBtn" title="Zoom In (fine 2% step)">+</button>
                   <button type="button" class="cad-btn-mini" id="cadRotateImageBtn">↻ 90°</button>
                   <span style="font-size: 11px; color: #94a3b8; margin-left: 2px;">Opacity:</span>
                   <input type="range" id="cadOpacitySlider" min="0.1" max="1.0" step="0.05" value="0.85" style="width: 60px;">

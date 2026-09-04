@@ -1223,6 +1223,7 @@ function renderLayersPanel(cad, state) {
             <span style="font-size: 10px; color: #94a3b8; font-weight: 500;">(${countBadge})</span>
           </div>
           <div class="cad-layer-actions">
+            ${layerName === "panels" ? '<button type="button" class="cad-layer-btn select-all-panels-btn" title="Select All Panels (or drag-select on canvas)" style="font-size: 10px; font-weight: 600; color: #38bdf8;">⊞ All</button>' : ''}
             <button type="button" class="cad-layer-btn layer-vis-btn" data-layer="${layerName}" title="${isVisible ? "Hide Layer" : "Show Layer"}">${isVisible ? "👁️" : "🕶️"}</button>
             <button type="button" class="cad-layer-btn layer-up-btn" data-layer="${layerName}" title="Move Layer Up (draw on top of other layers)">🔼</button>
             <button type="button" class="cad-layer-btn layer-down-btn" data-layer="${layerName}" title="Move Layer Down (draw below other layers)">🔽</button>
@@ -1243,6 +1244,14 @@ function renderLayersPanel(cad, state) {
   });
 
   container.innerHTML = html;
+
+  // Select all panels button
+  container.querySelectorAll(".select-all-panels-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      cad.selectAllPanels();
+    });
+  });
 
   // Event handlers for layer controls
   container.querySelectorAll(".layer-vis-btn").forEach((btn) => {
@@ -1276,7 +1285,7 @@ function renderLayersPanel(cad, state) {
     });
   });
 
-  // Component row selection
+  // Component row selection (supports Shift/Ctrl/Cmd multi-selection)
   container.querySelectorAll(".cad-component-row").forEach((row) => {
     row.addEventListener("click", (e) => {
       if (
@@ -1288,7 +1297,8 @@ function renderLayersPanel(cad, state) {
       }
       const cType = row.getAttribute("data-comp-type");
       const cId = row.getAttribute("data-comp-id");
-      cad.selectComponent(cType, cId);
+      const isMulti = e.shiftKey || e.ctrlKey || e.metaKey;
+      cad.selectComponent(cType, cId, isMulti);
     });
   });
 
@@ -1907,10 +1917,25 @@ function setupCadEventListeners(cad) {
   const imgInput = $("cadImageInput");
   const imgControls = $("cadImageControls");
 
+  const updateLockBtnUI = () => {
+    const lockBtn = $("cadLockImageBtn");
+    if (!lockBtn) return;
+    if (cad.image.locked) {
+      lockBtn.textContent = "🔒 Locked";
+      lockBtn.style.color = "#38bdf8";
+      lockBtn.title = "Image is locked in place. Click to unlock for editing.";
+    } else {
+      lockBtn.textContent = "🔓 Unlocked";
+      lockBtn.style.color = "#fbbf24";
+      lockBtn.title = "Image is unlocked. Click to lock in place.";
+    }
+  };
+
   imgInput?.addEventListener("change", (e) => {
     if (e.target.files && e.target.files[0]) {
       cad.loadCustomImage(e.target.files[0]);
       if (imgControls) imgControls.style.display = "flex";
+      updateLockBtnUI();
       // Switch active tool to move image so user can immediately reposition it
       toolBtns.forEach(t => $(t.id)?.classList.remove("active"));
       $("cadToolPanBtn")?.classList.add("active");
@@ -1918,13 +1943,18 @@ function setupCadEventListeners(cad) {
     }
   });
 
+  $("cadLockImageBtn")?.addEventListener("click", () => {
+    cad.setImageLocked(!cad.image.locked);
+    updateLockBtnUI();
+  });
+
   $("cadZoomSlider")?.addEventListener("input", (e) => cad.setImageZoom(e.target.value));
   $("cadZoomInBtn")?.addEventListener("click", () => {
-    cad.setImageZoom(cad.image.scale * 1.15);
+    cad.setImageZoom(cad.image.scale * 1.02);
     if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale;
   });
   $("cadZoomOutBtn")?.addEventListener("click", () => {
-    cad.setImageZoom(cad.image.scale * 0.85);
+    cad.setImageZoom(cad.image.scale * 0.98);
     if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale;
   });
   $("cadRotateImageBtn")?.addEventListener("click", () => cad.rotateImage90());
@@ -3139,6 +3169,16 @@ window.loadProposalState = function(data) {
     const cad = getActiveRooftopCAD();
     if (cad && typeof cad.loadState === 'function') {
       cad.loadState(data.cad);
+      if (data.cad.image && data.cad.image.isLoaded) {
+        const imgControls = $("cadImageControls");
+        if (imgControls) imgControls.style.display = "flex";
+        const lockBtn = $("cadLockImageBtn");
+        if (lockBtn) {
+          lockBtn.textContent = cad.image.locked ? "🔒 Locked" : "🔓 Unlocked";
+          lockBtn.style.color = cad.image.locked ? "#38bdf8" : "#fbbf24";
+        }
+        if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale;
+      }
     }
   }
 
