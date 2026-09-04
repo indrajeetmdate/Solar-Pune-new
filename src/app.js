@@ -832,6 +832,22 @@ function render() {
     }
   }
 
+  // Update sticky header quick-stats ribbon KPIs
+  const ribbonCap = $("ribbonCapacity");
+  if (ribbonCap) ribbonCap.textContent = `${option.dcCapacityKw.toFixed(1)} kWp`;
+  const ribbonSav = $("ribbonSavings");
+  if (ribbonSav) ribbonSav.textContent = money(option.monthlySavings);
+  const ribbonPay = $("ribbonPayback");
+  if (ribbonPay) ribbonPay.textContent = isLoan && fin ? fin.tenureFormatted : years(option.paybackYears);
+
+  // Update Financials tab summary metrics
+  const finTotal = $("financialTotalCost");
+  if (finTotal) finTotal.textContent = money(option.totalCost);
+  const finSub = $("financialSubsidy");
+  if (finSub) finSub.textContent = `- ${money(option.subsidy)}`;
+  const finNet = $("financialNetCost");
+  if (finNet) finNet.textContent = money(option.netCost);
+
   $("sanctionStatus").textContent = estimate.sanctionedStatus.label;
   $("sanctionStatus").className = `status-pill ${estimate.sanctionedStatus.level}`;
 
@@ -2021,16 +2037,20 @@ function renderDiagram(pl, input) {
 
 function lockInternal() {
   state.internalUnlocked = false;
-  $("internalPanel").classList.add("hidden");
-  $("easyModeButton").classList.add("active");
-  $("internalModeButton").classList.remove("active");
+  $("internalPanel")?.classList.add("hidden");
+  $("easyModeButton")?.classList.add("active");
+  $("internalModeButton")?.classList.remove("active");
 
-  document.querySelectorAll('.wizard-actions').forEach(el => el.classList.remove('hidden'));
-  
-  if (typeof window.goToStep === 'function') {
-    window.goToStep(1);
+  const ratesPill = $("ratesPillBtn");
+  if (ratesPill) ratesPill.style.display = "none";
+  const ratesRail = $("ratesRailBtn");
+  if (ratesRail) ratesRail.style.display = "none";
+
+  if (state.activeSidebarCategory === "rates") {
+    switchSidebarCategory("contact");
   }
 
+  document.querySelectorAll('.wizard-actions').forEach(el => el.classList.remove('hidden'));
   render();
 }
 
@@ -2059,11 +2079,16 @@ function unlockInternal() {
 
 function openInternal() {
   state.internalUnlocked = true;
-  $("internalPanel").classList.remove("hidden");
+  $("internalPanel")?.classList.remove("hidden");
   const resultsPanel = document.querySelector('.results-panel');
   if (resultsPanel) resultsPanel.classList.remove('blurred-overlay');
-  $("easyModeButton").classList.remove("active");
-  $("internalModeButton").classList.add("active");
+  $("easyModeButton")?.classList.remove("active");
+  $("internalModeButton")?.classList.add("active");
+
+  const ratesPill = $("ratesPillBtn");
+  if (ratesPill) ratesPill.style.display = "inline-flex";
+  const ratesRail = $("ratesRailBtn");
+  if (ratesRail) ratesRail.style.display = "flex";
 
   const intCustName = document.getElementById("internalCustomerName");
   const extCustName = document.getElementById("customerName");
@@ -2083,11 +2108,6 @@ function openInternal() {
     intEmail.value = extEmail.value;
   }
 
-  const step1 = document.getElementById("step1");
-  const step2 = document.getElementById("step2");
-  if (step1) step1.classList.add("hidden");
-  if (step2) step2.classList.remove("hidden");
-
   document.querySelectorAll('.wizard-actions').forEach(el => el.classList.add('hidden'));
 
   render();
@@ -2101,6 +2121,73 @@ function switchTab(tab) {
   document.querySelectorAll(".tab-panel").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.panel !== tab);
   });
+}
+
+function switchWorkspaceTab(tabId) {
+  state.activeWorkspaceTab = tabId;
+  document.querySelectorAll(".workspace-tab-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tab === tabId);
+  });
+  document.querySelectorAll(".workspace-tab-pane").forEach((pane) => {
+    const isActive = pane.dataset.pane === tabId;
+    pane.classList.toggle("active", isActive);
+    pane.style.display = isActive ? "block" : "none";
+  });
+  if (tabId === "cad") {
+    const cad = getActiveRooftopCAD();
+    if (cad) {
+      setTimeout(() => {
+        cad.resizeCanvas();
+        cad.render();
+      }, 50);
+    }
+  }
+}
+
+function switchSidebarCategory(catId) {
+  state.activeSidebarCategory = catId;
+  document.querySelectorAll(".sidebar-pill-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.cat === catId);
+  });
+  document.querySelectorAll(".rail-icon-btn").forEach((btn) => {
+    if (btn.id !== "expandSidebarBtn") {
+      btn.classList.toggle("active", btn.dataset.cat === catId);
+    }
+  });
+  document.querySelectorAll(".cat-section").forEach((sec) => {
+    const isActive = sec.dataset.cat === catId;
+    sec.classList.toggle("active", isActive);
+    sec.style.display = isActive ? "block" : "none";
+  });
+  const layout = $("mainLayout");
+  if (layout?.classList.contains("sidebar-collapsed")) {
+    toggleSidebar(false);
+  }
+}
+
+function toggleSidebar(collapsed) {
+  const layout = $("mainLayout");
+  const sidebar = $("sidebarPanel");
+  const rail = $("sidebarRail");
+  const body = $("sidebarBody");
+  const headerPills = $("sidebarNavPills");
+  
+  const isCurrentlyCollapsed = layout?.classList.contains("sidebar-collapsed");
+  const shouldCollapse = collapsed !== undefined ? collapsed : !isCurrentlyCollapsed;
+  
+  if (layout) layout.classList.toggle("sidebar-collapsed", shouldCollapse);
+  if (sidebar) sidebar.classList.toggle("collapsed", shouldCollapse);
+  if (rail) rail.style.display = shouldCollapse ? "flex" : "none";
+  if (body) body.style.display = shouldCollapse ? "none" : "block";
+  if (headerPills) headerPills.style.display = shouldCollapse ? "none" : "flex";
+  
+  const cad = getActiveRooftopCAD();
+  if (cad) {
+    setTimeout(() => {
+      cad.resizeCanvas();
+      cad.render();
+    }, 250);
+  }
 }
 
 function resetForm() {
@@ -2366,6 +2453,7 @@ function attachEvents() {
         selectedOption.systemIncludesText = state.systemIncludesText[selectedOption.systemType];
       }
       const hideFlags = {
+        showCadDiagram: $("showCadDiagram")?.checked !== false,
         hidePayback: $("hidePayback")?.checked || false,
         hideAreaFit: $("hideAreaFit")?.checked || false,
         hideSubsidy: $("hideSubsidy")?.checked || false,
@@ -2443,6 +2531,7 @@ function attachEvents() {
         selectedOption.systemIncludesText = state.systemIncludesText[selectedOption.systemType];
       }
       const hideFlags = {
+        showCadDiagram: $("showCadDiagram")?.checked !== false,
         hidePayback: $("hidePayback")?.checked || false,
         hideAreaFit: $("hideAreaFit")?.checked || false,
         hideSubsidy: $("hideSubsidy")?.checked || false,
@@ -2473,6 +2562,67 @@ function attachEvents() {
   document.querySelectorAll(".tab-button").forEach((button) => {
     button.addEventListener("click", () => switchTab(button.dataset.tab));
   });
+
+  // Workspace Tabs
+  document.querySelectorAll(".workspace-tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => switchWorkspaceTab(btn.dataset.tab));
+  });
+
+  // Sidebar Category Pills
+  document.querySelectorAll(".sidebar-pill-btn").forEach((btn) => {
+    btn.addEventListener("click", () => switchSidebarCategory(btn.dataset.cat));
+  });
+
+  // Sidebar Rail Icon Buttons
+  document.querySelectorAll(".rail-icon-btn").forEach((btn) => {
+    if (btn.id !== "expandSidebarBtn") {
+      btn.addEventListener("click", () => switchSidebarCategory(btn.dataset.cat));
+    }
+  });
+
+  // Sidebar Collapse / Expand Toggles
+  $("toggleSidebarBtn")?.addEventListener("click", () => toggleSidebar());
+  $("collapseSidebarBtn")?.addEventListener("click", () => toggleSidebar(true));
+  $("expandSidebarBtn")?.addEventListener("click", () => toggleSidebar(false));
+
+  window.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+      e.preventDefault();
+      toggleSidebar();
+    }
+  });
+
+  // Quick Action Buttons
+  $("sidebarCalculateBtn")?.addEventListener("click", () => render());
+  $("ribbonDownloadPdfBtn")?.addEventListener("click", () => {
+    $("downloadProposalButtonInternal")?.click();
+  });
+
+  // Synchronize CAD Report Toggle Button <-> #showCadDiagram Checkbox
+  const cadTogglePdfBtn = $("cadTogglePdfReportBtn");
+  const showCadCb = $("showCadDiagram");
+  if (cadTogglePdfBtn && showCadCb) {
+    const updateCadPdfBtnVisual = () => {
+      if (showCadCb.checked) {
+        cadTogglePdfBtn.classList.add("active");
+        cadTogglePdfBtn.title = "Blueprint will appear in PDF report (Click to hide)";
+        cadTogglePdfBtn.style.borderColor = "var(--primary-green, #16a34a)";
+        cadTogglePdfBtn.style.color = "var(--primary-green, #16a34a)";
+      } else {
+        cadTogglePdfBtn.classList.remove("active");
+        cadTogglePdfBtn.title = "Blueprint hidden from PDF report (Click to include)";
+        cadTogglePdfBtn.style.borderColor = "var(--line, #cbd5e1)";
+        cadTogglePdfBtn.style.color = "var(--text-muted, #64748b)";
+      }
+    };
+    cadTogglePdfBtn.addEventListener("click", () => {
+      showCadCb.checked = !showCadCb.checked;
+      updateCadPdfBtnVisual();
+      render();
+    });
+    showCadCb.addEventListener("change", updateCadPdfBtnVisual);
+    updateCadPdfBtnVisual();
+  }
 
   $("panelConfigSelect")?.addEventListener("change", () => {
     const pl = state.estimates?.panelLayout;
@@ -2775,7 +2925,43 @@ async function saveProposalData() {
   if (btn) btn.textContent = "Saving...";
 
   const input = readInput();
-  const stateData = { state, input };
+  const config = readConfig();
+  const reportDisplay = {
+    showCadDiagram: $("showCadDiagram")?.checked !== false,
+    hidePayback: $("hidePayback")?.checked || false,
+    hideAreaFit: $("hideAreaFit")?.checked || false,
+    hideSubsidy: $("hideSubsidy")?.checked || false,
+    hideCost: $("hideCost")?.checked || false,
+    hideFinancing: $("hideFinancing")?.checked || false,
+    solarInstalled: $("solarInstalled")?.checked || false,
+  };
+
+  const cad = getActiveRooftopCAD();
+  const cadState = cad && typeof cad.serialize === "function" ? cad.serialize() : null;
+
+  const stateData = { 
+    state, 
+    input,
+    config,
+    reportDisplay,
+    cad: cadState
+  };
+
+  // 1. Cache to local storage immediately for robust offline draft restoration
+  try {
+    const localPayload = {
+      customerName: input.customerName || "Draft Customer",
+      mobileNumber: input.mobileNumber || "",
+      emailAddress: input.emailAddress || "",
+      savedAt: new Date().toISOString(),
+      stateData
+    };
+    localStorage.setItem("solar_proposal_last_saved", JSON.stringify(localPayload));
+  } catch (err) {
+    console.warn("Could not save to localStorage", err);
+  }
+
+  // 2. Persist to backend server / database
   try {
     const res = await fetch('/api/save-proposal', {
       method: 'POST',
@@ -2803,15 +2989,14 @@ async function saveProposalData() {
     } else {
       console.error('Save failed:', data.error);
       if (btn) {
-        btn.textContent = "Error! ❌";
+        btn.textContent = "Saved locally! 💾";
         setTimeout(() => btn.textContent = origText, 2500);
       }
-      alert('Error saving data: ' + data.error);
     }
   } catch (e) {
     console.error('Error saving proposal:', e);
     if (btn) {
-      btn.textContent = "Error! ❌";
+      btn.textContent = "Saved locally! 💾";
       setTimeout(() => btn.textContent = origText, 2500);
     }
   }
@@ -2821,41 +3006,102 @@ async function searchProposals(query) {
   const listEl = $("proposalList");
   if (!listEl) return;
   listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">Searching...</div>';
+
+  let localDraftHtml = '';
+  try {
+    const localRaw = localStorage.getItem("solar_proposal_last_saved");
+    if (localRaw) {
+      const localData = JSON.parse(localRaw);
+      const q = (query || '').toLowerCase().trim();
+      const matchName = !q || (localData.customerName && localData.customerName.toLowerCase().includes(q));
+      const matchMobile = !q || (localData.mobileNumber && localData.mobileNumber.includes(q));
+      if (matchName || matchMobile) {
+        localDraftHtml = `
+          <div style="padding: 10px 14px; border: 1px solid #86efac; background: #f0fdf4; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <span style="display:inline-block; font-size: 10px; font-weight:700; background: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 4px; margin-bottom: 3px;">⚡ Local Auto-Save Draft</span><br>
+              <strong style="color: #0f172a; font-size: 13.5px;">${localData.customerName || 'Draft'}</strong>
+              <span style="font-size: 12px; color: #64748b; margin-left: 6px;">${localData.mobileNumber || ''}</span><br>
+              <span style="font-size: 11px; color: #94a3b8;">${new Date(localData.savedAt).toLocaleString()}</span>
+            </div>
+            <button class="primary-button load-local-btn" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button">Load</button>
+          </div>
+        `;
+      }
+    }
+  } catch (err) {
+    console.warn("Could not parse local draft", err);
+  }
+
   try {
     const res = await fetch('/api/load-proposals?search=' + encodeURIComponent(query));
     const json = await res.json();
+    let serverHtml = '';
     if (json.success && json.data.length > 0) {
-      listEl.innerHTML = json.data.map(p => `
-        <div style="padding: 10px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
+      window._currentServerProposals = json.data;
+      serverHtml = json.data.map((p, idx) => `
+        <div style="padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
           <div>
-            <strong>${p.customer_name || 'Unknown'}</strong><br>
-            <span style="font-size: 12px; color: var(--text-muted);">${p.mobile_number || ''} | ${p.email_address || ''}</span><br>
+            <strong style="color: #0f172a; font-size: 13.5px;">${p.customer_name || 'Unknown'}</strong><br>
+            <span style="font-size: 12px; color: var(--text-muted);">${p.mobile_number || ''} ${p.email_address ? '| ' + p.email_address : ''}</span><br>
             <span style="font-size: 11px; color: var(--text-muted);">${new Date(p.created_at).toLocaleString()}</span>
           </div>
-          <button class="primary-button" style="padding: 6px 12px; font-size: 12px;" onclick='window.loadProposalState(${JSON.stringify(p.state_data).replace(/'/g, "&apos;")})'>Load</button>
+          <button class="primary-button load-server-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button">Load</button>
         </div>
       `).join('');
-    } else {
-      listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">No results found.</div>';
+    } else if (!localDraftHtml) {
+      serverHtml = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">No proposals found.</div>';
     }
+
+    listEl.innerHTML = localDraftHtml + serverHtml;
+
+    listEl.querySelector(".load-local-btn")?.addEventListener("click", () => {
+      try {
+        const localData = JSON.parse(localStorage.getItem("solar_proposal_last_saved"));
+        if (localData?.stateData) window.loadProposalState(localData.stateData);
+      } catch (e) {
+        console.error("Failed to load local draft", e);
+      }
+    });
+
+    listEl.querySelectorAll(".load-server-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.idx, 10);
+        const p = window._currentServerProposals?.[idx];
+        if (p?.state_data) window.loadProposalState(p.state_data);
+      });
+    });
+
   } catch (e) {
     console.error(e);
-    listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">Error loading data.</div>';
+    if (localDraftHtml) {
+      listEl.innerHTML = localDraftHtml + '<div style="text-align: center; color: var(--text-muted); padding: 12px; font-size: 12px;">(Server offline - loaded local draft)</div>';
+      listEl.querySelector(".load-local-btn")?.addEventListener("click", () => {
+        try {
+          const localData = JSON.parse(localStorage.getItem("solar_proposal_last_saved"));
+          if (localData?.stateData) window.loadProposalState(localData.stateData);
+        } catch (err) {
+          console.error("Failed to load local draft", err);
+        }
+      });
+    } else {
+      listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">Error loading data from server.</div>';
+    }
   }
 }
 
 window.loadProposalState = function(data) {
+  if (!data) return;
   if (data.state) {
     Object.assign(state, data.state);
   }
   if (data.input) {
-    // Populate DOM inputs based on data.input
     Object.keys(data.input).forEach(key => {
        const el = $(key);
        if (el && el.type !== 'radio' && el.type !== 'checkbox') {
          el.value = data.input[key] || "";
        } else if (el && el.type === 'checkbox') {
-         el.checked = data.input[key];
+         el.checked = !!data.input[key];
        }
     });
     if (data.input.customerName) {
@@ -2871,7 +3117,35 @@ window.loadProposalState = function(data) {
       if ($('internalEmailAddress')) $('internalEmailAddress').value = data.input.emailAddress;
     }
   }
-  
+  if (data.config) {
+    Object.keys(data.config).forEach(key => {
+      const el = $(key);
+      if (el && el.type !== 'radio' && el.type !== 'checkbox') {
+        el.value = data.config[key] || "";
+      }
+    });
+  }
+  if (data.reportDisplay) {
+    Object.keys(data.reportDisplay).forEach(key => {
+      const el = $(key);
+      if (el && el.type === 'checkbox') {
+        el.checked = !!data.reportDisplay[key];
+      }
+    });
+  }
+
+  // Restore Rooftop CAD state
+  if (data.cad) {
+    const cad = getActiveRooftopCAD();
+    if (cad && typeof cad.loadState === 'function') {
+      cad.loadState(data.cad);
+    }
+  }
+
+  // Remove blur overlay when a proposal is loaded
+  const resultsPanel = document.querySelector('.results-panel');
+  if (resultsPanel) resultsPanel.classList.remove('blurred-overlay');
+
   if ($('loadProposalModal')) $('loadProposalModal').style.display = 'none';
   render();
 };

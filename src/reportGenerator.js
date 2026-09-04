@@ -291,7 +291,112 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   });
   yPos = doc.lastAutoTable.finalY + 15;
 
-  // ================= PAGE 2: Financial Quote =================
+  let sectionNumber = 2;
+
+  // ================= SECTION 2: Rooftop Layout & Solar Array CAD Plan =================
+  const showCadDiagram = hideFlags.showCadDiagram !== undefined ? hideFlags.showCadDiagram : !hideFlags.hideCadDiagram;
+  if (showCadDiagram) {
+    doc.addPage();
+    yPos = 30;
+    addHeader("Rooftop Layout & CAD Blueprint");
+
+    doc.setTextColor(COLORS.black);
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text(`${sectionNumber}. Rooftop Layout & Solar Array CAD Plan`, margin, yPos);
+    yPos += 8;
+    sectionNumber++;
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(COLORS.text);
+    doc.text("Dimensioned rooftop architectural layout, module placement, maintenance pathways, and shadow obstruction analysis.", margin, yPos);
+    yPos += 7;
+
+    // Get snapshot image from RooftopCAD or canvas
+    let cadImage = null;
+    try {
+      if (typeof window !== "undefined" && window.cad && typeof window.cad.getReportSnapshot === "function") {
+        cadImage = window.cad.getReportSnapshot();
+      }
+      if (!cadImage) {
+        cadImage = canvasToImageData("panelDiagramCanvas");
+      }
+    } catch (e) {
+      console.warn("Could not capture CAD snapshot:", e);
+    }
+
+    if (cadImage) {
+      const maxImgW = pageWidth - margin * 2;
+      const maxImgH = 105;
+      const aspect = 800 / 460;
+      let drawW = maxImgW;
+      let drawH = drawW / aspect;
+      if (drawH > maxImgH) {
+        drawH = maxImgH;
+        drawW = drawH * aspect;
+      }
+      const imgX = margin + (maxImgW - drawW) / 2;
+
+      // Dark CAD canvas border/fill
+      doc.setFillColor(15, 23, 42);
+      doc.roundedRect(imgX - 0.5, yPos - 0.5, drawW + 1, drawH + 1, 1.5, 1.5, "F");
+      try {
+        doc.addImage(cadImage, "PNG", imgX, yPos, drawW, drawH);
+      } catch (err) {
+        console.warn("Failed to add CAD image to PDF:", err);
+      }
+      yPos += drawH + 8;
+    }
+
+    // Architectural layout & array metrics table
+    let cadStats = null;
+    let placedPanelsCount = 0;
+    let reqPanelsCount = option.sizing ? Math.ceil(option.dcCapacityKw / 0.55) : 0;
+    let northAngle = 0;
+    let bldgHeight = 18;
+    let shadingEst = "0.0%";
+    let roofL = 30;
+    let roofB = 20;
+
+    if (typeof window !== "undefined" && window.cad) {
+      cadStats = window.cad.getAreaStats ? window.cad.getAreaStats() : null;
+      placedPanelsCount = window.cad.panels ? window.cad.panels.length : 0;
+      reqPanelsCount = window.cad.requiredPanels || reqPanelsCount;
+      northAngle = window.cad.northAngleDeg ?? 0;
+      bldgHeight = window.cad.buildingHeightFt ?? 18;
+      roofL = window.cad.roofLengthFt || 30;
+      roofB = window.cad.roofBreadthFt || 20;
+      if (window.cad.sunSim && window.cad.sunSim.enabled && typeof window.cad.getShadingLossStats === "function") {
+        const lossStats = window.cad.getShadingLossStats();
+        if (lossStats) shadingEst = `${lossStats.lossPercent.toFixed(1)}%`;
+      }
+    }
+
+    const cadTableData = [
+      ["Roof Dimensions", `${roofL} ft × ${roofB} ft (${cadStats ? cadStats.grossSqft : roofL * roofB} sq ft)`],
+      ["Net Usable Roof Space", `${cadStats ? cadStats.netUsableSqft : roofL * roofB} sq ft (${cadStats ? cadStats.netUsableSqm : ((roofL * roofB) * 0.0929).toFixed(1)} sq m)`],
+      ["Maintenance Pathways & Cutouts", `${cadStats ? cadStats.pathwaySqft + cadStats.cutoutSqft : 0} sq ft (Safety & Service Access)`],
+      ["Solar Module Placement", `${placedPanelsCount} / ${reqPanelsCount} Modules Placed (${placedPanelsCount === reqPanelsCount ? "Complete Array" : `${Math.max(0, reqPanelsCount - placedPanelsCount)} Latent`})`],
+      ["Orientation & True North", `${northAngle}° Azimuth (${northAngle === 0 ? "True North Aligned" : `${northAngle}° from North`}) | Height: ${bldgHeight} ft`],
+      ["Simulated Shading Impact", `${shadingEst} Solar Shading Loss (Astronomical solar trajectory & obstacle model)`]
+    ];
+
+    doc.autoTable({
+      startY: yPos,
+      body: cadTableData,
+      theme: "grid",
+      headStyles: { fillColor: COLORS.primary },
+      columnStyles: {
+        0: { fontStyle: "bold", width: 75, fillColor: COLORS.bgLight },
+        1: { fontStyle: "normal" }
+      },
+      margin: { left: margin },
+    });
+    yPos = doc.lastAutoTable.finalY + 12;
+  }
+
+  // ================= FINANCIAL QUOTE SECTION =================
   if (!hideCost) {
     doc.addPage();
     yPos = 30;
@@ -300,8 +405,9 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.setTextColor(COLORS.black);
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text("2. Financial Quote & Breakup", margin, yPos);
+    doc.text(`${sectionNumber}. Financial Quote & Breakup`, margin, yPos);
     yPos += 10;
+    sectionNumber++;
   
     doc.setFontSize(12);
     doc.text(`Selected Option: ${formatSysType(option.systemType)} (${option.dcCapacityKw} kWp)`, margin, yPos);
@@ -517,9 +623,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.text(`${formatCurrency(option.lifetimeSavings)}`, margin + 50, yPos);
   yPos += 10;
 
-  let sectionNumber = 3;
-
-  // ================= SECTION 3 (PAGE 3): Bank Partner Loan Proposal =================
+  // ================= SECTION 3 (or dynamic): Bank Partner Loan Proposal =================
   if (!hideFinancing && !hideCost && option.financing) {
     const fin = option.financing;
     doc.addPage();

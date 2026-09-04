@@ -1,22 +1,22 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="gemini-api-key" content="">
-    <title>Pune Solar Calculator — DC Energy</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pune Rooftop Solar Calculator | DC Energy</title>
     <link rel="stylesheet" href="./src/styles.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2363923e'><circle cx='12' cy='12' r='5'/><path d='M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42'/></svg>">
   </head>
   <body>
     <header class="app-header">
-      <div style="display: flex; align-items: center; gap: 1rem;">
-        <img src="https://bfkxdpripwjxenfvwpfu.supabase.co/storage/v1/object/public/Logo/DC_Energyfull_black_bg_.png" alt="DC Energy Logo" style="height: 40px; border-radius: 4px;">
-        <div>
-          <p class="eyebrow">DC Energy • Pune rooftop solar</p>
-          <h1>Solar Calculator</h1>
+      <div class="header-brand-group">
+        <button class="sidebar-toggle-btn header-toggle-btn" id="toggleSidebarBtn" title="Toggle Inputs Sidebar (Ctrl+B)" type="button">☰</button>
+        <div class="brand">
+          <span class="brand-badge">⚡</span>
+          <div>
+            <h1>DC ENERGY</h1>
+            <p class="tagline">Pune Rooftop Solar Calculator</p>
+          </div>
         </div>
       </div>
       <div class="header-actions" aria-label="Mode selector">
@@ -25,543 +25,436 @@
       </div>
     </header>
 
-    <main class="layout">
-            <section class="input-panel" aria-label="Customer and site inputs">
-        <div id="wizardNav" class="wizard-nav" style="display: none;">
-          <div class="wizard-step-dot active" id="navStep1">1. Contact</div>
-          <div class="wizard-step-dot" id="navStep2">2. Energy</div>
-          <div class="wizard-step-dot" id="navStep3">3. Site</div>
+    <main class="layout" id="mainLayout">
+      <!-- ================= MINIMIZABLE CATEGORIZED INPUT SIDEBAR ================= -->
+      <aside class="sidebar-panel" id="sidebarPanel" aria-label="Customer and site inputs">
+        <!-- Expanded Header -->
+        <div class="sidebar-header" id="sidebarHeader">
+          <div class="sidebar-title-row">
+            <div class="sidebar-title-badge">
+              <span class="sidebar-title-icon">⚡</span>
+              <span class="sidebar-title-text">Project Inputs</span>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <button class="sidebar-action-btn" id="resetButton" type="button" title="Reset Inputs">↺ Reset</button>
+              <button class="sidebar-collapse-btn" id="collapseSidebarBtn" title="Collapse Sidebar [Ctrl+B]" type="button">◀</button>
+            </div>
+          </div>
+
+          <!-- Category Navigation Pills -->
+          <nav class="sidebar-nav-pills" id="sidebarNavPills" aria-label="Input categories">
+            <button class="sidebar-pill-btn active" data-cat="contact" type="button" title="Customer basics">👤 Contact</button>
+            <button class="sidebar-pill-btn" data-cat="energy" type="button" title="Energy & Bill">⚡ Energy</button>
+            <button class="sidebar-pill-btn" data-cat="roof" type="button" title="Roof & Site">📐 Roof</button>
+            <button class="sidebar-pill-btn" data-cat="sizing" type="button" title="Solar Tech & Sizing">⚙️ Sizing</button>
+            <button class="sidebar-pill-btn" data-cat="financing" type="button" title="Payment & Loan">🏦 Loan</button>
+            <button class="sidebar-pill-btn" data-cat="rates" id="ratesPillBtn" type="button" title="Pricing & Tariffs (Internal)" style="display: none;">🔧 Rates</button>
+          </nav>
         </div>
 
-        <!-- STEP 1 -->
-        <div id="step1" class="wizard-step active">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Step 1</p>
-              <h2>Customer basics</h2>
-            </div>
-            <button class="ghost-button" id="resetButton" type="button">Reset</button>
-          </div>
+        <!-- Collapsed Icon Rail (shown when sidebar is collapsed) -->
+        <div class="sidebar-rail" id="sidebarRail" style="display: none;">
+          <button class="rail-icon-btn active" data-cat="contact" title="Customer Contact">👤</button>
+          <button class="rail-icon-btn" data-cat="energy" title="Energy & Bill">⚡</button>
+          <button class="rail-icon-btn" data-cat="roof" title="Roof & Site">📐</button>
+          <button class="rail-icon-btn" data-cat="sizing" title="Solar Tech & Sizing">⚙️</button>
+          <button class="rail-icon-btn" data-cat="financing" title="Payment & Loan">🏦</button>
+          <button class="rail-icon-btn" data-cat="rates" id="ratesRailBtn" title="Pricing & Tariffs" style="display: none;">🔧</button>
+          <div style="flex: 1;"></div>
+          <button class="rail-icon-btn expand-btn" id="expandSidebarBtn" title="Expand Sidebar">▶</button>
+        </div>
 
-          <div class="field-grid">
-            <label class="field">
-              <span>Customer name</span>
-              <input id="customerName" type="text" placeholder="Optional">
-            </label>
-            <label class="field">
-              <span>Mobile number <span style="color: var(--danger)">*</span></span>
-              <input id="mobileNumber" type="tel" placeholder="Required" required>
-            </label>
-            <label class="field">
-              <span>Email address</span>
-              <input id="emailAddress" type="email" placeholder="Optional">
-            </label>
-          </div>
+        <!-- Sidebar Body: Categorized Sections -->
+        <div class="sidebar-body" id="sidebarBody">
           
-          <div class="wizard-actions">
-            <div></div> <!-- Spacer -->
-            <button class="primary-button" type="button" onclick="window.goToStep(2)">Next: Energy & Site →</button>
-          </div>
-        </div>
-
-        <!-- STEP 2 -->
-        <div id="step2" class="wizard-step hidden">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Step 2</p>
-              <h2>Energy & Site details</h2>
+          <!-- CATEGORY 1: CONTACT -->
+          <div class="cat-section active" id="catSectionContact" data-cat="contact">
+            <div class="cat-section-header">
+              <span class="cat-section-title">Customer Basics</span>
+              <span class="cat-section-badge">Required *</span>
             </div>
-          </div>
-
-          <label class="upload-zone" for="billUpload">
-            <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            <input id="billUpload" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.tiff,.tif,.txt,.csv">
-            <span class="upload-title">Attach electricity bill</span>
-            <span class="upload-formats">PDF, JPG, PNG, WEBP — Marathi & English bills via Gemini AI</span>
-            <span id="billUploadStatus"></span>
-          </label>
-
-          <div id="billExtractPanel" class="extract-panel hidden">
-            <div class="section-heading compact">
-              <div>
-                <p class="eyebrow">Bill extraction</p>
-                <h2>Detected fields</h2>
-              </div>
-              <button class="ghost-button" id="applyExtractedBill" type="button">Apply</button>
-            </div>
-
-            <div class="extract-grid">
-              <div><span>File Name</span><strong id="extractedFileName">-</strong></div>
-              <div><span>Name</span><strong id="extractedName">-</strong></div>
-              <div><span>Address</span><strong id="extractedAddress">-</strong></div>
-              <div><span>Bill Month</span><strong id="extractedBillMonth">-</strong></div>
-              <div><span>Sanction Load</span><strong id="extractedSanctionLoad">-</strong></div>
-              <div><span>Bill Amount</span><strong id="extractedBillAmount">-</strong></div>
-              <div><span>Units Consumed</span><strong id="extractedUnits">-</strong></div>
-              <div><span>Avg Units Per Month</span><strong id="extractedYearlyAvg">-</strong></div>
-            </div>
-
-            <p id="extractedExtra" class="muted small hidden" style="margin-top: 8px;"></p>
-
-            <!-- Charge Breakdown Table -->
-            <details id="extractedChargesTable" class="hidden" style="margin-top: 10px; cursor: pointer;" open>
-              <summary style="font-weight: 600; font-size: 13px; color: var(--ink);">Current Bill Breakdown <i class="info-tip" data-tip="Every charge, duty, and rebate line item extracted from your bill. Negative amounts are discounts/rebates.">i</i></summary>
-              <div style="margin-top: 8px; max-height: 280px; overflow-y: auto;"></div>
-            </details>
-
-            <!-- Billing History Table -->
-            <details id="extractedHistoryTable" class="hidden" style="margin-top: 8px; cursor: pointer;">
-              <summary style="font-weight: 600; font-size: 13px; color: var(--ink);">Billing History <i class="info-tip" data-tip="Past 6–12 months of consumption and bill amounts from your electricity bill.">i</i></summary>
-              <div style="margin-top: 8px; max-height: 200px; overflow-y: auto;"></div>
-            </details>
-
-            <p id="billExtractWarnings" class="muted small" style="margin-top: 8px;"></p>
-          </div>
-
-          <div class="field-grid mt-4" style="margin-top: 1.5rem;">
-            <label class="field">
-              <span>Avg units per month <i class="info-tip" data-tip="Average electricity units consumed per month as shown on your bill.">i</i></span>
-              <input id="monthlyUnits" type="number" min="0" step="1" value="450">
-            </label>
-            <label class="field">
-              <span>Optimization Goal <i class="info-tip" data-tip="Optimum sizes for average use (max ROI). Summer-proof sizes for peak usage (zero bills even in hot months, but higher upfront cost).">i</i></span>
-              <select id="optimizationStrategy">
-                <option value="optimum" selected>Optimum (Cost & ROI)</option>
-                <option value="summer_proof">Summer-Proof (Peak Sizing)</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Monthly bill amount <i class="info-tip" data-tip="Total amount on your latest electricity bill including all charges.">i</i></span>
-              <input id="monthlyBill" type="number" min="0" step="100" value="5200">
-            </label>
-            <label class="field">
-              <span>Sanctioned load <i class="info-tip" data-tip="Maximum power (kW) your electricity connection is approved for. Found on your bill.">i</i></span>
-              <input id="sanctionedLoad" type="number" min="0" step="0.5" value="5">
-            </label>
-            <label class="field">
-              <span>Consumer category <i class="info-tip" data-tip="Your MSEDCL connection type. Residential, commercial, industrial, agricultural, or group housing — each has different tariff rates.">i</i></span>
-              <select id="consumerCategory">
-                <option value="LT-I" selected>LT-I Residential</option>
-                <option value="LT-I-GHS">LT-I Group Housing</option>
-                <option value="LT-II">LT-II Commercial</option>
-                <option value="LT-III">LT-III Industrial</option>
-                <option value="LT-AG">LT-AG Agricultural</option>
-                <option value="HT-I">HT-I Industrial</option>
-                <option value="HT-II">HT-II Commercial</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Phase</span>
-              <select id="connectionPhase">
-                <option value="1-phase">Single phase</option>
-                <option value="3-phase">Three phase</option>
-              </select>
-            </label>
-            <label class="field hidden" id="numFlatsField">
-              <span>Number of flats (GHS)</span>
-              <input id="numFlats" type="number" min="1" step="1" placeholder="e.g. 80">
-            </label>
-            <label class="field hidden" id="powerFactorField">
-              <span>Current power factor</span>
-              <input id="currentPf" type="number" min="0.5" max="1" step="0.01" placeholder="e.g. 0.85">
-            </label>
-            <label class="field hidden" id="peakUsageField">
-              <span>Peak hour usage %</span>
-              <input id="peakHourUsagePct" type="number" min="0" max="100" step="5" value="30">
-            </label>
-          </div>
-
-          <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--line);">
-
-          <div class="section-heading compact">
-            <div>
-              <h2>Site & Goals</h2>
-            </div>
-            <button class="ghost-button" id="fetchLocationButton" type="button" title="Fetch current coordinates">Auto-fetch</button>
-          </div>
-
-          <div class="field-grid">
-            <label class="field">
-              <span>Area (sq ft) <i class="info-tip" data-tip="Shadow-free roof or terrace area available for panels. Includes space for walkways and cleaning access.">i</i></span>
-              <input id="roofArea" type="number" min="0" step="10" value="650">
-            </label>
-            <label class="field">
-              <span>System preference</span>
-              <select id="goal">
-                <option value="ongrid">On-grid</option>
-                <option value="hybrid">Hybrid</option>
-                <option value="offgrid">Off-grid</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Coordinates (Lat, Lng)</span>
-              <input id="coordinates" type="text" placeholder="e.g. 18.52, 73.85">
-            </label>
-            <label class="field">
-              <span>Tilt Angle (°)</span>
-              <input id="tiltAngle" type="number" min="0" max="90" step="1" placeholder="Auto (Lat)">
-            </label>
-            <label class="field">
-              <span>Orientation</span>
-              <select id="orientationDir">
-                <option value="South">South (Optimal)</option>
-                <option value="SouthEast">South-East</option>
-                <option value="SouthWest">South-West</option>
-                <option value="East">East</option>
-                <option value="West">West</option>
-                <option value="North">North (High Loss)</option>
-              </select>
-            </label>
-          </div>
-
-          <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--line);">
-
-          <div class="section-heading compact">
-            <div>
-              <h2>Payment & Financing</h2>
-              <p class="muted small" style="margin-top: 2px;">Calculate based on upfront payment vs zero out-of-pocket bank partner loan</p>
-            </div>
-          </div>
-
-          <div class="field-grid">
-            <label class="field" style="grid-column: 1 / -1;">
-              <span>Payment Option <i class="info-tip" data-tip="Choose between full upfront payment or an EMI bank loan where your monthly installment matches your current electricity bill.">i</i></span>
-              <select id="paymentMode">
-                <option value="upfront" selected>Upfront Cash Payment</option>
-                <option value="loan">Bank Partner Loan (Zero Out-of-Pocket EMI)</option>
-              </select>
-            </label>
-          </div>
-
-          <div id="customerLoanFields" class="field-grid hidden" style="margin-top: 0.75rem; background: var(--surface-soft); padding: 12px; border-radius: var(--radius); border: 1px solid var(--brand-green-light);">
-            <label class="field">
-              <span>Loan Amount (₹) <i class="info-tip" data-tip="Bank loan principal amount. Defaults to 100% of Net System Cost after subsidy.">i</i></span>
-              <input id="loanAmount" type="number" min="0" step="5000" placeholder="Auto (Net Cost)">
-            </label>
-            <label class="field">
-              <span>Bank Interest Rate (%) <i class="info-tip" data-tip="Annual interest rate for solar loan partners (e.g. SBI Surya Ghar, Union Bank). Default is 9.5% p.a.">i</i></span>
-              <input id="loanInterestRate" type="number" min="1" max="25" step="0.1" value="9.5">
-            </label>
-            <label class="field">
-              <span>Monthly Installment (EMI Target) <i class="info-tip" data-tip="Target monthly payment to bank. Automatically matches your current electricity bill so your monthly cash outflow does not increase.">i</i></span>
-              <input id="loanMonthlyEmi" type="number" min="0" step="100" placeholder="Auto (Matches Monthly Bill)">
-            </label>
-            <div style="grid-column: 1 / -1; font-size: 12px; color: var(--brand-green); font-weight: 500; display: flex; align-items: center; gap: 6px;" id="customerLoanLivePreview">
-              <span>✨ Pay what you already pay for electricity → System becomes 100% free in <strong id="customerLoanTenurePreview">~4 years</strong>!</span>
-            </div>
-          </div>
-
-          <div class="wizard-actions">
-            <button class="ghost-button" type="button" onclick="window.goToStep(1)">← Back</button>
-            <button class="primary-button" id="downloadProposalButton" type="button">Download Proposal ↓</button>
-          </div>
-        </div>
-
-        <div id="internalPanel" class="internal-panel hidden">
-          <div class="section-heading compact">
-            <div>
-              <p class="eyebrow">Settings</p>
-              <h2>Advanced Options</h2>
-            </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
-              <button class="secondary-button" id="openLoadProposalModalButton" type="button" style="padding: 4px 12px; font-size: 12px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; cursor: pointer;">Load Data 📂</button>
-              <div style="width: 1px; height: 16px; background: var(--line); margin: 0 4px;"></div>
-              <select id="presetSelect" style="max-width: 140px; font-size: 13px; padding: 4px;">
-                <option value="">Load Preset...</option>
-              </select>
-              <button class="ghost-button" id="savePresetButton" type="button" style="padding: 4px 8px;">Save</button>
-            </div>
-          </div>
-
-          <div class="tabs" aria-label="Internal assumption groups">
-            <button class="tab-button active" type="button" data-tab="system">System</button>
-            <button class="tab-button" type="button" data-tab="pricing">Pricing</button>
-            <button class="tab-button" type="button" data-tab="financing">Financing</button>
-            <button class="tab-button" type="button" data-tab="losses">Losses</button>
-            <button class="tab-button" type="button" data-tab="tariff">Tariff</button>
-          </div>
-
-          <div class="tab-panel" data-panel="system">
             <div class="field-grid">
-              <label class="field">
+              <label class="field" style="grid-column: 1 / -1;">
                 <span>Customer name</span>
-                <input id="internalCustomerName" type="text" placeholder="Optional">
+                <input id="customerName" type="text" placeholder="e.g. Rahul Sharma">
               </label>
-              <label class="field">
-                <span>Mobile number</span>
-                <input id="internalMobileNumber" type="text" placeholder="Optional">
+              <label class="field" style="grid-column: 1 / -1;">
+                <span>Mobile number <span style="color: var(--danger, #ef4444)">*</span></span>
+                <input id="mobileNumber" type="tel" placeholder="10-digit mobile" required>
               </label>
-              <label class="field">
+              <label class="field" style="grid-column: 1 / -1;">
                 <span>Email address</span>
-                <input id="internalEmailAddress" type="email" placeholder="Optional">
+                <input id="emailAddress" type="email" placeholder="name@example.com">
               </label>
               <label class="field">
-                <span>Panel type <i class="info-tip" data-tip="DCR panels are domestically made (required for govt subsidy). Non-DCR are imported, cheaper but no subsidy.">i</i></span>
-                <select id="panelType">
-                  <option value="dcr">DCR subsidy path</option>
-                  <option value="nonDcr">Non-DCR no subsidy</option>
+                <span>Sanctioned load (kW) <i class="info-tip" data-tip="Approved contract load on your electricity bill.">i</i></span>
+                <input id="sanctionedLoad" type="number" min="0" step="0.5" value="5">
+              </label>
+              <label class="field">
+                <span>Consumer category</span>
+                <select id="consumerCategory">
+                  <option value="LT-I" selected>LT-I Residential</option>
+                  <option value="LT-I-GHS">LT-I Group Housing</option>
+                  <option value="LT-II">LT-II Commercial</option>
+                  <option value="LT-III">LT-III Industrial</option>
+                  <option value="LT-AG">LT-AG Agricultural</option>
+                  <option value="HT-I">HT-I Industrial</option>
+                  <option value="HT-II">HT-II Commercial</option>
                 </select>
               </label>
+              <label class="field" style="grid-column: 1 / -1;">
+                <span>Phase</span>
+                <select id="connectionPhase">
+                  <option value="1-phase">Single phase</option>
+                  <option value="3-phase">Three phase</option>
+                </select>
+              </label>
+              <label class="field hidden" id="numFlatsField" style="grid-column: 1 / -1;">
+                <span>Number of flats (GHS)</span>
+                <input id="numFlats" type="number" min="1" step="1" placeholder="e.g. 80">
+              </label>
+              <label class="field hidden" id="powerFactorField">
+                <span>Power factor</span>
+                <input id="currentPf" type="number" min="0.5" max="1" step="0.01" placeholder="e.g. 0.85">
+              </label>
+              <label class="field hidden" id="peakUsageField">
+                <span>Peak usage %</span>
+                <input id="peakHourUsagePct" type="number" min="0" max="100" step="5" value="30">
+              </label>
+            </div>
+            
+            <!-- Hidden inputs to maintain 100% backwards compatibility with existing state scripts -->
+            <input id="internalCustomerName" type="hidden">
+            <input id="internalMobileNumber" type="hidden">
+            <input id="internalEmailAddress" type="hidden">
+          </div>
 
-              <label class="field" id="subsidyCategoryContainer">
-                <span>Subsidy category</span>
+          <!-- CATEGORY 2: ENERGY & BILL -->
+          <div class="cat-section" id="catSectionEnergy" data-cat="energy" style="display: none;">
+            <div class="cat-section-header">
+              <span class="cat-section-title">Energy Consumption & Bill</span>
+            </div>
+
+            <!-- Upload Zone -->
+            <label class="upload-zone" for="billUpload" style="margin-bottom: 12px;">
+              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <input id="billUpload" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.tiff,.tif,.txt,.csv">
+              <span class="upload-title">Attach electricity bill</span>
+              <span class="upload-formats">PDF, JPG, PNG — Marathi & English OCR via Gemini AI</span>
+              <span id="billUploadStatus"></span>
+            </label>
+
+            <!-- Detected Bill Fields Panel -->
+            <div id="billExtractPanel" class="extract-panel hidden" style="margin-bottom: 12px;">
+              <div class="section-heading compact" style="margin-bottom: 8px;">
+                <div>
+                  <p class="eyebrow">Bill Extraction</p>
+                  <h2 style="font-size: 14px;">Detected Fields</h2>
+                </div>
+                <button class="ghost-button" id="applyExtractedBill" type="button" style="padding: 2px 8px; font-size: 11px;">Apply</button>
+              </div>
+
+              <div class="extract-grid">
+                <div><span>File Name</span><strong id="extractedFileName">-</strong></div>
+                <div><span>Name</span><strong id="extractedName">-</strong></div>
+                <div><span>Address</span><strong id="extractedAddress">-</strong></div>
+                <div><span>Bill Month</span><strong id="extractedBillMonth">-</strong></div>
+                <div><span>Sanction Load</span><strong id="extractedSanctionLoad">-</strong></div>
+                <div><span>Bill Amount</span><strong id="extractedBillAmount">-</strong></div>
+                <div><span>Units Consumed</span><strong id="extractedUnits">-</strong></div>
+                <div><span>Avg Units/Mo</span><strong id="extractedYearlyAvg">-</strong></div>
+              </div>
+
+              <p id="extractedExtra" class="muted small hidden" style="margin-top: 8px;"></p>
+
+              <details id="extractedChargesTable" class="hidden" style="margin-top: 8px; cursor: pointer;" open>
+                <summary style="font-weight: 600; font-size: 12px; color: var(--ink);">Current Bill Breakdown</summary>
+                <div style="margin-top: 6px; max-height: 200px; overflow-y: auto;"></div>
+              </details>
+
+              <details id="extractedHistoryTable" class="hidden" style="margin-top: 6px; cursor: pointer;">
+                <summary style="font-weight: 600; font-size: 12px; color: var(--ink);">Billing History</summary>
+                <div style="margin-top: 6px; max-height: 180px; overflow-y: auto;"></div>
+              </details>
+
+              <p id="billExtractWarnings" class="muted small" style="margin-top: 6px;"></p>
+            </div>
+
+            <div class="field-grid">
+              <label class="field">
+                <span>Avg units / mo <i class="info-tip" data-tip="Average electricity units (kWh) consumed per month.">i</i></span>
+                <input id="monthlyUnits" type="number" min="0" step="1" value="450">
+              </label>
+              <label class="field">
+                <span>Monthly bill (₹) <i class="info-tip" data-tip="Total current monthly bill amount including all charges.">i</i></span>
+                <input id="monthlyBill" type="number" min="0" step="100" value="5200">
+              </label>
+              <label class="field" style="grid-column: 1 / -1;">
+                <span>Optimization Goal <i class="info-tip" data-tip="Optimum sizes for average use (max ROI). Summer-proof sizes for peak hot months.">i</i></span>
+                <select id="optimizationStrategy">
+                  <option value="optimum" selected>Optimum (Cost & ROI)</option>
+                  <option value="summer_proof">Summer-Proof (Peak Sizing)</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <!-- CATEGORY 3: ROOF & LOCATION -->
+          <div class="cat-section" id="catSectionRoof" data-cat="roof" style="display: none;">
+            <div class="cat-section-header">
+              <span class="cat-section-title">Roof & Geometry</span>
+              <button class="ghost-button" id="fetchLocationButton" type="button" title="Auto-detect current GPS coordinates" style="padding: 2px 8px; font-size: 11px;">📍 Auto GPS</button>
+            </div>
+            <div class="field-grid">
+              <label class="field" style="grid-column: 1 / -1;">
+                <span>Usable Roof Area (sq ft) <i class="info-tip" data-tip="Shadow-free roof area. You can also measure and sync directly from the Rooftop CAD tab.">i</i></span>
+                <input id="roofArea" type="number" min="0" step="10" value="650">
+              </label>
+              <label class="field" style="grid-column: 1 / -1;">
+                <span>System preference</span>
+                <select id="goal">
+                  <option value="ongrid">On-grid (Max Savings)</option>
+                  <option value="hybrid">Hybrid (Grid + Battery)</option>
+                  <option value="offgrid">Off-grid (Independent)</option>
+                </select>
+              </label>
+              <label class="field" style="grid-column: 1 / -1;">
+                <span>Coordinates (Lat, Lng)</span>
+                <input id="coordinates" type="text" placeholder="e.g. 18.52, 73.85">
+              </label>
+              <label class="field">
+                <span>Tilt Angle (°)</span>
+                <input id="tiltAngle" type="number" min="0" max="90" step="1" placeholder="Auto (Lat)">
+              </label>
+              <label class="field">
+                <span>Orientation</span>
+                <select id="orientationDir">
+                  <option value="South">South (Optimal)</option>
+                  <option value="SouthEast">South-East</option>
+                  <option value="SouthWest">South-West</option>
+                  <option value="East">East</option>
+                  <option value="West">West</option>
+                  <option value="North">North</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <!-- CATEGORY 4: SOLAR HARDWARE & SIZING -->
+          <div class="cat-section" id="catSectionSizing" data-cat="sizing" style="display: none;">
+            <div class="cat-section-header">
+              <span class="cat-section-title">Solar Tech & Hardware</span>
+            </div>
+            <div class="field-grid">
+              <label class="field" style="grid-column: 1 / -1;">
+                <span>Panel Type <i class="info-tip" data-tip="DCR panels are domestically manufactured and required for PM Surya Ghar subsidy.">i</i></span>
+                <select id="panelType">
+                  <option value="dcr">DCR (Govt Subsidy Eligible)</option>
+                  <option value="nonDcr">Non-DCR (Imported, No Subsidy)</option>
+                </select>
+              </label>
+              <label class="field" id="subsidyCategoryContainer" style="grid-column: 1 / -1;">
+                <span>Subsidy Category</span>
                 <select id="subsidyCategory">
                   <option value="individual">Residential households</option>
                   <option value="ghs">Group Housing Society (GHS/RWA)</option>
                 </select>
               </label>
-
-              <label class="field">
-                <span>Structure <i class="info-tip" data-tip="The mounting frame for panels. Hot-dip is most durable, Galvalume is mid-range, GP Purlin is budget.">i</i></span>
+              <label class="field" style="grid-column: 1 / -1;">
+                <span>Mounting Structure</span>
                 <select id="structureType">
-                  <option value="hotDip">Hot-dip galvanized</option>
-                  <option value="galvalume">Galvalume</option>
-                  <option value="gpPurlin">GP purlin</option>
+                  <option value="hotDip">Hot-dip galvanized (25+ yrs)</option>
+                  <option value="galvalume">Galvalume (Mid-range)</option>
+                  <option value="gpPurlin">GP purlin (Budget)</option>
                 </select>
               </label>
-
               <label class="field">
-                <span>Capacity override (kWp) <i class="info-tip" data-tip="Manually set the system size (kWp) instead of using the auto-calculated recommendation.">i</i></span>
+                <span>Capacity Override (kWp)</span>
                 <input id="capacityOverride" type="number" min="0" step="0.1" placeholder="Auto">
               </label>
-
               <label class="field">
-                <span>Inverter override (kW) <i class="info-tip" data-tip="Manually set the inverter size (kW). Leave blank to auto-match panel capacity.">i</i></span>
+                <span>Inverter Override (kW)</span>
                 <input id="inverterOverride" type="number" min="0" step="0.1" placeholder="Auto">
               </label>
-
-              <label class="field">
-                <span>Battery override (kWh) <i class="info-tip" data-tip="Manually set the battery capacity (kWh). Leave blank to auto-calculate based on backup load and hours.">i</i></span>
+              <label class="field" style="grid-column: 1 / -1;">
+                <span>Battery Override (kWh)</span>
                 <input id="batteryOverride" type="number" min="0" step="0.1" placeholder="Auto">
               </label>
-
               <label class="field">
-                <span>Backup load (%) <i class="info-tip" data-tip="Percentage of total system capacity required during a power cut. E.g. 50%.">i</i></span>
+                <span>Backup load (%)</span>
                 <input id="backupLoad" type="number" min="0" max="100" step="5" value="50">
               </label>
-
               <label class="field">
-                <span>Backup hours (hrs) <i class="info-tip" data-tip="How many hours of battery backup needed during outages. More hours = bigger battery = higher cost.">i</i></span>
+                <span>Backup hours</span>
                 <input id="backupHours" type="number" min="0" step="0.5" value="2">
               </label>
             </div>
-
-            <fieldset style="border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; margin-top: 12px;">
-              <legend style="font-size: 12px; font-weight: 600; padding: 0 6px; color: var(--text-muted);">Report Display</legend>
-              <div style="display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px;">
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input type="checkbox" id="hidePayback"> Hide Payback (Yrs)
-                </label>
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input type="checkbox" id="hideAreaFit"> Hide Area Fit
-                </label>
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input type="checkbox" id="hideSubsidy"> Hide Subsidy
-                </label>
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input type="checkbox" id="hideCost"> Hide Cost
-                </label>
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input type="checkbox" id="hideFinancing"> Hide Loan Options
-                </label>
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input type="checkbox" id="solarInstalled"> Solar Already Installed
-                </label>
-              </div>
-            </fieldset>
           </div>
 
-          <div class="tab-panel hidden" data-panel="pricing">
+          <!-- CATEGORY 5: PAYMENT & FINANCING -->
+          <div class="cat-section" id="catSectionFinancing" data-cat="financing" style="display: none;">
+            <div class="cat-section-header">
+              <span class="cat-section-title">Payment & Loan Financing</span>
+            </div>
             <div class="field-grid">
+              <label class="field" style="grid-column: 1 / -1;">
+                <span>Payment Mode</span>
+                <select id="paymentMode">
+                  <option value="upfront" selected>Upfront Cash Payment</option>
+                  <option value="loan">Bank Partner Loan (Zero Out-of-Pocket EMI)</option>
+                </select>
+              </label>
+            </div>
+
+            <div id="customerLoanFields" class="field-grid" style="margin-top: 8px; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
+              <label class="field" style="grid-column: 1 / -1;">
+                <span>Bank Interest Rate (% p.a.)</span>
+                <input id="loanInterestRate" type="number" min="1" max="25" step="0.1" value="9.5">
+              </label>
               <label class="field">
-                <span>DCR panel (Rs/Wp) <i class="info-tip" data-tip="Cost per watt of domestically manufactured panels. Required for government subsidy eligibility.">i</i></span>
+                <span>Loan Amount (₹)</span>
+                <input id="loanAmount" type="number" min="0" step="5000" placeholder="Auto (Net Cost)">
+              </label>
+              <label class="field">
+                <span>Target Monthly EMI (₹)</span>
+                <input id="loanMonthlyEmi" type="number" min="0" step="100" placeholder="Auto (Matches Bill)">
+              </label>
+              <div style="grid-column: 1 / -1; font-size: 11.5px; color: var(--primary-green, #16a34a); font-weight: 500; margin-top: 4px;" id="customerLoanLivePreview">
+                <span>✨ Pay what you already pay for electricity → System becomes 100% free in <strong id="customerLoanTenurePreview">~4 years</strong>!</span>
+              </div>
+            </div>
+
+            <!-- Hidden internal financing mirrors -->
+            <select id="internalPaymentMode" style="display: none;">
+              <option value="upfront">Upfront</option>
+              <option value="loan">Loan</option>
+            </select>
+            <input id="internalLoanInterestRate" type="hidden">
+            <input id="internalLoanAmount" type="hidden">
+            <input id="internalLoanMonthlyEmi" type="hidden">
+            <input id="internalLoanTenureMonths" type="hidden">
+          </div>
+
+          <!-- CATEGORY 6: RATES & TARIFFS (INTERNAL ONLY) -->
+          <div class="cat-section" id="catSectionRates" data-cat="rates" style="display: none;">
+            <div class="cat-section-header">
+              <span class="cat-section-title">Pricing & Tariff Slabs (Internal)</span>
+              <div style="display: flex; gap: 4px;">
+                <select id="presetSelect" style="max-width: 110px; font-size: 11px; padding: 2px;">
+                  <option value="">Presets...</option>
+                </select>
+                <button class="ghost-button" id="savePresetButton" type="button" style="padding: 2px 6px; font-size: 11px;">Save</button>
+              </div>
+            </div>
+
+            <div class="field-grid" style="margin-bottom: 10px;">
+              <label class="field">
+                <span>DCR (Rs/Wp)</span>
                 <input id="panelDcrRate" type="number" min="0" step="0.1" value="26">
               </label>
-
               <label class="field">
-                <span>Non-DCR panel (Rs/Wp) <i class="info-tip" data-tip="Cost per watt of imported panels. Cheaper but not eligible for government subsidy.">i</i></span>
+                <span>Non-DCR (Rs/Wp)</span>
                 <input id="panelNonDcrRate" type="number" min="0" step="0.1" value="17">
               </label>
-
               <label class="field">
-                <span>Battery (Rs/Wh) <i class="info-tip" data-tip="Cost per watt-hour of lithium battery storage for backup during power cuts.">i</i></span>
+                <span>Battery (Rs/Wh)</span>
                 <input id="batteryRate" type="number" min="0" step="0.1" value="17.5">
               </label>
-
-
               <label class="field">
-                <span>Hot-dip structure (Rs/W) <i class="info-tip" data-tip="Premium zinc-coated mounting frame. Best corrosion resistance, lasts 25+ years.">i</i></span>
+                <span>Hot-dip (Rs/W)</span>
                 <input id="hotDipStructureRate" type="number" min="0" step="0.1" value="6">
               </label>
-
               <label class="field">
-                <span>Galvalume structure (Rs/W) <i class="info-tip" data-tip="Aluminium-zinc coated steel frame. Good durability at mid-range cost.">i</i></span>
+                <span>Galvalume (Rs/W)</span>
                 <input id="galvalumeStructureRate" type="number" min="0" step="0.1" value="5.3">
               </label>
-
               <label class="field">
-                <span>GP purlin structure (Rs/W) <i class="info-tip" data-tip="Galvanized steel purlin. Budget option, adequate for most residential installs.">i</i></span>
+                <span>GP purlin (Rs/W)</span>
                 <input id="gpPurlinStructureRate" type="number" min="0" step="0.1" value="4.8">
               </label>
-
               <label class="field">
-                <span>Wiring (Rs/W) <i class="info-tip" data-tip="Cost of DC and AC cables, connectors, and junction boxes per watt of system size.">i</i></span>
+                <span>Wiring (Rs/W)</span>
                 <input id="wiringRate" type="number" min="0" step="0.1" value="3.5">
               </label>
-
               <label class="field">
-                <span>Installation (Rs/W) <i class="info-tip" data-tip="Labour cost for mounting panels, wiring, inverter setup, and testing.">i</i></span>
+                <span>Installation (Rs/W)</span>
                 <input id="installationRate" type="number" min="0" step="0.1" value="4">
               </label>
-
               <label class="field">
-                <span>Consultancy (Rs/W) <i class="info-tip" data-tip="Site survey, system design, and technical documentation fees.">i</i></span>
+                <span>Consultancy (Rs/W)</span>
                 <input id="consultancyRate" type="number" min="0" step="0.1" value="3">
               </label>
-
               <label class="field">
-                <span>Contingency (%) <i class="info-tip" data-tip="Buffer for unexpected costs like cable extensions, extra earthing, or site-specific modifications.">i</i></span>
+                <span>Contingency (%)</span>
                 <input id="contingencyRate" type="number" min="0" step="0.1" value="3">
               </label>
             </div>
-            <p style="font-size: 11px; color: var(--muted); margin: 10px 0 0; line-height: 1.5;">
-              <strong>Note:</strong> Net metering and liaisoning costs are additional and will be quoted separately.<br>
-              <strong>GST:</strong> Effective rate of 8.9% applied (70% goods @ 5% + 30% services @ 18%).
-            </p>
-          </div>
 
-          <div class="tab-panel hidden" data-panel="financing">
-            <div class="field-grid">
+            <div class="cat-subheading" style="font-size: 11.5px; font-weight: 700; color: var(--text-muted, #64748b); text-transform: uppercase; margin: 8px 0 4px;">Technical Performance</div>
+            <div class="field-grid" style="margin-bottom: 10px;">
               <label class="field">
-                <span>Payment mode <i class="info-tip" data-tip="Switch between upfront cash payment or bank partner zero out-of-pocket EMI loan.">i</i></span>
-                <select id="internalPaymentMode">
-                  <option value="upfront" selected>Upfront cash</option>
-                  <option value="loan">Bank partner loan</option>
-                </select>
+                <span>Panel Wp</span>
+                <input id="panelWp" type="number" min="100" max="800" step="5" value="550">
               </label>
-
               <label class="field">
-                <span>Bank interest rate (% p.a.) <i class="info-tip" data-tip="Annual loan interest rate from bank partners (e.g. SBI Surya Ghar, Union Bank). Default 9.5%.">i</i></span>
-                <input id="internalLoanInterestRate" type="number" min="1" max="25" step="0.1" value="9.5">
+                <span>Daily Gen/kW</span>
+                <input id="dailyGeneration" type="number" min="1" max="8" step="0.1" value="4.2">
               </label>
-
               <label class="field">
-                <span>Loan amount override (₹) <i class="info-tip" data-tip="Override total loan principal. Leave blank to auto-fund 100% of Net System Cost.">i</i></span>
-                <input id="internalLoanAmount" type="number" min="0" step="5000" placeholder="Auto (Net Cost)">
+                <span>Shading loss %</span>
+                <input id="shadingLoss" type="number" min="0" max="50" step="1" value="3">
               </label>
-
               <label class="field">
-                <span>Monthly EMI override (₹/mo) <i class="info-tip" data-tip="Override monthly installment amount. Leave blank to auto-match customer's monthly electricity bill.">i</i></span>
-                <input id="internalLoanMonthlyEmi" type="number" min="0" step="100" placeholder="Auto (Monthly Bill)">
+                <span>Orientation loss %</span>
+                <input id="orientationLoss" type="number" min="0" max="50" step="1" value="2">
               </label>
-
               <label class="field">
-                <span>Loan tenure override (Months) <i class="info-tip" data-tip="Override loan duration in months. Leave blank to auto-calculate duration from EMI.">i</i></span>
-                <input id="internalLoanTenureMonths" type="number" min="1" max="240" step="6" placeholder="Auto">
+                <span>System loss %</span>
+                <input id="systemLoss" type="number" min="0" max="50" step="1" value="14">
+              </label>
+              <label class="field">
+                <span>Degradation %/yr</span>
+                <input id="degradationRate" type="number" min="0" max="5" step="0.1" value="0.7">
+              </label>
+              <label class="field">
+                <span>Panel Eff (%)</span>
+                <input id="panelEfficiency" type="number" min="10" max="30" step="0.1" value="21.5">
+              </label>
+              <label class="field">
+                <span>Battery DoD (%)</span>
+                <input id="batteryDod" type="number" min="50" max="100" step="5" value="90">
+              </label>
+              <label class="field">
+                <span>Inverter Eff (%)</span>
+                <input id="inverterEfficiency" type="number" min="80" max="99" step="0.5" value="97">
+              </label>
+              <label class="field">
+                <span>Self Cons %</span>
+                <input id="selfConsumptionPct" type="number" min="0" max="100" step="5" value="60">
               </label>
             </div>
-            <p style="font-size: 11px; color: var(--muted); margin: 10px 0 0; line-height: 1.5;">
-              <strong>Zero Out-of-Pocket Principle:</strong> Bank partner solar loans align monthly installments with the customer's average electricity bill so their monthly outflow stays unchanged, while the solar system pays for itself.
-            </p>
-          </div>
 
-          <div class="tab-panel hidden" data-panel="losses">
-            <div class="field-grid">
-              <label class="field" style="grid-column: 1 / -1;">
-                <span>Panel Rating (Wp) <i class="info-tip" data-tip="The power output of a single panel. Slide to adjust.">i</i></span>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <input id="panelWp" type="range" min="300" max="800" step="5" value="550" style="flex: 1;">
-                  <span id="panelWpLabel" style="min-width: 60px; text-align: right; font-weight: 600; font-size: 13px;">550 Wp</span>
-                </div>
-              </label>
-
-              <label class="field" style="grid-column: 1 / -1;">
-                <span>Panel Efficiency (%) <i class="info-tip" data-tip="How efficiently the panel converts sunlight to electricity. Higher efficiency means smaller panels.">i</i></span>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <input id="panelEfficiency" type="range" min="15" max="25" step="0.1" value="21.5" style="flex: 1;">
-                  <span id="panelEfficiencyLabel" style="min-width: 60px; text-align: right; font-weight: 600; font-size: 13px;">21.5%</span>
-                </div>
-              </label>
-
-              <label class="field">
-                <span>kWh/kWp/day <i class="info-tip" data-tip="How many units 1 kW of solar panels generate daily in Pune. Varies by season (3.5–5.0).">i</i></span>
-                <input id="dailyGeneration" type="number" min="0" step="0.1" value="4.2">
-              </label>
-
-
-              <label class="field">
-                <span>Shading loss (%) <i class="info-tip" data-tip="Energy lost due to shadows from trees, walls, water tanks, or nearby buildings during peak sun hours.">i</i></span>
-                <input id="shadingLoss" type="number" min="0" max="90" step="1" value="5">
-              </label>
-
-              <label class="field">
-                <span>Tilt/orientation loss (%) <i class="info-tip" data-tip="Energy lost if panels aren't tilted south at the optimal angle (~18° for Pune). East/West facing adds more loss.">i</i></span>
-                <input id="orientationLoss" type="number" min="0" max="90" step="1" value="4">
-              </label>
-
-              <label class="field">
-                <span>System loss (%) <i class="info-tip" data-tip="Miscellaneous losses: wiring, dust, inverter conversion, temperature. Typically 6–10%.">i</i></span>
-                <input id="systemLoss" type="number" min="0" max="90" step="1" value="8">
-              </label>
-
-              <label class="field">
-                <span>Annual degradation (%) <i class="info-tip" data-tip="Panels lose ~0.5% output each year. After 25 years, they still produce ~87% of original capacity.">i</i></span>
-                <input id="degradationRate" type="number" min="0" step="0.1" value="0.5">
-              </label>
-
-              <label class="field">
-                <span>Battery DoD (%) <i class="info-tip" data-tip="Depth of Discharge — how much of the battery can safely be used. 90% means 10% is always reserved.">i</i></span>
-                <input id="batteryDod" type="number" min="1" max="100" step="1" value="90">
-              </label>
-
-              <label class="field">
-                <span>Inverter efficiency (%) <i class="info-tip" data-tip="How efficiently the inverter converts DC solar power to AC household power. Higher is better.">i</i></span>
-                <input id="inverterEfficiency" type="number" min="1" max="100" step="1" value="92">
-              </label>
-
-              <label class="field">
-                <span>Self-consumption (%) <i class="info-tip" data-tip="Percentage of generated solar energy consumed on-site during solar hours. Residential ~60%, Commercial ~80%. Slide to adjust.">i</i></span>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <input id="selfConsumptionPct" type="range" min="10" max="95" step="5" value="60" style="flex: 1;">
-                  <span id="selfConsumptionLabel" style="min-width: 36px; text-align: right; font-weight: 600; font-size: 13px;">60%</span>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          <div class="tab-panel hidden" data-panel="tariff">
+            <div class="cat-subheading" style="font-size: 11.5px; font-weight: 700; color: var(--text-muted, #64748b); text-transform: uppercase; margin: 8px 0 4px;">MSEDCL Tariff Slabs (Rs/unit)</div>
             <div class="field-grid">
               <label class="field">
-                <span>Savings method <i class="info-tip" data-tip="Auto uses your bill amount if entered, else uses MSEDCL slab rates. Slab is more conservative.">i</i></span>
-                <select id="savingsMethod">
-                  <option value="auto">Auto</option>
-                  <option value="effective">Effective bill tariff</option>
-                  <option value="slab">MSEDCL slab estimate</option>
-                </select>
+                <span>Fixed Chg (Rs)</span>
+                <input id="fixedCharge" type="number" min="0" step="10" value="128">
               </label>
-
               <label class="field">
-                <span>Fixed charges <i class="info-tip" data-tip="Monthly fixed amount charged by MSEDCL regardless of consumption. Cannot be offset by solar.">i</i></span>
-                <input id="fixedCharge" type="number" min="0" step="10" value="130">
-              </label>
-
-              <label class="field">
-                <span>Duty (%) <i class="info-tip" data-tip="Electricity duty levied by the state government as a percentage of your energy + fixed charges.">i</i></span>
+                <span>Elec Duty (%)</span>
                 <input id="electricityDuty" type="number" min="0" step="0.1" value="16">
               </label>
-
               <label class="field">
-                <span>Tariff escalation (%) <i class="info-tip" data-tip="Expected annual increase in electricity rates. Higher escalation = more savings over 25 years.">i</i></span>
+                <span>Escalation (%)</span>
                 <input id="tariffEscalation" type="number" min="0" step="0.1" value="3">
               </label>
-            </div>
-
-            <div class="section-heading compact" style="margin-top: 1rem;">
-              <div>
-                <p class="eyebrow">MSEDCL Slab Rates (Rs/unit)</p>
-              </div>
-            </div>
-            <div class="field-grid">
+              <label class="field">
+                <span>Savings Method</span>
+                <select id="savingsMethod">
+                  <option value="marginal" selected>Marginal slab reduction</option>
+                  <option value="blended">Blended average</option>
+                </select>
+              </label>
               <label class="field">
                 <span>0–100 units</span>
                 <input id="slabRate1" type="number" min="0" step="0.01" value="5.52">
@@ -579,345 +472,399 @@
                 <input id="slabRate4" type="number" min="0" step="0.01" value="15.17">
               </label>
             </div>
-            <p class="muted small">Slab rates are now editable. Update when MSEDCL revises tariffs.</p>
           </div>
-        </div>
-      </section>
 
-      <section class="results-panel blurred-overlay" id="resultsPanel" aria-label="Recommendations" style="padding: 16px;">
-        
-        <!-- TOP: Interactive Rooftop CAD & Panel Array Diagram -->
-        <div class="panel-diagram-section detail-card" style="margin-bottom: 16px; display: none; padding: 14px;" id="panelDiagramSection">
-          <div class="section-heading compact" style="margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
-            <div>
-              <p class="eyebrow" style="font-size: 10px; color: var(--brand-green);">Interactive Rooftop CAD</p>
-              <h2 style="font-size: 16px;">Rooftop Layout & Solar Array <i class="info-tip" data-tip="Draw measured roof dimensions, subtract red obstacle zones, import site aerial images, and magnetically arrange panels into multiple islands.">i</i></h2>
+        </div>
+
+        <!-- Sidebar Actions Bar -->
+        <div class="sidebar-footer">
+          <button class="sidebar-footer-btn" id="openLoadProposalModalButton" type="button">Load Data 📂</button>
+          <button class="sidebar-footer-btn primary" id="sidebarCalculateBtn" type="button">Recalculate ⚡</button>
+        </div>
+      </aside>
+
+      <!-- ================= RIGHT WORKSPACE SECTION (TABBED, ZERO ENDLESS SCROLL) ================= -->
+      <section class="workspace-panel results-panel blurred-overlay" id="resultsPanel" aria-label="Recommendations & CAD Workspace">
+        <!-- Sticky Workspace Navigation Bar -->
+        <header class="workspace-header">
+          <nav class="workspace-tab-nav" id="workspaceTabNav" aria-label="Workspace sections">
+            <button class="workspace-tab-btn active" data-tab="cad" id="workspaceTabCadBtn" type="button">
+              <span class="tab-icon">📐</span>
+              <span class="tab-text">Rooftop CAD</span>
+            </button>
+            <button class="workspace-tab-btn" data-tab="sizing" id="workspaceTabSizingBtn" type="button">
+              <span class="tab-icon">📊</span>
+              <span class="tab-text">Sizing & Compare</span>
+            </button>
+            <button class="workspace-tab-btn" data-tab="financials" id="workspaceTabFinancialsBtn" type="button">
+              <span class="tab-icon">💰</span>
+              <span class="tab-text">Financials & Savings</span>
+            </button>
+            <button class="workspace-tab-btn" data-tab="loan" id="workspaceTabLoanBtn" type="button">
+              <span class="tab-icon">🏦</span>
+              <span class="tab-text">Loan & EMI</span>
+            </button>
+            <button class="workspace-tab-btn" data-tab="proposal" id="workspaceTabProposalBtn" type="button">
+              <span class="tab-icon">📋</span>
+              <span class="tab-text">Proposal & Export</span>
+            </button>
+            <button class="workspace-tab-btn" data-tab="guide" id="workspaceTabGuideBtn" type="button">
+              <span class="tab-icon">ℹ️</span>
+              <span class="tab-text">Tech Guide</span>
+            </button>
+          </nav>
+
+          <!-- Sticky Quick-Stats Ribbon -->
+          <div class="workspace-kpi-ribbon">
+            <div class="kpi-chip" title="Recommended System Capacity">
+              <span class="kpi-label">Capacity</span>
+              <strong class="kpi-val" id="ribbonCapacity">0 kWp</strong>
             </div>
-            <div style="display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap;">
+            <div class="kpi-chip" title="Monthly Bill Savings">
+              <span class="kpi-label">Savings/mo</span>
+              <strong class="kpi-val" id="ribbonSavings" style="color: #16a34a;">₹0</strong>
+            </div>
+            <div class="kpi-chip" title="Estimated Payback Period">
+              <span class="kpi-label">Payback</span>
+              <strong class="kpi-val" id="ribbonPayback">0 yrs</strong>
+            </div>
+            <button class="ribbon-pdf-btn" id="ribbonDownloadPdfBtn" type="button" title="Download Proposal PDF">
+              <span>📄 PDF ↓</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- PANE 1: ROOFTOP CAD & ARRAY -->
+        <div class="workspace-tab-pane active" id="paneCad" data-pane="cad">
+          <div class="panel-diagram-section" id="panelDiagramSection">
+            <div class="cad-header-strip">
+              <div class="cad-title-group">
+                <span class="eyebrow" style="font-size: 10px; color: var(--primary-green, #16a34a); font-weight: 700;">Blueprint CAD</span>
+                <h2 style="font-size: 15px; margin: 0; font-weight: 700;">Rooftop Layout & Solar Array</h2>
+              </div>
               <div class="cad-stats-pill" id="cadStatsPill">
                 Gross: <strong id="cadGrossArea">600</strong> sq ft &nbsp;|&nbsp;
-                Red Cutouts: <strong id="cadCutoutArea" style="color: #ef4444;">0</strong> sq ft &nbsp;|&nbsp;
+                Cutouts: <strong id="cadCutoutArea" style="color: #ef4444;">0</strong> sq ft &nbsp;|&nbsp;
                 Net Usable: <strong id="cadNetArea">600</strong> sq ft
               </div>
-              <button type="button" class="cad-btn" id="cadSyncNetAreaBtn" style="border-color: var(--brand-green); color: var(--brand-green); font-weight: 700;" title="Sync calculated net usable area to the main roof input">
+              <button type="button" class="cad-btn" id="cadSyncNetAreaBtn" style="border-color: var(--primary-green, #16a34a); color: var(--primary-green, #16a34a); font-weight: 700;" title="Sync calculated net usable area to the main roof input">
                 ⚡ Apply Net Area to Sizing
               </button>
             </div>
-          </div>
 
-          <div class="cad-panel-container">
-            <!-- COMPACT TOP BORDER TOOLBAR (Mouse-icon sized buttons ~30px with tooltips) -->
-            <div class="cad-top-bar" id="cadTopBar">
-              <!-- View Switcher -->
-              <div class="cad-btn-group" title="Projection Views">
-                <button type="button" class="cad-icon-btn active" id="cadViewTopBtn" data-view="top" title="Top Down Plan View (📐)">📐</button>
-                <button type="button" class="cad-icon-btn" id="cadViewFrontBtn" data-view="front" title="Front Elevation View (🏢)">🏢</button>
-                <button type="button" class="cad-icon-btn" id="cadViewSideBtn" data-view="side" title="Side Elevation View (🏛️)">🏛️</button>
-              </div>
-
-              <div class="cad-bar-divider"></div>
-
-              <!-- Primary Tools -->
-              <div class="cad-btn-group" title="Drawing Tools">
-                <button type="button" class="cad-icon-btn active" id="cadToolSelectBtn" data-tool="select" title="Select / Marquee Drag / Move (↖️) [V]">↖️</button>
-                <button type="button" class="cad-icon-btn" id="cadToolRoofBtn" data-tool="roof" title="Draw Base Roof Rectangle (📐)">📐</button>
-                <div class="cad-shape-picker" id="cadCutoutShapePicker" style="display: inline-flex; gap: 2px;">
-                  <button type="button" class="cad-icon-btn" id="cadToolSubtractBtn" data-tool="subtract" title="Cutout Obstacle (Red Zone)">➖</button>
-                  <button type="button" class="cad-icon-btn active" id="cadShapeRectBtn" data-shape="rectangle" title="Rectangle Cutout">▭</button>
-                  <button type="button" class="cad-icon-btn" id="cadShapeCircleBtn" data-shape="circle" title="Round Obstacle / Water Tank">⚪</button>
-                  <button type="button" class="cad-icon-btn" id="cadShapeLBtn" data-shape="l_shape" title="L-Shape Obstacle">⌐</button>
+            <div class="cad-panel-container">
+              <!-- COMPACT TOP BORDER TOOLBAR (Mouse-icon sized buttons ~30px with tooltips) -->
+              <div class="cad-top-bar" id="cadTopBar">
+                <!-- View Switcher -->
+                <div class="cad-btn-group" title="Projection Views">
+                  <button type="button" class="cad-icon-btn active" id="cadViewTopBtn" data-view="top" title="Top Down Plan View (📐)">📐</button>
+                  <button type="button" class="cad-icon-btn" id="cadViewFrontBtn" data-view="front" title="Front Elevation View (🏢)">🏢</button>
+                  <button type="button" class="cad-icon-btn" id="cadViewSideBtn" data-view="side" title="Side Elevation View (🏛️)">🏛️</button>
                 </div>
-                <button type="button" class="cad-icon-btn" id="cadToolPathwayBtn" data-tool="pathway" title="Draw Maintenance Walkway (🚶)">🚶</button>
-                <button type="button" class="cad-icon-btn" id="cadToolPanelBtn" data-tool="panel" title="Move & Snap Panels (☀️)">☀️</button>
-                <button type="button" class="cad-icon-btn" id="cadToolPanBtn" data-tool="image_pan" title="Pan Aerial Image (✋)">✋</button>
-              </div>
 
-              <div class="cad-bar-divider"></div>
+                <div class="cad-bar-divider"></div>
 
-              <!-- Multi-Select & Bulk Actions -->
-              <div class="cad-btn-group" title="Bulk Selection Actions">
-                <button type="button" class="cad-icon-btn" id="cadRotateSelectedBtn" title="Rotate Selected 90° [R]">🔄</button>
-                <button type="button" class="cad-icon-btn" id="cadScaleUpSelectedBtn" title="Scale Up Selected [+ / =]">🔍⁺</button>
-                <button type="button" class="cad-icon-btn" id="cadScaleDownSelectedBtn" title="Scale Down Selected [- / _]">🔍⁻</button>
-                <button type="button" class="cad-icon-btn" id="cadDeleteSelectedBtn" title="Delete Selected [Del] / Return Panels to Latent" style="color: #f87171;">🗑️</button>
-              </div>
-
-              <div class="cad-bar-divider"></div>
-
-              <!-- Latent Panel Pool Placement -->
-              <div class="cad-btn-group" title="Panel Placement from Latent Pool">
-                <button type="button" class="cad-icon-btn" id="cadAddSinglePanelBtn" title="Place 1 Panel from Latent Pool">+1</button>
-                <button type="button" class="cad-icon-btn" id="cadAddBlockBtn" title="Place 2×2 Block from Latent Pool">⊞</button>
-                <button type="button" class="cad-icon-btn" id="cadAutoPlaceBtn" title="Auto-Fill Remaining Panels from Latent Pool" style="color: #38bdf8; border-color: #0284c7;">⚡</button>
-                <button type="button" class="cad-icon-btn" id="cadAddHorizPathwayBtn" title="Add Central Maintenance Corridor">🛣️</button>
-                <button type="button" class="cad-icon-btn" id="cadClearPanelsBtn" title="Reset All Panels back to Latent Pool" style="color: #fca5a5;">↺</button>
-              </div>
-
-              <div class="cad-bar-divider"></div>
-
-              <!-- External Obstacles -->
-              <div class="cad-btn-group" title="Surrounding Yard Obstacles">
-                <button type="button" class="cad-icon-btn" id="cadAddTreeBtn" title="Add Tree in Yard">🌳</button>
-                <button type="button" class="cad-icon-btn" id="cadAddPoleBtn" title="Add Utility Pole in Yard">🗼</button>
-                <button type="button" class="cad-icon-btn" id="cadAddNeighborBtn" title="Add Neighbor Building">🏢</button>
-                <button type="button" class="cad-icon-btn" id="cadAddWallBtn" title="Add Boundary Wall">🧱</button>
-                <button type="button" class="cad-icon-btn" id="cadClearObstaclesBtn" title="Clear External Obstacles" style="color: #f87171;">✕</button>
-              </div>
-
-              <!-- Right-aligned Toggles for Minimizable Detail Drawers -->
-              <div class="cad-btn-group cad-bar-right" style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-                <div class="cad-compact-pill" id="cadInventoryPill" title="Latent Pool Inventory">
-                  <span>📦</span>
-                  <strong id="cadInventoryCount">0 / 12 Placed (12 Remaining)</strong>
-                </div>
-                <button type="button" class="cad-icon-btn" id="cadToggleNorthDrawerBtn" title="Compass & North Alignment">🧭</button>
-                <button type="button" class="cad-icon-btn" id="cadToggleSunDrawerBtn" title="Sun Path & Shadow Simulation">☀️</button>
-                <button type="button" class="cad-icon-btn" id="cadToggleRoofDrawerBtn" title="Roof & Walkway Dimensions">📏</button>
-                <button type="button" class="cad-icon-btn" id="cadToggleImageDrawerBtn" title="Import Aerial / Roof Image">🖼️</button>
-                <button type="button" class="cad-icon-btn active" id="cadToggleLayersBtn" title="Layers & Components Panel [L]">📚</button>
-              </div>
-            </div>
-
-            <!-- COLLAPSIBLE DETAIL DRAWERS -->
-            <!-- 1. North Drawer -->
-            <div class="cad-drawer" id="cadNorthDrawer" style="display: none;">
-              <span style="font-size: 11px; font-weight: 700; color: #f87171;">🧭 North Alignment:</span>
-              <div class="cad-input-group">
-                <input type="number" id="cadNorthAngleInput" value="0" min="0" max="359" step="1" style="width: 52px;">
-                <span>°</span>
-              </div>
-              <button type="button" class="cad-btn-mini" id="cadNorthMinus15Btn" title="Rotate North 15° CCW">↺ 15°</button>
-              <button type="button" class="cad-btn-mini" id="cadNorthPlus15Btn" title="Rotate North 15° CW">↻ 15°</button>
-              <button type="button" class="cad-btn-mini" id="cadNorthResetBtn" title="Reset North to 0°">Reset</button>
-              <button type="button" class="cad-drawer-close" data-close="cadNorthDrawer" title="Close">✕</button>
-            </div>
-
-            <!-- 2. Sun Simulation Drawer -->
-            <div class="cad-drawer cad-sun-toolbar" id="cadSunToolbar" style="display: none;">
-              <button type="button" class="cad-btn-mini" id="cadToggleSunSimBtn" style="border-color: #f59e0b; color: #f59e0b; font-weight: 700;">☀️ Sun Sim: OFF</button>
-              <div id="cadSunControls" style="display: none; align-items: center; gap: 6px; flex-wrap: wrap;">
-                <span style="font-size: 11px; color: #94a3b8; font-weight: 600;">Season:</span>
-                <button type="button" class="cad-btn-mini active" id="cadSeasonWinterBtn" data-day="355" title="Dec 21 (Winter Solstice)">❄️ Dec 21</button>
-                <button type="button" class="cad-btn-mini" id="cadSeasonEquinoxBtn" data-day="80" title="Mar 21 (Equinox)">🌱 Mar 21</button>
-                <button type="button" class="cad-btn-mini" id="cadSeasonSummerBtn" data-day="172" title="Jun 21 (Summer Solstice)">☀️ Jun 21</button>
-                <div style="display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; border-left: 1px solid #334155; padding-left: 6px;">
-                  <button type="button" class="cad-btn-mini" id="cadPlaySunBtn" style="color: #38bdf8;">▶ Play</button>
-                  <input type="range" id="cadSunTimeSlider" min="6" max="18" step="0.25" value="10.5" style="width: 85px;">
-                  <strong id="cadSunTimeLabel" style="font-size: 11px; color: #fef08a; min-width: 55px;">10:30 AM</strong>
-                </div>
-                <div class="cad-compact-pill" id="cadSolarTelemetryPill" style="margin-left: auto; border-color: #f59e0b; color: #fef08a;">
-                  Alt: <strong id="cadSolarAlt">48.2°</strong> &nbsp;|&nbsp;
-                  Az: <strong id="cadSolarAz" style="color: #38bdf8;">155.4°</strong> &nbsp;|&nbsp;
-                  Shading Loss: <strong id="cadShadingLossVal" style="color: #4ade80;">0.0%</strong>
-                </div>
-              </div>
-              <button type="button" class="cad-drawer-close" data-close="cadSunToolbar" title="Close">✕</button>
-            </div>
-
-            <!-- 3. Roof & Dimensions Drawer -->
-            <div class="cad-drawer" id="cadRoofDrawer" style="display: none;">
-              <div class="cad-input-group">
-                <label for="cadRoofLength">Roof L:</label>
-                <input type="number" id="cadRoofLength" value="30" min="5" step="1">
-                <span>ft</span>
-              </div>
-              <div class="cad-input-group">
-                <label for="cadRoofBreadth">B:</label>
-                <input type="number" id="cadRoofBreadth" value="20" min="5" step="1">
-                <span>ft</span>
-              </div>
-              <div class="cad-input-group">
-                <label for="cadPathwayWidth">Walkway:</label>
-                <input type="number" id="cadPathwayWidth" value="2.5" min="1" step="0.5">
-                <span>ft</span>
-              </div>
-              <div class="cad-input-group">
-                <label for="cadBuildingHeightInput">Bldg H:</label>
-                <input type="number" id="cadBuildingHeightInput" value="18" min="5" max="120" step="1">
-                <span>ft</span>
-              </div>
-              <button type="button" class="cad-btn-mini" id="cadClearCutoutsBtn" style="color: #f87171; margin-left: auto;">Clear Cutouts</button>
-              <button type="button" class="cad-drawer-close" data-close="cadRoofDrawer" title="Close">✕</button>
-            </div>
-
-            <!-- 4. Image Drawer -->
-            <div class="cad-drawer" id="cadImageDrawer" style="display: none;">
-              <label class="cad-btn-mini" style="cursor: pointer; color: var(--brand-green); font-weight: 600;">
-                🖼️ Upload Image
-                <input type="file" id="cadImageInput" accept="image/*" style="display: none;">
-              </label>
-              <div id="cadImageControls" style="display: none; align-items: center; gap: 6px; flex-wrap: wrap;">
-                <span style="font-size: 11px; color: #94a3b8;">Zoom:</span>
-                <button type="button" class="cad-btn-mini" id="cadZoomOutBtn">−</button>
-                <input type="range" id="cadZoomSlider" min="0.2" max="3.0" step="0.05" value="1.0" style="width: 70px;">
-                <button type="button" class="cad-btn-mini" id="cadZoomInBtn">+</button>
-                <button type="button" class="cad-btn-mini" id="cadRotateImageBtn">↻ 90°</button>
-                <span style="font-size: 11px; color: #94a3b8; margin-left: 2px;">Opacity:</span>
-                <input type="range" id="cadOpacitySlider" min="0.1" max="1.0" step="0.05" value="0.85" style="width: 60px;">
-                <button type="button" class="cad-btn-mini" id="cadFitImageBtn">Fit to Roof</button>
-                <button type="button" class="cad-btn-mini" id="cadRemoveImageBtn" style="color: #f87171;">✕ Remove</button>
-              </div>
-              <button type="button" class="cad-drawer-close" data-close="cadImageDrawer" title="Close">✕</button>
-            </div>
-
-            <!-- 5. Contextual Properties Inspector Drawer -->
-            <div class="cad-drawer cad-inspector-toolbar" id="cadInspectorToolbar" style="display: flex;">
-              <div class="cad-inspector-badge" id="inspectorBadge">
-                <span id="inspectorIcon">🟢</span>
-                <strong id="inspectorTypeTitle">Base Roof</strong>
-              </div>
-
-              <div class="cad-input-group" id="inspectorLabelGroup" style="display: none;">
-                <label for="inspectorLabel">Label:</label>
-                <input type="text" id="inspectorLabel" value="Main Roof" style="width: 90px;">
-              </div>
-
-              <div class="cad-input-group" id="inspectorLengthGroup">
-                <label for="inspectorLength">L:</label>
-                <input type="number" id="inspectorLength" value="30" min="1" step="0.5" style="width: 50px;">
-                <span>ft</span>
-              </div>
-
-              <div class="cad-input-group" id="inspectorBreadthGroup">
-                <label for="inspectorBreadth">B:</label>
-                <input type="number" id="inspectorBreadth" value="20" min="1" step="0.5" style="width: 50px;">
-                <span>ft</span>
-              </div>
-
-              <div class="cad-input-group" id="inspectorDiameterGroup" style="display: none;">
-                <label for="inspectorDiameter">Dia:</label>
-                <input type="number" id="inspectorDiameter" value="6" min="1" step="0.5" style="width: 50px;">
-                <span>ft</span>
-              </div>
-
-              <div class="cad-input-group" id="inspectorDistXGroup" style="display: none;">
-                <label for="inspectorDistX">X:</label>
-                <input type="number" id="inspectorDistX" value="-15" step="1" style="width: 48px;">
-                <span>ft</span>
-              </div>
-
-              <div class="cad-input-group" id="inspectorDistYGroup" style="display: none;">
-                <label for="inspectorDistY">Y:</label>
-                <input type="number" id="inspectorDistY" value="5" step="1" style="width: 48px;">
-                <span>ft</span>
-              </div>
-
-              <div class="cad-input-group" id="inspectorHeightGroup" style="display: none;">
-                <label for="inspectorHeight">H:</label>
-                <input type="number" id="inspectorHeight" value="20" min="1" step="1" style="width: 48px;">
-                <span>ft</span>
-              </div>
-
-              <div class="cad-input-group" id="inspectorOpacityGroup" title="Adjust opacity of selected item">
-                <label for="inspectorOpacity">Opacity:</label>
-                <input type="range" id="inspectorOpacity" min="0.1" max="1.0" step="0.05" value="1.0" style="width: 55px;">
-                <span id="inspectorOpacityVal" style="min-width: 28px; font-size: 10.5px;">100%</span>
-              </div>
-
-              <div class="cad-zorder-group" id="inspectorZOrderGroup" title="Stack Order" style="display: none;">
-                <button type="button" class="cad-btn-mini" id="inspectorMoveUpBtn" title="Move Up">▲</button>
-                <button type="button" class="cad-btn-mini" id="inspectorMoveDownBtn" title="Move Down">▼</button>
-                <button type="button" class="cad-btn-mini" id="inspectorBringToFrontBtn" title="Bring to Front">⤒</button>
-                <button type="button" class="cad-btn-mini" id="inspectorSendToBackBtn" title="Send to Back">⤓</button>
-              </div>
-
-              <div class="cad-compact-pill" id="inspectorAreaPill">
-                <strong id="inspectorAreaValue" style="color: #38bdf8;">600 sq ft</strong>
-              </div>
-
-              <div style="display: flex; gap: 4px; margin-left: auto; align-items: center;">
-                <button type="button" class="cad-btn-mini" id="inspectorDeleteBtn" style="color: #f87171; display: none;" title="Delete Selected (Del) [Returns panel to latent pool]">🗑️ Delete</button>
-                <button type="button" class="cad-btn-mini" id="inspectorDeselectBtn" title="Clear selection" style="display: none;">✕ Clear</button>
-              </div>
-            </div>
-
-            <!-- CAD WORKSPACE: CANVAS + SLIM DOCKED LAYERS PANEL -->
-            <div class="cad-workspace-layout" id="cadWorkspaceLayout">
-              <!-- CANVAS DRAFTING BOARD -->
-              <div class="cad-canvas-board">
-                <canvas id="panelDiagramCanvas"></canvas>
-                <div class="cad-hint-bar">
-                  <span>💡 <strong>Controls:</strong> Drag to move | Shift-click or marquee drag for multi-select | [R] Rotate | [Del] Delete (returns to latent) | [+/-] Scale</span>
-                  <span id="cadIslandsCount">1 Array Island</span>
-                </div>
-              </div>
-
-              <!-- SLIM DOCKED RIGHT BORDER LAYERS & COMPONENTS PANEL (Width: ~210px) -->
-              <aside class="cad-layers-panel" id="cadLayersPanel">
-                <div class="cad-layers-header">
-                  <div style="display: flex; align-items: center; gap: 5px;">
-                    <span style="font-size: 12px;">📚</span>
-                    <strong style="font-size: 11.5px; color: #f8fafc;">Layers</strong>
+                <!-- Primary Tools -->
+                <div class="cad-btn-group" title="Drawing Tools">
+                  <button type="button" class="cad-icon-btn active" id="cadToolSelectBtn" data-tool="select" title="Select / Marquee Drag / Move (↖️) [V]">↖️</button>
+                  <button type="button" class="cad-icon-btn" id="cadToolRoofBtn" data-tool="roof" title="Draw Base Roof Rectangle (📐)">📐</button>
+                  <div class="cad-shape-picker" id="cadCutoutShapePicker" style="display: inline-flex; gap: 2px;">
+                    <button type="button" class="cad-icon-btn" id="cadToolSubtractBtn" data-tool="subtract" title="Cutout Obstacle (Red Zone)">➖</button>
+                    <button type="button" class="cad-icon-btn active" id="cadShapeRectBtn" data-shape="rectangle" title="Rectangle Cutout">▭</button>
+                    <button type="button" class="cad-icon-btn" id="cadShapeCircleBtn" data-shape="circle" title="Round Obstacle / Water Tank">⚪</button>
+                    <button type="button" class="cad-icon-btn" id="cadShapeLBtn" data-shape="l_shape" title="L-Shape Obstacle">⌐</button>
                   </div>
-                  <div style="display: flex; align-items: center; gap: 4px;">
-                    <span class="cad-layers-count" id="cadLayersTotalCount">5</span>
-                    <button type="button" class="cad-btn-mini" id="cadCollapseLayersBtn" title="Collapse Layers Panel" style="padding: 1px 5px; font-size: 10px;">▶</button>
+                  <button type="button" class="cad-icon-btn" id="cadToolPathwayBtn" data-tool="pathway" title="Draw Maintenance Walkway (🚶)">🚶</button>
+                  <button type="button" class="cad-icon-btn" id="cadToolPanelBtn" data-tool="panel" title="Move & Snap Panels (☀️)">☀️</button>
+                  <button type="button" class="cad-icon-btn" id="cadToolPanBtn" data-tool="image_pan" title="Pan Aerial Image (✋)">✋</button>
+                </div>
+
+                <div class="cad-bar-divider"></div>
+
+                <!-- Multi-Select & Bulk Actions -->
+                <div class="cad-btn-group" title="Bulk Selection Actions">
+                  <button type="button" class="cad-icon-btn" id="cadRotateSelectedBtn" title="Rotate Selected 90° [R]">🔄</button>
+                  <button type="button" class="cad-icon-btn" id="cadScaleUpSelectedBtn" title="Scale Up Selected [+ / =]">🔍⁺</button>
+                  <button type="button" class="cad-icon-btn" id="cadScaleDownSelectedBtn" title="Scale Down Selected [- / _]">🔍⁻</button>
+                  <button type="button" class="cad-icon-btn" id="cadDeleteSelectedBtn" title="Delete Selected [Del] / Return Panels to Latent" style="color: #f87171;">🗑️</button>
+                </div>
+
+                <div class="cad-bar-divider"></div>
+
+                <!-- Latent Panel Pool Placement -->
+                <div class="cad-btn-group" title="Panel Placement from Latent Pool">
+                  <button type="button" class="cad-icon-btn" id="cadAddSinglePanelBtn" title="Place 1 Panel from Latent Pool">+1</button>
+                  <button type="button" class="cad-icon-btn" id="cadAddBlockBtn" title="Place 2×2 Block from Latent Pool">⊞</button>
+                  <button type="button" class="cad-icon-btn" id="cadAutoPlaceBtn" title="Auto-Fill Remaining Panels from Latent Pool" style="color: #38bdf8; border-color: #0284c7;">⚡</button>
+                  <button type="button" class="cad-icon-btn" id="cadAddHorizPathwayBtn" title="Add Central Maintenance Corridor">🛣️</button>
+                  <button type="button" class="cad-icon-btn" id="cadClearPanelsBtn" title="Reset All Panels back to Latent Pool" style="color: #fca5a5;">↺</button>
+                </div>
+
+                <div class="cad-bar-divider"></div>
+
+                <!-- External Obstacles -->
+                <div class="cad-btn-group" title="Surrounding Yard Obstacles">
+                  <button type="button" class="cad-icon-btn" id="cadAddTreeBtn" title="Add Tree in Yard">🌳</button>
+                  <button type="button" class="cad-icon-btn" id="cadAddPoleBtn" title="Add Utility Pole in Yard">🗼</button>
+                  <button type="button" class="cad-icon-btn" id="cadAddNeighborBtn" title="Add Neighbor Building">🏢</button>
+                  <button type="button" class="cad-icon-btn" id="cadAddWallBtn" title="Add Boundary Wall">🧱</button>
+                  <button type="button" class="cad-icon-btn" id="cadClearObstaclesBtn" title="Clear External Obstacles" style="color: #f87171;">✕</button>
+                </div>
+
+                <!-- Right-aligned Toggles for Minimizable Detail Drawers -->
+                <div class="cad-btn-group cad-bar-right" style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
+                  <div class="cad-compact-pill" id="cadInventoryPill" title="Latent Pool Inventory">
+                    <span>📦</span>
+                    <strong id="cadInventoryCount">0 / 12 Placed (12 Remaining)</strong>
+                  </div>
+                  <!-- PDF Report Inclusion Quick Toggle -->
+                  <button type="button" class="cad-icon-btn active" id="cadTogglePdfReportBtn" title="Include CAD Layout in PDF Proposal (Currently Included)" data-tooltip="PDF Report: Included">📄</button>
+                  <button type="button" class="cad-icon-btn" id="cadToggleNorthDrawerBtn" title="Compass & North Alignment">🧭</button>
+                  <button type="button" class="cad-icon-btn" id="cadToggleSunDrawerBtn" title="Sun Path & Shadow Simulation">☀️</button>
+                  <button type="button" class="cad-icon-btn" id="cadToggleRoofDrawerBtn" title="Roof & Walkway Dimensions">📏</button>
+                  <button type="button" class="cad-icon-btn" id="cadToggleImageDrawerBtn" title="Import Aerial / Roof Image">🖼️</button>
+                  <button type="button" class="cad-icon-btn active" id="cadToggleLayersBtn" title="Layers & Components Panel [L]">📚</button>
+                </div>
+              </div>
+
+              <!-- COLLAPSIBLE DETAIL DRAWERS -->
+              <!-- 1. North Drawer -->
+              <div class="cad-drawer" id="cadNorthDrawer" style="display: none;">
+                <span style="font-size: 11px; font-weight: 700; color: #f87171;">🧭 North Alignment:</span>
+                <div class="cad-input-group">
+                  <input type="number" id="cadNorthAngleInput" value="0" min="0" max="359" step="1" style="width: 52px;">
+                  <span>°</span>
+                </div>
+                <button type="button" class="cad-btn-mini" id="cadNorthMinus15Btn" title="Rotate North 15° CCW">↺ 15°</button>
+                <button type="button" class="cad-btn-mini" id="cadNorthPlus15Btn" title="Rotate North 15° CW">↻ 15°</button>
+                <button type="button" class="cad-btn-mini" id="cadNorthResetBtn" title="Reset North to 0°">Reset</button>
+                <button type="button" class="cad-drawer-close" data-close="cadNorthDrawer" title="Close">✕</button>
+              </div>
+
+              <!-- 2. Sun Simulation Drawer -->
+              <div class="cad-drawer cad-sun-toolbar" id="cadSunToolbar" style="display: none;">
+                <button type="button" class="cad-btn-mini" id="cadToggleSunSimBtn" style="border-color: #f59e0b; color: #f59e0b; font-weight: 700;">☀️ Sun Sim: OFF</button>
+                <div id="cadSunControls" style="display: none; align-items: center; gap: 6px; flex-wrap: wrap;">
+                  <span style="font-size: 11px; color: #94a3b8; font-weight: 600;">Season:</span>
+                  <button type="button" class="cad-btn-mini active" id="cadSeasonWinterBtn" data-day="355" title="Dec 21 (Winter Solstice)">❄️ Dec 21</button>
+                  <button type="button" class="cad-btn-mini" id="cadSeasonEquinoxBtn" data-day="80" title="Mar 21 (Equinox)">🌱 Mar 21</button>
+                  <button type="button" class="cad-btn-mini" id="cadSeasonSummerBtn" data-day="172" title="Jun 21 (Summer Solstice)">☀️ Jun 21</button>
+                  <div style="display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; border-left: 1px solid #334155; padding-left: 6px;">
+                    <button type="button" class="cad-btn-mini" id="cadPlaySunBtn" style="color: #38bdf8;">▶ Play</button>
+                    <input type="range" id="cadSunTimeSlider" min="6" max="18" step="0.25" value="10.5" style="width: 85px;">
+                    <strong id="cadSunTimeLabel" style="font-size: 11px; color: #fef08a; min-width: 55px;">10:30 AM</strong>
+                  </div>
+                  <div class="cad-compact-pill" id="cadSolarTelemetryPill" style="margin-left: auto; border-color: #f59e0b; color: #fef08a;">
+                    Alt: <strong id="cadSolarAlt">48.2°</strong> &nbsp;|&nbsp;
+                    Az: <strong id="cadSolarAz" style="color: #38bdf8;">155.4°</strong> &nbsp;|&nbsp;
+                    Shading Loss: <strong id="cadShadingLossVal" style="color: #4ade80;">0.0%</strong>
                   </div>
                 </div>
-                <div class="cad-layers-body" id="cadLayersList">
-                  <!-- Dynamically rendered by cad.onLayersChange -->
+                <button type="button" class="cad-drawer-close" data-close="cadSunToolbar" title="Close">✕</button>
+              </div>
+
+              <!-- 3. Roof & Dimensions Drawer -->
+              <div class="cad-drawer" id="cadRoofDrawer" style="display: none;">
+                <div class="cad-input-group">
+                  <label for="cadRoofLength">Roof L:</label>
+                  <input type="number" id="cadRoofLength" value="30" min="5" step="1">
+                  <span>ft</span>
                 </div>
-              </aside>
+                <div class="cad-input-group">
+                  <label for="cadRoofBreadth">B:</label>
+                  <input type="number" id="cadRoofBreadth" value="20" min="5" step="1">
+                  <span>ft</span>
+                </div>
+                <div class="cad-input-group">
+                  <label for="cadPathwayWidth">Walkway:</label>
+                  <input type="number" id="cadPathwayWidth" value="2.5" min="1" step="0.5">
+                  <span>ft</span>
+                </div>
+                <div class="cad-input-group">
+                  <label for="cadBuildingHeightInput">Bldg H:</label>
+                  <input type="number" id="cadBuildingHeightInput" value="18" min="5" max="120" step="1">
+                  <span>ft</span>
+                </div>
+                <button type="button" class="cad-btn-mini" id="cadClearCutoutsBtn" style="color: #f87171; margin-left: auto;">Clear Cutouts</button>
+                <button type="button" class="cad-drawer-close" data-close="cadRoofDrawer" title="Close">✕</button>
+              </div>
+
+              <!-- 4. Image Drawer -->
+              <div class="cad-drawer" id="cadImageDrawer" style="display: none;">
+                <label class="cad-btn-mini" style="cursor: pointer; color: var(--primary-green, #16a34a); font-weight: 600;">
+                  🖼️ Upload Image
+                  <input type="file" id="cadImageInput" accept="image/*" style="display: none;">
+                </label>
+                <div id="cadImageControls" style="display: none; align-items: center; gap: 6px; flex-wrap: wrap;">
+                  <span style="font-size: 11px; color: #94a3b8;">Zoom:</span>
+                  <button type="button" class="cad-btn-mini" id="cadZoomOutBtn">−</button>
+                  <input type="range" id="cadZoomSlider" min="0.2" max="3.0" step="0.05" value="1.0" style="width: 70px;">
+                  <button type="button" class="cad-btn-mini" id="cadZoomInBtn">+</button>
+                  <button type="button" class="cad-btn-mini" id="cadRotateImageBtn">↻ 90°</button>
+                  <span style="font-size: 11px; color: #94a3b8; margin-left: 2px;">Opacity:</span>
+                  <input type="range" id="cadOpacitySlider" min="0.1" max="1.0" step="0.05" value="0.85" style="width: 60px;">
+                  <button type="button" class="cad-btn-mini" id="cadFitImageBtn">Fit to Roof</button>
+                  <button type="button" class="cad-btn-mini" id="cadRemoveImageBtn" style="color: #f87171;">✕ Remove</button>
+                </div>
+                <button type="button" class="cad-drawer-close" data-close="cadImageDrawer" title="Close">✕</button>
+              </div>
+
+              <!-- 5. Contextual Properties Inspector Drawer -->
+              <div class="cad-drawer cad-inspector-toolbar" id="cadInspectorToolbar" style="display: flex;">
+                <div class="cad-inspector-badge" id="inspectorBadge">
+                  <span id="inspectorIcon">🟢</span>
+                  <strong id="inspectorTypeTitle">Base Roof</strong>
+                </div>
+
+                <div class="cad-input-group" id="inspectorLabelGroup" style="display: none;">
+                  <label for="inspectorLabel">Label:</label>
+                  <input type="text" id="inspectorLabel" value="Main Roof" style="width: 90px;">
+                </div>
+
+                <div class="cad-input-group" id="inspectorLengthGroup">
+                  <label for="inspectorLength">L:</label>
+                  <input type="number" id="inspectorLength" value="30" min="1" step="0.5" style="width: 50px;">
+                  <span>ft</span>
+                </div>
+
+                <div class="cad-input-group" id="inspectorBreadthGroup">
+                  <label for="inspectorBreadth">B:</label>
+                  <input type="number" id="inspectorBreadth" value="20" min="1" step="0.5" style="width: 50px;">
+                  <span>ft</span>
+                </div>
+
+                <div class="cad-input-group" id="inspectorDiameterGroup" style="display: none;">
+                  <label for="inspectorDiameter">Dia:</label>
+                  <input type="number" id="inspectorDiameter" value="6" min="1" step="0.5" style="width: 50px;">
+                  <span>ft</span>
+                </div>
+
+                <div class="cad-input-group" id="inspectorDistXGroup" style="display: none;">
+                  <label for="inspectorDistX">X:</label>
+                  <input type="number" id="inspectorDistX" value="-15" step="1" style="width: 48px;">
+                  <span>ft</span>
+                </div>
+
+                <div class="cad-input-group" id="inspectorDistYGroup" style="display: none;">
+                  <label for="inspectorDistY">Y:</label>
+                  <input type="number" id="inspectorDistY" value="5" step="1" style="width: 48px;">
+                  <span>ft</span>
+                </div>
+
+                <div class="cad-input-group" id="inspectorHeightGroup" style="display: none;">
+                  <label for="inspectorHeight">H:</label>
+                  <input type="number" id="inspectorHeight" value="20" min="1" step="1" style="width: 48px;">
+                  <span>ft</span>
+                </div>
+
+                <div class="cad-input-group" id="inspectorOpacityGroup" title="Adjust opacity of selected item">
+                  <label for="inspectorOpacity">Opacity:</label>
+                  <input type="range" id="inspectorOpacity" min="0.1" max="1.0" step="0.05" value="1.0" style="width: 55px;">
+                  <span id="inspectorOpacityVal" style="min-width: 28px; font-size: 10.5px;">100%</span>
+                </div>
+
+                <div class="cad-zorder-group" id="inspectorZOrderGroup" title="Stack Order" style="display: none;">
+                  <button type="button" class="cad-btn-mini" id="inspectorMoveUpBtn" title="Move Up">▲</button>
+                  <button type="button" class="cad-btn-mini" id="inspectorMoveDownBtn" title="Move Down">▼</button>
+                  <button type="button" class="cad-btn-mini" id="inspectorBringToFrontBtn" title="Bring to Front">⤒</button>
+                  <button type="button" class="cad-btn-mini" id="inspectorSendToBackBtn" title="Send to Back">⤓</button>
+                </div>
+
+                <div class="cad-compact-pill" id="inspectorAreaPill">
+                  <strong id="inspectorAreaValue" style="color: #38bdf8;">600 sq ft</strong>
+                </div>
+
+                <div style="display: flex; gap: 4px; margin-left: auto; align-items: center;">
+                  <button type="button" class="cad-btn-mini" id="inspectorDeleteBtn" style="color: #f87171; display: none;" title="Delete Selected (Del) [Returns panel to latent pool]">🗑️ Delete</button>
+                  <button type="button" class="cad-btn-mini" id="inspectorDeselectBtn" title="Clear selection" style="display: none;">✕ Clear</button>
+                </div>
+              </div>
+
+              <!-- CAD WORKSPACE: CANVAS + SLIM DOCKED LAYERS PANEL -->
+              <div class="cad-workspace-layout" id="cadWorkspaceLayout">
+                <!-- CANVAS DRAFTING BOARD -->
+                <div class="cad-canvas-board">
+                  <canvas id="panelDiagramCanvas"></canvas>
+                  <div class="cad-hint-bar">
+                    <span>💡 <strong>Controls:</strong> Drag to move | Shift-click or marquee drag for multi-select | [R] Rotate | [Del] Delete (returns to latent)</span>
+                    <span id="cadIslandsCount">1 Array Island</span>
+                  </div>
+                </div>
+
+                <!-- SLIM DOCKED RIGHT BORDER LAYERS & COMPONENTS PANEL (Width: ~210px) -->
+                <aside class="cad-layers-panel" id="cadLayersPanel">
+                  <div class="cad-layers-header">
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                      <span style="font-size: 12px;">📚</span>
+                      <strong style="font-size: 11.5px; color: #f8fafc;">Layers</strong>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                      <span class="cad-layers-count" id="cadLayersTotalCount">5</span>
+                      <button type="button" class="cad-btn-mini" id="cadCollapseLayersBtn" title="Collapse Layers Panel" style="padding: 1px 5px; font-size: 10px;">▶</button>
+                    </div>
+                  </div>
+                  <div class="cad-layers-body" id="cadLayersList">
+                    <!-- Dynamically rendered by cad.onLayersChange -->
+                  </div>
+                </aside>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- SEQUENTIAL HORIZONTAL LAYOUT -->
-        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
-          
+        <!-- PANE 2: SIZING & COMPARE -->
+        <div class="workspace-tab-pane" id="paneSizing" data-pane="sizing" style="display: none;">
           <!-- Recommendation Header -->
-          <div class="detail-card" style="padding: 12px 16px;">
-            <div class="summary-band" style="margin-bottom: 12px; align-items: center;">
+          <div class="detail-card" style="margin-bottom: 12px;">
+            <div class="summary-band" style="margin-bottom: 10px; align-items: center;">
               <div>
                 <p class="eyebrow" style="font-size: 10px;">Recommendation</p>
-                <h2 id="recommendationTitle" style="font-size: 18px;">On-grid DCR solar</h2>
+                <h2 id="recommendationTitle" style="font-size: 17px;">On-grid DCR solar</h2>
                 <p id="recommendationReason" class="muted" style="font-size: 13px; margin-top: 2px;">Best payback for subsidy-eligible residential use.</p>
               </div>
               <div class="status-pill" id="sanctionStatus" style="font-size: 12px; padding: 4px 8px;">Within sanctioned load</div>
             </div>
 
             <div class="metric-grid" style="grid-template-columns: repeat(4, 1fr); gap: 8px;">
-              <div class="metric-card" style="padding: 10px;">
-                <span style="font-size: 11px;">Size <i class="info-tip" data-tip="Recommended solar system capacity in kilowatts peak (kWp). Based on your consumption, roof area, and sanctioned load.">i</i></span>
-                <strong id="recommendedCapacity" style="font-size: 15px;">0 kWp</strong>
+              <div class="metric-card">
+                <span class="metric-label">Size <i class="info-tip" data-tip="Recommended solar system capacity in kWp.">i</i></span>
+                <strong class="metric-value" id="recommendedCapacity">0 kWp</strong>
               </div>
-              <div class="metric-card" style="padding: 10px;">
-                <span style="font-size: 11px;">Gen/mo <i class="info-tip" data-tip="Estimated electricity units your solar system will generate each month, accounting for Pune's sunlight and all losses.">i</i></span>
-                <strong id="monthlyGeneration" style="font-size: 15px;">0 units</strong>
+              <div class="metric-card">
+                <span class="metric-label">Gen/mo <i class="info-tip" data-tip="Estimated electricity units generated each month.">i</i></span>
+                <strong class="metric-value" id="monthlyGeneration">0 units</strong>
               </div>
-              <div class="metric-card" style="padding: 10px;">
-                <span style="font-size: 11px;">Save/mo <i class="info-tip" data-tip="How much your monthly electricity bill will reduce. Includes tariff savings, ToD rebates, and other applicable benefits.">i</i></span>
-                <strong id="monthlySavings" style="font-size: 15px;">Rs 0</strong>
+              <div class="metric-card">
+                <span class="metric-label">Save/mo <i class="info-tip" data-tip="Monthly electricity bill reduction.">i</i></span>
+                <strong class="metric-value" id="monthlySavings" style="color: #16a34a;">Rs 0</strong>
               </div>
-              <div id="paybackCard" class="metric-card" style="padding: 10px;">
-                <span style="font-size: 11px;">Payback <i class="info-tip" data-tip="Time to recover your investment. After this period, your solar system generates pure profit through bill savings.">i</i></span>
-                <strong id="payback" style="font-size: 15px;">0 years</strong>
+              <div id="paybackCard" class="metric-card">
+                <span class="metric-label">Payback <i class="info-tip" data-tip="Time to recover initial investment.">i</i></span>
+                <strong class="metric-value" id="payback">0 years</strong>
               </div>
             </div>
-            <div id="billBreakdownPanel" class="breakup-list hidden" style="margin: 10px 0 0; font-size: 12px; padding: 8px 12px; background: var(--card-bg); border: 1px solid var(--line); border-radius: var(--radius);"></div>
-            <div id="savingsBreakdownPanel" class="breakup-list hidden" style="margin: 10px 0 0; font-size: 12px; padding: 8px 12px; background: var(--card-bg); border: 1px solid var(--line); border-radius: var(--radius);"></div>
+            <div id="billBreakdownPanel" class="breakup-list hidden" style="margin: 10px 0 0; font-size: 12px; padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+            <div id="savingsBreakdownPanel" class="breakup-list hidden" style="margin: 10px 0 0; font-size: 12px; padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
           </div>
 
           <!-- Compare Table -->
-          <div class="detail-card" style="padding: 12px 16px;">
+          <div class="detail-card" style="margin-bottom: 12px;">
             <div class="section-heading compact" style="margin-bottom: 8px;">
-              <div>
-                <h3 style="margin: 0; font-size: 15px;">System options <i class="info-tip" data-tip="Compare three system types side by side. The highlighted row is our recommendation based on your goal.">i</i></h3>
-              </div>
+              <h3 style="margin: 0; font-size: 14px; font-weight: 600;">System Options Comparison <i class="info-tip" data-tip="Compare system types side by side. Click any row to select.">i</i></h3>
             </div>
             <div class="table-wrap">
-              <table style="font-size: 13px;">
+              <table style="font-size: 12.5px;">
                 <thead>
                   <tr>
-                    <th style="padding: 8px; width: 40px; text-align: center;">Pick</th>
-                    <th style="padding: 8px;">System <i class="info-tip" data-tip="On-grid: cheapest, no backup. Hybrid: grid + battery backup. Off-grid: fully independent.">i</i></th>
-                    <th style="padding: 8px;">Panel <i class="info-tip" data-tip="DCR = subsidy eligible Indian-made. Non-DCR = imported, no subsidy.">i</i></th>
-                    <th style="padding: 8px;">Inverter <i class="info-tip" data-tip="Recommended inverter size in kW to match the panel capacity.">i</i></th>
-                    <th style="padding: 8px;">Battery <i class="info-tip" data-tip="Battery storage size in kWh. Only for hybrid/off-grid systems with backup.">i</i></th>
-                    <th style="padding: 8px;">Net cost <i class="info-tip" data-tip="Total system cost after subtracting government subsidy.">i</i></th>
-                    <th style="padding: 8px;" class="subsidy-col">Subsidy <i class="info-tip" data-tip="Government incentive to reduce your upfront cost. Only for DCR panels on grid-connected systems.">i</i></th>
-                    <th style="padding: 8px;">Savings/mo <i class="info-tip" data-tip="Estimated monthly reduction in your electricity bill after solar.">i</i></th>
-                    <th style="padding: 8px;" class="payback-col">Payback <i class="info-tip" data-tip="Years to recover your investment through monthly bill savings.">i</i></th>
+                    <th style="padding: 6px; width: 40px; text-align: center;">Pick</th>
+                    <th style="padding: 6px;">System</th>
+                    <th style="padding: 6px;">Panel</th>
+                    <th style="padding: 6px;">Inverter</th>
+                    <th style="padding: 6px;">Battery</th>
+                    <th style="padding: 6px;">Net cost</th>
+                    <th style="padding: 6px;" class="subsidy-col">Subsidy</th>
+                    <th style="padding: 6px;">Savings/mo</th>
+                    <th style="padding: 6px;" class="payback-col">Payback</th>
                   </tr>
                 </thead>
                 <tbody id="comparisonRows"></tbody>
@@ -926,94 +873,166 @@
           </div>
 
           <!-- Configuration & Area -->
-          <div class="detail-card" style="padding: 12px 16px;">
+          <div class="detail-card">
             <div style="display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-              <h3 style="margin: 0; font-size: 15px;">Panel Configuration & Area <i class="info-tip" data-tip="Physical layout details — how many panels, total space needed, and whether they fit your available area.">i</i></h3>
-              <div class="status-pill" id="areaFitStatus" style="font-size: 12px; padding: 4px 8px;">Checking fit</div>
+              <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Panel Configuration & Area Fit</h3>
+              <div class="status-pill" id="areaFitStatus" style="font-size: 11px; padding: 3px 8px;">Checking fit</div>
             </div>
             <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr); gap: 8px;">
-              <div class="metric-card" style="padding: 10px;">
-                <span style="font-size: 11px;">Panels required <i class="info-tip" data-tip="Number of 550W solar panels needed for the recommended system size.">i</i></span>
-                <strong id="panelCount" style="font-size: 15px;">0</strong>
+              <div class="metric-card">
+                <span class="metric-label">Panels required</span>
+                <strong class="metric-value" id="panelCount">0</strong>
               </div>
-              <div class="metric-card" style="padding: 10px;">
-                <span style="font-size: 11px;">Area required <i class="info-tip" data-tip="Total roof space needed including gaps for maintenance walkways and shadow clearance (1.5× panel area).">i</i></span>
-                <strong id="panelAreaRequired" style="font-size: 15px;">0 sq ft</strong>
+              <div class="metric-card">
+                <span class="metric-label">Area required</span>
+                <strong class="metric-value" id="panelAreaRequired">0 sq ft</strong>
               </div>
-              <div class="metric-card" style="padding: 10px;">
-                <span style="font-size: 11px;">Panel spec <i class="info-tip" data-tip="Physical dimensions and power rating of each individual solar panel used in the design.">i</i></span>
-                <strong id="panelSpec" style="font-size: 13px;">1123 × 2279 mm · 550 Wp</strong>
+              <div class="metric-card">
+                <span class="metric-label">Panel specification</span>
+                <strong class="metric-value" id="panelSpec" style="font-size: 12px;">1123 × 2279 mm · 550 Wp</strong>
               </div>
             </div>
           </div>
-
-          <!-- Breakup Accordion -->
-          <details class="detail-card" style="padding: 12px 16px; cursor: pointer; border: 1px solid var(--line); border-radius: var(--radius); background: #fff;" open>
-            <summary style="font-weight: 600; font-size: 14px; outline: none;">Cost Breakup <i class="info-tip" data-tip="Detailed breakdown of all costs: panels, inverter, battery, structure, wiring, installation, fees, taxes, and contingency.">i</i></summary>
-            <div style="margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px;">
-              <dl id="costBreakup" class="breakup-list" style="margin: 0; font-size: 13px;"></dl>
-            </div>
-          </details>
-
-          <!-- Financing & Commercial Proposal Accordion -->
-          <details id="financingProposalCard" class="detail-card" style="padding: 12px 16px; cursor: pointer; border: 1px solid var(--line); border-radius: var(--radius); background: #fff;" open>
-            <summary style="font-weight: 600; font-size: 14px; outline: none; display: flex; justify-content: space-between; align-items: center;">
-              <span>Bank Partner Loan vs Upfront Payment <i class="info-tip" data-tip="Commercial comparison: Upfront purchase vs Bank Loan where monthly installment matches your electricity bill.">i</i></span>
-              <span class="status-pill" id="financingStatusBadge" style="font-size: 11px; margin-left: 8px;">Zero Out-of-Pocket</span>
-            </summary>
-            <div id="financingBreakdownContent" style="margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px;">
-              <!-- Rendered dynamically -->
-            </div>
-          </details>
-
-          <!-- Notes Accordion -->
-          <details class="detail-card" style="padding: 12px 16px; cursor: pointer; border: 1px solid var(--line); border-radius: var(--radius); background: #fff;">
-            <summary style="font-weight: 600; font-size: 14px; outline: none;">Eligibility &amp; Notes <i class="info-tip" data-tip="Key information about subsidy eligibility, DCR requirements, net metering rules, and important caveats.">i</i></summary>
-            <div style="margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px;">
-              <ul id="notesList" class="notes-list" style="margin: 0; padding-left: 16px; font-size: 13px;"></ul>
-            </div>
-          </details>
-
-          <!-- Download & Save Proposal Buttons for Internal Mode -->
-          <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); display: flex; gap: 12px;">
-            <button class="primary-button" id="downloadProposalButtonInternal" type="button" style="flex: 1;">Download Proposal PDF ↓</button>
-            <button class="secondary-button" id="saveProposalButtonInternal" type="button" style="padding: 10px 16px; font-weight: 600; border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; background: white;">Save Data 💾</button>
-          </div>
-
         </div>
 
-      <!-- System Differences Informative Section -->
-      <section class="system-differences-section">
-        <div class="system-differences-container">
-          <div class="system-differences-content">
-            <h2>Solar System Differences</h2>
-            <p>
-              Choosing the right solar system depends on your budget, energy goals, and power reliability needs. Here is a quick comparison of the options:
+        <!-- PANE 3: FINANCIALS & SAVINGS -->
+        <div class="workspace-tab-pane" id="paneFinancials" data-pane="financials" style="display: none;">
+          <div class="detail-card" style="margin-bottom: 12px;">
+            <div class="section-heading compact" style="margin-bottom: 10px;">
+              <h3 style="margin: 0; font-size: 15px; font-weight: 600;">System Cost & Subsidy Summary</h3>
+            </div>
+            <div class="cost-summary-strip" id="costSummaryStrip" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px;">
+              <div class="metric-card">
+                <span class="metric-label">Total System Cost</span>
+                <strong class="metric-value" id="financialTotalCost">₹0</strong>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Govt. Subsidy</span>
+                <strong class="metric-value" id="financialSubsidy" style="color: #16a34a;">- ₹0</strong>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Net Payable Amount</span>
+                <strong class="metric-value" id="financialNetCost" style="color: #0284c7;">₹0</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Itemized Cost Breakup List -->
+          <div class="detail-card" style="margin-bottom: 12px;">
+            <div class="section-heading compact" style="margin-bottom: 8px;">
+              <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Itemized Cost Breakup <i class="info-tip" data-tip="Bill of materials with components, GST, and contingency.">i</i></h3>
+            </div>
+            <dl id="costBreakup" class="breakup-list" style="margin: 0; font-size: 12.5px;"></dl>
+            <p style="font-size: 11px; color: #64748b; margin-top: 10px;">
+              * Net metering liaisoning costs quoted separately. Effective GST: 8.9% (70% goods @ 5% + 30% services @ 18%).
             </p>
-            <ul class="system-differences-list">
-              <li>
-                <strong>On-Grid Systems:</strong> Maximizes financial savings and ROI by exporting excess generation back to the utility grid via net metering. Note: Does not function during power cuts for safety reasons.
-              </li>
-              <li>
-                <strong>Off-Grid Systems:</strong> Completely independent from the utility grid. Relies entirely on battery storage to store day-time solar power for night-time and outage usage.
-              </li>
-              <li>
-                <strong>Hybrid / Semi-Hybrid Systems:</strong> The ultimate combination. Active net-metering allows grid export for high savings, while integrated battery banks provide uninterrupted backup power during utility cuts.
-              </li>
-            </ul>
-          </div>
-          <div class="system-differences-media">
-            <img src="./src/system_differences.png" alt="System Differences: On-Grid vs Off-Grid vs Hybrid">
           </div>
         </div>
+
+        <!-- PANE 4: LOAN & COMMERCIAL PROPOSAL -->
+        <div class="workspace-tab-pane" id="paneLoan" data-pane="loan" style="display: none;">
+          <div class="detail-card" id="financingProposalCard">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <div>
+                <h3 style="margin: 0; font-size: 15px; font-weight: 600;">Bank Partner Loan vs Upfront Cash</h3>
+                <p class="muted small" style="margin: 2px 0 0;">Zero out-of-pocket EMI matched to your existing electricity bill</p>
+              </div>
+              <span class="status-pill" id="financingStatusBadge" style="font-size: 11px;">Zero Out-of-Pocket</span>
+            </div>
+            <div id="financingBreakdownContent" style="border-top: 1px solid #e2e8f0; padding-top: 10px;">
+              <!-- Rendered dynamically by app.js -->
+            </div>
+          </div>
+        </div>
+
+        <!-- PANE 5: PROPOSAL & EXPORT -->
+        <div class="workspace-tab-pane" id="paneProposal" data-pane="proposal" style="display: none;">
+          <div class="detail-card" style="margin-bottom: 12px;">
+            <div class="section-heading compact" style="margin-bottom: 8px;">
+              <h3 style="margin: 0; font-size: 15px; font-weight: 600;">Proposal Export & Report Customization</h3>
+            </div>
+            <p class="muted small" style="margin: 0 0 10px;">Configure which sections appear in the official client proposal PDF.</p>
+
+            <fieldset style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-top: 6px; background: #f8fafc;">
+              <legend style="font-size: 11.5px; font-weight: 600; padding: 0 6px; color: #64748b;">Report Sections Customization</legend>
+              <div style="display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px;">
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="showCadDiagram" checked> <strong>Include CAD Layout Blueprint</strong>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="hidePayback"> Hide Payback (Yrs)
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="hideAreaFit"> Hide Area Fit
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="hideSubsidy"> Hide Subsidy
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="hideCost"> Hide Cost Breakup
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="hideFinancing"> Hide Loan Options
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="solarInstalled"> Solar Already Installed
+                </label>
+              </div>
+            </fieldset>
+
+            <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
+              <button class="primary-button" id="downloadProposalButtonInternal" type="button" style="flex: 1; min-width: 200px; padding: 10px 18px;">Download Proposal PDF ↓</button>
+              <button class="primary-button hidden" id="downloadProposalButton" type="button">Download Proposal ↓</button>
+              <button class="secondary-button" id="saveProposalButtonInternal" type="button" style="padding: 10px 16px; font-weight: 600; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; background: white;">Save Data 💾</button>
+            </div>
+          </div>
+
+          <!-- Eligibility & Notes Accordion -->
+          <div class="detail-card">
+            <div class="section-heading compact" style="margin-bottom: 8px;">
+              <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Eligibility & Engineering Notes</h3>
+            </div>
+            <ul id="notesList" class="notes-list" style="margin: 0; padding-left: 16px; font-size: 12.5px; line-height: 1.5;"></ul>
+          </div>
+        </div>
+
+        <!-- PANE 6: SYSTEM DIFFERENCES GUIDE -->
+        <div class="workspace-tab-pane" id="paneGuide" data-pane="guide" style="display: none;">
+          <section class="system-differences-section" style="padding: 12px 0;">
+            <div class="system-differences-container">
+              <div class="system-differences-content">
+                <h2 style="font-size: 16px; margin: 0 0 8px;">Solar System Differences</h2>
+                <p style="font-size: 13px; margin: 0 0 10px; color: #475569;">
+                  Choosing the right solar system depends on your budget, energy goals, and power reliability needs:
+                </p>
+                <ul class="system-differences-list" style="font-size: 12.5px;">
+                  <li>
+                    <strong>On-Grid Systems:</strong> Maximizes financial savings and ROI by exporting excess generation back to the utility grid via net metering. Shuts down during grid cuts for safety.
+                  </li>
+                  <li>
+                    <strong>Off-Grid Systems:</strong> Completely independent from the utility grid. Relies entirely on battery storage to power day and night loads.
+                  </li>
+                  <li>
+                    <strong>Hybrid / Semi-Hybrid Systems:</strong> The best of both worlds. Active net-metering allows grid export for high savings, while integrated battery banks provide uninterrupted backup during utility cuts.
+                  </li>
+                </ul>
+              </div>
+              <div class="system-differences-media" style="margin-top: 10px;">
+                <img src="./src/system_differences.png" alt="System Differences: On-Grid vs Off-Grid vs Hybrid" style="border-radius: 8px; max-width: 100%;">
+              </div>
+            </div>
+          </section>
+        </div>
+
       </section>
     </main>
 
+    <!-- Master Password Dialog -->
     <dialog id="passwordDialog" class="password-dialog">
       <form method="dialog" class="password-box">
-        <p class="eyebrow">Internal mode</p>
-        <h2 id="passwordDialogTitle">Enter passphrase</h2>
-        <p id="passwordHelp" class="muted small">Please enter the master password.</p>
+        <p class="eyebrow">Internal Mode</p>
+        <h2 id="passwordDialogTitle" style="font-size: 16px;">Enter Passphrase</h2>
+        <p id="passwordHelp" class="muted small">Please enter master passphrase to unlock internal pricing.</p>
         <label class="field">
           <span>Passphrase</span>
           <input id="internalPassword" type="password" autocomplete="current-password">
@@ -1029,16 +1048,16 @@
     <!-- Load Proposal Modal -->
     <div id="loadProposalModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
       <div style="background: var(--surface); border-radius: var(--radius-lg); width: 90%; max-width: 600px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: var(--shadow-lg);">
-        <div style="padding: 16px 24px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
-          <h3 style="margin: 0; font-size: 16px;">Load Saved Data</h3>
+        <div style="padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0; font-size: 15px; font-weight: 700;">Load Saved Proposal Data</h3>
           <button id="closeLoadProposalModal" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted);">&times;</button>
         </div>
-        <div style="padding: 16px 24px; display: flex; flex-direction: column; overflow: hidden;">
-          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-            <input type="text" id="searchProposalInput" placeholder="Search by Name, Mobile, or Email..." style="flex: 1; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius); font-size: 14px;">
-            <button id="searchProposalBtn" class="primary-button" style="padding: 10px 16px;">Search</button>
+        <div style="padding: 16px 20px; display: flex; flex-direction: column; overflow: hidden;">
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="searchProposalInput" placeholder="Search by Name, Mobile, or Email..." style="flex: 1; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;">
+            <button id="searchProposalBtn" class="primary-button" style="padding: 8px 14px; font-size: 13px;">Search</button>
           </div>
-          <div id="proposalList" style="overflow-y: auto; max-height: 400px; display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px;">
+          <div id="proposalList" style="overflow-y: auto; max-height: 380px; display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--line); border-radius: 6px; padding: 8px;">
             <div style="text-align: center; color: var(--text-muted); padding: 20px;">Search to load data...</div>
           </div>
         </div>
@@ -1052,12 +1071,6 @@
       </div>
     </footer>
 
-    <script>
-      // Inject OpenRouter API key from Vercel environment variable
-      // Set gem_key in Vercel Project Settings → Environment Variables
-      // Then update the window global below for local testing:
-      // window.__OPENROUTER_API_KEY = 'your-key-here';
-    </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script type="module" src="./src/app.js"></script>

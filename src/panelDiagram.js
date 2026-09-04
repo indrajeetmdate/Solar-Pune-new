@@ -3701,6 +3701,7 @@ export class RooftopCAD {
 
   // 8-Point Transform Handles on Selected Item / Multi-Select Box
   drawSelectionGizmo() {
+    if (this.isExportingSnapshot) return;
     const ctx = this.ctx;
 
     // Multi-selection collective bounding box
@@ -3792,6 +3793,7 @@ export class RooftopCAD {
   }
 
   drawInteractiveOverlays() {
+    if (this.isExportingSnapshot) return;
     const ctx = this.ctx;
 
     // Rubber-band marquee selection box
@@ -3919,6 +3921,154 @@ export class RooftopCAD {
     const brM = (this.roofBreadthFt * 0.3048).toFixed(1);
     ctx.fillText(`${this.roofBreadthFt} ft (${brM} m)`, 0, 0);
     ctx.restore();
+  }
+
+  // Serialize complete CAD state into a JSON-friendly object
+  serialize() {
+    return {
+      version: 1,
+      unit: this.unit,
+      roofLengthFt: this.roofLengthFt,
+      roofBreadthFt: this.roofBreadthFt,
+      buildingHeightFt: this.buildingHeightFt,
+      northAngleDeg: this.northAngleDeg,
+      activeView: this.activeView,
+      defaultPathwayWidthFt: this.defaultPathwayWidthFt,
+      panelWidthMm: this.panelWidthMm,
+      panelHeightMm: this.panelHeightMm,
+      requiredPanels: this.requiredPanels,
+      cutouts: this.cutouts.map((c) => ({ ...c })),
+      pathways: this.pathways.map((p) => ({ ...p })),
+      panels: this.panels.map((p) => ({ ...p })),
+      externalObstacles: this.externalObstacles.map((o) => ({ ...o })),
+      layerOrder: [...this.layerOrder],
+      layerOpacity: { ...this.layerOpacity },
+      layerVisible: { ...this.layerVisible },
+      image: {
+        isLoaded: !!this.image.isLoaded,
+        src: this.image.src || (this.image.element && this.image.element.src ? this.image.element.src : null),
+        x: this.image.x || 0,
+        y: this.image.y || 0,
+        scale: this.image.scale || 1.0,
+        rotation: this.image.rotation || 0,
+        opacity: this.image.opacity ?? 0.85,
+        origWidth: this.image.origWidth || this.roofW,
+        origHeight: this.image.origHeight || this.roofH,
+      },
+      sunSim: {
+        enabled: !!this.sunSim.enabled,
+        dayOfYear: this.sunSim.dayOfYear,
+        timeHour: this.sunSim.timeHour,
+        speed: this.sunSim.speed || 1.0,
+        latitude: this.sunSim.latitude,
+        longitude: this.sunSim.longitude,
+      },
+    };
+  }
+
+  // Restore CAD state from saved data
+  loadState(savedData) {
+    if (!savedData) return;
+
+    if (savedData.unit) this.unit = savedData.unit;
+    if (savedData.roofLengthFt !== undefined) this.roofLengthFt = Number(savedData.roofLengthFt);
+    if (savedData.roofBreadthFt !== undefined) this.roofBreadthFt = Number(savedData.roofBreadthFt);
+    if (savedData.buildingHeightFt !== undefined) this.buildingHeightFt = Number(savedData.buildingHeightFt);
+    if (savedData.northAngleDeg !== undefined) this.northAngleDeg = Number(savedData.northAngleDeg);
+    if (savedData.activeView) this.activeView = savedData.activeView;
+    if (savedData.defaultPathwayWidthFt !== undefined) this.defaultPathwayWidthFt = Number(savedData.defaultPathwayWidthFt);
+    if (savedData.panelWidthMm !== undefined) this.panelWidthMm = Number(savedData.panelWidthMm);
+    if (savedData.panelHeightMm !== undefined) this.panelHeightMm = Number(savedData.panelHeightMm);
+    if (savedData.requiredPanels !== undefined) this.requiredPanels = Number(savedData.requiredPanels);
+
+    this.autoFitRoof();
+
+    this.cutouts = Array.isArray(savedData.cutouts) ? savedData.cutouts.map((c) => ({ ...c })) : [];
+    this.pathways = Array.isArray(savedData.pathways) ? savedData.pathways.map((p) => ({ ...p })) : [];
+    this.panels = Array.isArray(savedData.panels) ? savedData.panels.map((p) => ({ ...p })) : [];
+    this.externalObstacles = Array.isArray(savedData.externalObstacles) ? savedData.externalObstacles.map((o) => ({ ...o })) : [];
+
+    if (Array.isArray(savedData.layerOrder)) {
+      this.layerOrder = [...savedData.layerOrder];
+    }
+    if (savedData.layerOpacity) {
+      this.layerOpacity = { ...this.layerOpacity, ...savedData.layerOpacity };
+    }
+    if (savedData.layerVisible) {
+      this.layerVisible = { ...this.layerVisible, ...savedData.layerVisible };
+    }
+
+    if (savedData.sunSim) {
+      this.sunSim.enabled = !!savedData.sunSim.enabled;
+      if (savedData.sunSim.dayOfYear !== undefined) this.sunSim.dayOfYear = Number(savedData.sunSim.dayOfYear);
+      if (savedData.sunSim.timeHour !== undefined) this.sunSim.timeHour = Number(savedData.sunSim.timeHour);
+      if (savedData.sunSim.speed !== undefined) this.sunSim.speed = Number(savedData.sunSim.speed);
+      if (savedData.sunSim.latitude !== undefined) this.sunSim.latitude = Number(savedData.sunSim.latitude);
+      if (savedData.sunSim.longitude !== undefined) this.sunSim.longitude = Number(savedData.sunSim.longitude);
+      this.yearlySunPathData = generate2DYearlySunPathData(this.sunSim.latitude, this.sunSim.longitude);
+    }
+
+    if (savedData.image && savedData.image.isLoaded && savedData.image.src) {
+      this.image.src = savedData.image.src;
+      this.image.x = savedData.image.x || 0;
+      this.image.y = savedData.image.y || 0;
+      this.image.scale = savedData.image.scale || 1.0;
+      this.image.rotation = savedData.image.rotation || 0;
+      this.image.opacity = savedData.image.opacity ?? 0.85;
+      this.image.origWidth = savedData.image.origWidth || this.roofW;
+      this.image.origHeight = savedData.image.origHeight || this.roofH;
+      this.image.isLoaded = true;
+
+      if (typeof Image !== "undefined") {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.onload = () => {
+          this.image.element = img;
+          this.image.origWidth = img.naturalWidth || img.width;
+          this.image.origHeight = img.naturalHeight || img.height;
+          this.render();
+        };
+        img.src = savedData.image.src;
+      }
+    } else {
+      this.removeCustomImage();
+    }
+
+    this.selectedItem = null;
+    this.selectedItems = [];
+    this.selectionMarquee = null;
+
+    this.notifyChanges();
+    this.notifyLayersChange();
+    this.render();
+  }
+
+  // Get high-res snapshot of canvas without editor marquee/handles for PDF inclusion
+  getReportSnapshot() {
+    if (!this.canvas || typeof this.canvas.toDataURL !== "function") return null;
+    const prevExport = this.isExportingSnapshot;
+    const prevSelected = this.selectedItem;
+    const prevSelectedItems = this.selectedItems;
+    const prevMarquee = this.selectionMarquee;
+
+    this.isExportingSnapshot = true;
+    this.selectedItem = null;
+    this.selectedItems = [];
+    this.selectionMarquee = null;
+
+    try {
+      this.render();
+      return this.canvas.toDataURL("image/png");
+    } catch (e) {
+      console.warn("Failed to capture CAD snapshot:", e);
+      return null;
+    } finally {
+      this.isExportingSnapshot = prevExport;
+      this.selectedItem = prevSelected;
+      this.selectedItems = prevSelectedItems;
+      this.selectionMarquee = prevMarquee;
+      this.render();
+    }
   }
 }
 

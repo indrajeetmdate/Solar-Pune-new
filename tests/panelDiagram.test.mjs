@@ -485,4 +485,75 @@ console.log("Running RooftopCAD tests...");
   console.log("✓ Test 8 Passed: Multi-Selection, Bulk Rotate/Scale/Delete & Return to Latent Pool");
 }
 
+// Test 9: Complete Serialization & State Loading (Round-Trip Persistence)
+{
+  const canvas = new MockCanvas();
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 40,
+    roofBreadthFt: 25,
+    requiredPanels: 10,
+    northAngleDeg: 45
+  });
+
+  // Add a cutout
+  cad.addCutout("rectangle", 10 * cad.scalePxPerFt, 5 * cad.scalePxPerFt);
+  // Add an external obstacle
+  const obs = cad.addExternalObstacle("tree", { label: "Garden Tree", heightFt: 20 });
+  obs.x = cad.roofX - 40;
+  obs.y = cad.roofY - 30;
+  
+  // Place 3 panels
+  cad.placePanel("portrait", cad.roofX + 20, cad.roofY + 20);
+  cad.placePanel("portrait", cad.roofX + 70, cad.roofY + 20);
+  cad.placePanel("landscape", cad.roofX + 120, cad.roofY + 20);
+  assert.equal(cad.panels.length, 3);
+
+  // Set sun simulation state
+  cad.setSunDate(172); // Summer solstice
+  cad.setSunTime(14); // 2 PM
+  cad.toggleSunSimulation(true);
+
+  // 1. Serialize
+  const serialized = cad.serialize();
+  assert.ok(serialized, "Serialized state should not be null");
+  assert.equal(serialized.roofLengthFt, 40);
+  assert.equal(serialized.roofBreadthFt, 25);
+  assert.equal(serialized.requiredPanels, 10);
+  assert.equal(serialized.northAngleDeg, 45);
+  assert.equal(serialized.panels.length, 3);
+  assert.equal(serialized.cutouts.length, 1);
+  assert.equal(serialized.externalObstacles.length, 1);
+  assert.equal(serialized.sunSim.dayOfYear, 172);
+  assert.equal(serialized.sunSim.timeHour, 14);
+  assert.equal(serialized.sunSim.enabled, true);
+
+  // 2. Load into a fresh new CAD instance
+  const canvas2 = new MockCanvas();
+  const cad2 = new RooftopCAD(canvas2, {
+    roofLengthFt: 10, // dummy initial values
+    roofBreadthFt: 10,
+    requiredPanels: 2,
+  });
+
+  cad2.loadState(serialized);
+  assert.equal(cad2.roofLengthFt, 40, "Restored roofLengthFt should match");
+  assert.equal(cad2.roofBreadthFt, 25, "Restored roofBreadthFt should match");
+  assert.equal(cad2.requiredPanels, 10, "Restored requiredPanels should match");
+  assert.equal(cad2.northAngleDeg, 45, "Restored northAngleDeg should match");
+  assert.equal(cad2.panels.length, 3, "Restored panels count should match 3");
+  assert.equal(cad2.cutouts.length, 1, "Restored cutouts count should match 1");
+  assert.equal(cad2.externalObstacles.length, 1, "Restored externalObstacles count should match 1");
+  assert.equal(cad2.externalObstacles[0].heightFt, 20, "Restored obstacle height should be 20ft");
+  assert.equal(cad2.sunSim.dayOfYear, 172, "Restored sunSim dayOfYear should match");
+  assert.equal(cad2.sunSim.timeHour, 14, "Restored sunSim timeHour should match");
+  assert.equal(cad2.sunSim.enabled, true, "Restored sunSim enabled should match");
+
+  // Verify getAreaStats works identically after restore
+  assert.equal(cad2.getAreaStats().grossSqft, cad.getAreaStats().grossSqft);
+  assert.equal(cad2.getAreaStats().cutoutSqft, cad.getAreaStats().cutoutSqft);
+  assert.equal(cad2.getAreaStats().netUsableSqft, cad.getAreaStats().netUsableSqft);
+
+  console.log("✓ Test 9 Passed: Complete Serialization & State Loading (Round-Trip Persistence)");
+}
+
 console.log("All RooftopCAD tests passed successfully!");
