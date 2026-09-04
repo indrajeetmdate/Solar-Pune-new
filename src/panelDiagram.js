@@ -108,8 +108,10 @@ export class RooftopCAD {
     this.dragOffset = { x: 0, y: 0 };
     this.initialBounds = null; // snapshot of bounds at drag start for accurate resizing
     this.drawPreview = null;
-    this.activeSnapGuide = null;
-    this.selectedItem = null; // { type: 'panel'|'cutout'|'pathway'|'roof'|'obstacle', item }
+    this.selectedItem = null; // primary { type: 'panel'|'cutout'|'pathway'|'roof'|'obstacle', item }
+    this.selectedItems = []; // Array of { type, item } for multi-selection
+    this.selectionMarquee = null; // { startX, startY, currentX, currentY } for rubber-band box select
+    this.multiDragSnapshots = null; // snapshot during multi-item translation
 
     // Callbacks
     this.onStatsChange = options.onStatsChange || null;
@@ -140,6 +142,7 @@ export class RooftopCAD {
 
     this.initEvents();
     this.autoFitRoof();
+    this.notifyChanges();
     this.render();
   }
 
@@ -768,15 +771,156 @@ export class RooftopCAD {
   }
 
   // Selection & Properties Inspector Synchronization
-  selectItem(type, item) {
+  isSelected(type, item) {
+    if (!item) return false;
+    const itemId = item.id || (type === "roof" ? "roof_main" : type === "image" ? "roof_image" : null);
+    return this.selectedItems.some(
+      (s) => s.type === type && (s.item.id === itemId || s.item === item)
+    );
+  }
+
+  selectItem(type, item, isMulti = false) {
     if (!type || !item) {
       this.selectedItem = null;
+      this.selectedItems = [];
+    } else if (isMulti) {
+      const alreadyIdx = this.selectedItems.findIndex(
+        (s) => s.type === type && (s.item.id === item.id || s.item === item)
+      );
+      if (alreadyIdx >= 0) {
+        this.selectedItems.splice(alreadyIdx, 1);
+        this.selectedItem = this.selectedItems.length > 0 ? this.selectedItems[this.selectedItems.length - 1] : null;
+      } else {
+        this.selectedItems.push({ type, item });
+        this.selectedItem = { type, item };
+      }
     } else {
       this.selectedItem = { type, item };
+      this.selectedItems = [{ type, item }];
     }
+
     if (this.onSelectionChange) {
-      this.onSelectionChange(this.selectedItem);
+      this.onSelectionChange(this.selectedItem, this.selectedItems);
     }
+    this.notifyLayersChange();
+    this.render();
+  }
+
+  selectMultiple(items) {
+    this.selectedItems = Array.isArray(items) ? [...items] : [];
+    this.selectedItem = this.selectedItems.length > 0 ? this.selectedItems[0] : null;
+    if (this.onSelectionChange) {
+      this.onSelectionChange(this.selectedItem, this.selectedItems);
+    }
+    this.notifyLayersChange();
+    this.render();
+  }
+
+  selectAllPanels() {
+    this.selectedItems = this.panels.map((p) => ({ type: "panel", item: p }));
+    this.selectedItem = this.selectedItems[0] || null;
+    if (this.onSelectionChange) {
+      this.onSelectionChange(this.selectedItem, this.selectedItems);
+    }
+    this.notifyLayersChange();
+    this.render();
+  }
+
+  clearSelection() {
+    this.selectItem(null, null);
+  }
+
+  rotateSelectedPanels(deg = 90) {
+    const panelsToRotate = this.selectedItems.filter((s) => s.type === "panel").map((s) => s.item);
+    if (panelsToRotate.length === 0 && this.selectedItem && this.selectedItem.type === "panel") {
+      panelsToRotate.push(this.selectedItem.item);
+    }
+    if (panelsToRotate.length === 0) return;
+
+    panelsToRotate.forEach((p) => {
+      const cx = p.x + p.w / 2;
+      const cy = p.y + p.h / 2;
+      const oldW = p.w;
+      p.w = p.h;
+      p.h = oldW;
+      p.x = cx - p.w / 2;
+      p.y = cy - p.h / 2;
+    });
+
+    this.notifyChanges();
+    this.notifyLayersChange();
+    this.render();
+  }
+
+  scaleSelectedItems(factor = 1.1, fromCenter = true) {
+    if (!this.selectedItems || this.selectedItems.length === 0) {
+      if (this.selectedItem) this.selectedItems = [this.selectedItem];
+      else return;
+    }
+
+    if (fromCenter && this.selectedItems.length > 1) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      this.selectedItems.forEach((s) => {
+        let it = s.item;
+        let b = it;
+        if (s.type === "obstacle") b = this.getObstacleScreenBounds(it);
+        if (b) {
+          minX = Math.min(minX, b.x);
+          minY = Math.min(minY, b.y);
+          maxX = Math.max(maxX, b.x + b.w);
+          maxY = Math.max(maxY, b.y + b.h);
+        }
+      });
+      const collectiveCx = (minX + maxX) / 2;
+      const collectiveCy = (minY + maxY) / 2;
+
+      this.selectedItems.forEach((s) => {
+        const it = s.item;
+        if (!it) return;
+        if (s.type === "panel") {
+          const curCx = it.x + it.w / 2;
+          const curCy = it.y + it.h / 2;
+          const newCx = collectiveCx + (curCx - collectiveCx) * factor;
+          const newCy = collectiveCy + (curCy - collectiveCy) * factor;
+          it.x = newCx - it.w / 2;
+          it.y = newCy - it.h / 2;
+        } else if (s.type === "cutout" || s.type === "pathway") {
+          const curCx = it.x + it.w / 2;
+          const curCy = it.y + it.h / 2;
+          const newCx = collectiveCx + (curCx - collectiveCx) * factor;
+          const newCy = collectiveCy + (curCy - collectiveCy) * factor;
+          it.w = Math.max(10, it.w * factor);
+          it.h = Math.max(10, it.h * factor);
+          if (it.radius) it.radius = Math.max(5, it.radius * factor);
+          it.x = newCx - it.w / 2;
+          it.y = newCy - it.h / 2;
+        } else if (s.type === "obstacle") {
+          it.widthFt = Math.max(1, (it.widthFt || 5) * factor);
+          it.breadthFt = Math.max(1, (it.breadthFt || 5) * factor);
+          it.distanceXFt = (it.distanceXFt || 0) * factor;
+          it.distanceYFt = (it.distanceYFt || 0) * factor;
+        }
+      });
+    } else {
+      this.selectedItems.forEach((s) => {
+        const it = s.item;
+        if (!it) return;
+        if (s.type === "cutout" || s.type === "pathway") {
+          const cx = it.x + it.w / 2;
+          const cy = it.y + it.h / 2;
+          it.w = Math.max(10, it.w * factor);
+          it.h = Math.max(10, it.h * factor);
+          if (it.radius) it.radius = Math.max(5, it.radius * factor);
+          it.x = cx - it.w / 2;
+          it.y = cy - it.h / 2;
+        } else if (s.type === "obstacle") {
+          it.widthFt = Math.max(1, (it.widthFt || 5) * factor);
+          it.breadthFt = Math.max(1, (it.breadthFt || 5) * factor);
+        }
+      });
+    }
+
+    this.notifyChanges();
     this.notifyLayersChange();
     this.render();
   }
@@ -789,7 +933,14 @@ export class RooftopCAD {
 
     if (props.opacity !== undefined) {
       const op = Math.max(0.05, Math.min(1.0, Number(props.opacity)));
-      it.opacity = op;
+      // If multiple items selected, update opacity across all selected items
+      if (this.selectedItems.length > 1) {
+        this.selectedItems.forEach((s) => {
+          if (s.item) s.item.opacity = op;
+        });
+      } else {
+        it.opacity = op;
+      }
       if (type === "roof") {
         this.roofOpacity = op;
         this.layerOpacity.roof = op;
@@ -803,7 +954,7 @@ export class RooftopCAD {
       it.lengthFt = this.roofLengthFt;
       it.breadthFt = this.roofBreadthFt;
       if (this.onSelectionChange) {
-        this.onSelectionChange(this.selectedItem);
+        this.onSelectionChange(this.selectedItem, this.selectedItems);
       }
       return;
     }
@@ -823,7 +974,7 @@ export class RooftopCAD {
       }
       this.autoFitRoof();
       if (this.onSelectionChange) {
-        this.onSelectionChange(this.selectedItem);
+        this.onSelectionChange(this.selectedItem, this.selectedItems);
       }
       this.notifyChanges();
       this.render();
@@ -852,7 +1003,7 @@ export class RooftopCAD {
     }
 
     if (this.onSelectionChange) {
-      this.onSelectionChange(this.selectedItem);
+      this.onSelectionChange(this.selectedItem, this.selectedItems);
     }
     this.notifyChanges();
     this.render();
@@ -860,21 +1011,37 @@ export class RooftopCAD {
 
   removeSelectedItem() {
     if (!this.selectedItem) return;
-    const { type, item } = this.selectedItem;
+    this.removeSelectedItems();
+  }
 
-    if (type === "panel") {
-      this.panels = this.panels.filter((p) => p.id !== item.id);
-    } else if (type === "cutout") {
-      this.cutouts = this.cutouts.filter((c) => c.id !== item.id);
-    } else if (type === "pathway") {
-      this.pathways = this.pathways.filter((p) => p.id !== item.id);
-    } else if (type === "obstacle") {
-      this.externalObstacles = this.externalObstacles.filter((o) => o.id !== item.id);
+  removeSelectedItems() {
+    if (this.selectedItems.length === 0 && this.selectedItem) {
+      this.selectedItems = [this.selectedItem];
+    }
+    if (this.selectedItems.length === 0) return;
+
+    const panelIds = new Set(this.selectedItems.filter((s) => s.type === "panel").map((s) => s.item.id));
+    const cutoutIds = new Set(this.selectedItems.filter((s) => s.type === "cutout").map((s) => s.item.id));
+    const pathwayIds = new Set(this.selectedItems.filter((s) => s.type === "pathway").map((s) => s.item.id));
+    const obstacleIds = new Set(this.selectedItems.filter((s) => s.type === "obstacle").map((s) => s.item.id));
+
+    if (panelIds.size > 0) {
+      this.panels = this.panels.filter((p) => !panelIds.has(p.id));
+    }
+    if (cutoutIds.size > 0) {
+      this.cutouts = this.cutouts.filter((c) => !cutoutIds.has(c.id));
+    }
+    if (pathwayIds.size > 0) {
+      this.pathways = this.pathways.filter((pw) => !pathwayIds.has(pw.id));
+    }
+    if (obstacleIds.size > 0) {
+      this.externalObstacles = this.externalObstacles.filter((o) => !obstacleIds.has(o.id));
       this.autoFitRoof();
     }
 
     this.selectItem(null, null);
     this.notifyChanges();
+    this.notifyLayersChange();
     this.render();
   }
 
@@ -1045,6 +1212,10 @@ export class RooftopCAD {
             id: this.selectedItem.item?.id,
           }
         : null,
+      selectedItems: this.selectedItems.map((s) => ({
+        type: s.type,
+        id: s.item?.id,
+      })),
     };
   }
 
@@ -1117,7 +1288,7 @@ export class RooftopCAD {
       target.opacity = op;
       if (this.selectedItem && this.selectedItem.item && this.selectedItem.item.id === id) {
         this.selectedItem.item.opacity = op;
-        if (this.onSelectionChange) this.onSelectionChange(this.selectedItem);
+        if (this.onSelectionChange) this.onSelectionChange(this.selectedItem, this.selectedItems);
       }
       this.notifyLayersChange();
       this.render();
@@ -1159,8 +1330,12 @@ export class RooftopCAD {
       this.removeExternalObstacle(id);
       return;
     }
+    this.selectedItems = this.selectedItems.filter((s) => s.item?.id !== id);
     if (this.selectedItem && this.selectedItem.item && this.selectedItem.item.id === id) {
-      this.selectItem(null, null);
+      this.selectedItem = this.selectedItems.length > 0 ? this.selectedItems[0] : null;
+    }
+    if (this.onSelectionChange) {
+      this.onSelectionChange(this.selectedItem, this.selectedItems);
     }
     this.notifyChanges();
     this.notifyLayersChange();
@@ -1505,10 +1680,22 @@ export class RooftopCAD {
     );
 
     window.addEventListener("keydown", (e) => {
+      if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
       if (e.key === "Delete" || e.key === "Backspace") {
-        if (this.selectedItem && !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
-          this.removeSelectedItem();
+        this.removeSelectedItems();
+      } else if (e.key === "r" || e.key === "R") {
+        this.rotateSelectedPanels(90);
+      } else if (e.key === "a" || e.key === "A") {
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          this.selectAllPanels();
         }
+      } else if (e.key === "+" || e.key === "=") {
+        this.scaleSelectedItems(1.1);
+      } else if (e.key === "-" || e.key === "_") {
+        this.scaleSelectedItems(0.9);
+      } else if (e.key === "Escape") {
+        this.clearSelection();
       }
     });
 
@@ -1660,11 +1847,29 @@ export class RooftopCAD {
       }
 
       if (inside) {
-        this.selectItem("obstacle", obs);
+        if (e.shiftKey) {
+          this.selectItem("obstacle", obs, true);
+          return;
+        }
+        if (!this.isSelected("obstacle", obs)) {
+          this.selectItem("obstacle", obs, false);
+        }
         this.dragItem = obs;
         this.dragStartSnapshot = { x: obs.distanceFromRoofX, y: obs.distanceFromRoofY };
-        this.dragMode = "drag_obstacle";
         this.dragOffset = { x: x - b.x, y: y - b.y };
+        if (this.selectedItems.length > 1) {
+          this.dragMode = "drag_multi";
+          this.multiDragSnapshots = this.selectedItems.map((s) => ({
+            type: s.type,
+            item: s.item,
+            origX: s.item.x,
+            origY: s.item.y,
+            origDistX: s.item.distanceFromRoofX,
+            origDistY: s.item.distanceFromRoofY,
+          }));
+        } else {
+          this.dragMode = "drag_obstacle";
+        }
         return;
       }
     }
@@ -1678,11 +1883,29 @@ export class RooftopCAD {
         for (let i = this.panels.length - 1; i >= 0; i--) {
           const p = this.panels[i];
           if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) {
-            this.selectItem("panel", p);
+            if (e.shiftKey) {
+              this.selectItem("panel", p, true);
+              return;
+            }
+            if (!this.isSelected("panel", p)) {
+              this.selectItem("panel", p, false);
+            }
             this.dragItem = p;
             this.dragStartSnapshot = { x: p.x, y: p.y };
-            this.dragMode = "drag_item";
             this.dragOffset = { x: x - p.x, y: y - p.y };
+            if (this.selectedItems.length > 1) {
+              this.dragMode = "drag_multi";
+              this.multiDragSnapshots = this.selectedItems.map((s) => ({
+                type: s.type,
+                item: s.item,
+                origX: s.item.x,
+                origY: s.item.y,
+                origDistX: s.item.distanceFromRoofX,
+                origDistY: s.item.distanceFromRoofY,
+              }));
+            } else {
+              this.dragMode = "drag_item";
+            }
             return;
           }
         }
@@ -1704,11 +1927,29 @@ export class RooftopCAD {
           }
 
           if (inside) {
-            this.selectItem("cutout", c);
+            if (e.shiftKey) {
+              this.selectItem("cutout", c, true);
+              return;
+            }
+            if (!this.isSelected("cutout", c)) {
+              this.selectItem("cutout", c, false);
+            }
             this.dragItem = c;
             this.dragStartSnapshot = { x: c.x, y: c.y };
-            this.dragMode = "drag_item";
             this.dragOffset = { x: x - c.x, y: y - c.y };
+            if (this.selectedItems.length > 1) {
+              this.dragMode = "drag_multi";
+              this.multiDragSnapshots = this.selectedItems.map((s) => ({
+                type: s.type,
+                item: s.item,
+                origX: s.item.x,
+                origY: s.item.y,
+                origDistX: s.item.distanceFromRoofX,
+                origDistY: s.item.distanceFromRoofY,
+              }));
+            } else {
+              this.dragMode = "drag_item";
+            }
             return;
           }
         }
@@ -1716,11 +1957,29 @@ export class RooftopCAD {
         for (let i = this.pathways.length - 1; i >= 0; i--) {
           const pw = this.pathways[i];
           if (x >= pw.x && x <= pw.x + pw.w && y >= pw.y && y <= pw.y + pw.h) {
-            this.selectItem("pathway", pw);
+            if (e.shiftKey) {
+              this.selectItem("pathway", pw, true);
+              return;
+            }
+            if (!this.isSelected("pathway", pw)) {
+              this.selectItem("pathway", pw, false);
+            }
             this.dragItem = pw;
             this.dragStartSnapshot = { x: pw.x, y: pw.y };
-            this.dragMode = "drag_item";
             this.dragOffset = { x: x - pw.x, y: y - pw.y };
+            if (this.selectedItems.length > 1) {
+              this.dragMode = "drag_multi";
+              this.multiDragSnapshots = this.selectedItems.map((s) => ({
+                type: s.type,
+                item: s.item,
+                origX: s.item.x,
+                origY: s.item.y,
+                origDistX: s.item.distanceFromRoofX,
+                origDistY: s.item.distanceFromRoofY,
+              }));
+            } else {
+              this.dragMode = "drag_item";
+            }
             return;
           }
         }
@@ -1740,7 +1999,17 @@ export class RooftopCAD {
       }
     }
 
-    // Clicked empty canvas
+    // Clicked empty canvas: start rubber-band marquee selection in select/panel mode
+    if (this.activeTool === "select" || this.activeTool === "panel") {
+      if (!e.shiftKey) {
+        this.selectItem(null, null);
+      }
+      this.dragMode = "marquee_select";
+      this.selectionMarquee = { startX: x, startY: y, currentX: x, currentY: y };
+      this.render();
+      return;
+    }
+
     this.selectItem(null, null);
   }
 
@@ -1771,6 +2040,29 @@ export class RooftopCAD {
       } else if (this.activeTool === "select") {
         this.canvas.style.cursor = "default";
       }
+    }
+
+    if (this.dragMode === "marquee_select" && this.selectionMarquee) {
+      this.selectionMarquee.currentX = x;
+      this.selectionMarquee.currentY = y;
+      this.render();
+      return;
+    }
+
+    if (this.dragMode === "drag_multi" && this.multiDragSnapshots) {
+      const dx = x - this.dragStart.x;
+      const dy = y - this.dragStart.y;
+      this.multiDragSnapshots.forEach((snap) => {
+        if (snap.type === "panel" || snap.type === "cutout" || snap.type === "pathway") {
+          snap.item.x = snap.origX + dx;
+          snap.item.y = snap.origY + dy;
+        } else if (snap.type === "obstacle") {
+          snap.item.distanceFromRoofX = Number((snap.origDistX + dx / this.scalePxPerFt).toFixed(1));
+          snap.item.distanceFromRoofY = Number((snap.origDistY + dy / this.scalePxPerFt).toFixed(1));
+        }
+      });
+      this.render();
+      return;
     }
 
     if (this.dragMode === "rotate_compass" && this.compassWidget) {
@@ -1969,6 +2261,59 @@ export class RooftopCAD {
   handlePointerUp(x, y, e) {
     if (this.dragMode === "pan_image") {
       this.canvas.style.cursor = "grab";
+    }
+
+    if (this.dragMode === "marquee_select" && this.selectionMarquee) {
+      const rx = Math.min(this.selectionMarquee.startX, this.selectionMarquee.currentX);
+      const ry = Math.min(this.selectionMarquee.startY, this.selectionMarquee.currentY);
+      const rw = Math.abs(this.selectionMarquee.currentX - this.selectionMarquee.startX);
+      const rh = Math.abs(this.selectionMarquee.currentY - this.selectionMarquee.startY);
+
+      if (rw > 5 || rh > 5) {
+        const found = [];
+        this.panels.forEach((p) => {
+          if (!(p.x + p.w < rx || p.x > rx + rw || p.y + p.h < ry || p.y > ry + rh)) {
+            found.push({ type: "panel", item: p });
+          }
+        });
+        this.cutouts.forEach((c) => {
+          if (!(c.x + c.w < rx || c.x > rx + rw || c.y + c.h < ry || c.y > ry + rh)) {
+            found.push({ type: "cutout", item: c });
+          }
+        });
+        this.externalObstacles.forEach((o) => {
+          const b = this.getObstacleScreenBounds(o);
+          if (!(b.x + b.w < rx || b.x > rx + rw || b.y + b.h < ry || b.y > ry + rh)) {
+            found.push({ type: "obstacle", item: o });
+          }
+        });
+
+        if (found.length > 0) {
+          if (e.shiftKey) {
+            const existingIds = new Set(this.selectedItems.map((s) => s.item?.id));
+            found.forEach((f) => {
+              if (!existingIds.has(f.item?.id)) this.selectedItems.push(f);
+            });
+            this.selectedItem = this.selectedItems[this.selectedItems.length - 1];
+            this.selectMultiple(this.selectedItems);
+          } else {
+            this.selectMultiple(found);
+          }
+        }
+      }
+      this.selectionMarquee = null;
+      this.dragMode = null;
+      this.render();
+      return;
+    }
+
+    if (this.dragMode === "drag_multi") {
+      this.dragMode = null;
+      this.dragItem = null;
+      this.multiDragSnapshots = null;
+      this.notifyChanges();
+      this.render();
+      return;
     }
 
     // Revert panel drop if it causes an illegal overlap with another panel or obstacle
@@ -2335,7 +2680,7 @@ export class RooftopCAD {
     const ctx = this.ctx;
 
     this.externalObstacles.forEach((obs) => {
-      const isSelected = this.selectedItem && this.selectedItem.item?.id === obs.id;
+      const isSelected = this.isSelected("obstacle", obs);
       const b = this.getObstacleScreenBounds(obs);
 
       ctx.save();
@@ -3148,7 +3493,7 @@ export class RooftopCAD {
   drawPathways(layerAlpha = 1.0) {
     const ctx = this.ctx;
     this.pathways.forEach((pw) => {
-      const isSelected = this.selectedItem && this.selectedItem.item && this.selectedItem.item.id === pw.id;
+      const isSelected = this.isSelected("pathway", pw);
       const alpha = layerAlpha * (pw.opacity ?? 1.0);
 
       ctx.save();
@@ -3193,7 +3538,7 @@ export class RooftopCAD {
     const ctx = this.ctx;
 
     this.cutouts.forEach((c) => {
-      const isSelected = this.selectedItem && this.selectedItem.item && this.selectedItem.item.id === c.id;
+      const isSelected = this.isSelected("cutout", c);
       const alpha = layerAlpha * (c.opacity ?? 1.0);
 
       ctx.save();
@@ -3314,7 +3659,7 @@ export class RooftopCAD {
     const ctx = this.ctx;
 
     this.panels.forEach((p, idx) => {
-      const isSelected = this.selectedItem && this.selectedItem.item && this.selectedItem.item.id === p.id;
+      const isSelected = this.isSelected("panel", p);
       const alpha = layerAlpha * (p.opacity ?? 1.0);
 
       ctx.save();
@@ -3336,7 +3681,7 @@ export class RooftopCAD {
       ctx.lineTo(p.x + p.w, p.y + p.h * 0.33);
       ctx.moveTo(p.x, p.y + p.h * 0.66);
       ctx.lineTo(p.x + p.w, p.y + p.h * 0.66);
-      ctx.moveTo(p.x + p.w * 0.5, p.y);
+      ctx.moveTo(p.x, p.y + p.w * 0.5);
       ctx.lineTo(p.x + p.w * 0.5, p.y + p.h);
       ctx.stroke();
 
@@ -3354,11 +3699,63 @@ export class RooftopCAD {
     });
   }
 
-  // 8-Point Transform Handles on Selected Item
+  // 8-Point Transform Handles on Selected Item / Multi-Select Box
   drawSelectionGizmo() {
+    const ctx = this.ctx;
+
+    // Multi-selection collective bounding box
+    if (this.selectedItems && this.selectedItems.length > 1) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      this.selectedItems.forEach((s) => {
+        let it = s.item;
+        let bounds = it;
+        if (s.type === "obstacle") bounds = this.getObstacleScreenBounds(it);
+        if (bounds) {
+          minX = Math.min(minX, bounds.x);
+          minY = Math.min(minY, bounds.y);
+          maxX = Math.max(maxX, bounds.x + bounds.w);
+          maxY = Math.max(maxY, bounds.y + bounds.h);
+        }
+      });
+
+      if (minX < maxX && minY < maxY) {
+        ctx.save();
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(minX - 4, minY - 4, (maxX - minX) + 8, (maxY - minY) + 8);
+        ctx.setLineDash([]);
+
+        const pillText = `${this.selectedItems.length} Items Selected`;
+        ctx.font = "bold 10px Inter, sans-serif";
+        const textW = ctx.measureText ? ctx.measureText(pillText).width : 90;
+        const pillX = (minX + maxX) / 2 - (textW + 16) / 2;
+        const pillY = minY - 24;
+
+        ctx.fillStyle = "rgba(15, 23, 42, 0.92)";
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(pillX, pillY, textW + 16, 18, 4);
+        } else {
+          ctx.rect(pillX, pillY, textW + 16, 18);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#38bdf8";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(pillText, (minX + maxX) / 2, pillY + 9);
+        ctx.restore();
+      }
+      return;
+    }
+
+    // Single item transform gizmo
     if (!this.selectedItem || !this.selectedItem.item) return;
     const it = this.selectedItem.item;
-    const ctx = this.ctx;
 
     // Outer selection bounding box
     ctx.strokeStyle = "#38bdf8";
@@ -3396,6 +3793,23 @@ export class RooftopCAD {
 
   drawInteractiveOverlays() {
     const ctx = this.ctx;
+
+    // Rubber-band marquee selection box
+    if (this.selectionMarquee) {
+      const rx = Math.min(this.selectionMarquee.startX, this.selectionMarquee.currentX);
+      const ry = Math.min(this.selectionMarquee.startY, this.selectionMarquee.currentY);
+      const rw = Math.abs(this.selectionMarquee.currentX - this.selectionMarquee.startX);
+      const rh = Math.abs(this.selectionMarquee.currentY - this.selectionMarquee.startY);
+
+      ctx.save();
+      ctx.fillStyle = "rgba(56, 189, 248, 0.15)";
+      ctx.fillRect(rx, ry, rw, rh);
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(rx, ry, rw, rh);
+      ctx.restore();
+    }
 
     if (this.activeSnapGuide) {
       ctx.strokeStyle = "#38bdf8";

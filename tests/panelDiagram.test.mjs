@@ -29,6 +29,9 @@ class MockContext2D {
   createRadialGradient() {
     return { addColorStop: () => {} };
   }
+  measureText() {
+    return { width: 90 };
+  }
 }
 
 class MockCanvas {
@@ -401,6 +404,85 @@ console.log("Running RooftopCAD tests...");
   assert.equal(cad.externalObstacles.length, 3, "External obstacles count should be 3 after removal");
 
   console.log("✓ Test 7 Passed: North Alignment, Multi-View Elevation, External Obstacles & Astronomical Sun Simulation");
+}
+
+// Test 8: Multi-Selection, Bulk Actions (Move, Rotate, Scale, Delete) & Return to Latent Pool
+{
+  const canvas = new MockCanvas();
+  let latestPanelsChange = null;
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 35,
+    roofBreadthFt: 25,
+    requiredPanels: 10,
+    onPanelsChange: (p) => {
+      latestPanelsChange = p;
+    },
+  });
+
+  // 1. Initial State - 10 latent panels
+  assert.equal(cad.panels.length, 0, "Panels must be 0 initially");
+  assert.equal(latestPanelsChange?.remaining, 10, "10 remaining latent panels");
+
+  // Place 4 panels
+  const p1 = cad.placePanel("portrait", cad.roofX + 10, cad.roofY + 10);
+  const p2 = cad.placePanel("portrait", cad.roofX + 40, cad.roofY + 10);
+  const p3 = cad.placePanel("portrait", cad.roofX + 70, cad.roofY + 10);
+  const p4 = cad.placePanel("portrait", cad.roofX + 100, cad.roofY + 10);
+  assert.equal(cad.panels.length, 4, "4 panels placed");
+  assert.equal(latestPanelsChange?.placed, 4);
+  assert.equal(latestPanelsChange?.remaining, 6, "6 panels remaining in latent pool");
+
+  // 2. Multi-Selection
+  cad.selectMultiple([
+    { type: "panel", item: p1 },
+    { type: "panel", item: p2 },
+  ]);
+  assert.equal(cad.selectedItems.length, 2, "2 items in multi-selection");
+  assert.ok(cad.isSelected("panel", p1), "p1 should be marked selected");
+  assert.ok(cad.isSelected("panel", p2), "p2 should be marked selected");
+  assert.ok(!cad.isSelected("panel", p3), "p3 should not be marked selected");
+
+  // 3. Bulk Rotate (90 deg)
+  const p1InitialW = p1.w;
+  const p1InitialH = p1.h;
+  const p2InitialW = p2.w;
+  const p2InitialH = p2.h;
+  cad.rotateSelectedPanels(90);
+  assert.equal(p1.w, p1InitialH, "p1 width should equal previous height");
+  assert.equal(p1.h, p1InitialW, "p1 height should equal previous width");
+  assert.equal(p2.w, p2InitialH, "p2 width should equal previous height");
+  assert.equal(p2.h, p2InitialW, "p2 height should equal previous width");
+  // Unselected panel p3 should NOT rotate
+  assert.equal(p3.w, p1InitialW, "p3 width should remain unchanged");
+
+  // 4. Bulk Scale
+  const oldDist = Math.abs(p2.x - p1.x);
+  cad.scaleSelectedItems(1.2);
+  const newDist = Math.abs(p2.x - p1.x);
+  assert.ok(newDist > oldDist, "Spacing between selected panels should scale up");
+
+  // 5. Bulk Delete & Return to Latent Pool
+  cad.removeSelectedItems();
+  assert.equal(cad.panels.length, 2, "2 panels should remain after deleting 2");
+  assert.equal(latestPanelsChange?.placed, 2, "Placed count should be 2");
+  assert.equal(latestPanelsChange?.remaining, 8, "Deleting 2 panels must return them to latent pool (remaining: 8)");
+  assert.equal(cad.selectedItems.length, 0, "Selected items cleared after delete");
+
+  // 6. Delete via removeComponent directly returns to latent pool
+  cad.removeComponent("panel", p3.id);
+  assert.equal(cad.panels.length, 1, "1 panel should remain after single removeComponent");
+  assert.equal(latestPanelsChange?.placed, 1, "Placed count should be 1");
+  assert.equal(latestPanelsChange?.remaining, 9, "Deleting panel must return it to latent pool (remaining: 9)");
+
+  // 7. Select All Panels
+  cad.selectAllPanels();
+  assert.equal(cad.selectedItems.length, 1, "Select all selects the 1 remaining panel");
+
+  // 8. Clear Selection
+  cad.clearSelection();
+  assert.equal(cad.selectedItems.length, 0, "Selection cleared");
+
+  console.log("✓ Test 8 Passed: Multi-Selection, Bulk Rotate/Scale/Delete & Return to Latent Pool");
 }
 
 console.log("All RooftopCAD tests passed successfully!");

@@ -1088,7 +1088,7 @@ function renderLayersPanel(cad, state) {
       if (state.panels && state.panels.length > 0) {
         itemsHtml = state.panels
           .map((p) => {
-            const isItemActive = state.selectedItem && state.selectedItem.id === p.id;
+            const isItemActive = cad.isSelected ? cad.isSelected("panel", p) : (state.selectedItem && state.selectedItem.id === p.id);
             const pOpPercent = Math.round((p.opacity ?? 1.0) * 100);
             return `
               <div class="cad-component-row ${isItemActive ? "active" : ""}" data-comp-type="panel" data-comp-id="${p.id}" title="Click to select on canvas">
@@ -1098,9 +1098,9 @@ function renderLayersPanel(cad, state) {
                   <span style="color: #64748b; font-size: 10px;">(${pOpPercent}%)</span>
                 </div>
                 <div class="cad-component-actions">
-                  <button type="button" class="cad-layer-btn comp-move-up-btn" data-type="panel" data-id="${p.id}" title="Move Up in stack">🔼</button>
-                  <button type="button" class="cad-layer-btn comp-move-down-btn" data-type="panel" data-id="${p.id}" title="Move Down in stack">🔽</button>
-                  <button type="button" class="cad-layer-btn comp-del-btn" data-type="panel" data-id="${p.id}" style="color: #f87171;" title="Return to latent pool">✕</button>
+                  <button type="button" class="cad-layer-btn comp-move-up-btn" data-type="panel" data-id="${p.id}" title="Move Up in stack">▲</button>
+                  <button type="button" class="cad-layer-btn comp-move-down-btn" data-type="panel" data-id="${p.id}" title="Move Down in stack">▼</button>
+                  <button type="button" class="cad-layer-btn comp-del-btn" data-type="panel" data-id="${p.id}" style="color: #f87171;" title="Delete & return to latent pool">✕</button>
                 </div>
               </div>
             `;
@@ -1118,7 +1118,7 @@ function renderLayersPanel(cad, state) {
       if (state.cutouts && state.cutouts.length > 0) {
         itemsHtml = state.cutouts
           .map((c, idx) => {
-            const isItemActive = state.selectedItem && state.selectedItem.id === c.id;
+            const isItemActive = cad.isSelected ? cad.isSelected("cutout", c) : (state.selectedItem && state.selectedItem.id === c.id);
             const shapeIcon = c.shape === "circle" ? "⚪" : c.shape === "l_shape" ? "⌐" : "▭";
             const cOpPercent = Math.round((c.opacity ?? 1.0) * 100);
             return `
@@ -1129,8 +1129,8 @@ function renderLayersPanel(cad, state) {
                   <span style="color: #ef4444; font-size: 10px;">(${cOpPercent}%)</span>
                 </div>
                 <div class="cad-component-actions">
-                  <button type="button" class="cad-layer-btn comp-move-up-btn" data-type="cutout" data-id="${c.id}" title="Move Up in stack">🔼</button>
-                  <button type="button" class="cad-layer-btn comp-move-down-btn" data-type="cutout" data-id="${c.id}" title="Move Down in stack">🔽</button>
+                  <button type="button" class="cad-layer-btn comp-move-up-btn" data-type="cutout" data-id="${c.id}" title="Move Up in stack">▲</button>
+                  <button type="button" class="cad-layer-btn comp-move-down-btn" data-type="cutout" data-id="${c.id}" title="Move Down in stack">▼</button>
                   <button type="button" class="cad-layer-btn comp-del-btn" data-type="cutout" data-id="${c.id}" style="color: #f87171;" title="Delete obstacle">✕</button>
                 </div>
               </div>
@@ -1149,7 +1149,7 @@ function renderLayersPanel(cad, state) {
       if (state.pathways && state.pathways.length > 0) {
         itemsHtml = state.pathways
           .map((pw, idx) => {
-            const isItemActive = state.selectedItem && state.selectedItem.id === pw.id;
+            const isItemActive = cad.isSelected ? cad.isSelected("pathway", pw) : (state.selectedItem && state.selectedItem.id === pw.id);
             const pwOpPercent = Math.round((pw.opacity ?? 1.0) * 100);
             return `
               <div class="cad-component-row ${isItemActive ? "active" : ""}" data-comp-type="pathway" data-comp-id="${pw.id}" title="Click to select on canvas">
@@ -1159,8 +1159,8 @@ function renderLayersPanel(cad, state) {
                   <span style="color: #eab308; font-size: 10px;">(${pwOpPercent}%)</span>
                 </div>
                 <div class="cad-component-actions">
-                  <button type="button" class="cad-layer-btn comp-move-up-btn" data-type="pathway" data-id="${pw.id}" title="Move Up in stack">🔼</button>
-                  <button type="button" class="cad-layer-btn comp-move-down-btn" data-type="pathway" data-id="${pw.id}" title="Move Down in stack">🔽</button>
+                  <button type="button" class="cad-layer-btn comp-move-up-btn" data-type="pathway" data-id="${pw.id}" title="Move Up in stack">▲</button>
+                  <button type="button" class="cad-layer-btn comp-move-down-btn" data-type="pathway" data-id="${pw.id}" title="Move Down in stack">▼</button>
                   <button type="button" class="cad-layer-btn comp-del-btn" data-type="pathway" data-id="${pw.id}" style="color: #f87171;" title="Delete walkway">✕</button>
                 </div>
               </div>
@@ -1345,13 +1345,67 @@ function setupCadEventListeners(cad) {
     });
   });
 
-  // Toggle Layers Panel button
-  $("cadToggleLayersBtn")?.addEventListener("click", () => {
+  // Toggle Layers Panel & Collapse Button
+  const toggleLayersPanel = () => {
     const panel = $("cadLayersPanel");
-    const btn = $("cadToggleLayersBtn");
+    const toggleBtn = $("cadToggleLayersBtn");
+    const collapseBtn = $("cadCollapseLayersBtn");
     if (!panel) return;
-    const isHidden = panel.classList.toggle("hidden");
-    btn?.classList.toggle("active", !isHidden);
+    const isCollapsed = panel.classList.toggle("collapsed");
+    toggleBtn?.classList.toggle("active", !isCollapsed);
+    if (collapseBtn) collapseBtn.textContent = isCollapsed ? "◀" : "▶";
+  };
+
+  $("cadToggleLayersBtn")?.addEventListener("click", toggleLayersPanel);
+  $("cadCollapseLayersBtn")?.addEventListener("click", toggleLayersPanel);
+
+  // Collapsible Minimizable Drawers
+  const drawerConfigs = [
+    { btnId: "cadToggleNorthDrawerBtn", drawerId: "cadNorthDrawer" },
+    { btnId: "cadToggleSunDrawerBtn", drawerId: "cadSunToolbar" },
+    { btnId: "cadToggleRoofDrawerBtn", drawerId: "cadRoofDrawer" },
+    { btnId: "cadToggleImageDrawerBtn", drawerId: "cadImageDrawer" },
+  ];
+
+  drawerConfigs.forEach(({ btnId, drawerId }) => {
+    const btn = $(btnId);
+    const drawer = $(drawerId);
+    if (btn && drawer) {
+      btn.addEventListener("click", () => {
+        const isOpen = drawer.style.display !== "none";
+        drawer.style.display = isOpen ? "none" : "flex";
+        btn.classList.toggle("active", !isOpen);
+      });
+    }
+  });
+
+  document.querySelectorAll(".cad-drawer-close").forEach((closeBtn) => {
+    closeBtn.addEventListener("click", () => {
+      const targetId = closeBtn.getAttribute("data-close");
+      const target = $(targetId);
+      if (target) {
+        target.style.display = "none";
+        const cfg = drawerConfigs.find((c) => c.drawerId === targetId);
+        if (cfg) $(cfg.btnId)?.classList.remove("active");
+      }
+    });
+  });
+
+  // Bulk Multi-Select Action Buttons
+  $("cadRotateSelectedBtn")?.addEventListener("click", () => {
+    cad.rotateSelectedPanels(90);
+  });
+
+  $("cadScaleUpSelectedBtn")?.addEventListener("click", () => {
+    cad.scaleSelectedItems(1.1);
+  });
+
+  $("cadScaleDownSelectedBtn")?.addEventListener("click", () => {
+    cad.scaleSelectedItems(0.9);
+  });
+
+  $("cadDeleteSelectedBtn")?.addEventListener("click", () => {
+    cad.removeSelectedItems();
   });
 
   // Shape picker buttons for Cutouts (Rectangle, Circle, L-Shape)
@@ -1374,7 +1428,7 @@ function setupCadEventListeners(cad) {
   });
 
   // Contextual Properties Inspector UI sync
-  const updateInspectorUI = (sel) => {
+  const updateInspectorUI = (sel, selectedItems) => {
     const icon = $("inspectorIcon");
     const title = $("inspectorTypeTitle");
     const labelGroup = $("inspectorLabelGroup");
@@ -1397,6 +1451,47 @@ function setupCadEventListeners(cad) {
     const opacityInput = $("inspectorOpacity");
     const opacityVal = $("inspectorOpacityVal");
     const zOrderGroup = $("inspectorZOrderGroup");
+
+    const multi = selectedItems || (cad.selectedItems && cad.selectedItems.length > 1 ? cad.selectedItems : null);
+
+    if (multi && multi.length > 1) {
+      if (icon) icon.textContent = "📦";
+      if (title) title.textContent = `${multi.length} Items Selected`;
+      if (labelGroup) labelGroup.style.display = "none";
+      if (lenGroup) lenGroup.style.display = "none";
+      if (brGroup) brGroup.style.display = "none";
+      if (diaGroup) diaGroup.style.display = "none";
+      if (distXGroup) distXGroup.style.display = "none";
+      if (distYGroup) distYGroup.style.display = "none";
+      if (heightGroup) heightGroup.style.display = "none";
+      if (opacityInput) {
+        const firstOp = multi[0]?.item?.opacity ?? 1.0;
+        opacityInput.value = firstOp;
+        if (opacityVal) opacityVal.textContent = `${Math.round(firstOp * 100)}%`;
+      }
+      if (zOrderGroup) zOrderGroup.style.display = "none";
+      if (delBtn) delBtn.style.display = "inline-flex";
+      if (deselectBtn) deselectBtn.style.display = "inline-flex";
+
+      let totalArea = 0;
+      multi.forEach((s) => {
+        if (s.type === "panel") totalArea += (cad.panelStandardLengthFt * cad.panelStandardBreadthFt);
+        else if (s.type === "cutout") {
+          if (s.item.shape === "circle") {
+            const r = (s.item.radius || s.item.w / 2) / cad.scalePxPerFt;
+            totalArea += Math.PI * r * r;
+          } else if (s.item.shape === "l_shape") {
+            totalArea += (s.item.lengthFt || 10) * (s.item.breadthFt || 10) * 0.75;
+          } else {
+            totalArea += (s.item.lengthFt || 10) * (s.item.breadthFt || 5);
+          }
+        } else if (s.type === "obstacle") {
+          totalArea += (s.item.lengthFt || 10) * (s.item.breadthFt || 5);
+        }
+      });
+      if (areaVal) areaVal.textContent = `${Math.round(totalArea)} sq ft`;
+      return;
+    }
 
     if (!sel || !sel.item || sel.type === "roof") {
       if (icon) icon.textContent = "🟢";
@@ -1536,14 +1631,14 @@ function setupCadEventListeners(cad) {
     }
   };
 
-  cad.onSelectionChange = (sel) => {
-    updateInspectorUI(sel);
+  cad.onSelectionChange = (sel, selectedItems) => {
+    updateInspectorUI(sel, selectedItems);
   };
 
   cad.onLayersChange = (layerState) => {
     renderLayersPanel(cad, layerState);
-    if (cad.selectedItem) {
-      updateInspectorUI(cad.selectedItem);
+    if (cad.selectedItem || (cad.selectedItems && cad.selectedItems.length > 0)) {
+      updateInspectorUI(cad.selectedItem, cad.selectedItems);
     }
   };
 
