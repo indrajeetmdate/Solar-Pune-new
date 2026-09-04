@@ -1450,3 +1450,224 @@ tr:hover td {
   box-shadow: 0 1px 3px rgba(239, 68, 68, 0.35);
 }
 
+/* ----------------------------------------------------------------
+   CAD Workspace Layout & Interactive Layers Panel
+   ---------------------------------------------------------------- */
+
+.cad-workspace-layout {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  margin-top: 4px;
+}
+
+.cad-workspace-layout .cad-canvas-board {
+  flex: 1;
+  min-width: 0;
+}
+
+.cad-layers-panel {
+  width: 290px;
+  min-width: 270px;
+  max-height: 480px;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s ease;
+}
+
+.cad-layers-panel.hidden {
+  display: none !important;
+}
+
+.cad-layers-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+}
+
+.cad-layers-count {
+  font-size: 10.5px;
+  background: #0f172a;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  font-weight: 600;
+}
+
+.cad-layers-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scrollbar-width: thin;
+}
+
+.cad-layer-card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.cad-layer-card:hover {
+  border-color: #475569;
+}
+
+.cad-layer-card.active {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 1px #38bdf8;
+  background: rgba(30, 41, 59, 0.95);
+}
+
+.cad-layer-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.cad-layer-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f8fafc;
+  cursor: pointer;
+  user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cad-layer-title:hover {
+  color: #38bdf8;
+}
+
+.cad-layer-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.cad-layer-btn {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.cad-layer-btn:hover {
+  background: #334155;
+  color: #ffffff;
+}
+
+.cad-layer-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.cad-layer-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.cad-layer-slider-row input[type="range"] {
+  flex: 1;
+  height: 4px;
+  accent-color: #38bdf8;
+  cursor: pointer;
+  background: #0f172a;
+  border-radius: 2px;
+}
+
+.cad-layer-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+  padding-left: 8px;
+  border-left: 2px solid #334155;
+  max-height: 180px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.cad-component-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 6px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cad-component-row:hover {
+  background: rgba(30, 41, 59, 0.9);
+  color: #ffffff;
+  border-color: #475569;
+}
+
+.cad-component-row.active {
+  background: rgba(56, 189, 248, 0.18);
+  color: #38bdf8;
+  border-color: #38bdf8;
+  font-weight: 600;
+}
+
+.cad-component-info {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cad-component-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+@media (max-width: 960px) {
+  .cad-workspace-layout {
+    flex-direction: column;
+  }
+  .cad-layers-panel {
+    width: 100%;
+    max-height: 320px;
+  }
+}
+
+

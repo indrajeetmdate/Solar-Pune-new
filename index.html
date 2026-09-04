@@ -638,6 +638,7 @@
                 <button type="button" class="cad-btn" id="cadToolPathwayBtn" data-tool="pathway" title="Draw custom maintenance pathway corridor">🚶 Walkway</button>
                 <button type="button" class="cad-btn" id="cadToolPanelBtn" data-tool="panel" title="Move & snap solar panels">☀️ Move Panels</button>
                 <button type="button" class="cad-btn" id="cadToolPanBtn" data-tool="image_pan" title="Drag to move imported image inside roof">✋ Move Image</button>
+                <button type="button" class="cad-btn active" id="cadToggleLayersBtn" title="Toggle Layers & Components Panel (L)" style="border-color: #38bdf8; color: #38bdf8;">📚 Layers</button>
               </div>
             </div>
 
@@ -658,7 +659,7 @@
               </div>
             </div>
 
-            <!-- TOOLBAR ROW 3: Contextual Properties Inspector (Editable Dimensions & Resizing) -->
+            <!-- TOOLBAR ROW 3: Contextual Properties Inspector (Editable Dimensions, Opacity & Z-Order) -->
             <div class="cad-toolbar cad-inspector-toolbar" id="cadInspectorToolbar">
               <div class="cad-inspector-badge" id="inspectorBadge">
                 <span id="inspectorIcon">🟢</span>
@@ -667,25 +668,39 @@
 
               <div class="cad-input-group" id="inspectorLabelGroup">
                 <label for="inspectorLabel">Label:</label>
-                <input type="text" id="inspectorLabel" value="Main Roof" style="width: 105px; padding: 3px 6px; font-size: 11.5px;">
+                <input type="text" id="inspectorLabel" value="Main Roof" style="width: 100px; padding: 3px 6px; font-size: 11.5px;">
               </div>
 
               <div class="cad-input-group" id="inspectorLengthGroup">
                 <label for="inspectorLength">Length:</label>
-                <input type="number" id="inspectorLength" value="30" min="1" step="0.5" style="width: 62px;">
+                <input type="number" id="inspectorLength" value="30" min="1" step="0.5" style="width: 58px;">
                 <span>ft</span>
               </div>
 
               <div class="cad-input-group" id="inspectorBreadthGroup">
                 <label for="inspectorBreadth">Breadth:</label>
-                <input type="number" id="inspectorBreadth" value="20" min="1" step="0.5" style="width: 62px;">
+                <input type="number" id="inspectorBreadth" value="20" min="1" step="0.5" style="width: 58px;">
                 <span>ft</span>
               </div>
 
               <div class="cad-input-group" id="inspectorDiameterGroup" style="display: none;">
                 <label for="inspectorDiameter">Diameter:</label>
-                <input type="number" id="inspectorDiameter" value="6" min="1" step="0.5" style="width: 62px;">
+                <input type="number" id="inspectorDiameter" value="6" min="1" step="0.5" style="width: 58px;">
                 <span>ft</span>
+              </div>
+
+              <div class="cad-input-group" id="inspectorOpacityGroup" title="Adjust transparency of selected element (e.g. solar panel, obstacle)">
+                <label for="inspectorOpacity">Opacity:</label>
+                <input type="range" id="inspectorOpacity" min="0.1" max="1.0" step="0.05" value="1.0" style="width: 65px;">
+                <span id="inspectorOpacityVal" style="min-width: 32px; font-size: 11px; font-variant-numeric: tabular-nums;">100%</span>
+              </div>
+
+              <div class="cad-zorder-group" id="inspectorZOrderGroup" title="Component Order in Layer (Move Up / Down)" style="display: flex; gap: 2px; align-items: center;">
+                <span style="font-size: 11px; color: #94a3b8; margin-right: 2px;">Order:</span>
+                <button type="button" class="cad-btn" id="inspectorMoveUpBtn" title="Bring Forward (Move Up in stack)">🔼</button>
+                <button type="button" class="cad-btn" id="inspectorMoveDownBtn" title="Send Backward (Move Down in stack)">🔽</button>
+                <button type="button" class="cad-btn" id="inspectorBringToFrontBtn" title="Bring to Front">⏫</button>
+                <button type="button" class="cad-btn" id="inspectorSendToBackBtn" title="Send to Back">⏬</button>
               </div>
 
               <div class="cad-stats-pill" id="inspectorAreaPill" style="background: #0f172a; border-color: #334155; color: #f1f5f9; padding: 3px 10px;">
@@ -718,13 +733,30 @@
               </div>
             </div>
 
-            <!-- CANVAS DRAFTING BOARD -->
-            <div class="cad-canvas-board">
-              <canvas id="panelDiagramCanvas"></canvas>
-              <div class="cad-hint-bar">
-                <span>💡 <strong>Tips:</strong> Drag panels to move — panels automatically snap magnetically on all 4 sides. In Cutout mode, drag to subtract obstacles.</span>
-                <span id="cadIslandsCount">1 Array Island</span>
+            <!-- CAD WORKSPACE: CANVAS + DOCKED LAYERS PANEL -->
+            <div class="cad-workspace-layout" id="cadWorkspaceLayout">
+              <!-- CANVAS DRAFTING BOARD -->
+              <div class="cad-canvas-board">
+                <canvas id="panelDiagramCanvas"></canvas>
+                <div class="cad-hint-bar">
+                  <span>💡 <strong>Tips:</strong> Drag panels to move — panels automatically snap magnetically on all 4 sides. In Cutout mode, drag to subtract obstacles.</span>
+                  <span id="cadIslandsCount">1 Array Island</span>
+                </div>
               </div>
+
+              <!-- DOCKED LAYERS & COMPONENTS PANEL -->
+              <aside class="cad-layers-panel" id="cadLayersPanel">
+                <div class="cad-layers-header">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 13px;">📚</span>
+                    <strong style="font-size: 12px; color: #f8fafc;">Layers & Components</strong>
+                  </div>
+                  <span class="cad-layers-count" id="cadLayersTotalCount">5 Layers</span>
+                </div>
+                <div class="cad-layers-body" id="cadLayersList">
+                  <!-- Dynamically rendered by cad.onLayersChange -->
+                </div>
+              </aside>
             </div>
           </div>
         </div>

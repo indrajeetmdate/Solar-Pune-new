@@ -195,4 +195,117 @@ console.log("Running RooftopCAD tests...");
   console.log("✓ Test 4 Passed: Contextual inspector two-way updates & removal");
 }
 
+// Test 5: Layer Stack Reordering & Universal Layer Opacity
+{
+  const canvas = new MockCanvas();
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 30,
+    roofBreadthFt: 20,
+    requiredPanels: 6,
+  });
+
+  // Default layer order: ["image", "roof", "pathways", "cutouts", "panels"]
+  assert.deepEqual(cad.layerOrder, ["image", "roof", "pathways", "cutouts", "panels"]);
+
+  // Move "roof" down (swap with "image")
+  cad.moveLayerDown("roof");
+  assert.deepEqual(cad.layerOrder, ["roof", "image", "pathways", "cutouts", "panels"]);
+
+  // Move "cutouts" up (swap with "panels") -> cutouts draw on top of panels
+  cad.moveLayerUp("cutouts");
+  assert.deepEqual(cad.layerOrder, ["roof", "image", "pathways", "panels", "cutouts"]);
+
+  // Layer Opacity adjustments
+  cad.setLayerOpacity("panels", 0.75);
+  assert.equal(cad.layerOpacity.panels, 0.75);
+
+  cad.setLayerOpacity("cutouts", 0.5);
+  assert.equal(cad.layerOpacity.cutouts, 0.5);
+
+  cad.setLayerOpacity("roof", 0.6);
+  assert.equal(cad.layerOpacity.roof, 0.6);
+  assert.equal(cad.roofOpacity, 0.6);
+
+  // Layer Visibility
+  cad.setLayerVisibility("image", false);
+  assert.equal(cad.layerVisible.image, false);
+
+  const layerState = cad.getLayerState();
+  assert.deepEqual(layerState.order, ["roof", "image", "pathways", "panels", "cutouts"]);
+  assert.equal(layerState.opacity.panels, 0.75);
+  assert.equal(layerState.visible.image, false);
+
+  console.log("✓ Test 5 Passed: Layer stack reordering (move up/down) & universal layer opacity");
+}
+
+// Test 6: Component Selection, Z-Ordering & Universal Solar Panel Opacity
+{
+  const canvas = new MockCanvas();
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 30,
+    roofBreadthFt: 20,
+    requiredPanels: 6,
+  });
+
+  // Place 3 panels
+  const p1 = cad.placePanel("portrait");
+  const p2 = cad.placePanel("portrait");
+  const p3 = cad.placePanel("portrait");
+
+  assert.equal(cad.panels.length, 3);
+  assert.equal(cad.panels[0].id, p1.id);
+  assert.equal(cad.panels[1].id, p2.id);
+  assert.equal(cad.panels[2].id, p3.id);
+
+  // Panels should have default opacity 1.0
+  assert.equal(p1.opacity, 1.0);
+  assert.equal(p2.opacity, 1.0);
+
+  // Select panel 1 and adjust opacity to 0.4 (transparent)
+  cad.selectItem("panel", p1);
+  assert.equal(cad.selectedItem.item.id, p1.id);
+  cad.updateSelectedItem({ opacity: 0.4 });
+  assert.equal(p1.opacity, 0.4, "Panel 1 opacity should be adjusted to 0.4");
+
+  // Reorder components: move p1 up in stack
+  cad.moveSelectedItemUp();
+  assert.equal(cad.panels[0].id, p2.id, "p2 should now be at index 0");
+  assert.equal(cad.panels[1].id, p1.id, "p1 should now be at index 1");
+
+  // Bring p1 to front
+  cad.bringSelectedItemToFront();
+  assert.equal(cad.panels[cad.panels.length - 1].id, p1.id, "p1 should now be at the front");
+
+  // Send p1 to back
+  cad.sendSelectedItemToBack();
+  assert.equal(cad.panels[0].id, p1.id, "p1 should now be at the back");
+
+  // Test selecting component by ID
+  cad.selectComponent("panel", p3.id);
+  assert.equal(cad.selectedItem.item.id, p3.id);
+
+  // Test setting component opacity directly
+  cad.setComponentOpacity("panel", p3.id, 0.55);
+  assert.equal(p3.opacity, 0.55);
+
+  // Test removing component by ID
+  cad.removeComponent("panel", p2.id);
+  assert.equal(cad.panels.length, 2);
+  assert.equal(cad.panels.find((p) => p.id === p2.id), undefined);
+
+  // Test cutouts z-ordering and opacity
+  const c1 = cad.addCutout(cad.roofX + 10, cad.roofY + 10, 30, 30, "rectangle", "HVAC 1");
+  const c2 = cad.addCutout(cad.roofX + 50, cad.roofY + 50, 40, 40, "circle", "Tank 1");
+  assert.equal(cad.cutouts.length, 2);
+
+  cad.selectComponent("cutout", c1.id);
+  cad.updateSelectedItem({ opacity: 0.35 });
+  assert.equal(c1.opacity, 0.35, "Cutout 1 opacity should be adjusted to 0.35");
+
+  cad.moveComponent("cutout", c1.id, "up");
+  assert.equal(cad.cutouts[1].id, c1.id, "Cutout 1 moved up");
+
+  console.log("✓ Test 6 Passed: Component selection, z-ordering (move up/down/front/back) & universal component opacity (including solar panels)");
+}
+
 console.log("All RooftopCAD tests passed successfully!");

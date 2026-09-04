@@ -78,6 +78,25 @@ export class RooftopCAD {
     this.onStatsChange = options.onStatsChange || null;
     this.onPanelsChange = options.onPanelsChange || null;
     this.onSelectionChange = options.onSelectionChange || null;
+    this.onLayersChange = options.onLayersChange || null;
+
+    // Layer Stack Ordering, Visibility & Opacity (Order from back to front)
+    this.layerOrder = ["image", "roof", "pathways", "cutouts", "panels"];
+    this.layerOpacity = {
+      image: 0.85,
+      roof: 1.0,
+      pathways: 1.0,
+      cutouts: 1.0,
+      panels: 1.0,
+    };
+    this.layerVisible = {
+      image: true,
+      roof: true,
+      pathways: true,
+      cutouts: true,
+      panels: true,
+    };
+    this.roofOpacity = 1.0;
 
     this.initEvents();
     this.autoFitRoof();
@@ -218,6 +237,7 @@ export class RooftopCAD {
       w,
       h,
       orientation,
+      opacity: 1.0,
     };
 
     this.panels.push(panel);
@@ -248,6 +268,7 @@ export class RooftopCAD {
           w,
           h,
           orientation,
+          opacity: 1.0,
         });
       }
     }
@@ -302,6 +323,7 @@ export class RooftopCAD {
             w,
             h,
             orientation,
+            opacity: 1.0,
           });
           placedCount++;
         }
@@ -378,6 +400,7 @@ export class RooftopCAD {
       breadthFt: Number(breadthFt.toFixed(1)),
       diameterFt: Number(diameterFt.toFixed(1)),
       label: defaultLabel,
+      opacity: 1.0,
     };
 
     this.cutouts.push(cutout);
@@ -410,6 +433,7 @@ export class RooftopCAD {
       lengthFt: Number((w / this.scalePxPerFt).toFixed(1)),
       breadthFt: Number((h / this.scalePxPerFt).toFixed(1)),
       label,
+      opacity: 1.0,
     };
     this.pathways.push(pathway);
     this.selectItem("pathway", pathway);
@@ -449,6 +473,7 @@ export class RooftopCAD {
     if (this.onSelectionChange) {
       this.onSelectionChange(this.selectedItem);
     }
+    this.notifyLayersChange();
     this.render();
   }
 
@@ -457,6 +482,15 @@ export class RooftopCAD {
     const { type, item: it } = this.selectedItem;
 
     if (props.label !== undefined) it.label = props.label;
+
+    if (props.opacity !== undefined) {
+      const op = Math.max(0.05, Math.min(1.0, Number(props.opacity)));
+      it.opacity = op;
+      if (type === "roof") {
+        this.roofOpacity = op;
+        this.layerOpacity.roof = op;
+      }
+    }
 
     if (type === "roof") {
       const l = props.lengthFt !== undefined ? Math.max(5, Number(props.lengthFt)) : this.roofLengthFt;
@@ -512,6 +546,275 @@ export class RooftopCAD {
 
     this.selectItem(null, null);
     this.notifyChanges();
+    this.render();
+  }
+
+  // ================= LAYER & COMPONENT Z-ORDER / OPACITY METHODS =================
+  moveLayerUp(layerName) {
+    const idx = this.layerOrder.indexOf(layerName);
+    if (idx === -1 || idx === this.layerOrder.length - 1) return;
+    const temp = this.layerOrder[idx];
+    this.layerOrder[idx] = this.layerOrder[idx + 1];
+    this.layerOrder[idx + 1] = temp;
+    this.notifyLayersChange();
+    this.render();
+  }
+
+  moveLayerDown(layerName) {
+    const idx = this.layerOrder.indexOf(layerName);
+    if (idx <= 0) return;
+    const temp = this.layerOrder[idx];
+    this.layerOrder[idx] = this.layerOrder[idx - 1];
+    this.layerOrder[idx - 1] = temp;
+    this.notifyLayersChange();
+    this.render();
+  }
+
+  setLayerOpacity(layerName, opacity) {
+    const op = Math.max(0.05, Math.min(1.0, Number(opacity)));
+    this.layerOpacity[layerName] = op;
+    if (layerName === "image") {
+      this.image.opacity = op;
+    } else if (layerName === "roof") {
+      this.roofOpacity = op;
+    }
+    this.notifyLayersChange();
+    this.render();
+  }
+
+  setLayerVisibility(layerName, visible) {
+    this.layerVisible[layerName] = !!visible;
+    this.notifyLayersChange();
+    this.render();
+  }
+
+  moveSelectedItemUp() {
+    if (!this.selectedItem || !this.selectedItem.item) return;
+    const { type, item } = this.selectedItem;
+
+    if (type === "panel") {
+      const idx = this.panels.findIndex((p) => p.id === item.id);
+      if (idx !== -1 && idx < this.panels.length - 1) {
+        const temp = this.panels[idx];
+        this.panels[idx] = this.panels[idx + 1];
+        this.panels[idx + 1] = temp;
+      }
+    } else if (type === "cutout") {
+      const idx = this.cutouts.findIndex((c) => c.id === item.id);
+      if (idx !== -1 && idx < this.cutouts.length - 1) {
+        const temp = this.cutouts[idx];
+        this.cutouts[idx] = this.cutouts[idx + 1];
+        this.cutouts[idx + 1] = temp;
+      }
+    } else if (type === "pathway") {
+      const idx = this.pathways.findIndex((pw) => pw.id === item.id);
+      if (idx !== -1 && idx < this.pathways.length - 1) {
+        const temp = this.pathways[idx];
+        this.pathways[idx] = this.pathways[idx + 1];
+        this.pathways[idx + 1] = temp;
+      }
+    }
+    this.notifyLayersChange();
+    this.render();
+  }
+
+  moveSelectedItemDown() {
+    if (!this.selectedItem || !this.selectedItem.item) return;
+    const { type, item } = this.selectedItem;
+
+    if (type === "panel") {
+      const idx = this.panels.findIndex((p) => p.id === item.id);
+      if (idx > 0) {
+        const temp = this.panels[idx];
+        this.panels[idx] = this.panels[idx - 1];
+        this.panels[idx - 1] = temp;
+      }
+    } else if (type === "cutout") {
+      const idx = this.cutouts.findIndex((c) => c.id === item.id);
+      if (idx > 0) {
+        const temp = this.cutouts[idx];
+        this.cutouts[idx] = this.cutouts[idx - 1];
+        this.cutouts[idx - 1] = temp;
+      }
+    } else if (type === "pathway") {
+      const idx = this.pathways.findIndex((pw) => pw.id === item.id);
+      if (idx > 0) {
+        const temp = this.pathways[idx];
+        this.pathways[idx] = this.pathways[idx - 1];
+        this.pathways[idx - 1] = temp;
+      }
+    }
+    this.notifyLayersChange();
+    this.render();
+  }
+
+  bringSelectedItemToFront() {
+    if (!this.selectedItem || !this.selectedItem.item) return;
+    const { type, item } = this.selectedItem;
+    if (type === "panel") {
+      this.panels = this.panels.filter((p) => p.id !== item.id);
+      this.panels.push(item);
+    } else if (type === "cutout") {
+      this.cutouts = this.cutouts.filter((c) => c.id !== item.id);
+      this.cutouts.push(item);
+    } else if (type === "pathway") {
+      this.pathways = this.pathways.filter((pw) => pw.id !== item.id);
+      this.pathways.push(item);
+    }
+    this.notifyLayersChange();
+    this.render();
+  }
+
+  sendSelectedItemToBack() {
+    if (!this.selectedItem || !this.selectedItem.item) return;
+    const { type, item } = this.selectedItem;
+    if (type === "panel") {
+      this.panels = this.panels.filter((p) => p.id !== item.id);
+      this.panels.unshift(item);
+    } else if (type === "cutout") {
+      this.cutouts = this.cutouts.filter((c) => c.id !== item.id);
+      this.cutouts.unshift(item);
+    } else if (type === "pathway") {
+      this.pathways = this.pathways.filter((pw) => pw.id !== item.id);
+      this.pathways.unshift(item);
+    }
+    this.notifyLayersChange();
+    this.render();
+  }
+
+  notifyLayersChange() {
+    if (this.onLayersChange) {
+      this.onLayersChange(this.getLayerState());
+    }
+  }
+
+  getLayerState() {
+    return {
+      order: [...this.layerOrder],
+      opacity: { ...this.layerOpacity },
+      visible: { ...this.layerVisible },
+      cutouts: this.cutouts.map((c) => ({ ...c })),
+      pathways: this.pathways.map((pw) => ({ ...pw })),
+      panelsCount: this.panels.length,
+      panels: this.panels.map((p, idx) => ({ ...p, index: idx + 1 })),
+      imageLoaded: this.image.isLoaded,
+      roofLengthFt: this.roofLengthFt,
+      roofBreadthFt: this.roofBreadthFt,
+      selectedItem: this.selectedItem
+        ? {
+            type: this.selectedItem.type,
+            id: this.selectedItem.item?.id,
+          }
+        : null,
+    };
+  }
+
+  selectComponent(type, id) {
+    if (!type) {
+      this.selectItem(null, null);
+      return;
+    }
+    if (type === "roof") {
+      this.selectItem("roof", {
+        id: "roof_main",
+        type: "roof",
+        shape: "rectangle",
+        lengthFt: this.roofLengthFt,
+        breadthFt: this.roofBreadthFt,
+        label: "Base Roof",
+        opacity: this.roofOpacity,
+      });
+      return;
+    }
+    if (type === "image") {
+      this.selectItem("image", {
+        id: "roof_image",
+        type: "image",
+        label: "Aerial Image",
+        opacity: this.image.opacity,
+        scale: this.image.scale,
+      });
+      return;
+    }
+    if (type === "panel") {
+      const p = this.panels.find((item) => item.id === id);
+      if (p) this.selectItem("panel", p);
+      return;
+    }
+    if (type === "cutout") {
+      const c = this.cutouts.find((item) => item.id === id);
+      if (c) this.selectItem("cutout", c);
+      return;
+    }
+    if (type === "pathway") {
+      const pw = this.pathways.find((item) => item.id === id);
+      if (pw) this.selectItem("pathway", pw);
+      return;
+    }
+  }
+
+  setComponentOpacity(type, id, opacity) {
+    const op = Math.max(0.05, Math.min(1.0, Number(opacity)));
+    if (type === "roof") {
+      this.setLayerOpacity("roof", op);
+      return;
+    }
+    if (type === "image") {
+      this.setImageOpacity(op);
+      return;
+    }
+    let target = null;
+    if (type === "panel") target = this.panels.find((p) => p.id === id);
+    else if (type === "cutout") target = this.cutouts.find((c) => c.id === id);
+    else if (type === "pathway") target = this.pathways.find((pw) => pw.id === id);
+
+    if (target) {
+      target.opacity = op;
+      if (this.selectedItem && this.selectedItem.item && this.selectedItem.item.id === id) {
+        this.selectedItem.item.opacity = op;
+        if (this.onSelectionChange) this.onSelectionChange(this.selectedItem);
+      }
+      this.notifyLayersChange();
+      this.render();
+    }
+  }
+
+  moveComponent(type, id, direction) {
+    let arr = null;
+    if (type === "panel") arr = this.panels;
+    else if (type === "cutout") arr = this.cutouts;
+    else if (type === "pathway") arr = this.pathways;
+    if (!arr) return;
+
+    const idx = arr.findIndex((item) => item.id === id);
+    if (idx === -1) return;
+
+    if (direction === "up" && idx < arr.length - 1) {
+      const temp = arr[idx];
+      arr[idx] = arr[idx + 1];
+      arr[idx + 1] = temp;
+    } else if (direction === "down" && idx > 0) {
+      const temp = arr[idx];
+      arr[idx] = arr[idx - 1];
+      arr[idx - 1] = temp;
+    }
+    this.notifyLayersChange();
+    this.render();
+  }
+
+  removeComponent(type, id) {
+    if (type === "panel") {
+      this.panels = this.panels.filter((p) => p.id !== id);
+    } else if (type === "cutout") {
+      this.cutouts = this.cutouts.filter((c) => c.id !== id);
+    } else if (type === "pathway") {
+      this.pathways = this.pathways.filter((pw) => pw.id !== id);
+    }
+    if (this.selectedItem && this.selectedItem.item && this.selectedItem.item.id === id) {
+      this.selectItem(null, null);
+    }
+    this.notifyChanges();
+    this.notifyLayersChange();
     this.render();
   }
 
@@ -762,6 +1065,7 @@ export class RooftopCAD {
         islandsCount: this.getIslands().length,
       });
     }
+    this.notifyLayersChange();
   }
 
   // ================= 8-POINT RESIZE HANDLES & EVENT LOGIC =================
@@ -901,70 +1205,75 @@ export class RooftopCAD {
       return;
     }
 
-    // Check if clicked on a panel
-    for (let i = this.panels.length - 1; i >= 0; i--) {
-      const p = this.panels[i];
-      if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) {
-        this.selectItem("panel", p);
-        this.dragItem = p;
-        this.dragStartSnapshot = { x: p.x, y: p.y };
-        this.dragMode = "drag_item";
-        this.dragOffset = { x: x - p.x, y: y - p.y };
-        return;
-      }
-    }
+    // Hit-test interactive elements according to dynamic layerOrder (topmost visible layer tested first)
+    for (let lIdx = this.layerOrder.length - 1; lIdx >= 0; lIdx--) {
+      const layer = this.layerOrder[lIdx];
+      if (!this.layerVisible[layer]) continue;
 
-    // Check if clicked on a cutout
-    for (let i = this.cutouts.length - 1; i >= 0; i--) {
-      const c = this.cutouts[i];
-      let inside = false;
-      if (c.shape === "circle") {
-        const cx = c.x + c.w / 2;
-        const cy = c.y + c.h / 2;
-        const r = c.radius || c.w / 2;
-        inside = (x - cx) ** 2 + (y - cy) ** 2 <= r ** 2;
-      } else if (c.shape === "l_shape") {
-        const inV = x >= c.x && x <= c.x + c.w * 0.5 && y >= c.y && y <= c.y + c.h;
-        const inH = x >= c.x && x <= c.x + c.w && y >= c.y + c.h * 0.5 && y <= c.y + c.h;
-        inside = inV || inH;
-      } else {
-        inside = x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h;
-      }
+      if (layer === "panels") {
+        for (let i = this.panels.length - 1; i >= 0; i--) {
+          const p = this.panels[i];
+          if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) {
+            this.selectItem("panel", p);
+            this.dragItem = p;
+            this.dragStartSnapshot = { x: p.x, y: p.y };
+            this.dragMode = "drag_item";
+            this.dragOffset = { x: x - p.x, y: y - p.y };
+            return;
+          }
+        }
+      } else if (layer === "cutouts") {
+        for (let i = this.cutouts.length - 1; i >= 0; i--) {
+          const c = this.cutouts[i];
+          let inside = false;
+          if (c.shape === "circle") {
+            const cx = c.x + c.w / 2;
+            const cy = c.y + c.h / 2;
+            const r = c.radius || c.w / 2;
+            inside = (x - cx) ** 2 + (y - cy) ** 2 <= r ** 2;
+          } else if (c.shape === "l_shape") {
+            const inV = x >= c.x && x <= c.x + c.w * 0.5 && y >= c.y && y <= c.y + c.h;
+            const inH = x >= c.x && x <= c.x + c.w && y >= c.y + c.h * 0.5 && y <= c.y + c.h;
+            inside = inV || inH;
+          } else {
+            inside = x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h;
+          }
 
-      if (inside) {
-        this.selectItem("cutout", c);
-        this.dragItem = c;
-        this.dragStartSnapshot = { x: c.x, y: c.y };
-        this.dragMode = "drag_item";
-        this.dragOffset = { x: x - c.x, y: y - c.y };
-        return;
+          if (inside) {
+            this.selectItem("cutout", c);
+            this.dragItem = c;
+            this.dragStartSnapshot = { x: c.x, y: c.y };
+            this.dragMode = "drag_item";
+            this.dragOffset = { x: x - c.x, y: y - c.y };
+            return;
+          }
+        }
+      } else if (layer === "pathways") {
+        for (let i = this.pathways.length - 1; i >= 0; i--) {
+          const pw = this.pathways[i];
+          if (x >= pw.x && x <= pw.x + pw.w && y >= pw.y && y <= pw.y + pw.h) {
+            this.selectItem("pathway", pw);
+            this.dragItem = pw;
+            this.dragStartSnapshot = { x: pw.x, y: pw.y };
+            this.dragMode = "drag_item";
+            this.dragOffset = { x: x - pw.x, y: y - pw.y };
+            return;
+          }
+        }
+      } else if (layer === "roof") {
+        if (x >= this.roofX && x <= this.roofX + this.roofW && y >= this.roofY && y <= this.roofY + this.roofH) {
+          this.selectItem("roof", {
+            id: "roof_main",
+            type: "roof",
+            shape: "rectangle",
+            lengthFt: this.roofLengthFt,
+            breadthFt: this.roofBreadthFt,
+            label: "Base Roof",
+            opacity: this.roofOpacity,
+          });
+          return;
+        }
       }
-    }
-
-    // Check if clicked on a pathway
-    for (let i = this.pathways.length - 1; i >= 0; i--) {
-      const pw = this.pathways[i];
-      if (x >= pw.x && x <= pw.x + pw.w && y >= pw.y && y <= pw.y + pw.h) {
-        this.selectItem("pathway", pw);
-        this.dragItem = pw;
-        this.dragStartSnapshot = { x: pw.x, y: pw.y };
-        this.dragMode = "drag_item";
-        this.dragOffset = { x: x - pw.x, y: y - pw.y };
-        return;
-      }
-    }
-
-    // Check if clicked inside base roof
-    if (x >= this.roofX && x <= this.roofX + this.roofW && y >= this.roofY && y <= this.roofY + this.roofH) {
-      this.selectItem("roof", {
-        id: "roof_main",
-        type: "roof",
-        shape: "rectangle",
-        lengthFt: this.roofLengthFt,
-        breadthFt: this.roofBreadthFt,
-        label: "Base Roof",
-      });
-      return;
     }
 
     // Clicked empty canvas outside roof
@@ -1183,30 +1492,32 @@ export class RooftopCAD {
     // Layer 1: Modern Dark Engineering Grid Background
     this.drawGrid(logicalW, logicalH);
 
-    // Layer 2: Clipped Imported Roof / Aerial Image
-    if (this.image.isLoaded && this.image.element) {
-      this.drawClippedImage();
+    // Dynamic Layer Ordering from this.layerOrder
+    for (const layer of this.layerOrder) {
+      if (!this.layerVisible[layer]) continue;
+
+      ctx.save();
+      const baseAlpha = this.layerOpacity[layer] ?? 1.0;
+
+      if (layer === "image") {
+        if (this.image.isLoaded && this.image.element) {
+          this.drawClippedImage(baseAlpha);
+        }
+      } else if (layer === "roof") {
+        this.drawRoofBoundary(baseAlpha);
+      } else if (layer === "pathways") {
+        this.drawPathways(baseAlpha);
+      } else if (layer === "cutouts") {
+        this.drawCutouts(baseAlpha);
+      } else if (layer === "panels") {
+        this.drawPanels(baseAlpha);
+      }
+      ctx.restore();
     }
 
-    // Layer 3: Green Usable Roof Area Boundary & Fill
-    this.drawRoofBoundary();
-
-    // Layer 4: Custom Pathways / Walkways
-    this.drawPathways();
-
-    // Layer 5: Subtracted Obstacle Areas (Red Cutouts)
-    this.drawCutouts();
-
-    // Layer 6: Solar Panels
-    this.drawPanels();
-
-    // Layer 7: Drawing Preview & Snap Guides
+    // Overlays, gizmos and annotations
     this.drawInteractiveOverlays();
-
-    // Layer 8: 8-Point Transform Handles on Selected Item
     this.drawSelectionGizmo();
-
-    // Layer 9: Dimension Lines & Annotations
     this.drawDimensions();
 
     ctx.restore();
@@ -1233,7 +1544,7 @@ export class RooftopCAD {
     ctx.stroke();
   }
 
-  drawClippedImage() {
+  drawClippedImage(layerAlpha = 1.0) {
     const ctx = this.ctx;
     ctx.save();
 
@@ -1241,7 +1552,7 @@ export class RooftopCAD {
     ctx.rect(this.roofX, this.roofY, this.roofW, this.roofH);
     ctx.clip();
 
-    ctx.globalAlpha = this.image.opacity;
+    ctx.globalAlpha = layerAlpha * (this.image.opacity ?? 0.85);
 
     const cx = this.roofX + this.roofW / 2 + this.image.x;
     const cy = this.roofY + this.roofH / 2 + this.image.y;
@@ -1257,9 +1568,12 @@ export class RooftopCAD {
     ctx.restore();
   }
 
-  drawRoofBoundary() {
+  drawRoofBoundary(layerAlpha = 1.0) {
     const ctx = this.ctx;
-    ctx.fillStyle = this.image.isLoaded ? "rgba(99, 146, 62, 0.2)" : "rgba(34, 197, 94, 0.18)";
+    ctx.save();
+    ctx.globalAlpha = layerAlpha * (this.roofOpacity ?? 1.0);
+
+    ctx.fillStyle = this.image.isLoaded ? "rgba(99, 146, 62, 0.25)" : "rgba(34, 197, 94, 0.22)";
     ctx.fillRect(this.roofX, this.roofY, this.roofW, this.roofH);
 
     ctx.strokeStyle = "#22c55e";
@@ -1279,12 +1593,18 @@ export class RooftopCAD {
     ctx.moveTo(this.roofX + this.roofW, this.roofY + this.roofH - tick);
     ctx.lineTo(this.roofX + this.roofW, this.roofY + this.roofH + tick);
     ctx.stroke();
+
+    ctx.restore();
   }
 
-  drawPathways() {
+  drawPathways(layerAlpha = 1.0) {
     const ctx = this.ctx;
     this.pathways.forEach((pw) => {
       const isSelected = this.selectedItem && this.selectedItem.item && this.selectedItem.item.id === pw.id;
+      const alpha = layerAlpha * (pw.opacity ?? 1.0);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
 
       ctx.fillStyle = "rgba(234, 179, 8, 0.25)";
       ctx.fillRect(pw.x, pw.y, pw.w, pw.h);
@@ -1316,14 +1636,20 @@ export class RooftopCAD {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(pw.label || "Walkway", pw.x + pw.w / 2, pw.y + pw.h / 2);
+
+      ctx.restore();
     });
   }
 
-  drawCutouts() {
+  drawCutouts(layerAlpha = 1.0) {
     const ctx = this.ctx;
 
     this.cutouts.forEach((c) => {
       const isSelected = this.selectedItem && this.selectedItem.item && this.selectedItem.item.id === c.id;
+      const alpha = layerAlpha * (c.opacity ?? 1.0);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
 
       if (c.shape === "circle") {
         const cx = c.x + c.w / 2;
@@ -1431,25 +1757,31 @@ export class RooftopCAD {
         const area = Math.round(c.lengthFt * c.breadthFt);
         ctx.fillText(`${c.label} (-${area} sq ft)`, c.x + c.w / 2, c.y + c.h / 2);
       }
+
+      ctx.restore();
     });
   }
 
-  drawPanels() {
+  drawPanels(layerAlpha = 1.0) {
     const ctx = this.ctx;
 
     this.panels.forEach((p, idx) => {
       const isSelected = this.selectedItem && this.selectedItem.item && this.selectedItem.item.id === p.id;
+      const alpha = layerAlpha * (p.opacity ?? 1.0);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
 
       ctx.fillStyle = isSelected ? "#1e3a8a" : "#0f172a";
       ctx.fillRect(p.x, p.y, p.w, p.h);
 
       const grad = ctx.createLinearGradient(p.x, p.y, p.x + p.w, p.y + p.h);
-      grad.addColorStop(0, "rgba(56, 189, 248, 0.25)");
-      grad.addColorStop(1, "rgba(30, 58, 138, 0.05)");
+      grad.addColorStop(0, "rgba(56, 189, 248, 0.35)");
+      grad.addColorStop(1, "rgba(30, 58, 138, 0.08)");
       ctx.fillStyle = grad;
       ctx.fillRect(p.x, p.y, p.w, p.h);
 
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
       ctx.lineWidth = 0.75;
       ctx.beginPath();
       ctx.moveTo(p.x, p.y + p.h * 0.33);
@@ -1465,10 +1797,12 @@ export class RooftopCAD {
       ctx.strokeRect(p.x, p.y, p.w, p.h);
 
       ctx.font = "bold 8px Inter, sans-serif";
-      ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(idx + 1, p.x + p.w / 2, p.y + p.h / 2);
+
+      ctx.restore();
     });
   }
 

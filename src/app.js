@@ -1048,6 +1048,264 @@ function render() {
 
 let cadListenersAttached = false;
 
+function renderLayersPanel(cad, state) {
+  const container = $("cadLayersList");
+  if (!container || !state) return;
+
+  const totalLayersCount = $("cadLayersTotalCount");
+  if (totalLayersCount) {
+    const activeElements =
+      (state.cutouts?.length || 0) +
+      (state.pathways?.length || 0) +
+      (state.panelsCount || 0) +
+      (state.imageLoaded ? 1 : 0) +
+      1;
+    totalLayersCount.textContent = `${state.order.length} Layers (${activeElements} items)`;
+  }
+
+  // Display topmost layer at the top of the stack (standard CAD hierarchy)
+  const displayOrder = [...state.order].reverse();
+
+  let html = "";
+
+  displayOrder.forEach((layerName) => {
+    const isVisible = state.visible[layerName] !== false;
+    const opacity = state.opacity[layerName] ?? 1.0;
+    const opacityPercent = Math.round(opacity * 100);
+
+    let layerIcon = "📄";
+    let layerTitle = layerName;
+    let countBadge = "";
+    let itemsHtml = "";
+    let isLayerActive = false;
+
+    if (layerName === "panels") {
+      layerIcon = "☀️";
+      layerTitle = "Solar Panels";
+      countBadge = `${state.panelsCount} placed`;
+      isLayerActive = state.selectedItem && state.selectedItem.type === "panel";
+
+      if (state.panels && state.panels.length > 0) {
+        itemsHtml = state.panels
+          .map((p) => {
+            const isItemActive = state.selectedItem && state.selectedItem.id === p.id;
+            const pOpPercent = Math.round((p.opacity ?? 1.0) * 100);
+            return `
+              <div class="cad-component-row ${isItemActive ? "active" : ""}" data-comp-type="panel" data-comp-id="${p.id}" title="Click to select on canvas">
+                <div class="cad-component-info">
+                  <span>☀️</span>
+                  <span>Panel #${p.index}</span>
+                  <span style="color: #64748b; font-size: 10px;">(${pOpPercent}%)</span>
+                </div>
+                <div class="cad-component-actions">
+                  <button type="button" class="cad-layer-btn comp-move-up-btn" data-type="panel" data-id="${p.id}" title="Move Up in stack">🔼</button>
+                  <button type="button" class="cad-layer-btn comp-move-down-btn" data-type="panel" data-id="${p.id}" title="Move Down in stack">🔽</button>
+                  <button type="button" class="cad-layer-btn comp-del-btn" data-type="panel" data-id="${p.id}" style="color: #f87171;" title="Return to latent pool">✕</button>
+                </div>
+              </div>
+            `;
+          })
+          .join("");
+      } else {
+        itemsHtml = `<div style="font-size: 10.5px; color: #64748b; padding: 4px 6px; font-style: italic;">No panels placed yet (Latent pool ready)</div>`;
+      }
+    } else if (layerName === "cutouts") {
+      layerIcon = "➖";
+      layerTitle = "Cutout Obstacles";
+      countBadge = `${state.cutouts.length} zones`;
+      isLayerActive = state.selectedItem && state.selectedItem.type === "cutout";
+
+      if (state.cutouts && state.cutouts.length > 0) {
+        itemsHtml = state.cutouts
+          .map((c, idx) => {
+            const isItemActive = state.selectedItem && state.selectedItem.id === c.id;
+            const shapeIcon = c.shape === "circle" ? "⚪" : c.shape === "l_shape" ? "⌐" : "▭";
+            const cOpPercent = Math.round((c.opacity ?? 1.0) * 100);
+            return `
+              <div class="cad-component-row ${isItemActive ? "active" : ""}" data-comp-type="cutout" data-comp-id="${c.id}" title="Click to select on canvas">
+                <div class="cad-component-info">
+                  <span>${shapeIcon}</span>
+                  <span>${c.label || "Cutout " + (idx + 1)}</span>
+                  <span style="color: #ef4444; font-size: 10px;">(${cOpPercent}%)</span>
+                </div>
+                <div class="cad-component-actions">
+                  <button type="button" class="cad-layer-btn comp-move-up-btn" data-type="cutout" data-id="${c.id}" title="Move Up in stack">🔼</button>
+                  <button type="button" class="cad-layer-btn comp-move-down-btn" data-type="cutout" data-id="${c.id}" title="Move Down in stack">🔽</button>
+                  <button type="button" class="cad-layer-btn comp-del-btn" data-type="cutout" data-id="${c.id}" style="color: #f87171;" title="Delete obstacle">✕</button>
+                </div>
+              </div>
+            `;
+          })
+          .join("");
+      } else {
+        itemsHtml = `<div style="font-size: 10.5px; color: #64748b; padding: 4px 6px; font-style: italic;">No cutouts drawn</div>`;
+      }
+    } else if (layerName === "pathways") {
+      layerIcon = "🚶";
+      layerTitle = "Walkways";
+      countBadge = `${state.pathways.length} corridors`;
+      isLayerActive = state.selectedItem && state.selectedItem.type === "pathway";
+
+      if (state.pathways && state.pathways.length > 0) {
+        itemsHtml = state.pathways
+          .map((pw, idx) => {
+            const isItemActive = state.selectedItem && state.selectedItem.id === pw.id;
+            const pwOpPercent = Math.round((pw.opacity ?? 1.0) * 100);
+            return `
+              <div class="cad-component-row ${isItemActive ? "active" : ""}" data-comp-type="pathway" data-comp-id="${pw.id}" title="Click to select on canvas">
+                <div class="cad-component-info">
+                  <span>🚶</span>
+                  <span>${pw.label || "Walkway " + (idx + 1)}</span>
+                  <span style="color: #eab308; font-size: 10px;">(${pwOpPercent}%)</span>
+                </div>
+                <div class="cad-component-actions">
+                  <button type="button" class="cad-layer-btn comp-move-up-btn" data-type="pathway" data-id="${pw.id}" title="Move Up in stack">🔼</button>
+                  <button type="button" class="cad-layer-btn comp-move-down-btn" data-type="pathway" data-id="${pw.id}" title="Move Down in stack">🔽</button>
+                  <button type="button" class="cad-layer-btn comp-del-btn" data-type="pathway" data-id="${pw.id}" style="color: #f87171;" title="Delete walkway">✕</button>
+                </div>
+              </div>
+            `;
+          })
+          .join("");
+      } else {
+        itemsHtml = `<div style="font-size: 10.5px; color: #64748b; padding: 4px 6px; font-style: italic;">No walkways placed</div>`;
+      }
+    } else if (layerName === "roof") {
+      layerIcon = "📐";
+      layerTitle = "Base Roof Boundary";
+      countBadge = `${state.roofLengthFt || 30} × ${state.roofBreadthFt || 20} ft`;
+      isLayerActive = state.selectedItem && state.selectedItem.type === "roof";
+      itemsHtml = `
+        <div class="cad-component-row ${isLayerActive ? "active" : ""}" data-comp-type="roof" data-comp-id="roof_main" title="Click to select base roof">
+          <div class="cad-component-info">
+            <span>🟢</span>
+            <span>Measured Boundary (${(state.roofLengthFt || 30) * (state.roofBreadthFt || 20)} sq ft)</span>
+          </div>
+        </div>
+      `;
+    } else if (layerName === "image") {
+      layerIcon = "🖼️";
+      layerTitle = "Aerial Roof Image";
+      countBadge = state.imageLoaded ? "Active" : "None";
+      isLayerActive = state.selectedItem && state.selectedItem.type === "image";
+      itemsHtml = `
+        <div class="cad-component-row ${isLayerActive ? "active" : ""}" data-comp-type="image" data-comp-id="roof_image" title="Click to select image">
+          <div class="cad-component-info">
+            <span>🖼️</span>
+            <span>${state.imageLoaded ? "Imported Site Photo" : "No image imported"}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    html += `
+      <div class="cad-layer-card ${isLayerActive ? "active" : ""}" data-layer-name="${layerName}">
+        <div class="cad-layer-top-row">
+          <div class="cad-layer-title" data-layer-name="${layerName}" title="Layer: ${layerTitle}">
+            <span>${layerIcon}</span>
+            <span>${layerTitle}</span>
+            <span style="font-size: 10px; color: #94a3b8; font-weight: 500;">(${countBadge})</span>
+          </div>
+          <div class="cad-layer-actions">
+            <button type="button" class="cad-layer-btn layer-vis-btn" data-layer="${layerName}" title="${isVisible ? "Hide Layer" : "Show Layer"}">${isVisible ? "👁️" : "🕶️"}</button>
+            <button type="button" class="cad-layer-btn layer-up-btn" data-layer="${layerName}" title="Move Layer Up (draw on top of other layers)">🔼</button>
+            <button type="button" class="cad-layer-btn layer-down-btn" data-layer="${layerName}" title="Move Layer Down (draw below other layers)">🔽</button>
+          </div>
+        </div>
+
+        <div class="cad-layer-slider-row">
+          <span>Layer Opacity:</span>
+          <input type="range" class="layer-opacity-slider" data-layer="${layerName}" min="0.1" max="1.0" step="0.05" value="${opacity}">
+          <span style="min-width: 28px; text-align: right; font-variant-numeric: tabular-nums;">${opacityPercent}%</span>
+        </div>
+
+        <div class="cad-layer-items-list">
+          ${itemsHtml}
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+
+  // Event handlers for layer controls
+  container.querySelectorAll(".layer-vis-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const lName = btn.getAttribute("data-layer");
+      cad.setLayerVisibility(lName, !state.visible[lName]);
+    });
+  });
+
+  container.querySelectorAll(".layer-up-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const lName = btn.getAttribute("data-layer");
+      cad.moveLayerUp(lName);
+    });
+  });
+
+  container.querySelectorAll(".layer-down-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const lName = btn.getAttribute("data-layer");
+      cad.moveLayerDown(lName);
+    });
+  });
+
+  container.querySelectorAll(".layer-opacity-slider").forEach((slider) => {
+    slider.addEventListener("input", (e) => {
+      const lName = slider.getAttribute("data-layer");
+      cad.setLayerOpacity(lName, Number(e.target.value));
+    });
+  });
+
+  // Component row selection
+  container.querySelectorAll(".cad-component-row").forEach((row) => {
+    row.addEventListener("click", (e) => {
+      if (
+        e.target.closest(".comp-move-up-btn") ||
+        e.target.closest(".comp-move-down-btn") ||
+        e.target.closest(".comp-del-btn")
+      ) {
+        return;
+      }
+      const cType = row.getAttribute("data-comp-type");
+      const cId = row.getAttribute("data-comp-id");
+      cad.selectComponent(cType, cId);
+    });
+  });
+
+  // Component move up / down
+  container.querySelectorAll(".comp-move-up-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const cType = btn.getAttribute("data-type");
+      const cId = btn.getAttribute("data-id");
+      cad.moveComponent(cType, cId, "up");
+    });
+  });
+
+  container.querySelectorAll(".comp-move-down-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const cType = btn.getAttribute("data-type");
+      const cId = btn.getAttribute("data-id");
+      cad.moveComponent(cType, cId, "down");
+    });
+  });
+
+  // Component delete
+  container.querySelectorAll(".comp-del-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const cType = btn.getAttribute("data-type");
+      const cId = btn.getAttribute("data-id");
+      cad.removeComponent(cType, cId);
+    });
+  });
+}
+
 function setupCadEventListeners(cad) {
   if (cadListenersAttached) return;
   cadListenersAttached = true;
@@ -1081,10 +1339,19 @@ function setupCadEventListeners(cad) {
 
   toolBtns.forEach(({ id, tool }) => {
     $(id)?.addEventListener("click", () => {
-      toolBtns.forEach(t => $(t.id)?.classList.remove("active"));
+      toolBtns.forEach((t) => $(t.id)?.classList.remove("active"));
       $(id)?.classList.add("active");
       cad.setTool(tool);
     });
+  });
+
+  // Toggle Layers Panel button
+  $("cadToggleLayersBtn")?.addEventListener("click", () => {
+    const panel = $("cadLayersPanel");
+    const btn = $("cadToggleLayersBtn");
+    if (!panel) return;
+    const isHidden = panel.classList.toggle("hidden");
+    btn?.classList.toggle("active", !isHidden);
   });
 
   // Shape picker buttons for Cutouts (Rectangle, Circle, L-Shape)
@@ -1096,11 +1363,11 @@ function setupCadEventListeners(cad) {
 
   shapeBtns.forEach(({ id, shape }) => {
     $(id)?.addEventListener("click", () => {
-      shapeBtns.forEach(s => $(s.id)?.classList.remove("active"));
+      shapeBtns.forEach((s) => $(s.id)?.classList.remove("active"));
       $(id)?.classList.add("active");
       cad.setShapeType(shape);
       // Switch active tool to subtract
-      toolBtns.forEach(t => $(t.id)?.classList.remove("active"));
+      toolBtns.forEach((t) => $(t.id)?.classList.remove("active"));
       $("cadToolSubtractBtn")?.classList.add("active");
       cad.setTool("subtract");
     });
@@ -1121,6 +1388,9 @@ function setupCadEventListeners(cad) {
     const areaVal = $("inspectorAreaValue");
     const delBtn = $("inspectorDeleteBtn");
     const deselectBtn = $("inspectorDeselectBtn");
+    const opacityInput = $("inspectorOpacity");
+    const opacityVal = $("inspectorOpacityVal");
+    const zOrderGroup = $("inspectorZOrderGroup");
 
     if (!sel || !sel.item || sel.type === "roof") {
       if (icon) icon.textContent = "🟢";
@@ -1134,12 +1404,20 @@ function setupCadEventListeners(cad) {
       if (areaVal) areaVal.textContent = `${Math.round(cad.roofLengthFt * cad.roofBreadthFt)} sq ft`;
       if (delBtn) delBtn.style.display = "none";
       if (deselectBtn) deselectBtn.style.display = sel ? "inline-flex" : "none";
+      if (opacityInput) opacityInput.value = cad.roofOpacity || 1.0;
+      if (opacityVal) opacityVal.textContent = `${Math.round((cad.roofOpacity || 1.0) * 100)}%`;
+      if (zOrderGroup) zOrderGroup.style.display = "none";
       return;
     }
 
     const it = sel.item;
     if (deselectBtn) deselectBtn.style.display = "inline-flex";
     if (delBtn) delBtn.style.display = "inline-flex";
+
+    const itemOpacity = it.opacity ?? 1.0;
+    if (opacityInput) opacityInput.value = itemOpacity;
+    if (opacityVal) opacityVal.textContent = `${Math.round(itemOpacity * 100)}%`;
+    if (zOrderGroup) zOrderGroup.style.display = "flex";
 
     if (sel.type === "cutout") {
       if (it.shape === "circle") {
@@ -1150,7 +1428,7 @@ function setupCadEventListeners(cad) {
         if (lenGroup) lenGroup.style.display = "none";
         if (brGroup) brGroup.style.display = "none";
         if (diaGroup) diaGroup.style.display = "flex";
-        if (diaInput) diaInput.value = it.diameterFt || Number((it.radius * 2 / cad.scalePxPerFt).toFixed(1));
+        if (diaInput) diaInput.value = it.diameterFt || Number(((it.radius * 2) / cad.scalePxPerFt).toFixed(1));
         const rFt = (it.radius || it.w / 2) / cad.scalePxPerFt;
         if (areaVal) areaVal.textContent = `${Math.round(Math.PI * rFt * rFt)} sq ft`;
       } else if (it.shape === "l_shape") {
@@ -1197,11 +1475,28 @@ function setupCadEventListeners(cad) {
       if (brInput) brInput.value = (it.h / cad.scalePxPerFt).toFixed(1);
       if (diaGroup) diaGroup.style.display = "none";
       if (areaVal) areaVal.textContent = `${Math.round((it.w * it.h) / (cad.scalePxPerFt * cad.scalePxPerFt))} sq ft`;
+    } else if (sel.type === "image") {
+      if (icon) icon.textContent = "🖼️";
+      if (title) title.textContent = "Aerial Image";
+      if (labelGroup) labelGroup.style.display = "none";
+      if (lenGroup) lenGroup.style.display = "none";
+      if (brGroup) brGroup.style.display = "none";
+      if (diaGroup) diaGroup.style.display = "none";
+      if (areaVal) areaVal.textContent = "Site Photo";
+      if (delBtn) delBtn.style.display = "none";
+      if (zOrderGroup) zOrderGroup.style.display = "none";
     }
   };
 
   cad.onSelectionChange = (sel) => {
     updateInspectorUI(sel);
+  };
+
+  cad.onLayersChange = (layerState) => {
+    renderLayersPanel(cad, layerState);
+    if (cad.selectedItem) {
+      updateInspectorUI(cad.selectedItem);
+    }
   };
 
   // Two-way Inspector Input Listeners
@@ -1233,6 +1528,24 @@ function setupCadEventListeners(cad) {
     cad.updateSelectedItem({ label: e.target.value });
   });
 
+  $("inspectorOpacity")?.addEventListener("input", (e) => {
+    const val = Number(e.target.value);
+    if ($("inspectorOpacityVal")) $("inspectorOpacityVal").textContent = `${Math.round(val * 100)}%`;
+    if (!cad.selectedItem || cad.selectedItem.type === "roof") {
+      cad.setLayerOpacity("roof", val);
+    } else if (cad.selectedItem.type === "image") {
+      cad.setImageOpacity(val);
+      if ($("cadOpacitySlider")) $("cadOpacitySlider").value = val;
+    } else {
+      cad.updateSelectedItem({ opacity: val });
+    }
+  });
+
+  $("inspectorMoveUpBtn")?.addEventListener("click", () => cad.moveSelectedItemUp());
+  $("inspectorMoveDownBtn")?.addEventListener("click", () => cad.moveSelectedItemDown());
+  $("inspectorBringToFrontBtn")?.addEventListener("click", () => cad.bringSelectedItemToFront());
+  $("inspectorSendToBackBtn")?.addEventListener("click", () => cad.sendSelectedItemToBack());
+
   $("inspectorDeleteBtn")?.addEventListener("click", () => {
     cad.removeSelectedItem();
   });
@@ -1248,6 +1561,9 @@ function setupCadEventListeners(cad) {
   $("cadAddHorizPathwayBtn")?.addEventListener("click", () => cad.addDefaultHorizontalPathway());
   $("cadClearPanelsBtn")?.addEventListener("click", () => cad.clearAllPanels());
   $("cadClearCutoutsBtn")?.addEventListener("click", () => cad.clearAllCutouts());
+
+  // Render initial Layers Panel
+  renderLayersPanel(cad, cad.getLayerState());
 
   // Image import
   const imgInput = $("cadImageInput");
@@ -1356,6 +1672,9 @@ function renderDiagram(pl, input) {
           $("cadIslandsCount").textContent = `${pStats.islandsCount} Array Island${pStats.islandsCount === 1 ? "" : "s"}`;
         }
       },
+      onLayersChange: (layerState) => {
+        renderLayersPanel(cad, layerState);
+      },
     });
     setupCadEventListeners(cad);
     // NOTE: All panels remain LATENT initially (cad.panels = [])
@@ -1372,6 +1691,7 @@ function renderDiagram(pl, input) {
     const remaining = Math.max(0, pl.numPanels - cad.panels.length);
     $("cadInventoryCount").textContent = `${cad.panels.length} / ${pl.numPanels} Placed (${remaining} Remaining)`;
   }
+  renderLayersPanel(cad, cad.getLayerState());
 }
 
 
