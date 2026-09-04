@@ -609,12 +609,12 @@
             <!-- TOOLBAR ROW 1: Dimensions & Active Drawing Tool -->
             <div class="cad-toolbar">
               <div class="cad-input-group">
-                <label for="cadRoofLength">Length:</label>
+                <label for="cadRoofLength">Roof L:</label>
                 <input type="number" id="cadRoofLength" value="30" min="5" step="1">
                 <span>ft</span>
               </div>
               <div class="cad-input-group">
-                <label for="cadRoofBreadth">Breadth:</label>
+                <label for="cadRoofBreadth">B:</label>
                 <input type="number" id="cadRoofBreadth" value="20" min="5" step="1">
                 <span>ft</span>
               </div>
@@ -624,11 +624,19 @@
                 <span>ft</span>
               </div>
 
-              <div style="display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap;">
-                <button type="button" class="cad-btn active" id="cadToolPanelBtn" data-tool="panel" title="Move and snap solar panels">☀️ Move Panels</button>
-                <button type="button" class="cad-btn" id="cadToolSubtractBtn" data-tool="subtract" title="Draw obstacle to subtract (marked in Red)">➖ Cutout (Red)</button>
-                <button type="button" class="cad-btn" id="cadToolPathwayBtn" data-tool="pathway" title="Draw maintenance pathway corridor">🚶 Walkway</button>
-                <button type="button" class="cad-btn" id="cadToolRoofBtn" data-tool="roof" title="Drag to draw new roof rectangle">📐 Draw Roof</button>
+              <div class="cad-tool-palette" style="display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; align-items: center;">
+                <button type="button" class="cad-btn active" id="cadToolSelectBtn" data-tool="select" title="Select, inspect & resize elements (V)">↖️ Select</button>
+                <button type="button" class="cad-btn" id="cadToolRoofBtn" data-tool="roof" title="Drag to draw base roof rectangle">📐 Draw Roof</button>
+
+                <div class="cad-shape-picker" id="cadCutoutShapePicker">
+                  <button type="button" class="cad-btn" id="cadToolSubtractBtn" data-tool="subtract" title="Subtract obstacle zone (marked in Red)" style="border: none; background: transparent; padding: 2px 6px;">➖ Cutout (Red):</button>
+                  <button type="button" class="cad-shape-btn active" id="cadShapeRectBtn" data-shape="rectangle" title="Rectangle Obstacle">▭ Rect</button>
+                  <button type="button" class="cad-shape-btn" id="cadShapeCircleBtn" data-shape="circle" title="Round Obstacle (e.g. Water Tank)">⚪ Circle</button>
+                  <button type="button" class="cad-shape-btn" id="cadShapeLBtn" data-shape="l_shape" title="L-Shape Obstacle">⌐ L-Shape</button>
+                </div>
+
+                <button type="button" class="cad-btn" id="cadToolPathwayBtn" data-tool="pathway" title="Draw custom maintenance pathway corridor">🚶 Walkway</button>
+                <button type="button" class="cad-btn" id="cadToolPanelBtn" data-tool="panel" title="Move & snap solar panels">☀️ Move Panels</button>
                 <button type="button" class="cad-btn" id="cadToolPanBtn" data-tool="image_pan" title="Drag to move imported image inside roof">✋ Move Image</button>
               </div>
             </div>
@@ -637,21 +645,60 @@
             <div class="cad-toolbar" style="background: #0f172a; border-color: #1e293b; color: #ffffff;">
               <div class="cad-inventory-pill" id="cadInventoryPill">
                 <span>📦 Latent Pool:</span>
-                <strong id="cadInventoryCount">12 / 12 Placed</strong>
+                <strong id="cadInventoryCount">0 / 12 Placed (12 Remaining)</strong>
               </div>
               <button type="button" class="cad-btn" id="cadAddSinglePanelBtn">+ 1 Panel</button>
               <button type="button" class="cad-btn" id="cadAddBlockBtn">+ 2×2 Block</button>
-              <button type="button" class="cad-btn" id="cadAutoPlaceBtn">⚡ Auto-Fill Remaining</button>
+              <button type="button" class="cad-btn" id="cadAutoPlaceBtn" style="border-color: #38bdf8; color: #38bdf8; font-weight: 700;">⚡ Auto-Fill Remaining</button>
               <button type="button" class="cad-btn" id="cadAddHorizPathwayBtn">+ Central Walkway</button>
 
               <div style="display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap;">
-                <button type="button" class="cad-btn" id="cadDeleteSelectedBtn" title="Delete selected panel or obstacle (Del)" style="color: #f87171;">🗑️ Delete</button>
                 <button type="button" class="cad-btn" id="cadClearPanelsBtn" style="color: #f87171;">Reset Panels</button>
                 <button type="button" class="cad-btn" id="cadClearCutoutsBtn" style="color: #f87171;">Clear Cutouts</button>
               </div>
             </div>
 
-            <!-- TOOLBAR ROW 3: Image Import & Manipulation Controls -->
+            <!-- TOOLBAR ROW 3: Contextual Properties Inspector (Editable Dimensions & Resizing) -->
+            <div class="cad-toolbar cad-inspector-toolbar" id="cadInspectorToolbar">
+              <div class="cad-inspector-badge" id="inspectorBadge">
+                <span id="inspectorIcon">🟢</span>
+                <strong id="inspectorTypeTitle">Base Roof</strong>
+              </div>
+
+              <div class="cad-input-group" id="inspectorLabelGroup">
+                <label for="inspectorLabel">Label:</label>
+                <input type="text" id="inspectorLabel" value="Main Roof" style="width: 105px; padding: 3px 6px; font-size: 11.5px;">
+              </div>
+
+              <div class="cad-input-group" id="inspectorLengthGroup">
+                <label for="inspectorLength">Length:</label>
+                <input type="number" id="inspectorLength" value="30" min="1" step="0.5" style="width: 62px;">
+                <span>ft</span>
+              </div>
+
+              <div class="cad-input-group" id="inspectorBreadthGroup">
+                <label for="inspectorBreadth">Breadth:</label>
+                <input type="number" id="inspectorBreadth" value="20" min="1" step="0.5" style="width: 62px;">
+                <span>ft</span>
+              </div>
+
+              <div class="cad-input-group" id="inspectorDiameterGroup" style="display: none;">
+                <label for="inspectorDiameter">Diameter:</label>
+                <input type="number" id="inspectorDiameter" value="6" min="1" step="0.5" style="width: 62px;">
+                <span>ft</span>
+              </div>
+
+              <div class="cad-stats-pill" id="inspectorAreaPill" style="background: #0f172a; border-color: #334155; color: #f1f5f9; padding: 3px 10px;">
+                Area: <strong id="inspectorAreaValue" style="color: #38bdf8;">600 sq ft</strong>
+              </div>
+
+              <div style="display: flex; gap: 6px; margin-left: auto; align-items: center; flex-wrap: wrap;">
+                <button type="button" class="cad-btn" id="inspectorDeleteBtn" style="color: #f87171; border-color: rgba(239, 68, 68, 0.4);" title="Delete selected element (Del)">🗑️ Delete</button>
+                <button type="button" class="cad-btn" id="inspectorDeselectBtn" title="Clear selection">✕ Deselect</button>
+              </div>
+            </div>
+
+            <!-- TOOLBAR ROW 4: Image Import & Manipulation Controls -->
             <div class="cad-toolbar">
               <label class="cad-btn" style="cursor: pointer; background: var(--surface-soft); font-weight: 700; color: var(--brand-green);">
                 🖼️ Import Roof / Aerial Image

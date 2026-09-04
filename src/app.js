@@ -1071,6 +1071,7 @@ function setupCadEventListeners(cad) {
 
   // Tool selection buttons
   const toolBtns = [
+    { id: "cadToolSelectBtn", tool: "select" },
     { id: "cadToolPanelBtn", tool: "panel" },
     { id: "cadToolSubtractBtn", tool: "subtract" },
     { id: "cadToolPathwayBtn", tool: "pathway" },
@@ -1086,12 +1087,165 @@ function setupCadEventListeners(cad) {
     });
   });
 
+  // Shape picker buttons for Cutouts (Rectangle, Circle, L-Shape)
+  const shapeBtns = [
+    { id: "cadShapeRectBtn", shape: "rectangle" },
+    { id: "cadShapeCircleBtn", shape: "circle" },
+    { id: "cadShapeLBtn", shape: "l_shape" },
+  ];
+
+  shapeBtns.forEach(({ id, shape }) => {
+    $(id)?.addEventListener("click", () => {
+      shapeBtns.forEach(s => $(s.id)?.classList.remove("active"));
+      $(id)?.classList.add("active");
+      cad.setShapeType(shape);
+      // Switch active tool to subtract
+      toolBtns.forEach(t => $(t.id)?.classList.remove("active"));
+      $("cadToolSubtractBtn")?.classList.add("active");
+      cad.setTool("subtract");
+    });
+  });
+
+  // Contextual Properties Inspector UI sync
+  const updateInspectorUI = (sel) => {
+    const icon = $("inspectorIcon");
+    const title = $("inspectorTypeTitle");
+    const labelGroup = $("inspectorLabelGroup");
+    const labelInput = $("inspectorLabel");
+    const lenGroup = $("inspectorLengthGroup");
+    const lenInput = $("inspectorLength");
+    const brGroup = $("inspectorBreadthGroup");
+    const brInput = $("inspectorBreadth");
+    const diaGroup = $("inspectorDiameterGroup");
+    const diaInput = $("inspectorDiameter");
+    const areaVal = $("inspectorAreaValue");
+    const delBtn = $("inspectorDeleteBtn");
+    const deselectBtn = $("inspectorDeselectBtn");
+
+    if (!sel || !sel.item || sel.type === "roof") {
+      if (icon) icon.textContent = "🟢";
+      if (title) title.textContent = "Base Roof";
+      if (labelGroup) labelGroup.style.display = "none";
+      if (lenGroup) lenGroup.style.display = "flex";
+      if (lenInput) lenInput.value = cad.roofLengthFt;
+      if (brGroup) brGroup.style.display = "flex";
+      if (brInput) brInput.value = cad.roofBreadthFt;
+      if (diaGroup) diaGroup.style.display = "none";
+      if (areaVal) areaVal.textContent = `${Math.round(cad.roofLengthFt * cad.roofBreadthFt)} sq ft`;
+      if (delBtn) delBtn.style.display = "none";
+      if (deselectBtn) deselectBtn.style.display = sel ? "inline-flex" : "none";
+      return;
+    }
+
+    const it = sel.item;
+    if (deselectBtn) deselectBtn.style.display = "inline-flex";
+    if (delBtn) delBtn.style.display = "inline-flex";
+
+    if (sel.type === "cutout") {
+      if (it.shape === "circle") {
+        if (icon) icon.textContent = "⚪";
+        if (title) title.textContent = "Obstacle (Circle)";
+        if (labelGroup) labelGroup.style.display = "flex";
+        if (labelInput) labelInput.value = it.label || "Round Tank";
+        if (lenGroup) lenGroup.style.display = "none";
+        if (brGroup) brGroup.style.display = "none";
+        if (diaGroup) diaGroup.style.display = "flex";
+        if (diaInput) diaInput.value = it.diameterFt || Number((it.radius * 2 / cad.scalePxPerFt).toFixed(1));
+        const rFt = (it.radius || it.w / 2) / cad.scalePxPerFt;
+        if (areaVal) areaVal.textContent = `${Math.round(Math.PI * rFt * rFt)} sq ft`;
+      } else if (it.shape === "l_shape") {
+        if (icon) icon.textContent = "⌐";
+        if (title) title.textContent = "Obstacle (L-Shape)";
+        if (labelGroup) labelGroup.style.display = "flex";
+        if (labelInput) labelInput.value = it.label || "L-Obstacle";
+        if (lenGroup) lenGroup.style.display = "flex";
+        if (lenInput) lenInput.value = it.lengthFt;
+        if (brGroup) brGroup.style.display = "flex";
+        if (brInput) brInput.value = it.breadthFt;
+        if (diaGroup) diaGroup.style.display = "none";
+        if (areaVal) areaVal.textContent = `${Math.round(it.lengthFt * it.breadthFt * 0.75)} sq ft`;
+      } else {
+        if (icon) icon.textContent = "🔴";
+        if (title) title.textContent = "Obstacle (Rect)";
+        if (labelGroup) labelGroup.style.display = "flex";
+        if (labelInput) labelInput.value = it.label || "Obstacle";
+        if (lenGroup) lenGroup.style.display = "flex";
+        if (lenInput) lenInput.value = it.lengthFt;
+        if (brGroup) brGroup.style.display = "flex";
+        if (brInput) brInput.value = it.breadthFt;
+        if (diaGroup) diaGroup.style.display = "none";
+        if (areaVal) areaVal.textContent = `${Math.round(it.lengthFt * it.breadthFt)} sq ft`;
+      }
+    } else if (sel.type === "pathway") {
+      if (icon) icon.textContent = "🚶";
+      if (title) title.textContent = "Walkway Corridor";
+      if (labelGroup) labelGroup.style.display = "flex";
+      if (labelInput) labelInput.value = it.label || "Walkway";
+      if (lenGroup) lenGroup.style.display = "flex";
+      if (lenInput) lenInput.value = it.lengthFt;
+      if (brGroup) brGroup.style.display = "flex";
+      if (brInput) brInput.value = it.breadthFt;
+      if (diaGroup) diaGroup.style.display = "none";
+      if (areaVal) areaVal.textContent = `${Math.round(it.lengthFt * it.breadthFt)} sq ft`;
+    } else if (sel.type === "panel") {
+      if (icon) icon.textContent = "☀️";
+      if (title) title.textContent = "Solar Panel";
+      if (labelGroup) labelGroup.style.display = "none";
+      if (lenGroup) lenGroup.style.display = "flex";
+      if (lenInput) lenInput.value = (it.w / cad.scalePxPerFt).toFixed(1);
+      if (brGroup) brGroup.style.display = "flex";
+      if (brInput) brInput.value = (it.h / cad.scalePxPerFt).toFixed(1);
+      if (diaGroup) diaGroup.style.display = "none";
+      if (areaVal) areaVal.textContent = `${Math.round((it.w * it.h) / (cad.scalePxPerFt * cad.scalePxPerFt))} sq ft`;
+    }
+  };
+
+  cad.onSelectionChange = (sel) => {
+    updateInspectorUI(sel);
+  };
+
+  // Two-way Inspector Input Listeners
+  $("inspectorLength")?.addEventListener("input", (e) => {
+    const val = Number(e.target.value);
+    if (!cad.selectedItem || cad.selectedItem.type === "roof") {
+      cad.setRoofDimensions(val, cad.roofBreadthFt);
+      if ($("cadRoofLength")) $("cadRoofLength").value = val;
+    } else {
+      cad.updateSelectedItem({ lengthFt: val });
+    }
+  });
+
+  $("inspectorBreadth")?.addEventListener("input", (e) => {
+    const val = Number(e.target.value);
+    if (!cad.selectedItem || cad.selectedItem.type === "roof") {
+      cad.setRoofDimensions(cad.roofLengthFt, val);
+      if ($("cadRoofBreadth")) $("cadRoofBreadth").value = val;
+    } else {
+      cad.updateSelectedItem({ breadthFt: val });
+    }
+  });
+
+  $("inspectorDiameter")?.addEventListener("input", (e) => {
+    cad.updateSelectedItem({ diameterFt: Number(e.target.value) });
+  });
+
+  $("inspectorLabel")?.addEventListener("input", (e) => {
+    cad.updateSelectedItem({ label: e.target.value });
+  });
+
+  $("inspectorDeleteBtn")?.addEventListener("click", () => {
+    cad.removeSelectedItem();
+  });
+
+  $("inspectorDeselectBtn")?.addEventListener("click", () => {
+    cad.selectItem(null, null);
+  });
+
   // Panel placement actions
   $("cadAddSinglePanelBtn")?.addEventListener("click", () => cad.placePanel());
   $("cadAddBlockBtn")?.addEventListener("click", () => cad.placePanelBlock(2, 2));
   $("cadAutoPlaceBtn")?.addEventListener("click", () => cad.autoPlaceRemainingPanels());
   $("cadAddHorizPathwayBtn")?.addEventListener("click", () => cad.addDefaultHorizontalPathway());
-  $("cadDeleteSelectedBtn")?.addEventListener("click", () => cad.removeSelectedItem());
   $("cadClearPanelsBtn")?.addEventListener("click", () => cad.clearAllPanels());
   $("cadClearCutoutsBtn")?.addEventListener("click", () => cad.clearAllCutouts());
 
@@ -1204,15 +1358,9 @@ function renderDiagram(pl, input) {
       },
     });
     setupCadEventListeners(cad);
-
-    // Initial default: Auto-place the required panels
-    cad.autoPlaceRemainingPanels();
+    // NOTE: All panels remain LATENT initially (cad.panels = [])
   } else {
     cad.setRequiredPanels(pl.numPanels, pl.panelWidthMm, pl.panelHeightMm);
-    // If no panels on roof, auto-place
-    if (cad.panels.length === 0) {
-      cad.autoPlaceRemainingPanels();
-    }
   }
 
   // Update initial UI stats
@@ -1220,6 +1368,10 @@ function renderDiagram(pl, input) {
   if ($("cadGrossArea")) $("cadGrossArea").textContent = stats.grossSqft;
   if ($("cadCutoutArea")) $("cadCutoutArea").textContent = stats.cutoutSqft + stats.pathwaySqft;
   if ($("cadNetArea")) $("cadNetArea").textContent = stats.netUsableSqft;
+  if ($("cadInventoryCount")) {
+    const remaining = Math.max(0, pl.numPanels - cad.panels.length);
+    $("cadInventoryCount").textContent = `${cad.panels.length} / ${pl.numPanels} Placed (${remaining} Remaining)`;
+  }
 }
 
 
