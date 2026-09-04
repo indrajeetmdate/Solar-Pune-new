@@ -586,22 +586,99 @@
 
       <section class="results-panel blurred-overlay" id="resultsPanel" aria-label="Recommendations" style="padding: 16px;">
         
-        <!-- TOP: Panel Array Diagram -->
-        <div class="panel-diagram-section detail-card" style="margin-bottom: 16px; display: none; padding: 12px;" id="panelDiagramSection">
-          <div class="section-heading compact" style="margin-bottom: 8px;">
+        <!-- TOP: Interactive Rooftop CAD & Panel Array Diagram -->
+        <div class="panel-diagram-section detail-card" style="margin-bottom: 16px; display: none; padding: 14px;" id="panelDiagramSection">
+          <div class="section-heading compact" style="margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
             <div>
-              <p class="eyebrow" style="font-size: 10px;">Visual Layout</p>
-              <h2 style="font-size: 16px;">Panel Array Diagram <i class="info-tip" data-tip="3D view of how solar panels will be arranged on your rooftop. Choose different row × column layouts.">i</i></h2>
+              <p class="eyebrow" style="font-size: 10px; color: var(--brand-green);">Interactive Rooftop CAD</p>
+              <h2 style="font-size: 16px;">Rooftop Layout & Solar Array <i class="info-tip" data-tip="Draw measured roof dimensions, subtract red obstacle zones, import site aerial images, and magnetically arrange panels into multiple islands.">i</i></h2>
             </div>
-            <select id="panelConfigSelect" style="max-width: 120px; margin-left: 10px; font-size: 13px; padding: 4px;">
-              <!-- Options populated dynamically -->
-            </select>
+            <div style="display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap;">
+              <div class="cad-stats-pill" id="cadStatsPill">
+                Gross: <strong id="cadGrossArea">600</strong> sq ft &nbsp;|&nbsp;
+                Red Cutouts: <strong id="cadCutoutArea" style="color: #ef4444;">0</strong> sq ft &nbsp;|&nbsp;
+                Net Usable: <strong id="cadNetArea">600</strong> sq ft
+              </div>
+              <button type="button" class="cad-btn" id="cadSyncNetAreaBtn" style="border-color: var(--brand-green); color: var(--brand-green); font-weight: 700;" title="Sync calculated net usable area to the main roof input">
+                ⚡ Apply Net Area to Sizing
+              </button>
+            </div>
           </div>
-          <div class="panel-diagram-container" style="background-image: url('https://ncxynrxeabkvlcirspnz.supabase.co/storage/v1/object/sign/Assets/solar_terrace_without%20panels.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV82YWY1NzE2OS1kZmJjLTRiMDEtOWI3ZS1jNzZkMzAwMjU4NjQiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJBc3NldHMvc29sYXJfdGVycmFjZV93aXRob3V0IHBhbmVscy5wbmciLCJpYXQiOjE3Nzg2ODAzNzYsImV4cCI6NDkzMjI4MDM3Nn0.ndjxiF8axs9f1SJ4Hqb63eBTWH-WDoFqskrq9uN5vjk'); background-size: cover; background-position: center; padding: 12px; border-radius: var(--radius); overflow: hidden;">
-            <div id="panelDiagramWrapper" style="display: flex; justify-content: center; padding: 10px 0;">
-              <canvas id="panelDiagramCanvas"></canvas>
+
+          <div class="cad-panel-container">
+            <!-- TOOLBAR ROW 1: Dimensions & Active Drawing Tool -->
+            <div class="cad-toolbar">
+              <div class="cad-input-group">
+                <label for="cadRoofLength">Length:</label>
+                <input type="number" id="cadRoofLength" value="30" min="5" step="1">
+                <span>ft</span>
+              </div>
+              <div class="cad-input-group">
+                <label for="cadRoofBreadth">Breadth:</label>
+                <input type="number" id="cadRoofBreadth" value="20" min="5" step="1">
+                <span>ft</span>
+              </div>
+              <div class="cad-input-group">
+                <label for="cadPathwayWidth">Walkway:</label>
+                <input type="number" id="cadPathwayWidth" value="2.5" min="1" step="0.5">
+                <span>ft</span>
+              </div>
+
+              <div style="display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap;">
+                <button type="button" class="cad-btn active" id="cadToolPanelBtn" data-tool="panel" title="Move and snap solar panels">☀️ Move Panels</button>
+                <button type="button" class="cad-btn" id="cadToolSubtractBtn" data-tool="subtract" title="Draw obstacle to subtract (marked in Red)">➖ Cutout (Red)</button>
+                <button type="button" class="cad-btn" id="cadToolPathwayBtn" data-tool="pathway" title="Draw maintenance pathway corridor">🚶 Walkway</button>
+                <button type="button" class="cad-btn" id="cadToolRoofBtn" data-tool="roof" title="Drag to draw new roof rectangle">📐 Draw Roof</button>
+                <button type="button" class="cad-btn" id="cadToolPanBtn" data-tool="image_pan" title="Drag to move imported image inside roof">✋ Move Image</button>
+              </div>
             </div>
-            <div id="panelDiagramDimensions" class="diagram-dimensions" style="text-align: center; font-size: 12px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.8); margin-top: 8px; font-weight: 600;"></div>
+
+            <!-- TOOLBAR ROW 2: Latent Panel Pool & Panel Actions -->
+            <div class="cad-toolbar" style="background: #0f172a; border-color: #1e293b; color: #ffffff;">
+              <div class="cad-inventory-pill" id="cadInventoryPill">
+                <span>📦 Latent Pool:</span>
+                <strong id="cadInventoryCount">12 / 12 Placed</strong>
+              </div>
+              <button type="button" class="cad-btn" id="cadAddSinglePanelBtn">+ 1 Panel</button>
+              <button type="button" class="cad-btn" id="cadAddBlockBtn">+ 2×2 Block</button>
+              <button type="button" class="cad-btn" id="cadAutoPlaceBtn">⚡ Auto-Fill Remaining</button>
+              <button type="button" class="cad-btn" id="cadAddHorizPathwayBtn">+ Central Walkway</button>
+
+              <div style="display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap;">
+                <button type="button" class="cad-btn" id="cadDeleteSelectedBtn" title="Delete selected panel or obstacle (Del)" style="color: #f87171;">🗑️ Delete</button>
+                <button type="button" class="cad-btn" id="cadClearPanelsBtn" style="color: #f87171;">Reset Panels</button>
+                <button type="button" class="cad-btn" id="cadClearCutoutsBtn" style="color: #f87171;">Clear Cutouts</button>
+              </div>
+            </div>
+
+            <!-- TOOLBAR ROW 3: Image Import & Manipulation Controls -->
+            <div class="cad-toolbar">
+              <label class="cad-btn" style="cursor: pointer; background: var(--surface-soft); font-weight: 700; color: var(--brand-green);">
+                🖼️ Import Roof / Aerial Image
+                <input type="file" id="cadImageInput" accept="image/*" style="display: none;">
+              </label>
+
+              <div id="cadImageControls" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <span style="font-weight: 600; color: var(--dark-grey); font-size: 11px;">Zoom:</span>
+                <button type="button" class="cad-btn" id="cadZoomOutBtn" style="padding: 2px 8px;">−</button>
+                <input type="range" id="cadZoomSlider" min="0.2" max="3.0" step="0.05" value="1.0" style="width: 75px;">
+                <button type="button" class="cad-btn" id="cadZoomInBtn" style="padding: 2px 8px;">+</button>
+                <button type="button" class="cad-btn" id="cadRotateImageBtn">↻ 90°</button>
+                <span style="font-weight: 600; color: var(--dark-grey); font-size: 11px; margin-left: 4px;">Opacity:</span>
+                <input type="range" id="cadOpacitySlider" min="0.1" max="1.0" step="0.05" value="0.85" style="width: 65px;">
+                <button type="button" class="cad-btn" id="cadFitImageBtn">Fit to Roof</button>
+                <button type="button" class="cad-btn" id="cadRemoveImageBtn" style="color: var(--danger);">✕ Remove</button>
+              </div>
+            </div>
+
+            <!-- CANVAS DRAFTING BOARD -->
+            <div class="cad-canvas-board">
+              <canvas id="panelDiagramCanvas"></canvas>
+              <div class="cad-hint-bar">
+                <span>💡 <strong>Tips:</strong> Drag panels to move — panels automatically snap magnetically on all 4 sides. In Cutout mode, drag to subtract obstacles.</span>
+                <span id="cadIslandsCount">1 Array Island</span>
+              </div>
+            </div>
           </div>
         </div>
 

@@ -2,7 +2,7 @@ import { DEFAULT_CONFIG, TARIFF_PROFILES, PANEL_LABELS, STRUCTURE_LABELS, SYSTEM
 import { calculateEstimate, getPanelConfigurations } from "./calculator.js";
 import { parseMsebBillFile } from "./billParser.js";
 import { isSupportedBillFile } from "./ocrExtractor.js";
-import { drawPanelArray } from "./panelDiagram.js";
+import { drawPanelArray, initRooftopCAD, getActiveRooftopCAD } from "./panelDiagram.js";
 
 const INTERNAL_PASSPHRASE_KEY = "puneSolarInternalPassphrase";
 
@@ -1046,61 +1046,180 @@ function render() {
   document.querySelectorAll(".subsidy-col").forEach(el => el.style.display = hideSubsidy ? "none" : "");
 }
 
+let cadListenersAttached = false;
+
+function setupCadEventListeners(cad) {
+  if (cadListenersAttached) return;
+  cadListenersAttached = true;
+
+  // Length & Breadth inputs
+  const lenInput = $("cadRoofLength");
+  const brInput = $("cadRoofBreadth");
+  const pwInput = $("cadPathwayWidth");
+
+  const syncDimensions = () => {
+    const l = Math.max(5, Number(lenInput?.value) || 30);
+    const b = Math.max(5, Number(brInput?.value) || 20);
+    cad.setRoofDimensions(l, b);
+  };
+
+  lenInput?.addEventListener("input", syncDimensions);
+  brInput?.addEventListener("input", syncDimensions);
+  pwInput?.addEventListener("input", () => {
+    cad.defaultPathwayWidthFt = Math.max(1, Number(pwInput.value) || 2.5);
+  });
+
+  // Tool selection buttons
+  const toolBtns = [
+    { id: "cadToolPanelBtn", tool: "panel" },
+    { id: "cadToolSubtractBtn", tool: "subtract" },
+    { id: "cadToolPathwayBtn", tool: "pathway" },
+    { id: "cadToolRoofBtn", tool: "roof" },
+    { id: "cadToolPanBtn", tool: "image_pan" },
+  ];
+
+  toolBtns.forEach(({ id, tool }) => {
+    $(id)?.addEventListener("click", () => {
+      toolBtns.forEach(t => $(t.id)?.classList.remove("active"));
+      $(id)?.classList.add("active");
+      cad.setTool(tool);
+    });
+  });
+
+  // Panel placement actions
+  $("cadAddSinglePanelBtn")?.addEventListener("click", () => cad.placePanel());
+  $("cadAddBlockBtn")?.addEventListener("click", () => cad.placePanelBlock(2, 2));
+  $("cadAutoPlaceBtn")?.addEventListener("click", () => cad.autoPlaceRemainingPanels());
+  $("cadAddHorizPathwayBtn")?.addEventListener("click", () => cad.addDefaultHorizontalPathway());
+  $("cadDeleteSelectedBtn")?.addEventListener("click", () => cad.removeSelectedItem());
+  $("cadClearPanelsBtn")?.addEventListener("click", () => cad.clearAllPanels());
+  $("cadClearCutoutsBtn")?.addEventListener("click", () => cad.clearAllCutouts());
+
+  // Image import
+  const imgInput = $("cadImageInput");
+  const imgControls = $("cadImageControls");
+
+  imgInput?.addEventListener("change", (e) => {
+    if (e.target.files && e.target.files[0]) {
+      cad.loadCustomImage(e.target.files[0]);
+      if (imgControls) imgControls.style.display = "flex";
+      // Switch active tool to move image so user can immediately reposition it
+      toolBtns.forEach(t => $(t.id)?.classList.remove("active"));
+      $("cadToolPanBtn")?.classList.add("active");
+      cad.setTool("image_pan");
+    }
+  });
+
+  $("cadZoomSlider")?.addEventListener("input", (e) => cad.setImageZoom(e.target.value));
+  $("cadZoomInBtn")?.addEventListener("click", () => {
+    cad.setImageZoom(cad.image.scale * 1.15);
+    if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale;
+  });
+  $("cadZoomOutBtn")?.addEventListener("click", () => {
+    cad.setImageZoom(cad.image.scale * 0.85);
+    if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale;
+  });
+  $("cadRotateImageBtn")?.addEventListener("click", () => cad.rotateImage90());
+  $("cadOpacitySlider")?.addEventListener("input", (e) => cad.setImageOpacity(e.target.value));
+  $("cadFitImageBtn")?.addEventListener("click", () => {
+    cad.resetImageTransform();
+    if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale;
+  });
+  $("cadRemoveImageBtn")?.addEventListener("click", () => {
+    cad.removeCustomImage();
+    if (imgControls) imgControls.style.display = "none";
+    if (imgInput) imgInput.value = "";
+  });
+
+  // Sync Net Area to Calculator
+  $("cadSyncNetAreaBtn")?.addEventListener("click", () => {
+    const stats = cad.getAreaStats();
+    const roofInput = $("roofArea");
+    if (roofInput) {
+      roofInput.value = stats.netUsableSqft;
+      roofInput.dispatchEvent(new Event("input", { bubbles: true }));
+      roofInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+      const btn = $("cadSyncNetAreaBtn");
+      if (btn) {
+        const origText = btn.textContent;
+        btn.textContent = `✓ ${stats.netUsableSqft} sq ft Applied!`;
+        btn.style.background = "var(--brand-green)";
+        btn.style.color = "#ffffff";
+        setTimeout(() => {
+          btn.textContent = origText;
+          btn.style.background = "";
+          btn.style.color = "var(--brand-green)";
+        }, 2500);
+      }
+    }
+  });
+}
+
 function renderDiagram(pl, input) {
   const section = $("panelDiagramSection");
-  const select = $("panelConfigSelect");
   const canvas = $("panelDiagramCanvas");
-  const dimLabel = $("panelDiagramDimensions");
 
-  if (!section || !select || !canvas || !dimLabel) return;
+  if (!section || !canvas) return;
   if (!pl || pl.numPanels <= 0) {
     section.style.display = "none";
     return;
   }
 
   section.style.display = "block";
-  const config = readConfig();
-  const configs = getPanelConfigurations(pl.numPanels, config);
 
-  // Re-populate select if panel count changed
-  const currentVal = select.value;
-  select.innerHTML = configs.map(c => 
-    `<option value="${c.label}">${c.label}</option>`
-  ).join("");
-  
-  if (configs.some(c => c.label === currentVal)) {
-    select.value = currentVal;
+  // Check initial roof dimensions from input
+  const initialRoofArea = Number(input.roofArea) || 600;
+  let initialLen = Number($("cadRoofLength")?.value);
+  let initialBr = Number($("cadRoofBreadth")?.value);
+
+  if (!initialLen || !initialBr || Math.abs(initialLen * initialBr - initialRoofArea) > initialRoofArea * 0.5) {
+    // Estimate L and B from roofArea with a ~1.3 aspect ratio
+    initialLen = Math.max(10, Math.round(Math.sqrt(initialRoofArea * 1.3)));
+    initialBr = Math.max(10, Math.round(initialRoofArea / initialLen));
+    if ($("cadRoofLength")) $("cadRoofLength").value = initialLen;
+    if ($("cadRoofBreadth")) $("cadRoofBreadth").value = initialBr;
+  }
+
+  let cad = getActiveRooftopCAD();
+  if (!cad || cad.canvas !== canvas) {
+    cad = initRooftopCAD(canvas, {
+      roofLengthFt: initialLen,
+      roofBreadthFt: initialBr,
+      requiredPanels: pl.numPanels,
+      panelWidthMm: pl.panelWidthMm,
+      panelHeightMm: pl.panelHeightMm,
+      onStatsChange: (stats) => {
+        if ($("cadGrossArea")) $("cadGrossArea").textContent = stats.grossSqft;
+        if ($("cadCutoutArea")) $("cadCutoutArea").textContent = stats.cutoutSqft + stats.pathwaySqft;
+        if ($("cadNetArea")) $("cadNetArea").textContent = stats.netUsableSqft;
+      },
+      onPanelsChange: (pStats) => {
+        if ($("cadInventoryCount")) {
+          $("cadInventoryCount").textContent = `${pStats.placed} / ${pStats.required} Placed (${pStats.remaining} Remaining)`;
+        }
+        if ($("cadIslandsCount")) {
+          $("cadIslandsCount").textContent = `${pStats.islandsCount} Array Island${pStats.islandsCount === 1 ? "" : "s"}`;
+        }
+      },
+    });
+    setupCadEventListeners(cad);
+
+    // Initial default: Auto-place the required panels
+    cad.autoPlaceRemainingPanels();
   } else {
-    // Default to a square-ish configuration
-    const best = configs.sort((a, b) => Math.abs(a.rows - a.cols) - Math.abs(b.rows - b.cols))[0];
-    select.value = best.label;
+    cad.setRequiredPanels(pl.numPanels, pl.panelWidthMm, pl.panelHeightMm);
+    // If no panels on roof, auto-place
+    if (cad.panels.length === 0) {
+      cad.autoPlaceRemainingPanels();
+    }
   }
 
-  const activeConfig = configs.find(c => c.label === select.value) || configs[0];
-  
-  dimLabel.textContent = `Outer dimensions: ${activeConfig.totalWidthM}m width × ${activeConfig.totalHeightM}m length`;
-
-  const tilt = input.tiltAngle !== null && input.tiltAngle !== undefined && input.tiltAngle !== "" 
-    ? Number(input.tiltAngle) 
-    : 18; // Default tilt heuristic
-  const orient = input.orientationDir || "South";
-
-  // Adjust wrapper styling if needed
-  const wrapper = $("panelDiagramWrapper");
-  if (wrapper) {
-    canvas.style.transform = "none";
-    canvas.style.boxShadow = "none";
-    canvas.style.background = "transparent";
-  }
-
-  drawPanelArray(canvas, {
-    rows: activeConfig.rows,
-    cols: activeConfig.cols,
-    panelWidthMm: pl.panelWidthMm,
-    panelHeightMm: pl.panelHeightMm,
-    tiltAngle: tilt,
-    orientationDir: orient
-  });
+  // Update initial UI stats
+  const stats = cad.getAreaStats();
+  if ($("cadGrossArea")) $("cadGrossArea").textContent = stats.grossSqft;
+  if ($("cadCutoutArea")) $("cadCutoutArea").textContent = stats.cutoutSqft + stats.pathwaySqft;
+  if ($("cadNetArea")) $("cadNetArea").textContent = stats.netUsableSqft;
 }
 
 
