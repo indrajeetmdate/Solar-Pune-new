@@ -671,5 +671,77 @@ console.log("Running RooftopCAD tests...");
   console.log("✓ Test 11 Passed: PDF Report Snapshot Generation & Hidden Tab Canvas Resilience");
 }
 
+// Test 12: Building Height Adjustment & Always-Visible Rooftop Solar Simulations
+{
+  const canvas = new MockCanvas();
+  let reportedHeight = null;
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 30,
+    roofBreadthFt: 20,
+    requiredPanels: 10,
+    onBuildingHeightChange: (h) => {
+      reportedHeight = h;
+    },
+  });
+
+  // 1. Initial State
+  assert.equal(cad.buildingHeightFt, 18, "Default building height should be 18 ft");
+
+  // 2. Direct Setter & Callback
+  cad.setBuildingHeight(30);
+  assert.equal(cad.buildingHeightFt, 30, "Building height should be 30 ft");
+  assert.equal(reportedHeight, 30, "onBuildingHeightChange callback should receive 30 ft");
+
+  // 3. Elevation Scale & Positive Headroom (Front & Side)
+  const logicalW = 800;
+  const logicalH = 460;
+  const groundY = logicalH - 65;
+
+  [10, 25, 45, 100].forEach((testH) => {
+    cad.setBuildingHeight(testH);
+    const frontScale = cad.getElevationScale(logicalW, logicalH, true);
+    const sideScale = cad.getElevationScale(logicalW, logicalH, false);
+
+    const frontRoofTopY = groundY - testH * frontScale;
+    const sideRoofTopY = groundY - testH * sideScale;
+
+    assert.ok(
+      frontRoofTopY >= 170,
+      `Front view roofTopY (${frontRoofTopY}) must preserve >= 170px sky headroom for height ${testH} ft`
+    );
+    assert.ok(
+      sideRoofTopY >= 170,
+      `Side view roofTopY (${sideRoofTopY}) must preserve >= 170px sky headroom for height ${testH} ft`
+    );
+  });
+
+  // 4. Interactive Dragging of Building Height on Canvas
+  cad.setBuildingHeight(20);
+  cad.setActiveView("front");
+  const elevScale = cad.getElevationScale(logicalW, logicalH, true);
+  const bldgW = cad.roofLengthFt * elevScale;
+  const bldgX = (logicalW - bldgW) / 2;
+  const roofTopY = groundY - cad.buildingHeightFt * elevScale;
+
+  // Pointer down on roof slab handle
+  cad.handlePointerDown(bldgX + bldgW / 2, roofTopY);
+  assert.equal(cad.dragMode, "drag_bldg_height", "Clicking on roof slab must start drag_bldg_height");
+
+  // Drag up by 40px (making building taller)
+  cad.handlePointerMove(bldgX + bldgW / 2, roofTopY - 40);
+  assert.ok(cad.buildingHeightFt > 20, `Building height should increase after dragging up (got ${cad.buildingHeightFt})`);
+  assert.equal(reportedHeight, cad.buildingHeightFt, "Reported height callback should sync with dragged height");
+
+  // Pointer up ends drag
+  cad.handlePointerUp();
+  assert.equal(cad.dragMode, null, "Pointer up should reset dragMode to null");
+
+  // 5. Verify renderFrontView & renderSideView execute without errors
+  cad.renderFrontView(logicalW, logicalH);
+  cad.renderSideView(logicalW, logicalH);
+
+  console.log("✓ Test 12 Passed: Building Height Adjustment & Always-Visible Rooftop Solar Simulations");
+}
+
 console.log("All RooftopCAD tests passed successfully!");
 

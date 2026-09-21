@@ -102,7 +102,7 @@ export class RooftopCAD {
     this.yearlySunPathData = generate2DYearlySunPathData(this.sunSim.latitude, this.sunSim.longitude);
 
     // Interaction state
-    this.dragMode = null; // 'drag_item', 'resize_item', 'draw_shape', 'pan_image', 'rotate_compass', 'drag_obstacle', 'drag_height_front', 'drag_height_side'
+    this.dragMode = null; // 'drag_item', 'resize_item', 'draw_shape', 'pan_image', 'rotate_compass', 'drag_obstacle', 'drag_height_front', 'drag_height_side', 'drag_bldg_height'
     this.dragItem = null;
     this.activeResizeHandle = null; // 'nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'radius', 'height'
     this.dragStart = { x: 0, y: 0 };
@@ -122,6 +122,7 @@ export class RooftopCAD {
     this.onSunChange = options.onSunChange || null;
     this.onViewChange = options.onViewChange || null;
     this.onNorthChange = options.onNorthChange || null;
+    this.onBuildingHeightChange = options.onBuildingHeightChange || null;
 
     // Layer Stack Ordering, Visibility & Opacity (Order from back to front)
     this.layerOrder = ["image", "roof", "pathways", "cutouts", "panels"];
@@ -1612,6 +1613,9 @@ export class RooftopCAD {
     if (this.onNorthChange) {
       this.onNorthChange(this.northAngleDeg);
     }
+    if (this.onBuildingHeightChange) {
+      this.onBuildingHeightChange(this.buildingHeightFt);
+    }
   }
 
   // ================= 8-POINT RESIZE HANDLES & EVENT LOGIC =================
@@ -1757,52 +1761,41 @@ export class RooftopCAD {
 
   handlePointerDown(x, y, e) {
     this.dragStart = { x, y };
+    const logicalW = this.canvas.parentElement ? Math.max(300, this.canvas.parentElement.clientWidth) : 800;
     const logicalH = 460;
-    const groundY = logicalH - 75;
+    const groundY = logicalH - 65;
 
     // Check Elevation Views (Front / Side)
-    if (this.activeView === "front") {
-      for (let i = this.externalObstacles.length - 1; i >= 0; i--) {
-        const obs = this.externalObstacles[i];
-        const obsX = this.roofX + obs.distanceFromRoofX * this.scalePxPerFt;
-        const obsW = (obs.shape === "circle" ? (obs.diameterFt || 8) : (obs.lengthFt || 10)) * this.scalePxPerFt;
-        const obsHPx = obs.heightFt * this.scalePxPerFt;
-        const topY = groundY - obsHPx;
-
-        // Height drag handle on top
-        if (Math.hypot(x - (obsX + obsW / 2), y - topY) <= 14) {
-          this.selectItem("obstacle", obs);
-          this.dragMode = "drag_height_front";
-          this.dragItem = obs;
-          return;
-        }
-
-        // Obstacle body click
-        if (x >= obsX && x <= obsX + obsW && y >= topY && y <= groundY) {
-          this.selectItem("obstacle", obs);
-          return;
-        }
-      }
-      this.selectItem(null, null);
-      return;
-    }
-
-    if (this.activeView === "side") {
-      const logicalW = this.canvas.parentElement ? Math.max(300, this.canvas.parentElement.clientWidth) : 800;
-      const bldgW = this.roofBreadthFt * this.scalePxPerFt;
+    if (this.activeView === "front" || this.activeView === "side") {
+      const isFront = this.activeView === "front";
+      const elevScale = this.getElevationScale(logicalW, logicalH, isFront);
+      this.elevScalePxPerFt = elevScale;
+      const bldgW = (isFront ? this.roofLengthFt : this.roofBreadthFt) * elevScale;
+      const bldgH = this.buildingHeightFt * elevScale;
       const bldgX = (logicalW - bldgW) / 2;
+      const roofTopY = groundY - bldgH;
 
+      // 1. Check Building Height Drag Handle on Roof Slab
+      if (Math.abs(y - roofTopY) <= 16 && x >= bldgX - 15 && x <= bldgX + bldgW + 15) {
+        this.dragMode = "drag_bldg_height";
+        this.dragStart = { x, y, origHeightFt: this.buildingHeightFt };
+        return;
+      }
+
+      // 2. Check External Obstacles Height Drag Handle & Body
       for (let i = this.externalObstacles.length - 1; i >= 0; i--) {
         const obs = this.externalObstacles[i];
-        const obsX = bldgX + obs.distanceFromRoofY * this.scalePxPerFt;
-        const obsW = (obs.shape === "circle" ? (obs.diameterFt || 8) : (obs.breadthFt || 10)) * this.scalePxPerFt;
-        const obsHPx = obs.heightFt * this.scalePxPerFt;
+        const distFt = isFront ? obs.distanceFromRoofX : obs.distanceFromRoofY;
+        const obsX = bldgX + distFt * elevScale;
+        const obsWFt = obs.shape === "circle" ? (obs.diameterFt || 8) : (isFront ? (obs.lengthFt || 10) : (obs.breadthFt || 10));
+        const obsW = obsWFt * elevScale;
+        const obsHPx = obs.heightFt * elevScale;
         const topY = groundY - obsHPx;
 
         // Height drag handle on top
         if (Math.hypot(x - (obsX + obsW / 2), y - topY) <= 14) {
           this.selectItem("obstacle", obs);
-          this.dragMode = "drag_height_side";
+          this.dragMode = isFront ? "drag_height_front" : "drag_height_side";
           this.dragItem = obs;
           return;
         }
@@ -1813,6 +1806,7 @@ export class RooftopCAD {
           return;
         }
       }
+
       this.selectItem(null, null);
       return;
     }
@@ -2050,7 +2044,7 @@ export class RooftopCAD {
 
   handlePointerMove(x, y, e) {
     const logicalH = 460;
-    const groundY = logicalH - 75;
+    const groundY = logicalH - 65;
 
     // Hover handle cursor detection when idle
     if (!this.dragMode) {
@@ -2063,6 +2057,36 @@ export class RooftopCAD {
       }
 
       if (this.activeView === "front" || this.activeView === "side") {
+        const isFront = this.activeView === "front";
+        const logicalW = this.canvas.parentElement ? Math.max(300, this.canvas.parentElement.clientWidth) : 800;
+        const elevScale = this.getElevationScale(logicalW, logicalH, isFront);
+        const bldgW = (isFront ? this.roofLengthFt : this.roofBreadthFt) * elevScale;
+        const bldgH = this.buildingHeightFt * elevScale;
+        const bldgX = (logicalW - bldgW) / 2;
+        const roofTopY = groundY - bldgH;
+
+        // Check roof slab / height handle hover
+        if (Math.abs(y - roofTopY) <= 16 && x >= bldgX - 15 && x <= bldgX + bldgW + 15) {
+          this.canvas.style.cursor = "ns-resize";
+          return;
+        }
+
+        // Check obstacle height handle hover
+        for (let i = this.externalObstacles.length - 1; i >= 0; i--) {
+          const obs = this.externalObstacles[i];
+          const distFt = isFront ? obs.distanceFromRoofX : obs.distanceFromRoofY;
+          const obsX = bldgX + distFt * elevScale;
+          const obsWFt = obs.shape === "circle" ? (obs.diameterFt || 8) : (isFront ? (obs.lengthFt || 10) : (obs.breadthFt || 10));
+          const obsW = obsWFt * elevScale;
+          const obsHPx = obs.heightFt * elevScale;
+          const topY = groundY - obsHPx;
+
+          if (Math.hypot(x - (obsX + obsW / 2), y - topY) <= 14) {
+            this.canvas.style.cursor = "ns-resize";
+            return;
+          }
+        }
+
         this.canvas.style.cursor = "default";
         return;
       }
@@ -2075,6 +2099,19 @@ export class RooftopCAD {
       } else if (this.activeTool === "select") {
         this.canvas.style.cursor = "default";
       }
+    }
+
+    if (this.dragMode === "drag_bldg_height") {
+      const isFront = this.activeView === "front";
+      const logicalW = this.canvas.parentElement ? Math.max(300, this.canvas.parentElement.clientWidth) : 800;
+      const elevScale = this.getElevationScale(logicalW, logicalH, isFront);
+      const hPx = Math.max(15, groundY - y);
+      const hFt = Math.max(5, Math.min(150, Math.round(hPx / elevScale)));
+      this.setBuildingHeight(hFt);
+      if (this.onBuildingHeightChange) {
+        this.onBuildingHeightChange(hFt);
+      }
+      return;
     }
 
     if (this.dragMode === "marquee_select" && this.selectionMarquee) {
@@ -2123,8 +2160,11 @@ export class RooftopCAD {
     }
 
     if ((this.dragMode === "drag_height_front" || this.dragMode === "drag_height_side") && this.dragItem) {
+      const isFront = this.dragMode === "drag_height_front";
+      const logicalW = this.canvas.parentElement ? Math.max(300, this.canvas.parentElement.clientWidth) : 800;
+      const elevScale = this.getElevationScale(logicalW, logicalH, isFront);
       const hPx = Math.max(10, groundY - y);
-      const hFt = Math.max(1, Math.round(hPx / this.scalePxPerFt));
+      const hFt = Math.max(1, Math.round(hPx / elevScale));
       this.dragItem.heightFt = hFt;
       if (this.onSelectionChange) {
         this.onSelectionChange(this.selectedItem);
@@ -2879,10 +2919,27 @@ export class RooftopCAD {
     ctx.restore();
   }
 
+  // Helper to dynamically scale building and surroundings in elevation views (Front & Side)
+  // Ensures at least 175px of sky headroom above the roof so solar simulations are always visible on top
+  getElevationScale(logicalW, logicalH = 460, isFront = true) {
+    const dimFt = isFront ? this.roofLengthFt : this.roofBreadthFt;
+    const groundY = logicalH - 65;
+    const minSkyHeadroom = 175;
+    const maxBldgHPx = Math.max(80, groundY - minSkyHeadroom); // e.g. 395 - 175 = 220px
+    const maxBldgWPx = Math.max(150, logicalW * 0.55);
+
+    const scaleByW = maxBldgWPx / Math.max(10, dimFt);
+    const scaleByH = maxBldgHPx / Math.max(5, this.buildingHeightFt);
+
+    return Math.max(1.0, Math.min(14, Math.min(this.scalePxPerFt, scaleByW, scaleByH)));
+  }
+
   // ================= FRONT ELEVATION VIEW =================
   renderFrontView(logicalW, logicalH) {
     const ctx = this.ctx;
-    const groundY = logicalH - 75;
+    const groundY = logicalH - 65;
+    const elevScale = this.getElevationScale(logicalW, logicalH, true);
+    this.elevScalePxPerFt = elevScale;
 
     // Sky gradient
     const skyGrad = ctx.createLinearGradient(0, 0, 0, groundY);
@@ -2906,12 +2963,9 @@ export class RooftopCAD {
     ctx.lineTo(logicalW, groundY);
     ctx.stroke();
 
-    // 2D Elevation Sun Path Arc across the sky dome
-    this.drawFrontSunPathArc(logicalW, logicalH, groundY);
-
-    // Building Front Facade
-    const bldgW = this.roofLengthFt * this.scalePxPerFt;
-    const bldgH = this.buildingHeightFt * this.scalePxPerFt;
+    // Building Front Facade Geometry
+    const bldgW = this.roofLengthFt * elevScale;
+    const bldgH = this.buildingHeightFt * elevScale;
     const bldgX = (logicalW - bldgW) / 2;
     const roofTopY = groundY - bldgH;
 
@@ -2990,19 +3044,17 @@ export class RooftopCAD {
     // External Obstacles in Front View
     this.externalObstacles.forEach((obs) => {
       const isSelected = this.selectedItem && this.selectedItem.item?.id === obs.id;
-      const obsX = bldgX + obs.distanceFromRoofX * this.scalePxPerFt;
-      const obsW = (obs.shape === "circle" ? (obs.diameterFt || 8) : (obs.lengthFt || 10)) * this.scalePxPerFt;
-      const obsH = obs.heightFt * this.scalePxPerFt;
+      const obsX = bldgX + obs.distanceFromRoofX * elevScale;
+      const obsW = (obs.shape === "circle" ? (obs.diameterFt || 8) : (obs.lengthFt || 10)) * elevScale;
+      const obsH = obs.heightFt * elevScale;
       const topY = groundY - obsH;
 
       ctx.save();
       if (obs.type === "tree") {
-        // Trunk
         const trunkW = Math.max(5, obsW * 0.2);
         ctx.fillStyle = "#78350f";
         ctx.fillRect(obsX + (obsW - trunkW) / 2, groundY - obsH * 0.45, trunkW, obsH * 0.45);
 
-        // Foliage Layers
         const foliageGrad = ctx.createLinearGradient(obsX, topY, obsX + obsW, groundY - obsH * 0.4);
         foliageGrad.addColorStop(0, "#22c55e");
         foliageGrad.addColorStop(1, "#14532d");
@@ -3016,12 +3068,10 @@ export class RooftopCAD {
         ctx.lineWidth = isSelected ? 2.5 : 1.5;
         ctx.stroke();
       } else if (obs.type === "pole") {
-        // Utility Pole
         const poleW = Math.max(3, obsW * 0.15);
         ctx.fillStyle = "#64748b";
         ctx.fillRect(obsX + (obsW - poleW) / 2, topY, poleW, obsH);
 
-        // Crossarms
         ctx.strokeStyle = "#94a3b8";
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -3033,14 +3083,12 @@ export class RooftopCAD {
         ctx.lineWidth = isSelected ? 2.5 : 1;
         ctx.strokeRect(obsX + (obsW - poleW) / 2, topY, poleW, obsH);
       } else if (obs.type === "building") {
-        // Neighbor Building
         ctx.fillStyle = "#334155";
         ctx.fillRect(obsX, topY, obsW, obsH);
         ctx.strokeStyle = isSelected ? "#38bdf8" : "#64748b";
         ctx.lineWidth = isSelected ? 2.5 : 1.5;
         ctx.strokeRect(obsX, topY, obsW, obsH);
       } else {
-        // Boundary Wall
         ctx.fillStyle = "#7c3aed";
         ctx.fillRect(obsX, topY, obsW, obsH);
         ctx.strokeStyle = isSelected ? "#38bdf8" : "#a855f7";
@@ -3066,31 +3114,61 @@ export class RooftopCAD {
       ctx.restore();
     });
 
+    // Interactive Building Height Drag Handle & Badge on Roof Slab
+    const handleW = Math.min(130, Math.max(95, bldgW * 0.5));
+    const handleH = 18;
+    const handleX = bldgX + (bldgW - handleW) / 2;
+    const handleY = roofTopY - 9;
+
+    ctx.save();
+    ctx.fillStyle = this.dragMode === "drag_bldg_height" ? "rgba(2, 132, 199, 0.95)" : "rgba(30, 41, 59, 0.9)";
+    ctx.strokeStyle = "#38bdf8";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(handleX, handleY, handleW, handleH, 4);
+    } else {
+      ctx.rect(handleX, handleY, handleW, handleH);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = "bold 9.5px Inter, sans-serif";
+    ctx.fillStyle = this.dragMode === "drag_bldg_height" ? "#ffffff" : "#38bdf8";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`↕ Bldg H: ${this.buildingHeightFt} ft`, handleX + handleW / 2, handleY + handleH / 2);
+    ctx.restore();
+
+    // 2D Elevation Sun Path Arc across the sky dome (ON TOP of building)
+    this.drawFrontSunPathArc(logicalW, logicalH, groundY, roofTopY, bldgX, bldgW);
+
     // Front View Header & Telemetry
     const solarPos = this.getSolarPosition();
     const stats = this.getShadingLossStats();
     ctx.font = "bold 11.5px Inter, sans-serif";
     ctx.fillStyle = "#f8fafc";
     ctx.textAlign = "left";
-    ctx.fillText(`🏢 FRONT ELEVATION (Length: ${this.roofLengthFt} ft | Building Height: ${this.buildingHeightFt} ft)`, 16, 24);
+    ctx.fillText(`🏢 FRONT ELEVATION (Length: ${this.roofLengthFt} ft | Building Height: ${this.buildingHeightFt} ft)`, 16, 22);
 
     ctx.font = "600 10.5px Inter, sans-serif";
     ctx.fillStyle = "#38bdf8";
-    ctx.fillText(`☀️ Solar Alt: ${solarPos.altitudeDeg.toFixed(1)}° | Az: ${solarPos.azimuthDeg.toFixed(1)}° | Array Shading: ${stats.lossPercentage}%`, 16, 42);
+    ctx.fillText(`☀️ Solar Alt: ${solarPos.altitudeDeg.toFixed(1)}° | Az: ${solarPos.azimuthDeg.toFixed(1)}° | Array Shading: ${stats.lossPercentage}%`, 16, 38);
   }
 
-  drawFrontSunPathArc(logicalW, logicalH, groundY) {
+  drawFrontSunPathArc(logicalW, logicalH, groundY, roofTopY, bldgX, bldgW) {
     const ctx = this.ctx;
-    const arcCx = logicalW / 2;
-    const domeR = Math.min(logicalW * 0.45, 250);
+    const arcCx = bldgX + bldgW / 2;
+    const maxDomeR = Math.max(90, roofTopY - 55);
+    const domeR = Math.min(logicalW * 0.44, maxDomeR);
 
     ctx.save();
 
-    // Sky Dome Arc (Horizon to Horizon)
+    // Sky Dome Arc (Horizon to Horizon at Rooftop Level)
     ctx.beginPath();
-    ctx.arc(arcCx, groundY, domeR, Math.PI, 0, false);
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.12)";
-    ctx.lineWidth = 1;
+    ctx.arc(arcCx, roofTopY, domeR, Math.PI, 0, false);
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.22)";
+    ctx.lineWidth = 1.2;
     ctx.setLineDash([3, 4]);
     ctx.stroke();
     ctx.setLineDash([]);
@@ -3099,11 +3177,11 @@ export class RooftopCAD {
     ctx.font = "bold 9.5px Inter, sans-serif";
     ctx.fillStyle = "#f59e0b";
     ctx.textAlign = "left";
-    ctx.fillText("🌅 EAST (Sunrise)", arcCx - domeR + 10, groundY - 6);
+    ctx.fillText("🌅 EAST (Sunrise)", arcCx - domeR + 10, roofTopY - 6);
 
     ctx.fillStyle = "#f97316";
     ctx.textAlign = "right";
-    ctx.fillText("🌇 WEST (Sunset)", arcCx + domeR - 10, groundY - 6);
+    ctx.fillText("🌇 WEST (Sunset)", arcCx + domeR - 10, roofTopY - 6);
 
     // 2D Yearly Solstice & Equinox Curves:
     const curves = [
@@ -3114,9 +3192,9 @@ export class RooftopCAD {
 
     curves.forEach((c) => {
       ctx.beginPath();
-      const peakY = groundY - domeR * Math.sin((c.peakAlt * Math.PI) / 180);
-      ctx.moveTo(arcCx - domeR * 0.92, groundY);
-      ctx.quadraticCurveTo(arcCx, peakY, arcCx + domeR * 0.92, groundY);
+      const peakY = roofTopY - domeR * Math.sin((c.peakAlt * Math.PI) / 180);
+      ctx.moveTo(arcCx - domeR * 0.92, roofTopY);
+      ctx.quadraticCurveTo(arcCx, peakY, arcCx + domeR * 0.92, roofTopY);
       ctx.strokeStyle = c.color;
       ctx.lineWidth = c.width;
       ctx.stroke();
@@ -3127,7 +3205,7 @@ export class RooftopCAD {
       ctx.fillText(c.label, arcCx, peakY - 6);
     });
 
-    // 2D Hourly Diurnal Grid Lines connecting seasons (6 AM, 9 AM, 12 PM, 3 PM, 6 PM)
+    // 2D Hourly Diurnal Grid Lines connecting seasons
     const hours = [
       { h: 7, label: "7 AM" },
       { h: 9, label: "9 AM" },
@@ -3140,19 +3218,19 @@ export class RooftopCAD {
       const frac = (hr.h - 6) / 12;
       const theta = Math.PI - frac * Math.PI;
       const hx = arcCx + domeR * Math.cos(theta) * 0.88;
-      const hy = groundY - domeR * Math.sin(theta) * 0.88;
+      const hy = roofTopY - domeR * Math.sin(theta) * 0.88;
 
       ctx.beginPath();
-      ctx.moveTo(arcCx, groundY);
+      ctx.moveTo(arcCx, roofTopY);
       ctx.lineTo(hx, hy);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
       ctx.lineWidth = 1;
       ctx.setLineDash([2, 3]);
       ctx.stroke();
       ctx.setLineDash([]);
 
       ctx.font = "bold 8px Inter, sans-serif";
-      ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
       ctx.textAlign = "center";
       ctx.fillText(hr.label, hx, hy - 4);
     });
@@ -3162,45 +3240,43 @@ export class RooftopCAD {
     if (solarPos && solarPos.isDaylight) {
       const frac = Math.max(0, Math.min(1, (this.sunSim.timeHour - 6) / 12));
       const theta = Math.PI - frac * Math.PI;
-      const altFrac = Math.max(0, solarPos.altitudeDeg / 90);
+      const altFrac = Math.max(0.08, solarPos.altitudeDeg / 90);
       const sunR = domeR * (0.2 + 0.78 * altFrac);
       const sunX = arcCx + sunR * Math.cos(theta);
-      const sunY = groundY - domeR * Math.sin(altFrac * (Math.PI / 2));
+      const sunY = roofTopY - domeR * Math.sin(altFrac * (Math.PI / 2));
 
-      // Beam to building roof
-      const bldgH = this.buildingHeightFt * this.scalePxPerFt;
-      const roofTopY = groundY - bldgH;
+      // Beam to building roof array
       ctx.beginPath();
       ctx.moveTo(sunX, sunY);
-      ctx.lineTo(arcCx, roofTopY - 8);
-      ctx.strokeStyle = "rgba(251, 191, 36, 0.45)";
-      ctx.lineWidth = 1.5;
+      ctx.lineTo(arcCx, roofTopY - 14);
+      ctx.strokeStyle = "rgba(251, 191, 36, 0.55)";
+      ctx.lineWidth = 1.8;
       ctx.setLineDash([4, 4]);
       ctx.stroke();
       ctx.setLineDash([]);
 
       // Glowing Sun
-      const sunGrad = ctx.createRadialGradient(sunX, sunY, 2, sunX, sunY, 16);
+      const sunGrad = ctx.createRadialGradient(sunX, sunY, 2, sunX, sunY, 18);
       sunGrad.addColorStop(0, "rgba(253, 224, 71, 1)");
-      sunGrad.addColorStop(0.5, "rgba(245, 158, 11, 0.7)");
+      sunGrad.addColorStop(0.5, "rgba(245, 158, 11, 0.75)");
       sunGrad.addColorStop(1, "rgba(245, 158, 11, 0)");
       ctx.fillStyle = sunGrad;
       ctx.beginPath();
-      ctx.arc(sunX, sunY, 16, 0, Math.PI * 2);
+      ctx.arc(sunX, sunY, 18, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.beginPath();
-      ctx.arc(sunX, sunY, 6.5, 0, Math.PI * 2);
+      ctx.arc(sunX, sunY, 7, 0, Math.PI * 2);
       ctx.fillStyle = "#fef08a";
       ctx.fill();
       ctx.strokeStyle = "#ea580c";
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      ctx.font = "bold 9px Inter, sans-serif";
+      ctx.font = "bold 9.5px Inter, sans-serif";
       ctx.fillStyle = "#fef08a";
       ctx.textAlign = "center";
-      ctx.fillText(`☀️ ${solarPos.altitudeDeg.toFixed(1)}° Alt | ${solarPos.azimuthDeg.toFixed(1)}° Az`, sunX, sunY - 12);
+      ctx.fillText(`☀️ ${solarPos.altitudeDeg.toFixed(1)}° Alt | ${solarPos.azimuthDeg.toFixed(1)}° Az`, sunX, sunY - 14);
     }
 
     ctx.restore();
@@ -3209,7 +3285,9 @@ export class RooftopCAD {
   // ================= SIDE ELEVATION VIEW =================
   renderSideView(logicalW, logicalH) {
     const ctx = this.ctx;
-    const groundY = logicalH - 75;
+    const groundY = logicalH - 65;
+    const elevScale = this.getElevationScale(logicalW, logicalH, false);
+    this.elevScalePxPerFt = elevScale;
 
     // Sky gradient
     const skyGrad = ctx.createLinearGradient(0, 0, 0, groundY);
@@ -3233,12 +3311,9 @@ export class RooftopCAD {
     ctx.lineTo(logicalW, groundY);
     ctx.stroke();
 
-    // 2D Declination Sun Path Arc
-    this.drawSideSunPathArc(logicalW, logicalH, groundY);
-
-    // Building Side Facade
-    const bldgW = this.roofBreadthFt * this.scalePxPerFt;
-    const bldgH = this.buildingHeightFt * this.scalePxPerFt;
+    // Building Side Facade Geometry
+    const bldgW = this.roofBreadthFt * elevScale;
+    const bldgH = this.buildingHeightFt * elevScale;
     const bldgX = (logicalW - bldgW) / 2;
     const roofTopY = groundY - bldgH;
 
@@ -3294,9 +3369,9 @@ export class RooftopCAD {
     // External Obstacles in Side View
     this.externalObstacles.forEach((obs) => {
       const isSelected = this.selectedItem && this.selectedItem.item?.id === obs.id;
-      const obsX = bldgX + obs.distanceFromRoofY * this.scalePxPerFt;
-      const obsW = (obs.shape === "circle" ? (obs.diameterFt || 8) : (obs.breadthFt || 10)) * this.scalePxPerFt;
-      const obsH = obs.heightFt * this.scalePxPerFt;
+      const obsX = bldgX + obs.distanceFromRoofY * elevScale;
+      const obsW = (obs.shape === "circle" ? (obs.diameterFt || 8) : (obs.breadthFt || 10)) * elevScale;
+      const obsH = obs.heightFt * elevScale;
       const topY = groundY - obsH;
 
       ctx.save();
@@ -3356,47 +3431,73 @@ export class RooftopCAD {
       ctx.restore();
     });
 
+    // Interactive Building Height Drag Handle & Badge on Roof Slab
+    const handleW = Math.min(130, Math.max(95, bldgW * 0.5));
+    const handleH = 18;
+    const handleX = bldgX + (bldgW - handleW) / 2;
+    const handleY = roofTopY - 9;
+
+    ctx.save();
+    ctx.fillStyle = this.dragMode === "drag_bldg_height" ? "rgba(2, 132, 199, 0.95)" : "rgba(30, 41, 59, 0.9)";
+    ctx.strokeStyle = "#38bdf8";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(handleX, handleY, handleW, handleH, 4);
+    } else {
+      ctx.rect(handleX, handleY, handleW, handleH);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = "bold 9.5px Inter, sans-serif";
+    ctx.fillStyle = this.dragMode === "drag_bldg_height" ? "#ffffff" : "#38bdf8";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`↕ Bldg H: ${this.buildingHeightFt} ft`, handleX + handleW / 2, handleY + handleH / 2);
+    ctx.restore();
+
+    // 2D Declination Sun Path Arc (ON TOP of building)
+    this.drawSideSunPathArc(logicalW, logicalH, groundY, roofTopY, bldgX, bldgW);
+
     // Side View Header & Telemetry
     const solarPos = this.getSolarPosition();
     ctx.font = "bold 11.5px Inter, sans-serif";
     ctx.fillStyle = "#f8fafc";
     ctx.textAlign = "left";
-    ctx.fillText(`🏛️ SIDE ELEVATION (Breadth: ${this.roofBreadthFt} ft | Building Height: ${this.buildingHeightFt} ft)`, 16, 24);
+    ctx.fillText(`🏛️ SIDE ELEVATION (Breadth: ${this.roofBreadthFt} ft | Building Height: ${this.buildingHeightFt} ft)`, 16, 22);
 
     ctx.font = "600 10.5px Inter, sans-serif";
     ctx.fillStyle = "#38bdf8";
-    ctx.fillText(`☀️ Array Tilt: South-Facing ~18° | Solar Alt: ${solarPos.altitudeDeg.toFixed(1)}° | Az: ${solarPos.azimuthDeg.toFixed(1)}°`, 16, 42);
+    ctx.fillText(`☀️ Array Tilt: South-Facing ~18° | Solar Alt: ${solarPos.altitudeDeg.toFixed(1)}° | Az: ${solarPos.azimuthDeg.toFixed(1)}°`, 16, 38);
   }
 
-  drawSideSunPathArc(logicalW, logicalH, groundY) {
+  drawSideSunPathArc(logicalW, logicalH, groundY, roofTopY, bldgX, bldgW) {
     const ctx = this.ctx;
-    const bldgW = this.roofBreadthFt * this.scalePxPerFt;
-    const bldgX = (logicalW - bldgW) / 2;
-    const bldgH = this.buildingHeightFt * this.scalePxPerFt;
-    const roofTopY = groundY - bldgH;
     const arcCx = bldgX + bldgW / 2;
-    const domeR = Math.min(logicalW * 0.42, 230);
+    const maxDomeR = Math.max(90, roofTopY - 55);
+    const domeR = Math.min(logicalW * 0.42, maxDomeR);
 
     ctx.save();
 
-    // Side sky dome: shows North-South seasonal declination variation
+    // Side sky dome: shows North-South seasonal declination variation at rooftop level
     ctx.beginPath();
-    ctx.arc(arcCx, groundY, domeR, Math.PI, 0, false);
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.12)";
-    ctx.lineWidth = 1;
+    ctx.arc(arcCx, roofTopY, domeR, Math.PI, 0, false);
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.22)";
+    ctx.lineWidth = 1.2;
     ctx.setLineDash([3, 4]);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // North / South indicators on ground horizon
+    // North / South indicators on rooftop horizon
     ctx.font = "bold 9px Inter, sans-serif";
     ctx.fillStyle = "#f87171";
     ctx.textAlign = "right";
-    ctx.fillText("← NORTH", arcCx - domeR + 10, groundY - 6);
+    ctx.fillText("← NORTH", arcCx - domeR + 10, roofTopY - 6);
 
     ctx.fillStyle = "#38bdf8";
     ctx.textAlign = "left";
-    ctx.fillText("SOUTH (Solar Panel Tilt) →", arcCx + 30, groundY - 6);
+    ctx.fillText("SOUTH (Solar Tilt) →", arcCx + 30, roofTopY - 6);
 
     // 2D Declination Arcs:
     const seasonalCurves = [
@@ -3408,14 +3509,19 @@ export class RooftopCAD {
     seasonalCurves.forEach((sc) => {
       ctx.beginPath();
       const peakRad = (sc.peakAlt * Math.PI) / 180;
-      const peakY = groundY - domeR * Math.sin(peakRad);
+      const peakY = roofTopY - domeR * Math.sin(peakRad);
       const peakX = arcCx + sc.tiltDir * domeR * Math.cos(peakRad) * 0.5;
 
-      ctx.moveTo(arcCx - domeR * 0.85, groundY);
-      ctx.quadraticCurveTo(peakX, peakY, arcCx + domeR * 0.85, groundY);
+      ctx.moveTo(arcCx - domeR * 0.85, roofTopY);
+      ctx.quadraticCurveTo(peakX, peakY, arcCx + domeR * 0.85, roofTopY);
       ctx.strokeStyle = sc.color;
       ctx.lineWidth = 1.5;
       ctx.stroke();
+
+      ctx.font = "bold 8px Inter, sans-serif";
+      ctx.fillStyle = sc.color;
+      ctx.textAlign = "center";
+      ctx.fillText(sc.label, peakX, peakY - 6);
     });
 
     // Current Sun marker in Side View
@@ -3425,40 +3531,40 @@ export class RooftopCAD {
       const azRad = (solarPos.azimuthDeg * Math.PI) / 180;
       const nsComponent = -Math.cos(azRad);
       const sunX = arcCx + nsComponent * (domeR * Math.cos(altRad) * 0.8);
-      const sunY = groundY - domeR * Math.sin(altRad);
+      const sunY = roofTopY - domeR * Math.sin(altRad);
 
-      // Sun ray pointing to roof
+      // Sun ray pointing to roof array
       ctx.beginPath();
       ctx.moveTo(sunX, sunY);
-      ctx.lineTo(arcCx, roofTopY - 10);
-      ctx.strokeStyle = "rgba(251, 191, 36, 0.4)";
-      ctx.lineWidth = 1.5;
+      ctx.lineTo(arcCx, roofTopY - 14);
+      ctx.strokeStyle = "rgba(251, 191, 36, 0.55)";
+      ctx.lineWidth = 1.8;
       ctx.setLineDash([4, 4]);
       ctx.stroke();
       ctx.setLineDash([]);
 
       // Glowing Sun Disk
-      const sunGrad = ctx.createRadialGradient(sunX, sunY, 2, sunX, sunY, 15);
+      const sunGrad = ctx.createRadialGradient(sunX, sunY, 2, sunX, sunY, 18);
       sunGrad.addColorStop(0, "rgba(253, 224, 71, 1)");
-      sunGrad.addColorStop(0.5, "rgba(245, 158, 11, 0.6)");
+      sunGrad.addColorStop(0.5, "rgba(245, 158, 11, 0.75)");
       sunGrad.addColorStop(1, "rgba(245, 158, 11, 0)");
       ctx.fillStyle = sunGrad;
       ctx.beginPath();
-      ctx.arc(sunX, sunY, 15, 0, Math.PI * 2);
+      ctx.arc(sunX, sunY, 18, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.beginPath();
-      ctx.arc(sunX, sunY, 6, 0, Math.PI * 2);
+      ctx.arc(sunX, sunY, 7, 0, Math.PI * 2);
       ctx.fillStyle = "#fef08a";
       ctx.fill();
       ctx.strokeStyle = "#ea580c";
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      ctx.font = "bold 9px Inter, sans-serif";
+      ctx.font = "bold 9.5px Inter, sans-serif";
       ctx.fillStyle = "#fef08a";
       ctx.textAlign = "center";
-      ctx.fillText(`☀️ Alt ${solarPos.altitudeDeg.toFixed(1)}°`, sunX, sunY - 12);
+      ctx.fillText(`☀️ Alt ${solarPos.altitudeDeg.toFixed(1)}°`, sunX, sunY - 14);
     }
 
     ctx.restore();

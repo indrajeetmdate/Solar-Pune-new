@@ -2004,6 +2004,9 @@ function setupCadEventListeners(cad) {
     { id: "cadViewSideBtn", view: "side" },
   ];
 
+  const elevBldgHGroup = $("cadElevationBldgHeightGroup");
+  const elevBldgHInput = $("cadElevationBldgHeightInput");
+
   const updateActiveViewButtons = (currentView) => {
     viewBtns.forEach(({ id, view }) => {
       const btn = $(id);
@@ -2011,6 +2014,9 @@ function setupCadEventListeners(cad) {
         btn.classList.toggle("active", view === currentView);
       }
     });
+    if (elevBldgHGroup) {
+      elevBldgHGroup.style.display = (currentView === "front" || currentView === "side") ? "inline-flex" : "none";
+    }
   };
 
   viewBtns.forEach(({ id, view }) => {
@@ -2059,11 +2065,28 @@ function setupCadEventListeners(cad) {
     }
   };
 
-  // Building Height Input
+  // Building Height Inputs (Drawer and Quick Elevation Control)
   const bldgHInput = $("cadBuildingHeightInput");
-  bldgHInput?.addEventListener("input", (e) => {
-    cad.setBuildingHeight(Number(e.target.value));
-  });
+  const updateBldgHeight = (val) => {
+    const h = Math.max(5, Math.min(150, Number(val) || 18));
+    cad.setBuildingHeight(h);
+    if (bldgHInput && document.activeElement !== bldgHInput) bldgHInput.value = h;
+    if (elevBldgHInput && document.activeElement !== elevBldgHInput) elevBldgHInput.value = h;
+  };
+
+  bldgHInput?.addEventListener("input", (e) => updateBldgHeight(e.target.value));
+  bldgHInput?.addEventListener("change", (e) => updateBldgHeight(e.target.value));
+  elevBldgHInput?.addEventListener("input", (e) => updateBldgHeight(e.target.value));
+  elevBldgHInput?.addEventListener("change", (e) => updateBldgHeight(e.target.value));
+
+  cad.onBuildingHeightChange = (heightFt) => {
+    if (bldgHInput && document.activeElement !== bldgHInput) {
+      bldgHInput.value = heightFt;
+    }
+    if (elevBldgHInput && document.activeElement !== elevBldgHInput) {
+      elevBldgHInput.value = heightFt;
+    }
+  };
 
   // Surrounding Obstacles in Yard
   $("cadAddTreeBtn")?.addEventListener("click", () => cad.addExternalObstacle("tree"));
@@ -2313,6 +2336,7 @@ function renderDiagram(pl, input) {
   if ($("cadNetArea")) $("cadNetArea").textContent = stats.netUsableSqft;
   if ($("cadNorthAngleInput")) $("cadNorthAngleInput").value = cad.northAngleDeg;
   if ($("cadBuildingHeightInput")) $("cadBuildingHeightInput").value = cad.buildingHeightFt;
+  if ($("cadElevationBldgHeightInput")) $("cadElevationBldgHeightInput").value = cad.buildingHeightFt;
   if ($("cadInventoryCount")) {
     const remaining = Math.max(0, pl.numPanels - cad.panels.length);
     $("cadInventoryCount").textContent = `${cad.panels.length} / ${pl.numPanels} Placed (${remaining} Remaining)`;
