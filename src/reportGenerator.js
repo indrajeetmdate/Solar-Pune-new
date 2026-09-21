@@ -372,9 +372,13 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
 
     // Get snapshot image from RooftopCAD or canvas
     let cadImage = null;
+    let cad = null;
     try {
-      if (typeof window !== "undefined" && window.cad && typeof window.cad.getReportSnapshot === "function") {
-        cadImage = window.cad.getReportSnapshot();
+      if (typeof window !== "undefined") {
+        cad = window.cad || (typeof window.getActiveRooftopCAD === "function" ? window.getActiveRooftopCAD() : null);
+      }
+      if (cad && typeof cad.getReportSnapshot === "function") {
+        cadImage = cad.getReportSnapshot();
       }
       if (!cadImage) {
         cadImage = canvasToImageData("panelDiagramCanvas");
@@ -386,7 +390,16 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     if (cadImage) {
       const maxImgW = pageWidth - margin * 2;
       const maxImgH = 105;
-      const aspect = 800 / 460;
+      let imgProps = null;
+      try {
+        imgProps = doc.getImageProperties(cadImage);
+      } catch (e) {
+        imgProps = { width: 800, height: 460 };
+      }
+      const aspect = (imgProps && imgProps.width && imgProps.height)
+        ? (imgProps.width / imgProps.height)
+        : (800 / 460);
+
       let drawW = maxImgW;
       let drawH = drawW / aspect;
       if (drawH > maxImgH) {
@@ -416,16 +429,16 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     let roofL = 30;
     let roofB = 20;
 
-    if (typeof window !== "undefined" && window.cad) {
-      cadStats = window.cad.getAreaStats ? window.cad.getAreaStats() : null;
-      placedPanelsCount = window.cad.panels ? window.cad.panels.length : 0;
-      reqPanelsCount = window.cad.requiredPanels || reqPanelsCount;
-      northAngle = window.cad.northAngleDeg ?? 0;
-      bldgHeight = window.cad.buildingHeightFt ?? 18;
-      roofL = window.cad.roofLengthFt || 30;
-      roofB = window.cad.roofBreadthFt || 20;
-      if (window.cad.sunSim && window.cad.sunSim.enabled && typeof window.cad.getShadingLossStats === "function") {
-        const lossStats = window.cad.getShadingLossStats();
+    if (cad) {
+      cadStats = cad.getAreaStats ? cad.getAreaStats() : null;
+      placedPanelsCount = cad.panels ? cad.panels.length : 0;
+      reqPanelsCount = cad.requiredPanels || reqPanelsCount;
+      northAngle = cad.northAngleDeg ?? 0;
+      bldgHeight = cad.buildingHeightFt ?? 18;
+      roofL = cad.roofLengthFt || 30;
+      roofB = cad.roofBreadthFt || 20;
+      if (cad.sunSim && cad.sunSim.enabled && typeof cad.getShadingLossStats === "function") {
+        const lossStats = cad.getShadingLossStats();
         if (lossStats) shadingEst = `${lossStats.lossPercent.toFixed(1)}%`;
       }
     }

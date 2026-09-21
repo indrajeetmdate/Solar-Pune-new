@@ -375,6 +375,7 @@ function getInverterRate(systemType, capacityKw) {
 }
 
 function getProtectionCost(capacityKw) {
+  if (capacityKw <= 0) return 0;
   if (capacityKw <= 3) return 10000;
   if (capacityKw <= 5) return 15000;
   if (capacityKw <= 10) return 25000;
@@ -522,10 +523,13 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       batteryCost = 35000;
     }
   }
-  const wiringCost = dcCapacityWp * pricing.wiringRatePerW;
-  const installationCost = dcCapacityWp * pricing.installationRatePerW;
-  const protectionCost = getProtectionCost(dcCapacityKw);
-  const consultancyCost = dcCapacityWp * pricing.consultancyRatePerW;
+  const wiringRate = pricing.wiringRatePerW !== undefined ? pricing.wiringRatePerW : 3.5;
+  const wiringCost = dcCapacityWp * wiringRate;
+  const installationCost = dcCapacityWp * (pricing.installationRatePerW || 0);
+  const protectionCost = pricing.protectionCost !== undefined
+    ? pricing.protectionCost
+    : (wiringRate > 0 ? getProtectionCost(dcCapacityKw) : 0);
+  const consultancyCost = dcCapacityWp * (pricing.consultancyRatePerW || 0);
 
   const preTaxSubtotal =
     panelCost + structureCost + inverterCost + backupInverterCost + batteryCost +

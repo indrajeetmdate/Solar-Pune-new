@@ -51,6 +51,9 @@ class MockCanvas {
   getBoundingClientRect() {
     return { left: 0, top: 0, width: 800, height: 460 };
   }
+  toDataURL(type) {
+    return "data:image/png;base64,mockImageDataForRooftopCAD";
+  }
 }
 
 globalThis.window = {
@@ -62,6 +65,7 @@ globalThis.document = {
   activeElement: { tagName: "BODY" },
   addEventListener: () => {},
   getElementById: () => null,
+  createElement: (tag) => new MockCanvas(),
 };
 
 const { RooftopCAD } = await import("../src/panelDiagram.js");
@@ -635,4 +639,37 @@ console.log("Running RooftopCAD tests...");
   console.log("✓ Test 10 Passed: Image Locking, Refined Zooming, Multi-Selection & Deselection");
 }
 
+// Test 11: PDF Report Snapshot Generation & Hidden Tab Canvas Resilience
+{
+  const canvas = new MockCanvas();
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 30,
+    roofBreadthFt: 20,
+    requiredPanels: 10,
+  });
+
+  // Place some panels
+  cad.placePanel("portrait", cad.roofX + 10, cad.roofY + 10);
+  cad.placePanel("portrait", cad.roofX + 60, cad.roofY + 10);
+
+  // Simulate hidden tab: parentElement.clientWidth is 0
+  canvas.parentElement.clientWidth = 0;
+
+  // Render while hidden (should NOT shrink canvas to 300px!)
+  cad.render();
+  assert.ok(canvas.width >= 800, `Canvas width (${canvas.width}) must not collapse below 800 when hidden`);
+  assert.ok(cad.roofX + cad.roofW <= canvas.width, "Roof must not exceed canvas width");
+
+  // Generate report snapshot
+  const snapshot = cad.getReportSnapshot();
+  assert.ok(snapshot, "Report snapshot must be returned");
+  assert.ok(snapshot.startsWith("data:image/png"), "Snapshot must be a PNG data URL");
+
+  // Verify DOM canvas was not corrupted
+  assert.ok(canvas.width >= 800, "Canvas width must remain >= 800");
+
+  console.log("✓ Test 11 Passed: PDF Report Snapshot Generation & Hidden Tab Canvas Resilience");
+}
+
 console.log("All RooftopCAD tests passed successfully!");
+

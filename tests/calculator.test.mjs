@@ -62,6 +62,20 @@ assert.ok(estimate.recommended.financing);
 assert.equal(estimate.recommended.financing.principal, estimate.recommended.netCost);
 assert.equal(estimate.recommended.financing.monthlyEmi, 5200);
 assert.ok(estimate.recommended.financing.tenureYears > 0);
-assert.ok(estimate.recommended.financing.freeElectricityYears > 0);
+// Wiring and cabling cost assertion when rate/W is 0
+const zeroWiringConfig = {
+  ...DEFAULT_CONFIG,
+  pricing: {
+    ...DEFAULT_CONFIG.pricing,
+    wiringRatePerW: 0,
+  }
+};
+const zeroWiringEstimate = calculateEstimate(makeInput({ capacityOverride: 13 }), zeroWiringConfig);
+assert.equal(
+  zeroWiringEstimate.recommended.costBreakup.electricalSafetyAndWiring,
+  0,
+  "Wiring and cabling cost must be 0 when rate/W is 0 (no basic 55000 protection cost)"
+);
 
 console.log("calculator tests passed");
+

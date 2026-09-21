@@ -2412,8 +2412,11 @@ export class RooftopCAD {
     const ctx = this.ctx;
     const dpr = window.devicePixelRatio || 1;
 
-    const parentW = this.canvas.parentElement ? this.canvas.parentElement.clientWidth : 800;
-    const logicalW = Math.max(300, parentW);
+    const clientW = this.canvas.parentElement ? this.canvas.parentElement.clientWidth : 0;
+    if (clientW > 100) {
+      this.lastLogicalW = clientW;
+    }
+    const logicalW = Math.max(800, this.lastLogicalW || 800);
     const logicalH = 460;
 
     if (this.canvas.width !== logicalW * dpr || this.canvas.height !== logicalH * dpr) {
@@ -4092,7 +4095,36 @@ export class RooftopCAD {
 
   // Get high-res snapshot of canvas without editor marquee/handles for PDF inclusion
   getReportSnapshot() {
-    if (!this.canvas || typeof this.canvas.toDataURL !== "function") return null;
+    if (!this.canvas) return null;
+
+    // Calculate dimensions to ensure entire rooftop, array, dimensions, and compass fit completely
+    const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+    let baseW = 800;
+    if (this.canvas.parentElement && this.canvas.parentElement.clientWidth > 100) {
+      baseW = Math.max(800, this.canvas.parentElement.clientWidth);
+    } else if (this.lastLogicalW && this.lastLogicalW > 100) {
+      baseW = Math.max(800, this.lastLogicalW);
+    } else if (this.canvas.width > 300) {
+      baseW = Math.max(800, Math.round(this.canvas.width / dpr));
+    }
+
+    // Ensure export width and height contain the full roof plus dimensions and compass
+    const requiredW = Math.max(baseW, Math.ceil((this.roofX || 0) + (this.roofW || 0) + 75));
+    const requiredH = Math.max(460, Math.ceil((this.roofY || 0) + (this.roofH || 0) + 60));
+
+    const exportDpr = 2; // High-res 2x DPR for crisp PDF rendering
+    let offscreen = null;
+    if (typeof document !== "undefined" && typeof document.createElement === "function") {
+      try {
+        offscreen = document.createElement("canvas");
+        offscreen.width = requiredW * exportDpr;
+        offscreen.height = requiredH * exportDpr;
+      } catch (e) {
+        offscreen = null;
+      }
+    }
+
+    const prevCtx = this.ctx;
     const prevExport = this.isExportingSnapshot;
     const prevSelected = this.selectedItem;
     const prevSelectedItems = this.selectedItems;
@@ -4104,17 +4136,39 @@ export class RooftopCAD {
     this.selectionMarquee = null;
 
     try {
-      this.render();
-      return this.canvas.toDataURL("image/png");
+      if (offscreen && typeof offscreen.getContext === "function") {
+        const offCtx = offscreen.getContext("2d");
+        offCtx.save();
+        offCtx.scale(exportDpr, exportDpr);
+        // Fill dark engineering slate background
+        offCtx.fillStyle = "#0f172a";
+        offCtx.fillRect(0, 0, requiredW, requiredH);
+
+        this.ctx = offCtx;
+        this.renderTopView(requiredW, requiredH);
+        offCtx.restore();
+        if (typeof offscreen.toDataURL === "function") {
+          return offscreen.toDataURL("image/png");
+        }
+      }
+
+      if (typeof this.canvas.toDataURL === "function") {
+        this.render();
+        return this.canvas.toDataURL("image/png");
+      }
+      return null;
     } catch (e) {
       console.warn("Failed to capture CAD snapshot:", e);
       return null;
     } finally {
+      this.ctx = prevCtx;
       this.isExportingSnapshot = prevExport;
       this.selectedItem = prevSelected;
       this.selectedItems = prevSelectedItems;
       this.selectionMarquee = prevMarquee;
-      this.render();
+      if (!offscreen) {
+        this.render();
+      }
     }
   }
 }
@@ -4123,11 +4177,17 @@ export class RooftopCAD {
 let activeCADInstance = null;
 
 export function getActiveRooftopCAD() {
+  if (typeof window !== "undefined" && !window.cad && activeCADInstance) {
+    window.cad = activeCADInstance;
+  }
   return activeCADInstance;
 }
 
 export function initRooftopCAD(canvas, options = {}) {
   activeCADInstance = new RooftopCAD(canvas, options);
+  if (typeof window !== "undefined") {
+    window.cad = activeCADInstance;
+  }
   return activeCADInstance;
 }
 

@@ -396,7 +396,10 @@ function renderBreakup(option, input, customerView, config) {
       const battKwh = option.batteryCapacityKwh;
       calcDetails['battery'] = `${battKwh} kWh × ${pricing.batteryRatePerWh || 0} Rs/Wh`;
     }
-    calcDetails['electricalSafetyAndWiring'] = `${pricing.wiringRatePerW || 0} Rs/W × ${dcWp.toLocaleString('en-IN')} W + protection`;
+    const wiringRateVal = pricing.wiringRatePerW !== undefined ? pricing.wiringRatePerW : 0;
+    calcDetails['electricalSafetyAndWiring'] = wiringRateVal > 0
+      ? `${wiringRateVal} Rs/W × ${dcWp.toLocaleString('en-IN')} W + protection`
+      : `0 Rs/W (excluded)`;
     calcDetails['installation'] = `${pricing.installationRatePerW || 0} Rs/W × ${dcWp.toLocaleString('en-IN')} W`;
     calcDetails['consultancy'] = `${pricing.consultancyRatePerW || 0} Rs/W × ${dcWp.toLocaleString('en-IN')} W`;
 
