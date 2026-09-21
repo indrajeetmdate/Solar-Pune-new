@@ -146,11 +146,17 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.text("1. System Design Considerations", margin, yPos);
   yPos += 10;
 
+  const isMultiMeter = input.meters && Array.isArray(input.meters) && input.meters.length > 1;
+
   // Customer details
   doc.setFontSize(11);
   doc.setTextColor(COLORS.text);
-  doc.text(`Customer Name: ${input.customerName || "Valued Customer"}`, margin, yPos);
+  doc.text(`Customer / Society: ${input.customerName || (isMultiMeter ? "Apartment Society" : "Valued Customer")}`, margin, yPos);
   yPos += 6;
+  if (isMultiMeter) {
+    doc.text(`Property Type: Multi-Flat Residential Building (${input.meters.length} Flats / Meters)`, margin, yPos);
+    yPos += 6;
+  }
   if (input.mobileNumber) {
     doc.text(`Mobile: ${input.mobileNumber}`, margin, yPos);
     yPos += 6;
@@ -159,11 +165,11 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.text(`Email: ${input.emailAddress}`, margin, yPos);
     yPos += 6;
   }
-  doc.text(`Monthly Consumption: ${input.monthlyUnits} units`, margin, yPos);
+  doc.text(`Total Monthly Consumption: ${input.monthlyUnits} units`, margin, yPos);
   yPos += 6;
-  doc.text(`Current Average Bill: ${formatCurrency(input.monthlyBill || 0)}`, margin, yPos);
+  doc.text(`Total Current Bill: ${formatCurrency(input.monthlyBill || 0)}`, margin, yPos);
   yPos += 6;
-  doc.text(`Sanctioned Load: ${input.sanctionedLoad} kW`, margin, yPos);
+  doc.text(`Total Sanctioned Load: ${input.sanctionedLoad} kW`, margin, yPos);
   yPos += 6;
   doc.text(`Usable Roof Area: ${input.roofArea} sq ft`, margin, yPos);
   yPos += 6;
@@ -177,7 +183,58 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
       yPos += 6;
     }
   }
-  yPos += 6;
+  yPos += 4;
+
+  // If multi-meter, add the meter-wise breakdown table
+  if (isMultiMeter) {
+    doc.setTextColor(COLORS.black);
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.text("Multi-Meter Breakdown & Subsidy Allocation", margin, yPos);
+    yPos += 6;
+
+    const mmHeaders = [["Flat / Name", "Consumer No.", "Load", "Units/Mo", "Solar (kWp)", "PM Surya Ghar Subsidy"]];
+    const mmRows = input.meters.map((m) => {
+      const sub = option.meterBreakdown?.find(b => b.id === m.id || b.consumerNumber === m.consumerNumber)?.subsidy ?? 0;
+      return [
+        m.label || m.consumerName || "Flat",
+        m.consumerNumber || "N/A",
+        `${m.sanctionedLoad || 0} kW`,
+        `${m.monthlyUnits || 0}`,
+        `${m.allocatedKw || 0} kWp`,
+        formatCurrency(sub),
+      ];
+    });
+
+    const totalAlloc = round(input.meters.reduce((s, m) => s + (Number(m.allocatedKw) || 0), 0), 1);
+    const totalSub = round(option.subsidy || 0, 0);
+    mmRows.push([
+      "Total / Building",
+      "-",
+      `${input.sanctionedLoad || 0} kW`,
+      `${input.monthlyUnits || 0}`,
+      `${totalAlloc} kWp`,
+      formatCurrency(totalSub),
+    ]);
+
+    doc.autoTable({
+      startY: yPos,
+      head: mmHeaders,
+      body: mmRows,
+      theme: "grid",
+      headStyles: { fillColor: COLORS.primary, fontSize: 9 },
+      bodyStyles: { fontSize: 8.5 },
+      didParseCell: function (data) {
+        if (data.row.index === mmRows.length - 1) {
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.fillColor = COLORS.bgLight;
+        }
+      },
+      margin: { left: margin },
+    });
+
+    yPos = doc.lastAutoTable.finalY + 8;
+  }
 
   // Selected system type label
   doc.setTextColor(COLORS.primary);
@@ -457,7 +514,11 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   
     // Conditionally include subsidy
     if (!hideSubsidy) {
-      costData.push(["Expected Subsidy", `- ${formatCurrency(option.subsidy)}`]);
+      const isMulti = input.meters && Array.isArray(input.meters) && input.meters.length > 1;
+      const subLabel = isMulti
+        ? `Expected Subsidy (PM Surya Ghar across ${input.meters.length} flats)`
+        : "Expected Subsidy";
+      costData.push([subLabel, `- ${formatCurrency(option.subsidy)}`]);
     }
     costData.push(["Net Payable Cost", formatCurrency(option.netCost)]);
   

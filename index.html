@@ -135,16 +135,22 @@
               <span class="cat-section-title">Energy Consumption & Bill</span>
             </div>
 
-            <!-- Upload Zone -->
+            <!-- Metering Mode Selector -->
+            <div class="metering-mode-selector" style="margin-bottom: 12px; display: flex; background: var(--surface-soft, #eef3ec); padding: 3px; border-radius: 6px; gap: 4px;">
+              <button type="button" id="meteringModeSingleBtn" class="metering-mode-btn active" style="flex: 1; padding: 6px 10px; font-size: 11.5px; font-weight: 600; border: none; border-radius: 4px; background: #ffffff; color: var(--ink); cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.08);">Single Meter</button>
+              <button type="button" id="meteringModeMultiBtn" class="metering-mode-btn" style="flex: 1; padding: 6px 10px; font-size: 11.5px; font-weight: 600; border: none; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer;">🏢 Multi-Meter (Flats)</button>
+            </div>
+
+            <!-- Upload Zone (Supports single or batch multi-bill upload) -->
             <label class="upload-zone" for="billUpload" style="margin-bottom: 12px;">
               <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <input id="billUpload" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.tiff,.tif,.txt,.csv">
-              <span class="upload-title">Attach electricity bill</span>
-              <span class="upload-formats">PDF, JPG, PNG — Marathi & English OCR via Gemini AI</span>
+              <input id="billUpload" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.tiff,.tif,.txt,.csv" multiple>
+              <span class="upload-title" id="billUploadTitle">Attach electricity bill(s)</span>
+              <span class="upload-formats">PDF, JPG, PNG — Select one or multiple bills for batch OCR</span>
               <span id="billUploadStatus"></span>
             </label>
 
-            <!-- Detected Bill Fields Panel -->
+            <!-- Detected Bill Fields Panel (for single bill or individual inspections) -->
             <div id="billExtractPanel" class="extract-panel hidden" style="margin-bottom: 12px;">
               <div class="section-heading compact" style="margin-bottom: 8px;">
                 <div>
@@ -180,7 +186,74 @@
               <p id="billExtractWarnings" class="muted small" style="margin-top: 6px;"></p>
             </div>
 
-            <div class="field-grid">
+            <!-- MULTI-METER MANAGEMENT PANEL -->
+            <div id="multiMeterSection" style="display: none; margin-bottom: 14px;">
+              <!-- Multi-Meter Aggregate KPI Strip -->
+              <div class="multi-meter-kpi-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 10px;">
+                <div class="mm-kpi-card" style="background: var(--surface-soft, #eef3ec); padding: 6px 10px; border-radius: 6px;">
+                  <span style="font-size: 10.5px; color: var(--muted); display: block;">Total Flats / Meters</span>
+                  <strong id="mmTotalMetersCount" style="font-size: 14px; color: var(--ink);">0 Flats</strong>
+                </div>
+                <div class="mm-kpi-card" style="background: var(--surface-soft, #eef3ec); padding: 6px 10px; border-radius: 6px;">
+                  <span style="font-size: 10.5px; color: var(--muted); display: block;">Total Sanctioned Load</span>
+                  <strong id="mmTotalSanctionedLoad" style="font-size: 14px; color: var(--ink);">0 kW</strong>
+                </div>
+                <div class="mm-kpi-card" style="background: var(--surface-soft, #eef3ec); padding: 6px 10px; border-radius: 6px;">
+                  <span style="font-size: 10.5px; color: var(--muted); display: block;">Total Monthly Units</span>
+                  <strong id="mmTotalMonthlyUnits" style="font-size: 14px; color: var(--ink);">0 kWh</strong>
+                </div>
+                <div class="mm-kpi-card" style="background: #e0f2fe; padding: 6px 10px; border-radius: 6px;">
+                  <span style="font-size: 10.5px; color: #0369a1; display: block;">Total Subsidies Eligible</span>
+                  <strong id="mmTotalSubsidies" style="font-size: 14px; color: #0284c7;">₹0</strong>
+                </div>
+              </div>
+
+              <!-- Solar Load Allocation Bar -->
+              <div class="mm-allocation-bar-card" style="background: #f8fafc; border: 1px solid var(--line, #e2e8f0); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                  <span style="font-size: 11px; font-weight: 600; color: var(--ink);">Solar Load Allocation</span>
+                  <span id="mmAllocationBalanceBadge" class="badge-balanced" style="font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: #dcfce7; color: #15803d; font-weight: 600;">Balanced ✓</span>
+                </div>
+                <div style="font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; margin-bottom: 6px;">
+                  <span>Allocated: <strong id="mmAllocatedKwSum" style="color: var(--ink);">0.0 kW</strong></span>
+                  <span>System Size: <strong id="mmSystemSizeTarget" style="color: var(--ink);">0.0 kW</strong></span>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                  <button type="button" id="mmAutoDistributeBtn" class="ghost-button" style="padding: 3px 8px; font-size: 11px;" title="Auto-distribute capacity proportionally across meters">⚡ Auto-Distribute</button>
+                  <button type="button" id="mmEqualDistributeBtn" class="ghost-button" style="padding: 3px 8px; font-size: 11px;" title="Distribute capacity equally among meters">⊞ Equal Split</button>
+                  <button type="button" id="mmAddMeterBtn" class="primary-button" style="padding: 3px 10px; font-size: 11px; margin-left: auto;">+ Add Flat / Meter</button>
+                </div>
+              </div>
+
+              <!-- Incomplete Data Warning if compulsory fields missing -->
+              <div id="mmCompulsoryWarning" style="display: none; background: #fef2f2; border-left: 3px solid #ef4444; padding: 6px 10px; font-size: 11px; color: #b91c1c; border-radius: 4px; margin-bottom: 10px;">
+                ⚠️ <strong>Compulsory Fields Required:</strong> Each meter must have a <strong>Consumer Number</strong>, <strong>Name/Flat</strong>, and <strong>Sanctioned Load</strong>.
+              </div>
+
+              <!-- Meters List Table -->
+              <div class="mm-table-container" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--line, #e2e8f0); border-radius: 6px; background: #ffffff;">
+                <table class="mm-table" style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
+                  <thead style="background: var(--surface-soft, #f1f5f9); position: sticky; top: 0; z-index: 2;">
+                    <tr style="border-bottom: 1px solid #cbd5e1;">
+                      <th style="padding: 6px 8px;">Flat / Name *</th>
+                      <th style="padding: 6px 6px;">Consumer No. *</th>
+                      <th style="padding: 6px 6px;">Load (kW) *</th>
+                      <th style="padding: 6px 6px;">Units/Mo</th>
+                      <th style="padding: 6px 6px;">Bill (₹)</th>
+                      <th style="padding: 6px 6px; width: 68px;">Alloc. kW</th>
+                      <th style="padding: 6px 6px;">Subsidy (₹)</th>
+                      <th style="padding: 6px 4px; text-align: center;">✕</th>
+                    </tr>
+                  </thead>
+                  <tbody id="mmMetersTableBody">
+                    <!-- Dynamic meter rows rendered by app.js -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- SINGLE METER INPUTS (Displayed in Single Meter mode) -->
+            <div class="field-grid" id="singleMeterInputsGrid">
               <label class="field">
                 <span>Avg units / mo <i class="info-tip" data-tip="Average electricity units (kWh) consumed per month.">i</i></span>
                 <input id="monthlyUnits" type="number" min="0" step="1" value="450">
@@ -915,6 +988,15 @@
                 <span class="metric-label">Net Payable Amount</span>
                 <strong class="metric-value" id="financialNetCost" style="color: #0284c7;">₹0</strong>
               </div>
+            </div>
+
+            <!-- Multi-Meter Subsidies Breakdown Card -->
+            <div id="financialMultiSubsidyCard" class="detail-card" style="display: none; margin-bottom: 12px; background: #f0fdf4; border: 1px solid #bbf7d0;">
+              <div class="section-heading compact" style="margin-bottom: 8px;">
+                <h4 style="margin: 0; font-size: 13.5px; font-weight: 600; color: #15803d;">🏢 Multi-Flat Subsidy Breakdown (PM Surya Ghar)</h4>
+                <span id="financialMultiSubsidyCount" style="font-size: 11px; color: #16a34a; font-weight: 600;">0 Flats Eligible</span>
+              </div>
+              <div id="financialMultiSubsidyList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 6px;"></div>
             </div>
           </div>
 

@@ -239,3 +239,73 @@ export async function parseMsebBillFile(file) {
 export function parseMsebBillText(text, { fileName = "" } = {}) {
   return parseBillText(text, fileName);
 }
+
+/**
+ * Parse multiple bill files sequentially, with progress callback.
+ * Returns an array of standardized meter objects with compulsory fields:
+ * - consumerNumber
+ * - consumerName
+ * - sanctionedLoad
+ */
+export async function parseMultipleMsebBillFiles(files, onProgress = () => {}) {
+  const fileList = Array.from(files);
+  const results = [];
+
+  for (let i = 0; i < fileList.length; i++) {
+    const file = fileList[i];
+    onProgress({ index: i + 1, total: fileList.length, fileName: file.name, status: "parsing" });
+    try {
+      const parsed = await parseMsebBillFile(file);
+      const fields = parsed?.fields || {};
+
+      let label = `Flat ${i + 1}`;
+      const nameParts = (fields.name || "").trim().split(/\s+/);
+      if (nameParts[0]) {
+        label = `${nameParts[0]}'s Meter`;
+      }
+      if (file.name) {
+        const cleanBase = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
+        if (/flat|unit|apt|shop|meter/i.test(cleanBase)) {
+          label = cleanBase;
+        }
+      }
+
+      const meterObj = {
+        id: "meter_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+        label,
+        consumerNumber: fields.consumerNo || "",
+        consumerName: fields.name || "",
+        sanctionedLoad: fields.sanctionedLoadKw || 0,
+        monthlyUnits: Math.round(fields.yearlyAvgUnitsKwh || fields.unitsConsumedKwh || 0),
+        monthlyBill: Math.round(fields.billAmountRs || 0),
+        consumerCategory: fields.tariffCategory ? mapCategory(fields.tariffCategory) : "LT-I",
+        connectionPhase: (fields.sanctionedLoadKw > 7.5 || fields.phase === "3") ? "3-phase" : "1-phase",
+        allocatedKw: 0,
+        subsidy: 0,
+        rawBill: parsed,
+      };
+
+      results.push(meterObj);
+      onProgress({ index: i + 1, total: fileList.length, fileName: file.name, status: "success", meter: meterObj });
+    } catch (err) {
+      console.error(`Failed to parse ${file.name}:`, err);
+      onProgress({ index: i + 1, total: fileList.length, fileName: file.name, status: "error", error: err.message });
+    }
+  }
+
+  return results;
+}
+
+function mapCategory(tc) {
+  if (!tc) return "LT-I";
+  const upper = tc.toUpperCase();
+  if (upper.includes("LT-I") && upper.includes("GHS")) return "LT-I-GHS";
+  if (upper.includes("LT-I") || upper.includes("RESIDENTIAL")) return "LT-I";
+  if (upper.includes("LT-II") || upper.includes("COMMERCIAL")) return "LT-II";
+  if (upper.includes("LT-III") || upper.includes("INDUSTRIAL")) return "LT-III";
+  if (upper.includes("HT-I")) return "HT-I";
+  if (upper.includes("HT-II")) return "HT-II";
+  if (upper.includes("AG")) return "LT-AG";
+  return "LT-I";
+}
+

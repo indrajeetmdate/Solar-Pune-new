@@ -40,12 +40,125 @@ export function calculatePerformanceFactor(performance, input = {}) {
   return round((1 - shading) * (1 - orientation) * (1 - system), 4);
 }
 
+export function calculateSingleMeterSubsidy(kw, category = "LT-I", policy = DEFAULT_CONFIG.policy) {
+  if (kw <= 0) return 0;
+  const profile = TARIFF_PROFILES[category];
+  if (!profile || profile.subsidyType === "none" || (category !== "LT-I" && category !== "LT-I-GHS")) {
+    return 0;
+  }
+  if (category === "LT-I-GHS") {
+    return round(kw * (policy.ghsSubsidyPerKw || 18000), 0);
+  }
+  // Standard PM Surya Ghar residential:
+  // First 2 kW @ ₹30,000/kW (max ₹60,000)
+  // Next 1 kW @ ₹18,000/kW (max ₹18,000)
+  // Capped at ₹78,000 for 3 kW+
+  const firstBand = Math.min(kw, 2) * (policy.subsidyFirstTwoKw || 30000);
+  const secondBand = Math.min(Math.max(kw - 2, 0), 1) * (policy.subsidyNextOneKw || 18000);
+  return round(Math.min(firstBand + secondBand, policy.subsidyCap || 78000), 0);
+}
+
+export function distributeCapacityAcrossMeters(totalCapacityKw, meters, strategy = "proportional") {
+  if (!Array.isArray(meters) || meters.length === 0) return [];
+  if (totalCapacityKw <= 0) {
+    return meters.map((m) => ({ ...m, allocatedKw: 0 }));
+  }
+
+  const n = meters.length;
+
+  if (strategy === "equal") {
+    const rawPerMeter = totalCapacityKw / n;
+    let remaining = totalCapacityKw;
+    return meters.map((m, idx) => {
+      if (idx === n - 1) {
+        return { ...m, allocatedKw: round(Math.max(0, remaining), 2) };
+      }
+      const val = round(rawPerMeter, 1);
+      remaining -= val;
+      return { ...m, allocatedKw: val };
+    });
+  }
+
+  if (strategy === "preserve") {
+    return meters.map((m) => ({ ...m, allocatedKw: Number(m.allocatedKw) || 0 }));
+  }
+
+  // Default: Proportional to consumption (or sanctioned load if units are missing)
+  const totalUnits = meters.reduce((sum, m) => sum + (Number(m.monthlyUnits) || 0), 0);
+  const totalLoad = meters.reduce((sum, m) => sum + (Number(m.sanctionedLoad) || 0), 0);
+
+  let remaining = totalCapacityKw;
+  return meters.map((m, idx) => {
+    if (idx === n - 1) {
+      return { ...m, allocatedKw: round(Math.max(0, remaining), 2) };
+    }
+    let share = 0;
+    if (totalUnits > 0) {
+      share = (Number(m.monthlyUnits) || 0) / totalUnits;
+    } else if (totalLoad > 0) {
+      share = (Number(m.sanctionedLoad) || 0) / totalLoad;
+    } else {
+      share = 1 / n;
+    }
+    const val = round(Math.max(0.5, totalCapacityKw * share), 1);
+    remaining -= val;
+    return { ...m, allocatedKw: val };
+  });
+}
+
 export function calculateSubsidy(systemType, panelType, dcCapacityKw, input = {}, policy = DEFAULT_CONFIG.policy) {
   const isGridConnected = systemType.startsWith("ongrid") || systemType.startsWith("hybrid");
   if (!isGridConnected || panelType !== "dcr" || dcCapacityKw <= 0) {
+    if (input.meters && Array.isArray(input.meters) && input.meters.length > 1) {
+      return {
+        total: 0,
+        type: "none",
+        perMeter: input.meters.map((m) => ({
+          id: m.id,
+          label: m.label || `Meter ${m.consumerNumber || ""}`,
+          consumerNumber: m.consumerNumber || "",
+          consumerName: m.consumerName || "",
+          sanctionedLoad: Number(m.sanctionedLoad) || 0,
+          allocatedKw: Number(m.allocatedKw) || 0,
+          subsidy: 0,
+        })),
+      };
+    }
     return { total: 0, type: "none" };
   }
 
+  // Multi-meter subsidy: calculate per-meter subsidy and sum them up
+  if (input.meters && Array.isArray(input.meters) && input.meters.length > 1) {
+    let metersToUse = input.meters;
+    const totalAllocated = metersToUse.reduce((s, m) => s + (Number(m.allocatedKw) || 0), 0);
+    if (totalAllocated === 0 && dcCapacityKw > 0) {
+      metersToUse = distributeCapacityAcrossMeters(dcCapacityKw, metersToUse, input.allocationStrategy || "proportional");
+    }
+    let totalSubsidy = 0;
+    const perMeter = metersToUse.map((m) => {
+      const allocatedKw = Number(m.allocatedKw) || 0;
+      const cat = m.consumerCategory || "LT-I";
+      const sub = calculateSingleMeterSubsidy(allocatedKw, cat, policy);
+      totalSubsidy += sub;
+      return {
+        id: m.id,
+        label: m.label || `Meter ${m.consumerNumber || ""}`,
+        consumerNumber: m.consumerNumber || "",
+        consumerName: m.consumerName || "",
+        sanctionedLoad: Number(m.sanctionedLoad) || 0,
+        allocatedKw,
+        subsidy: sub,
+      };
+    });
+
+    return {
+      total: round(totalSubsidy, 0),
+      type: "multi_meter",
+      perMeter,
+    };
+  }
+
+  // Single meter flow (backward compatible)
   const profile = TARIFF_PROFILES[input.consumerCategory] || TARIFF_PROFILES["LT-I"];
   let subsidyType = profile.subsidyType || "individual";
   if (subsidyType !== "none" && input.subsidyCategory) {
@@ -433,6 +546,26 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const paybackYears = annualSavings > 0 ? netCost / annualSavings : Infinity;
   const roiPercent = netCost > 0 ? (annualSavings / netCost) * 100 : 0;
 
+  const meterBreakdown = subsidyResult.perMeter
+    ? subsidyResult.perMeter.map((m) => {
+        const origMeter = (input.meters || []).find((x) => x.id === m.id || x.consumerNumber === m.consumerNumber) || {};
+        const meterKw = Number(m.allocatedKw) || 0;
+        const meterGen = dcCapacityKw > 0 ? round((meterKw / dcCapacityKw) * monthlyGeneration, 0) : 0;
+        const meterUnits = Number(origMeter.monthlyUnits) || 0;
+        const meterBill = Number(origMeter.monthlyBill) || 0;
+        const meterOffset = Math.min(meterGen, meterUnits);
+        const meterSavings = meterUnits > 0 ? round((meterOffset / meterUnits) * (meterBill * 0.85), 0) : 0;
+        return {
+          ...m,
+          monthlyUnits: meterUnits,
+          monthlyBill: meterBill,
+          sanctionedLoad: Number(origMeter.sanctionedLoad) || 0,
+          monthlyGeneration: meterGen,
+          estimatedMonthlySavings: meterSavings,
+        };
+      })
+    : null;
+
   return {
     systemType,
     panelType,
@@ -446,6 +579,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
     lifetimeSavings: calculateLifetimeSavings(annualSavings, config),
     subsidy: round(subsidy, 0),
     subsidyType: subsidyResult.type,
+    meterBreakdown,
     totalPreSubsidy: round(totalPreSubsidy, 0),
     netCost: round(netCost, 0),
     paybackYears: Number.isFinite(paybackYears) ? round(paybackYears, 1) : Infinity,
@@ -592,6 +726,16 @@ export function getPanelConfigurations(numPanels, config = DEFAULT_CONFIG) {
 }
 
 export function calculateEstimate(input, config = DEFAULT_CONFIG) {
+  // Aggregate multi-meter metrics if present
+  if (input.meters && Array.isArray(input.meters) && input.meters.length > 1) {
+    const totalUnits = input.meters.reduce((s, m) => s + (Number(m.monthlyUnits) || 0), 0);
+    const totalBill = input.meters.reduce((s, m) => s + (Number(m.monthlyBill) || 0), 0);
+    const totalLoad = input.meters.reduce((s, m) => s + (Number(m.sanctionedLoad) || 0), 0);
+    if (totalUnits > 0) input.monthlyUnits = totalUnits;
+    if (totalBill > 0) input.monthlyBill = totalBill;
+    if (totalLoad > 0) input.sanctionedLoad = totalLoad;
+  }
+
   const panelType = input.panelType || "dcr";
   let ongridType = "ongrid";
   const isResidential = config.tariff.consumerCategory.startsWith("LT-I");

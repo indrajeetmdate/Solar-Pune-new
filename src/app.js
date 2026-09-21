@@ -1,6 +1,6 @@
 import { DEFAULT_CONFIG, TARIFF_PROFILES, PANEL_LABELS, STRUCTURE_LABELS, SYSTEM_LABELS } from "./config.js";
-import { calculateEstimate, getPanelConfigurations } from "./calculator.js";
-import { parseMsebBillFile } from "./billParser.js";
+import { calculateEstimate, getPanelConfigurations, calculateSingleMeterSubsidy, distributeCapacityAcrossMeters } from "./calculator.js";
+import { parseMsebBillFile, parseMultipleMsebBillFiles } from "./billParser.js";
 import { isSupportedBillFile } from "./ocrExtractor.js";
 import { drawPanelArray, initRooftopCAD, getActiveRooftopCAD } from "./panelDiagram.js";
 
@@ -14,6 +14,9 @@ const state = {
   extractedBill: null,
   ongridBackup: "none",
   selectedSystemIndex: null,
+  meteringMode: "single",
+  meters: [],
+  allocationStrategy: "proportional",
 };
 
 const ASSUMPTION_IDS = [
@@ -127,17 +130,26 @@ function plainValue(value, suffix = "") {
 function readInput() {
   const safeStr = (id) => { const el = $(id); return el ? el.value.trim() : ""; };
   const safeChecked = (id) => { const el = $(id); return el ? el.checked : false; };
+
+  const isMulti = state.meteringMode === "multi" && state.meters.length > 0;
+  const multiUnits = isMulti ? state.meters.reduce((s, m) => s + (Number(m.monthlyUnits) || 0), 0) : 0;
+  const multiBill = isMulti ? state.meters.reduce((s, m) => s + (Number(m.monthlyBill) || 0), 0) : 0;
+  const multiLoad = isMulti ? state.meters.reduce((s, m) => s + (Number(m.sanctionedLoad) || 0), 0) : 0;
+
   return {
     customerName: state.internalUnlocked ? (safeStr("internalCustomerName") || safeStr("customerName")) : safeStr("customerName"),
     mobileNumber: state.internalUnlocked ? (safeStr("internalMobileNumber") || safeStr("mobileNumber")) : safeStr("mobileNumber"),
     emailAddress: state.internalUnlocked ? (safeStr("internalEmailAddress") || safeStr("emailAddress")) : safeStr("emailAddress"),
-    monthlyUnits: numberValue("monthlyUnits"),
-    monthlyBill: numberValue("monthlyBill"),
+    monthlyUnits: isMulti ? multiUnits : numberValue("monthlyUnits"),
+    monthlyBill: isMulti ? multiBill : numberValue("monthlyBill"),
     roofArea: numberValue("roofArea"),
-    sanctionedLoad: numberValue("sanctionedLoad"),
+    sanctionedLoad: isMulti ? multiLoad : numberValue("sanctionedLoad"),
     consumerCategory: safeStr("consumerCategory") || "LT-I",
     connectionPhase: safeStr("connectionPhase") || "1-phase",
-    numFlats: numberValue("numFlats"),
+    numFlats: isMulti ? state.meters.length : numberValue("numFlats"),
+    meters: isMulti ? state.meters : null,
+    meteringMode: state.meteringMode,
+    allocationStrategy: state.allocationStrategy || "proportional",
     currentPf: numberValue("currentPf") || null,
     improvedPf: 0.97,  // Smart inverters typically bring PF to 0.97+
     peakHourUsagePct: numberValue("peakHourUsagePct") || 30,
@@ -790,6 +802,211 @@ function applyExtractedBill() {
   render();
 }
 
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function updateMultiMeterKPIs() {
+  const totalMeters = state.meters.length;
+  const totalLoad = state.meters.reduce((s, m) => s + (Number(m.sanctionedLoad) || 0), 0);
+  const totalUnits = state.meters.reduce((s, m) => s + (Number(m.monthlyUnits) || 0), 0);
+  const totalAllocatedKw = round(state.meters.reduce((s, m) => s + (Number(m.allocatedKw) || 0), 0), 2);
+  let totalSubsidies = 0;
+  state.meters.forEach((m) => {
+    totalSubsidies += calculateSingleMeterSubsidy(Number(m.allocatedKw) || 0, m.consumerCategory || "LT-I");
+  });
+
+  if ($("mmTotalMetersCount")) $("mmTotalMetersCount").textContent = `${totalMeters} Flats`;
+  if ($("mmTotalSanctionedLoad")) $("mmTotalSanctionedLoad").textContent = `${totalLoad} kW`;
+  if ($("mmTotalMonthlyUnits")) $("mmTotalMonthlyUnits").textContent = `${totalUnits.toLocaleString('en-IN')} kWh`;
+  if ($("mmTotalSubsidies")) $("mmTotalSubsidies").textContent = `₹${totalSubsidies.toLocaleString('en-IN')}`;
+  if ($("mmAllocatedKwSum")) $("mmAllocatedKwSum").textContent = `${totalAllocatedKw.toFixed(1)} kW`;
+
+  const targetCapacity = state.estimates?.recommended?.dcCapacityKw || 0;
+  if ($("mmSystemSizeTarget")) $("mmSystemSizeTarget").textContent = `${targetCapacity.toFixed(1)} kW`;
+
+  const badge = $("mmAllocationBalanceBadge");
+  if (badge) {
+    const diff = round(totalAllocatedKw - targetCapacity, 1);
+    if (Math.abs(diff) <= 0.05 || targetCapacity === 0) {
+      badge.textContent = "Balanced ✓";
+      badge.style.background = "#dcfce7";
+      badge.style.color = "#15803d";
+    } else if (diff > 0) {
+      badge.textContent = `⚠️ Over by ${diff.toFixed(1)} kW`;
+      badge.style.background = "#fee2e2";
+      badge.style.color = "#b91c1c";
+    } else {
+      badge.textContent = `⚠️ Under by ${Math.abs(diff).toFixed(1)} kW`;
+      badge.style.background = "#fef3c7";
+      badge.style.color = "#b45309";
+    }
+  }
+
+  // Check compulsory fields
+  let hasIncomplete = false;
+  state.meters.forEach((m) => {
+    if (!m.consumerNumber || !m.label || !(Number(m.sanctionedLoad) > 0)) {
+      hasIncomplete = true;
+    }
+  });
+  const warningEl = $("mmCompulsoryWarning");
+  if (warningEl) {
+    warningEl.style.display = hasIncomplete && totalMeters > 0 ? "block" : "none";
+  }
+}
+
+function renderMultiMeterTable() {
+  const tbody = $("mmMetersTableBody");
+  if (!tbody) return;
+
+  const totalMeters = state.meters.length;
+
+  let totalSubsidies = 0;
+  const rowsHtml = state.meters.map((meter) => {
+    const isMissingNo = !meter.consumerNumber;
+    const isMissingLabel = !meter.label;
+    const isMissingLoad = !(Number(meter.sanctionedLoad) > 0);
+    const sub = calculateSingleMeterSubsidy(Number(meter.allocatedKw) || 0, meter.consumerCategory || "LT-I");
+    totalSubsidies += sub;
+
+    return `
+      <tr data-meter-id="${meter.id}" style="border-bottom: 1px solid #e2e8f0; transition: background 0.15s;">
+        <td style="padding: 4px 6px;">
+          <input type="text" class="mm-input mm-field-label ${isMissingLabel ? 'input-error' : ''}" data-id="${meter.id}" data-field="label" value="${escapeHtml(meter.label || '')}" placeholder="e.g. Flat 101" style="width: 85px; font-size: 11px; padding: 3px 4px; border: 1px solid ${isMissingLabel ? '#ef4444' : '#cbd5e1'}; border-radius: 4px;">
+        </td>
+        <td style="padding: 4px 6px;">
+          <input type="text" class="mm-input mm-field-cons ${isMissingNo ? 'input-error' : ''}" data-id="${meter.id}" data-field="consumerNumber" value="${escapeHtml(meter.consumerNumber || '')}" placeholder="12-digit No." style="width: 95px; font-size: 11px; padding: 3px 4px; border: 1px solid ${isMissingNo ? '#ef4444' : '#cbd5e1'}; border-radius: 4px;">
+        </td>
+        <td style="padding: 4px 6px;">
+          <input type="number" class="mm-input mm-field-load ${isMissingLoad ? 'input-error' : ''}" data-id="${meter.id}" data-field="sanctionedLoad" min="0.5" step="0.5" value="${meter.sanctionedLoad || ''}" placeholder="kW" style="width: 50px; font-size: 11px; padding: 3px 4px; border: 1px solid ${isMissingLoad ? '#ef4444' : '#cbd5e1'}; border-radius: 4px;">
+        </td>
+        <td style="padding: 4px 6px;">
+          <input type="number" class="mm-input mm-field-units" data-id="${meter.id}" data-field="monthlyUnits" min="0" step="1" value="${meter.monthlyUnits || 0}" style="width: 55px; font-size: 11px; padding: 3px 4px; border: 1px solid #cbd5e1; border-radius: 4px;">
+        </td>
+        <td style="padding: 4px 6px;">
+          <input type="number" class="mm-input mm-field-bill" data-id="${meter.id}" data-field="monthlyBill" min="0" step="50" value="${meter.monthlyBill || 0}" style="width: 60px; font-size: 11px; padding: 3px 4px; border: 1px solid #cbd5e1; border-radius: 4px;">
+        </td>
+        <td style="padding: 4px 6px;">
+          <input type="number" class="mm-input mm-field-alloc" data-id="${meter.id}" data-field="allocatedKw" min="0" max="500" step="0.1" value="${meter.allocatedKw || 0}" style="width: 58px; font-size: 11px; padding: 3px 4px; border: 1px solid #38bdf8; border-radius: 4px; font-weight: 600; color: #0284c7;">
+        </td>
+        <td style="padding: 4px 6px; white-space: nowrap;">
+          <span class="mm-subsidy-badge" style="font-size: 10.5px; font-weight: 600; color: #16a34a; background: #dcfce7; padding: 2px 5px; border-radius: 4px;">₹${sub.toLocaleString('en-IN')}</span>
+        </td>
+        <td style="padding: 4px 4px; text-align: center;">
+          <button type="button" class="mm-del-meter-btn" data-id="${meter.id}" title="Remove Flat" style="background: none; border: none; color: #ef4444; font-size: 13px; cursor: pointer; padding: 2px 4px;">✕</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  tbody.innerHTML = rowsHtml || `<tr><td colspan="8" style="padding: 14px; text-align: center; color: var(--muted); font-style: italic;">No meters added yet. Click "+ Add Flat / Meter" or upload bills above.</td></tr>`;
+
+  updateMultiMeterKPIs();
+
+  // Attach input event listeners
+  tbody.querySelectorAll(".mm-input").forEach((input) => {
+    input.addEventListener("input", (e) => {
+      const id = e.target.getAttribute("data-id");
+      const field = e.target.getAttribute("data-field");
+      const meter = state.meters.find((m) => m.id === id);
+      if (meter) {
+        if (field === "sanctionedLoad" || field === "monthlyUnits" || field === "monthlyBill" || field === "allocatedKw") {
+          meter[field] = Number(e.target.value) || 0;
+        } else {
+          meter[field] = e.target.value;
+        }
+        // If editing allocatedKw, update subsidy badge immediately without losing focus
+        if (field === "allocatedKw") {
+          const row = e.target.closest("tr");
+          const subBadge = row?.querySelector(".mm-subsidy-badge");
+          const newSub = calculateSingleMeterSubsidy(meter.allocatedKw, meter.consumerCategory || "LT-I");
+          if (subBadge) subBadge.textContent = `₹${newSub.toLocaleString('en-IN')}`;
+          updateMultiMeterKPIs();
+        }
+      }
+    });
+
+    input.addEventListener("change", () => {
+      render();
+    });
+  });
+
+  tbody.querySelectorAll(".mm-del-meter-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-id");
+      state.meters = state.meters.filter((m) => m.id !== id);
+      renderMultiMeterTable();
+      render();
+    });
+  });
+}
+
+function setMeteringMode(mode) {
+  state.meteringMode = mode;
+  const singleBtn = $("meteringModeSingleBtn");
+  const multiBtn = $("meteringModeMultiBtn");
+  const multiSection = $("multiMeterSection");
+  const singleGrid = $("singleMeterInputsGrid");
+
+  if (mode === "multi") {
+    singleBtn?.classList.remove("active");
+    if (singleBtn) {
+      singleBtn.style.background = "transparent";
+      singleBtn.style.color = "var(--muted)";
+      singleBtn.style.boxShadow = "none";
+    }
+    multiBtn?.classList.add("active");
+    if (multiBtn) {
+      multiBtn.style.background = "#ffffff";
+      multiBtn.style.color = "var(--ink)";
+      multiBtn.style.boxShadow = "0 1px 2px rgba(0,0,0,0.08)";
+    }
+    if (multiSection) multiSection.style.display = "block";
+    if (singleGrid) singleGrid.style.display = "none";
+
+    // If no meters exist yet, seed first meter from current single meter inputs
+    if (state.meters.length === 0) {
+      state.meters.push({
+        id: "meter_" + Date.now(),
+        label: $("customerName")?.value ? `${$("customerName").value}'s Flat` : "Flat 101",
+        consumerNumber: "",
+        consumerName: $("customerName")?.value || "",
+        sanctionedLoad: Number($("sanctionedLoad")?.value) || 5,
+        monthlyUnits: Number($("monthlyUnits")?.value) || 450,
+        monthlyBill: Number($("monthlyBill")?.value) || 5200,
+        consumerCategory: $("consumerCategory")?.value || "LT-I",
+        connectionPhase: $("connectionPhase")?.value || "1-phase",
+        allocatedKw: 0,
+        subsidy: 0,
+      });
+    }
+    renderMultiMeterTable();
+  } else {
+    multiBtn?.classList.remove("active");
+    if (multiBtn) {
+      multiBtn.style.background = "transparent";
+      multiBtn.style.color = "var(--muted)";
+      multiBtn.style.boxShadow = "none";
+    }
+    singleBtn?.classList.add("active");
+    if (singleBtn) {
+      singleBtn.style.background = "#ffffff";
+      singleBtn.style.color = "var(--ink)";
+      singleBtn.style.boxShadow = "0 1px 2px rgba(0,0,0,0.08)";
+    }
+    if (multiSection) multiSection.style.display = "none";
+    if (singleGrid) singleGrid.style.display = "grid";
+  }
+
+  render();
+}
+
 function render() {
   const input = readInput();
   const config = readConfig();
@@ -847,6 +1064,42 @@ function render() {
   if (finSub) finSub.textContent = `- ${money(option.subsidy)}`;
   const finNet = $("financialNetCost");
   if (finNet) finNet.textContent = money(option.netCost);
+
+  // Update Multi-Meter Financial Subsidy Card if active
+  const multiSubCard = $("financialMultiSubsidyCard");
+  const multiSubList = $("financialMultiSubsidyList");
+  const multiSubCount = $("financialMultiSubsidyCount");
+
+  if (multiSubCard && multiSubList) {
+    if (state.meteringMode === "multi" && option.meterBreakdown && option.meterBreakdown.length > 1) {
+      multiSubCard.style.display = "block";
+      if (multiSubCount) {
+        const eligibleCount = option.meterBreakdown.filter((m) => m.subsidy > 0).length;
+        multiSubCount.textContent = `${eligibleCount} of ${option.meterBreakdown.length} Flats Eligible for PM Surya Ghar`;
+      }
+      multiSubList.innerHTML = option.meterBreakdown
+        .map((m) => `
+          <div style="background: #ffffff; border: 1px solid #dcfce7; border-radius: 6px; padding: 6px 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+              <strong style="font-size: 11.5px; color: var(--ink);">${escapeHtml(m.label || m.consumerName || 'Flat')}</strong>
+              <span style="font-size: 11px; font-weight: 600; color: #15803d;">₹${m.subsidy.toLocaleString('en-IN')}</span>
+            </div>
+            <div style="font-size: 10.5px; color: var(--muted); display: flex; justify-content: space-between;">
+              <span>${m.allocatedKw} kWp Allocated</span>
+              <span>${m.monthlyUnits} kWh/mo</span>
+            </div>
+          </div>
+        `)
+        .join("");
+    } else {
+      multiSubCard.style.display = "none";
+    }
+  }
+
+  // Update allocation bar targets in multi-meter panel
+  if (state.meteringMode === "multi") {
+    updateMultiMeterKPIs();
+  }
 
   $("sanctionStatus").textContent = estimate.sanctionedStatus.label;
   $("sanctionStatus").className = `status-pill ${estimate.sanctionedStatus.level}`;
@@ -2427,9 +2680,57 @@ function attachEvents() {
   });
 
 
+  // Metering Mode Selector Buttons
+  $("meteringModeSingleBtn")?.addEventListener("click", () => setMeteringMode("single"));
+  $("meteringModeMultiBtn")?.addEventListener("click", () => setMeteringMode("multi"));
+
+  // Multi-Meter Action Buttons
+  $("mmAddMeterBtn")?.addEventListener("click", () => {
+    const nextIndex = state.meters.length + 1;
+    state.meters.push({
+      id: "meter_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+      label: `Flat ${nextIndex}`,
+      consumerNumber: "",
+      consumerName: `Flat ${nextIndex}`,
+      sanctionedLoad: 3,
+      monthlyUnits: 300,
+      monthlyBill: 3500,
+      consumerCategory: $("consumerCategory")?.value || "LT-I",
+      connectionPhase: $("connectionPhase")?.value || "1-phase",
+      allocatedKw: 0,
+      subsidy: 0,
+    });
+    const targetCapacity = state.estimates?.recommended?.dcCapacityKw || 0;
+    if (targetCapacity > 0) {
+      state.meters = distributeCapacityAcrossMeters(targetCapacity, state.meters, state.allocationStrategy || "proportional");
+    }
+    renderMultiMeterTable();
+    render();
+  });
+
+  $("mmAutoDistributeBtn")?.addEventListener("click", () => {
+    state.allocationStrategy = "proportional";
+    const targetCapacity = state.estimates?.recommended?.dcCapacityKw || 0;
+    if (targetCapacity > 0 && state.meters.length > 0) {
+      state.meters = distributeCapacityAcrossMeters(targetCapacity, state.meters, "proportional");
+      renderMultiMeterTable();
+      render();
+    }
+  });
+
+  $("mmEqualDistributeBtn")?.addEventListener("click", () => {
+    state.allocationStrategy = "equal";
+    const targetCapacity = state.estimates?.recommended?.dcCapacityKw || 0;
+    if (targetCapacity > 0 && state.meters.length > 0) {
+      state.meters = distributeCapacityAcrossMeters(targetCapacity, state.meters, "equal");
+      renderMultiMeterTable();
+      render();
+    }
+  });
+
   $("billUpload").addEventListener("change", async (event) => {
-    const [file] = event.target.files;
-    if (!file) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) {
       state.extractedBill = null;
       $("billUploadStatus").textContent = "";
       $("billUploadStatus").className = "";
@@ -2437,10 +2738,67 @@ function attachEvents() {
       return;
     }
 
-    const ext = file.name.split(".").pop()?.toLowerCase();
-    const isAI = isSupportedBillFile(file) && ext !== "txt" && ext !== "csv";
     const statusEl = $("billUploadStatus");
     statusEl.className = "upload-status-loading";
+
+    if (files.length > 1 || state.meteringMode === "multi") {
+      setMeteringMode("multi");
+      statusEl.innerHTML = `<span class="spinner"></span> Processing ${files.length} bill(s)...`;
+      try {
+        const batchResults = await parseMultipleMsebBillFiles(files, (progress) => {
+          statusEl.textContent = `Processing bill ${progress.current} of ${progress.total} (${progress.fileName})…`;
+        });
+
+        const newMeters = [];
+        batchResults.forEach((res, idx) => {
+          if (res.success && res.meter) {
+            const m = res.meter;
+            newMeters.push({
+              id: "meter_" + Date.now() + "_" + idx,
+              label: m.label || `Flat ${idx + 1}`,
+              consumerNumber: m.consumerNumber || "",
+              consumerName: m.consumerName || "",
+              sanctionedLoad: m.sanctionedLoad || 5,
+              monthlyUnits: m.monthlyUnits || 0,
+              monthlyBill: m.monthlyBill || 0,
+              consumerCategory: m.consumerCategory || "LT-I",
+              connectionPhase: m.connectionPhase || "1-phase",
+              allocatedKw: 0,
+              subsidy: 0,
+            });
+          }
+        });
+
+        if (newMeters.length > 0) {
+          const hasRealMeters = state.meters.some((m) => m.consumerNumber);
+          if (!hasRealMeters) {
+            state.meters = newMeters;
+          } else {
+            state.meters = [...state.meters, ...newMeters];
+          }
+
+          const targetCapacity = state.estimates?.recommended?.dcCapacityKw || 0;
+          if (targetCapacity > 0) {
+            state.meters = distributeCapacityAcrossMeters(targetCapacity, state.meters, state.allocationStrategy || "proportional");
+          }
+        }
+
+        statusEl.className = "upload-status-success";
+        const successCount = batchResults.filter((r) => r.success).length;
+        statusEl.textContent = `✓ Processed ${successCount} of ${files.length} bill(s) successfully.`;
+        renderMultiMeterTable();
+        render();
+      } catch (err) {
+        statusEl.className = "upload-status-error";
+        statusEl.textContent = `✗ Batch bill processing failed: ${err.message}`;
+      }
+      return;
+    }
+
+    // Single file processing
+    const file = files[0];
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    const isAI = isSupportedBillFile(file) && ext !== "txt" && ext !== "csv";
 
     if (isAI) {
       statusEl.innerHTML = `<span class="spinner"></span> Analyzing ${file.name} with Gemini AI… this may take a few seconds.`;
@@ -2464,6 +2822,20 @@ function attachEvents() {
 
   $("downloadProposalButton")?.addEventListener("click", () => {
     if (state.estimates) {
+      // Validate compulsory multi-meter fields before generating PDF
+      if (state.meteringMode === "multi" && state.meters.length > 0) {
+        const invalidMeters = state.meters.filter(m => !m.consumerNumber?.trim() || !m.label?.trim() || !(Number(m.sanctionedLoad) > 0));
+        if (invalidMeters.length > 0) {
+          alert(`Cannot generate proposal: ${invalidMeters.length} flat/meter(s) are missing compulsory details.\n\nEvery meter must have at minimum:\n1. Consumer Number\n2. Consumer Name / Flat Identifier\n3. Sanctioned Load (kW)\n\nPlease complete these in the Multi-Meter panel before downloading.`);
+          const warningEl = $("mmCompulsoryWarning");
+          if (warningEl) {
+            warningEl.style.display = "block";
+            warningEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+          return;
+        }
+      }
+
       saveProposalData(); // Automatically save data when downloading report
       const btn = $("downloadProposalButton");
       const origText = btn?.textContent;
@@ -2545,6 +2917,20 @@ function attachEvents() {
 
   $("downloadProposalButtonInternal")?.addEventListener("click", () => {
     if (state.estimates) {
+      // Validate compulsory multi-meter fields before generating PDF
+      if (state.meteringMode === "multi" && state.meters.length > 0) {
+        const invalidMeters = state.meters.filter(m => !m.consumerNumber?.trim() || !m.label?.trim() || !(Number(m.sanctionedLoad) > 0));
+        if (invalidMeters.length > 0) {
+          alert(`Cannot generate proposal: ${invalidMeters.length} flat/meter(s) are missing compulsory details.\n\nEvery meter must have at minimum:\n1. Consumer Number\n2. Consumer Name / Flat Identifier\n3. Sanctioned Load (kW)\n\nPlease complete these in the Multi-Meter panel before downloading.`);
+          const warningEl = $("mmCompulsoryWarning");
+          if (warningEl) {
+            warningEl.style.display = "block";
+            warningEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+          return;
+        }
+      }
+
       const btn = $("downloadProposalButtonInternal");
       const origText = btn?.textContent;
       if (btn) { btn.textContent = "Generating PDF..."; btn.disabled = true; }
@@ -3126,6 +3512,9 @@ window.loadProposalState = function(data) {
     Object.assign(state, data.state);
   }
   if (data.input) {
+    if (data.input.meteringMode) state.meteringMode = data.input.meteringMode;
+    if (data.input.meters && Array.isArray(data.input.meters)) state.meters = data.input.meters;
+    if (data.input.allocationStrategy) state.allocationStrategy = data.input.allocationStrategy;
     Object.keys(data.input).forEach(key => {
        const el = $(key);
        if (el && el.type !== 'radio' && el.type !== 'checkbox') {
@@ -3187,5 +3576,11 @@ window.loadProposalState = function(data) {
   if (resultsPanel) resultsPanel.classList.remove('blurred-overlay');
 
   if ($('loadProposalModal')) $('loadProposalModal').style.display = 'none';
+
+  if (state.meteringMode === "multi") {
+    setMeteringMode("multi");
+  } else {
+    setMeteringMode("single");
+  }
   render();
 };
