@@ -545,7 +545,10 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const effectiveGstRate = (goodsShare * goodsGstRate) + (servicesShare * servicesGstRate); // 8.9%
   const gst = preTaxSubtotal * (effectiveGstRate / 100);
   const contingency = preTaxSubtotal * ((pricing.contingencyRate || 0) / 100);
-  const totalPreSubsidy = preTaxSubtotal + gst + contingency;
+  const baseCostInclGst = round(preTaxSubtotal + gst + contingency, 0);
+  const marginRate = pricing.marginRate !== undefined ? pricing.marginRate : (input.marginRate !== undefined ? input.marginRate : 30);
+  const margin = round(baseCostInclGst * (marginRate / 100), 0);
+  const totalPreSubsidy = baseCostInclGst + margin;
   const subsidyResult = calculateSubsidy(systemType, panelType, dcCapacityKw, input, config.policy);
   const subsidy = subsidyResult.total;
   const netCost = Math.max(totalPreSubsidy - subsidy, 0);
@@ -618,6 +621,9 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       gst: round(gst, 0),
       effectiveGstRate: round(effectiveGstRate, 1),
       contingency: round(contingency, 0),
+      baseCostInclGst: round(baseCostInclGst, 0),
+      marginRate: round(marginRate, 1),
+      margin: round(margin, 0),
     },
     financing: calculateSolarFinancing({
       netCost,

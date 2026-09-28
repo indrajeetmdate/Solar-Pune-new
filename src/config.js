@@ -184,6 +184,7 @@ export const DEFAULT_CONFIG = {
     installationRatePerW: 4,
     consultancyRatePerW: 3,
     contingencyRate: 3,
+    marginRate: 30, // Default 30% margin on total component costs incl. of GST
   },
   performance: {
     panelWp: 550,

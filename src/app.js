@@ -23,7 +23,7 @@ const ASSUMPTION_IDS = [
   "panelType", "structureType", "capacityOverride", "inverterOverride", "batteryOverride", "backupLoad", "backupHours",
   "panelDcrRate", "panelNonDcrRate", "batteryRate",
   "hotDipStructureRate", "galvalumeStructureRate", "gpPurlinStructureRate", "wiringRate", "installationRate", "consultancyRate",
-  "contingencyRate",
+  "contingencyRate", "marginRate",
   "panelWp", "panelEfficiency",
   "dailyGeneration", "shadingLoss", "orientationLoss", "systemLoss", "degradationRate", "batteryDod", "inverterEfficiency", "selfConsumptionPct",
   "savingsMethod", "fixedCharge", "electricityDuty", "tariffEscalation",
@@ -82,6 +82,7 @@ const ids = [
   "installationRate",
   "consultancyRate",
   "contingencyRate",
+  "marginRate",
   "panelWp",
   "panelEfficiency",
   "dailyGeneration",
@@ -218,6 +219,7 @@ function readConfig() {
       installationRatePerW: numberValue("installationRate"),
       consultancyRatePerW: numberValue("consultancyRate"),
       contingencyRate: numberValue("contingencyRate"),
+      marginRate: numberValue("marginRate") !== undefined && !isNaN(numberValue("marginRate")) ? numberValue("marginRate") : 30,
     },
     performance: {
       panelWp: numberValue("panelWp") || 550,
@@ -435,6 +437,14 @@ function renderBreakup(option, input, customerView, config) {
 
     let gstVal = state.breakupConfigGst && state.breakupConfigGst[sysType] !== undefined ? state.breakupConfigGst[sysType] : option.costBreakup.gst;
     let contVal = state.breakupConfigContingency && state.breakupConfigContingency[sysType] !== undefined ? state.breakupConfigContingency[sysType] : option.costBreakup.contingency;
+    let defaultMarginRate = (config && config.pricing && config.pricing.marginRate !== undefined) ? config.pricing.marginRate : 30;
+    let marginPct = (state.breakupConfigMarginPct && state.breakupConfigMarginPct[sysType] !== undefined)
+      ? state.breakupConfigMarginPct[sysType]
+      : (option.costBreakup.marginRate !== undefined ? option.costBreakup.marginRate : defaultMarginRate);
+    let baseCost = option.costBreakup.baseCostInclGst !== undefined
+      ? option.costBreakup.baseCostInclGst
+      : (displayList.reduce((sum, it) => sum + (it.isHidden || it.isHeader ? 0 : (it.value || 0)), 0) + gstVal + contVal);
+    let marginVal = option.costBreakup.margin !== undefined ? option.costBreakup.margin : Math.round(baseCost * (marginPct / 100));
 
     itemsHtml += `
       <tr style="border-top: 1px solid var(--line);">
@@ -461,13 +471,33 @@ function renderBreakup(option, input, customerView, config) {
         <td style="padding: 3px 4px; text-align: right; font-size: 11px; color: var(--text-muted); vertical-align: top;">${money(contVal)}</td>
         <td></td>
       </tr>
+      <tr>
+        <td style="padding: 5px 6px;">
+          Margin (${marginPct}%)
+          <div style="font-size: 10px; font-style: italic; color: var(--text-muted);">${marginPct}% of total component costs incl. GST</div>
+        </td>
+        <td style="padding: 3px 2px; text-align: right; vertical-align: top;">
+          <div style="display: flex; align-items: center; justify-content: flex-end; gap: 2px;">
+            <input type="number" step="0.5" min="0" class="override-margin-pct" data-sys="${sysType}" value="${marginPct}"
+              style="width: 58px; text-align: right; padding: 3px 4px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;">
+            <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">%</span>
+          </div>
+        </td>
+        <td style="padding: 3px 4px; text-align: right; font-size: 11px; color: var(--text-muted); vertical-align: top;">${money(marginVal)}</td>
+        <td></td>
+      </tr>
     </table>`;
+
+    const dcWp = option.dcCapacityKw * 1000;
+    const costPerWatt = dcWp > 0 ? (option.totalPreSubsidy / dcWp) : 0;
+    const exceeds60 = costPerWatt > 60;
 
     // Totals summary (non-editable)
     itemsHtml += `
     <div style="margin-top: 8px; padding-top: 8px; border-top: 2px solid var(--line); font-size: 13px;">
       <div style="display:flex; justify-content:space-between; margin-bottom: 3px;">
-        <span style="font-weight: 600;">Total (Inc. GST)</span><span style="font-weight: 600;">${money(option.totalPreSubsidy)}</span>
+        <span style="font-weight: 600;">Total (Inc. GST & Margin)</span>
+        <span style="font-weight: 600;">${money(option.totalPreSubsidy)} <span style="font-size: 11px; font-weight: normal; color: ${exceeds60 ? '#dc2626' : 'var(--text-muted)'};">(₹${costPerWatt.toFixed(1)}/W)</span></span>
       </div>
       <div style="display:flex; justify-content:space-between; margin-bottom: 3px; color: var(--primary);">
         <span>Subsidy</span><span>- ${money(option.subsidy)}</span>
@@ -475,6 +505,10 @@ function renderBreakup(option, input, customerView, config) {
       <div style="display:flex; justify-content:space-between; font-weight: 700; font-size: 14px; padding-top: 4px; border-top: 1px solid var(--line);">
         <span>Net Customer Cost</span><span>${money(option.netCost)}</span>
       </div>
+      ${exceeds60 ? `
+      <div class="cost-per-watt-alert" style="margin-top: 8px; padding: 7px 10px; background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; border-radius: 4px; color: #92400e; font-size: 12px; font-weight: 600;">
+        ⚠️ Warning: Total cost before subsidy after margin is ₹${costPerWatt.toFixed(1)}/W, exceeding the ₹60/W benchmark!
+      </div>` : ''}
     </div>`;
   } else {
     let visibleItems = option.costBreakupList.filter(it => !it.isHidden && !it.isHeader);
@@ -502,6 +536,13 @@ function renderBreakup(option, input, customerView, config) {
       <dt style="font-weight: bold; color: var(--text); font-size: 1.1em;">Net customer cost</dt>
       <dd style="font-weight: bold; font-size: 1.1em;">${money(option.netCost)}</dd>
     </div>`;
+
+    if (exceeds60) {
+      itemsHtml += `
+      <div class="cost-per-watt-alert" style="margin-top: 10px; padding: 7px 10px; background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; border-radius: 4px; color: #92400e; font-size: 12px; font-weight: 600;">
+        ⚠️ Warning: Total cost before subsidy after margin is ₹${costPerWatt.toFixed(1)}/W, exceeding the ₹60/W benchmark!
+      </div>`;
+    }
   }
 
   $("costBreakup").innerHTML = itemsHtml;
@@ -535,6 +576,15 @@ function renderBreakup(option, input, customerView, config) {
         if (!state.breakupConfigContingency) state.breakupConfigContingency = {};
         if (isNaN(val)) delete state.breakupConfigContingency[sysType];
         else state.breakupConfigContingency[sysType] = val;
+        render();
+      });
+    });
+    document.querySelectorAll(".override-margin-pct").forEach(el => {
+      el.addEventListener("change", (e) => {
+        let val = parseFloat(e.target.value);
+        if (!state.breakupConfigMarginPct) state.breakupConfigMarginPct = {};
+        if (isNaN(val)) delete state.breakupConfigMarginPct[sysType];
+        else state.breakupConfigMarginPct[sysType] = val;
         render();
       });
     });
@@ -1064,11 +1114,27 @@ function render() {
 
   // Update Financials tab summary metrics
   const finTotal = $("financialTotalCost");
-  if (finTotal) finTotal.textContent = money(option.totalCost);
+  if (finTotal) finTotal.textContent = money(option.totalPreSubsidy);
   const finSub = $("financialSubsidy");
   if (finSub) finSub.textContent = `- ${money(option.subsidy)}`;
   const finNet = $("financialNetCost");
   if (finNet) finNet.textContent = money(option.netCost);
+
+  // Check cost per watt limit (> 60 Rs/W)
+  const dcWp = option.dcCapacityKw * 1000;
+  const costPerWatt = dcWp > 0 ? (option.totalPreSubsidy / dcWp) : 0;
+  const costPerWattWarnEl = $("financialCostPerWattWarning");
+  const costPerWattMsgEl = $("financialCostPerWattMsg");
+  if (costPerWattWarnEl) {
+    if (costPerWatt > 60) {
+      costPerWattWarnEl.style.display = "block";
+      if (costPerWattMsgEl) {
+        costPerWattMsgEl.innerHTML = `Total cost before subsidy after margin is <strong>₹${costPerWatt.toFixed(1)}/W</strong>, which exceeds the benchmark of <strong>₹60/W</strong>. Consider adjusting margin or component rates.`;
+      }
+    } else {
+      costPerWattWarnEl.style.display = "none";
+    }
+  }
 
   // Update Multi-Meter Financial Subsidy Card if active
   const multiSubCard = $("financialMultiSubsidyCard");
@@ -3366,9 +3432,21 @@ function applyBreakupConfig(estimate, input) {
     let configContingency = state.breakupConfigContingency && state.breakupConfigContingency[sysType] !== undefined ? state.breakupConfigContingency[sysType] : null;
     const contingency = configContingency !== null ? configContingency : preTaxSubtotal * ((input.contingencyRate || 0) / 100);
 
+    const baseCostInclGst = preTaxSubtotal + gst + contingency;
+
+    // Margin (default 30% of total component costs incl. of GST)
+    let defaultMarginRate = (config && config.pricing && config.pricing.marginRate !== undefined) ? config.pricing.marginRate : 30;
+    let marginRate = (state.breakupConfigMarginPct && state.breakupConfigMarginPct[sysType] !== undefined)
+      ? state.breakupConfigMarginPct[sysType]
+      : defaultMarginRate;
+    const margin = baseCostInclGst * (marginRate / 100);
+
     option.costBreakup.effectiveGstRate = effectiveGstRate;
     option.costBreakup.gst = gst;
     option.costBreakup.contingency = contingency;
+    option.costBreakup.baseCostInclGst = baseCostInclGst;
+    option.costBreakup.marginRate = marginRate;
+    option.costBreakup.margin = margin;
 
     let effectiveSubsidy = $("hideSubsidy")?.checked ? 0 : option.subsidy;
     
@@ -3376,21 +3454,18 @@ function applyBreakupConfig(estimate, input) {
       option.totalPreSubsidy = 0;
       effectiveSubsidy = 0;
       option.subsidy = 0;
-    }
-
-    option.totalPreSubsidy = preTaxSubtotal + gst + contingency;
-    
-    if ($("hideCost")?.checked) {
-      option.totalPreSubsidy = 0;
-      effectiveSubsidy = 0;
-      option.subsidy = 0;
       option.netCost = 0;
     } else {
+      option.totalPreSubsidy = baseCostInclGst + margin;
       option.netCost = Math.max(option.totalPreSubsidy - effectiveSubsidy, 0);
     }
     
     option.paybackYears = option.annualSavings > 0 && option.netCost > 0 ? option.netCost / option.annualSavings : 0;
     option.roiPercent = option.netCost > 0 ? (option.annualSavings / option.netCost) * 100 : Infinity;
+
+    if (option.financing) {
+      option.financing.principal = option.netCost;
+    }
 
     option.costBreakupList = finalItems;
   });

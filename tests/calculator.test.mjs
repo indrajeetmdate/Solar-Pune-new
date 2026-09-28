@@ -95,5 +95,40 @@ assert.equal(commercialEstimate.options[1].systemType, "hybrid");
 assert.ok(commercialEstimate.options[1].batteryCapacityKwh > 0);
 assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hybrid with battery should calculate peak penalty avoided");
 
+// Margin & 60 Rs/W Warning Benchmark Tests
+{
+  const testInput = makeInput({ capacityOverride: 5 });
+  const est = calculateEstimate(testInput, DEFAULT_CONFIG);
+  const opt = est.recommended;
+  const cb = opt.costBreakup;
+
+  // Margin percentage defaults to 30%
+  assert.equal(cb.marginRate, 30, "Default margin must be 30%");
+  assert.ok(cb.baseCostInclGst > 0, "Base cost incl. GST must be calculated");
+  assert.equal(cb.margin, Math.round(cb.baseCostInclGst * 0.3), "Margin must be 30% of base cost incl. GST");
+  assert.equal(opt.totalPreSubsidy, cb.baseCostInclGst + cb.margin, "Total cost must include margin");
+  assert.equal(opt.netCost, opt.totalPreSubsidy - opt.subsidy, "Net cost must equal total pre-subsidy minus subsidy");
+
+  // Warning benchmark: check if rate/W exceeds 60 Rs/W
+  const costPerWatt = opt.totalPreSubsidy / (opt.dcCapacityKw * 1000);
+  assert.ok(costPerWatt > 60, "With 30% margin, standard system exceeds 60 Rs/W triggering warning");
+
+  // Test custom margin override (e.g. 0%)
+  const customConfig = {
+    ...DEFAULT_CONFIG,
+    pricing: {
+      ...DEFAULT_CONFIG.pricing,
+      marginRate: 0,
+    }
+  };
+  const lowMarginEst = calculateEstimate(testInput, customConfig);
+  const lowOpt = lowMarginEst.recommended;
+  assert.equal(lowOpt.costBreakup.marginRate, 0);
+  assert.equal(lowOpt.costBreakup.margin, 0);
+  assert.ok(lowOpt.totalPreSubsidy < opt.totalPreSubsidy);
+  const lowCostPerWatt = lowOpt.totalPreSubsidy / (lowOpt.dcCapacityKw * 1000);
+  assert.ok(lowCostPerWatt < 60, "With 0% margin, system rate/W should stay below 60 Rs/W");
+}
+
 console.log("calculator tests passed");
 
