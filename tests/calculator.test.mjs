@@ -6,6 +6,7 @@ import {
   calculateSubsidy,
   recommendCapacity,
 } from "../src/calculator.js";
+import { buildSystemIncludesText, sanitizeSystemIncludes } from "../src/reportGenerator.js";
 
 function makeInput(overrides = {}) {
   return {
@@ -128,6 +129,53 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.ok(lowOpt.totalPreSubsidy < opt.totalPreSubsidy);
   const lowCostPerWatt = lowOpt.totalPreSubsidy / (lowOpt.dcCapacityKw * 1000);
   assert.ok(lowCostPerWatt < 60, "With 0% margin, system rate/W should stay below 60 Rs/W");
+}
+
+// System Includes > never include Contingency in the PDF Tests
+{
+  // 1. Test auto-generated system includes text from estimate option
+  const est = calculateEstimate(makeInput(), DEFAULT_CONFIG);
+  const opt = est.recommended;
+  const pdfIncludesText = buildSystemIncludesText(opt);
+  assert.ok(!/contingency/i.test(pdfIncludesText), "Auto-generated System Includes must not contain Contingency");
+  assert.ok(pdfIncludesText.startsWith("System Includes:"), "Must start with 'System Includes:'");
+  assert.ok(pdfIncludesText.includes("GST"), "Must include GST");
+  assert.ok(pdfIncludesText.endsWith("."), "Must end with period");
+
+  // 2. Test sanitizeSystemIncludes with various strings containing Contingency
+  const cases = [
+    {
+      input: "Solar Panels, Mounting Structure, On-grid Inverter, GST, and Contingency.",
+      expected: "Solar Panels, Mounting Structure, On-grid Inverter, and GST."
+    },
+    {
+      input: "Solar Panels, Inverter, Contingency, and GST.",
+      expected: "Solar Panels, Inverter, and GST."
+    },
+    {
+      input: "Solar Panels, Inverter, and Contingency.",
+      expected: "Solar Panels, Inverter."
+    },
+    {
+      input: "Solar Panels, Inverter, Contingency.",
+      expected: "Solar Panels, Inverter."
+    }
+  ];
+
+  for (const c of cases) {
+    const res = sanitizeSystemIncludes(c.input);
+    assert.ok(!/contingency/i.test(res), `Result '${res}' must not contain contingency`);
+    assert.equal(res, c.expected);
+  }
+
+  // 3. Test buildSystemIncludesText when custom systemIncludesText was supplied with Contingency
+  const customOpt = {
+    ...opt,
+    systemIncludesText: "Solar Panels, Structure, Inverter, GST, and Contingency."
+  };
+  const customPdfText = buildSystemIncludesText(customOpt);
+  assert.ok(!/contingency/i.test(customPdfText), "Custom text with Contingency must have Contingency stripped");
+  assert.equal(customPdfText, "System Includes: Solar Panels, Structure, Inverter, and GST.");
 }
 
 console.log("calculator tests passed");

@@ -374,8 +374,10 @@ function renderBreakup(option, input, customerView, config) {
 
     // Build the default "System Includes" text from visible items
     let visibleLabels = displayList.filter(it => !it.isHidden && !it.isHeader).map(it => it.label);
-    let defaultIncludesText = visibleLabels.join(", ") + ", GST, and Contingency.";
+    let defaultIncludesText = visibleLabels.join(", ") + ", and GST.";
     let currentIncludesText = (state.systemIncludesText && state.systemIncludesText[sysType]) || defaultIncludesText;
+    currentIncludesText = currentIncludesText.replace(/,?\s*(?:and\s+)?contingency\.?/gi, "").trim();
+    if (!currentIncludesText.endsWith(".")) currentIncludesText += ".";
 
     // System Includes editable textarea
     itemsHtml += `
@@ -516,8 +518,10 @@ function renderBreakup(option, input, customerView, config) {
     if (state.systemIncludesText && state.systemIncludesText[option.systemType]) {
       includesText = state.systemIncludesText[option.systemType];
     } else {
-      includesText = visibleItems.map(it => it.label).join(", ") + ", GST, and Contingency.";
+      includesText = visibleItems.map(it => it.label).join(", ") + ", and GST.";
     }
+    includesText = includesText.replace(/,?\s*(?:and\s+)?contingency\.?/gi, "").trim();
+    if (!includesText.endsWith(".")) includesText += ".";
 
     itemsHtml = `<div style="margin-bottom: 12px; font-size: 13px; color: var(--text-light); line-height: 1.4;">
       <strong>Includes:</strong> ${includesText}

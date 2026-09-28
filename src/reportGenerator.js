@@ -60,6 +60,56 @@ const canvasToImageData = (canvasId) => {
   }
 };
 
+export function sanitizeSystemIncludes(text) {
+  let s = (text || "")
+    .replace(/,?\s+and\s+contingency/gi, "")
+    .replace(/,?\s+contingency/gi, "")
+    .replace(/,\s*\./g, ".")
+    .replace(/\s*,\s*,/g, ",")
+    .replace(/,\s*GST\b/gi, ", and GST")
+    .replace(/and\s+and\b/gi, "and")
+    .replace(/\s+/g, " ")
+    .replace(/\s+\./g, ".")
+    .trim();
+  if (s && !s.endsWith(".")) s += ".";
+  return s;
+}
+
+export function buildSystemIncludesText(option) {
+  const cBreakup = option.costBreakup || {};
+  let mainInverterPrefix = "On-grid";
+  if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
+  if (option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
+
+  let rawText;
+  if (option.systemIncludesText) {
+    rawText = option.systemIncludesText.replace(/^System Includes:\s*/i, "");
+  } else {
+    const includedItems = [];
+    if (option.costBreakupList) {
+      option.costBreakupList.forEach(it => {
+        if (!it.isHidden && !it.isHeader) {
+          includedItems.push(it.label);
+        }
+      });
+    } else {
+      // Fallback if list not found
+      includedItems.push(
+        "Solar Panels",
+        `${mainInverterPrefix} Inverter`,
+        "Mounting Structure",
+        "Electrical safety and wiring",
+        "Installation & Commissioning",
+        "Consultancy"
+      );
+      if (cBreakup.backupInverter > 0) includedItems.push("Backup Off-grid Inverter");
+      if (cBreakup.battery > 0) includedItems.push("Battery Storage");
+    }
+    rawText = includedItems.join(", ") + ", and GST.";
+  }
+  return "System Includes: " + sanitizeSystemIncludes(rawText);
+}
+
 export async function generateProposalPDF(estimates, selectedOption, hideFlags = {}) {
   console.log("Starting PDF generation...", estimates);
 
@@ -487,34 +537,8 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     mainInverterPrefix = "On-grid";
     if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
     if (option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
-  
-    // Build system includes text - use custom text if provided, otherwise auto-generate
-    let includesText;
-    if (option.systemIncludesText) {
-      includesText = "System Includes: " + option.systemIncludesText;
-    } else {
-      const includedItems = [];
-      if (option.costBreakupList) {
-        option.costBreakupList.forEach(it => {
-          if (!it.isHidden && !it.isHeader) {
-            includedItems.push(it.label);
-          }
-        });
-      } else {
-        // Fallback if list not found
-        includedItems.push(
-          "Solar Panels",
-          `${mainInverterPrefix} Inverter`,
-          "Mounting Structure",
-          "Electrical safety and wiring",
-          "Installation & Commissioning",
-          "Consultancy"
-        );
-        if (cBreakup.backupInverter > 0) includedItems.push("Backup Off-grid Inverter");
-        if (cBreakup.battery > 0) includedItems.push("Battery Storage");
-      }
-      includesText = "System Includes: " + includedItems.join(", ") + ", GST, and Contingency.";
-    }
+    // Build system includes text - never include Contingency in the PDF
+    const includesText = buildSystemIncludesText(option);
   
     doc.setFontSize(10);
     doc.setTextColor(COLORS.text);
