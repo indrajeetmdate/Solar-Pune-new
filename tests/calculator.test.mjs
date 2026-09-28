@@ -77,5 +77,23 @@ assert.equal(
   "Wiring and cabling cost must be 0 when rate/W is 0 (no basic 55000 protection cost)"
 );
 
+// Systems without battery must NOT include peak penalty avoided
+const commercialInput = makeInput({
+  consumerCategory: "LT-II",
+  monthlyUnits: 1000,
+  monthlyBill: 12000,
+  goal: "ongrid",
+  backupNeeded: true, // Even if requested, on-grid has no battery
+});
+const commercialEstimate = calculateEstimate(commercialInput, DEFAULT_CONFIG);
+assert.equal(commercialEstimate.options[0].systemType, "ongrid");
+assert.equal(commercialEstimate.options[0].batteryCapacityKwh, 0);
+assert.equal(commercialEstimate.options[0].savingsBreakdown.todPeakAvoided, 0, "Ongrid without battery must have 0 peak penalty avoided");
+
+// But hybrid system with battery should include peak penalty avoided for LT-II
+assert.equal(commercialEstimate.options[1].systemType, "hybrid");
+assert.ok(commercialEstimate.options[1].batteryCapacityKwh > 0);
+assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hybrid with battery should calculate peak penalty avoided");
+
 console.log("calculator tests passed");
 

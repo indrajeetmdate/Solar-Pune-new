@@ -252,8 +252,9 @@ export function calculateTodSavings(offsetUnits, energyChargePerUnit, input = {}
   }
 
   // Peak penalty avoidance: battery can discharge 17:00–24:00
-  // Only relevant for categories with todPeakPenaltyPct > 0 and hybrid/offgrid
-  if (profile.todPeakPenaltyPct > 0 && input.backupNeeded) {
+  // Only relevant for categories with todPeakPenaltyPct > 0 and systems WITH a battery
+  const hasBattery = input.hasBattery !== undefined ? Boolean(input.hasBattery) : Boolean(input.backupNeeded && !input.noBattery);
+  if (profile.todPeakPenaltyPct > 0 && hasBattery) {
     const peakUsagePct = (input.peakHourUsagePct || 30) / 100;
     const peakUnits = input.monthlyUnits * peakUsagePct;
     const batteryCanCover = Math.min(peakUnits, offsetUnits * 0.3); // battery covers ~30% of gen
@@ -495,7 +496,8 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
 
   // Category-aware bonus savings
   const avgRate = input.monthlyUnits > 0 ? modelCurrentBill.energyCharge / input.monthlyUnits : 0;
-  const todSavings = calculateTodSavings(offsetUnits, avgRate, input);
+  const hasBattery = batteryCapacityKwh > 0;
+  const todSavings = calculateTodSavings(offsetUnits, avgRate, { ...input, hasBattery });
   const pfIncentive = calculatePfIncentive(input.currentPf, input.improvedPf, modelCurrentBill.energyCharge, input);
   // FIX M3: Prompt pay differential — customer gets this discount with or without solar.
   // Only the difference is attributable to solar.
@@ -593,14 +595,14 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       energyCharge: round(modelCurrentBill.energyCharge, 0),
       fixedCharge: round(modelCurrentBill.fixedCharge, 0),
       duty: round(modelCurrentBill.duty, 0),
-      todPenalty: round(todSavings.peakPenaltyAvoided, 0),
-      total: round(modelCurrentBill.total + todSavings.peakPenaltyAvoided, 0)
+      todPenalty: round(hasBattery ? todSavings.peakPenaltyAvoided : 0, 0),
+      total: round(modelCurrentBill.total + (hasBattery ? todSavings.peakPenaltyAvoided : 0), 0)
     },
     savingsBreakdown: {
       baseSavings: round(baseSavings, 0),
       bankingLoss: round(banking.deductedUnits * avgRate, 0),
       todDaytimeRebate: todSavings.daytimeRebate,
-      todPeakAvoided: todSavings.peakPenaltyAvoided,
+      todPeakAvoided: hasBattery ? todSavings.peakPenaltyAvoided : 0,
       pfIncentive: round(pfIncentive, 0),
       promptPayDiscount: round(promptPay, 0),
     },

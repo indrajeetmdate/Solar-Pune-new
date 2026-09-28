@@ -653,10 +653,14 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
       "Prompt pay discount": "1% bill discount for prompt payment, easier with significantly lowered bills.",
       "Banking loss": "MSEDCL grid-support charges on excess solar energy exported to the grid.",
     };
+    const hasBattery = (option.batteryCapacityKwh > 0) || (option.costBreakup && option.costBreakup.battery > 0);
     option.savingsBreakdownList.forEach(item => {
-      if (!item.isHidden && item.value !== 0) {
+      // Exclude negative value components, banking loss, and battery-only savings on systems without battery
+      if (item.value <= 0 || item.id === 'bankingLoss' || (item.label && item.label.toLowerCase().includes('banking'))) return;
+      if (!hasBattery && (item.id === 'todPeakAvoided' || (item.label && item.label.toLowerCase().includes('peak penalty')))) return;
+      if (!item.isHidden) {
         let label = item.label;
-        let valueStr = item.value < 0 ? `-${formatCurrency(Math.abs(item.value * 12))}` : formatCurrency(item.value * 12);
+        let valueStr = formatCurrency(item.value * 12);
         let tip = tipMap[item.label] || "";
         savingsData.push([label, valueStr, tip]);
       }
@@ -680,9 +684,6 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     didParseCell: function (data) {
       if (data.row.raw[0].includes("Total Annual Savings")) {
         data.cell.styles.fillColor = COLORS.bgLight;
-      }
-      if (data.row.raw[0].includes("Banking Charges")) {
-        data.row.cells[1].styles.textColor = [200, 50, 50]; // Red color for loss
       }
     },
     margin: { left: margin },

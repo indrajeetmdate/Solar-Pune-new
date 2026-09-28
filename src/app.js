@@ -1252,14 +1252,14 @@ function render() {
         "Prompt pay discount": "1% discount for paying your reduced bill on time. Solar makes this easier with lower bills.",
         "Banking loss": "MSEDCL charges a grid-support fee on excess solar units exported to the grid.",
       };
-      const items = option.savingsBreakdownList.filter(it => !it.isHidden && it.value !== 0);
+      const items = option.savingsBreakdownList.filter(it => !it.isHidden && it.value > 0);
       if (items.length > 0) {
         sbEl.classList.remove("hidden");
         sbEl.innerHTML = items
           .map(item => {
             const tip = tipMap[item.label] || "";
             const icon = tip ? ` <i class="info-tip" data-tip="${tip}">i</i>` : "";
-            return `<div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><div><span style="font-weight: 600;">${item.label}</span>${icon}</div><div>${item.value > 0 ? "+" : ""}${money(Math.abs(item.value))}${item.value < 0 ? " loss" : ""}/mo</div></div>`;
+            return `<div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><div><span style="font-weight: 600;">${item.label}</span>${icon}</div><div>+${money(item.value)}/mo</div></div>`;
           })
           .join("");
       } else {
@@ -3176,17 +3176,31 @@ function applySavingsConfig(estimate, input) {
   estimate.options.forEach(option => {
     let sysType = option.systemType;
     let sb = option.savingsBreakdown;
+    const hasBattery = (option.batteryCapacityKwh > 0) || (option.costBreakup && option.costBreakup.battery > 0);
     
     let defaultItems = [
       { id: 'baseSavings', label: 'Slab/tariff offset', value: sb.baseSavings },
       { id: 'todDaytimeRebate', label: 'ToD daytime rebate', value: sb.todDaytimeRebate },
-      { id: 'todPeakAvoided', label: 'Peak penalty avoided', value: sb.todPeakAvoided },
-      { id: 'pfIncentive', label: 'PF improvement', value: sb.pfIncentive },
-      { id: 'promptPayDiscount', label: 'Prompt pay discount', value: sb.promptPayDiscount },
-      { id: 'bankingLoss', label: 'Banking loss', value: -sb.bankingLoss },
     ];
+    // Only include Peak penalty avoided for systems with a battery
+    if (hasBattery && sb.todPeakAvoided > 0) {
+      defaultItems.push({ id: 'todPeakAvoided', label: 'Peak penalty avoided', value: sb.todPeakAvoided });
+    }
+    defaultItems.push(
+      { id: 'pfIncentive', label: 'PF improvement', value: sb.pfIncentive },
+      { id: 'promptPayDiscount', label: 'Prompt pay discount', value: sb.promptPayDiscount }
+    );
     
-    if (!state.savingsConfig[sysType]) {
+    // Purge any bankingLoss or non-battery peak penalty from saved or active config
+    if (state.savingsConfig[sysType]) {
+      state.savingsConfig[sysType] = state.savingsConfig[sysType].filter(item => {
+        if (item.id === 'bankingLoss' || (item.label && item.label.toLowerCase().includes('banking'))) return false;
+        if (!hasBattery && (item.id === 'todPeakAvoided' || (item.label && item.label.toLowerCase().includes('peak penalty')))) return false;
+        return true;
+      });
+    }
+
+    if (!state.savingsConfig[sysType] || state.savingsConfig[sysType].length === 0) {
       state.savingsConfig[sysType] = defaultItems.map(di => ({
         id: di.id,
         label: di.label,
@@ -3194,6 +3208,18 @@ function applySavingsConfig(estimate, input) {
         isOverride: false,
         overrideValue: di.value
       }));
+    } else {
+      defaultItems.forEach(di => {
+        if (!state.savingsConfig[sysType].some(x => x.id === di.id)) {
+          state.savingsConfig[sysType].push({
+            id: di.id,
+            label: di.label,
+            isHidden: false,
+            isOverride: false,
+            overrideValue: di.value
+          });
+        }
+      });
     }
     
     let configList = state.savingsConfig[sysType];
@@ -3201,12 +3227,18 @@ function applySavingsConfig(estimate, input) {
     let totalMonthlySavings = 0;
     
     configList.forEach(c => {
+      if (c.id === 'bankingLoss' || (c.label && c.label.toLowerCase().includes('banking'))) return;
+      if (!hasBattery && (c.id === 'todPeakAvoided' || (c.label && c.label.toLowerCase().includes('peak penalty')))) return;
+
       let item = { ...c };
       let di = defaultItems.find(x => x.id === c.id);
       let computedValue = di ? di.value : 0;
       item.value = c.isOverride ? c.overrideValue : computedValue;
       
-      if (!c.isHidden && item.value !== 0) {
+      // Negative value components should not be included in estimated savings
+      if (item.value < 0) return;
+
+      if (!c.isHidden && item.value > 0) {
         totalMonthlySavings += item.value;
       }
       finalSavingsItems.push(item);
