@@ -361,6 +361,9 @@ function renderComparison(options, recommended) {
 function renderBreakup(option, input, customerView, config) {
   const isInternal = state.internalUnlocked;
   const sysType = option.systemType;
+  const dcWp = option.dcCapacityKw * 1000;
+  const costPerWatt = dcWp > 0 ? (option.totalPreSubsidy / dcWp) : 0;
+  const exceeds60 = costPerWatt > 60;
 
   let itemsHtml = "";
   
@@ -383,7 +386,6 @@ function renderBreakup(option, input, customerView, config) {
     </div>`;
 
     // Build calculation detail map for each cost item
-    const dcWp = option.dcCapacityKw * 1000;
     const pricing = config?.pricing || {};
     const calcDetails = {};
     const panelRate = input.panelType === 'nonDcr' ? pricing.panelNonDcrRatePerWp : pricing.panelDcrRatePerWp;
@@ -487,10 +489,6 @@ function renderBreakup(option, input, customerView, config) {
         <td></td>
       </tr>
     </table>`;
-
-    const dcWp = option.dcCapacityKw * 1000;
-    const costPerWatt = dcWp > 0 ? (option.totalPreSubsidy / dcWp) : 0;
-    const exceeds60 = costPerWatt > 60;
 
     // Totals summary (non-editable)
     itemsHtml += `
@@ -1068,7 +1066,7 @@ function render() {
   const estimate = calculateEstimate(input, config);
   applyBillConfig(estimate, input);
   applySavingsConfig(estimate, input);
-  applyBreakupConfig(estimate, input);
+  applyBreakupConfig(estimate, input, config);
   state.estimates = estimate;
   const option = (state.selectedSystemIndex !== null && state.selectedSystemIndex >= 0 && state.selectedSystemIndex < estimate.options.length)
     ? estimate.options[state.selectedSystemIndex]
@@ -2467,6 +2465,7 @@ function openInternal() {
   if (ratesPill) ratesPill.style.display = "inline-flex";
   const ratesRail = $("ratesRailBtn");
   if (ratesRail) ratesRail.style.display = "flex";
+  switchSidebarCategory("rates");
 
   const intCustName = document.getElementById("internalCustomerName");
   const extCustName = document.getElementById("customerName");
@@ -3367,7 +3366,7 @@ function applyBillConfig(estimate, input) {
   });
 }
 
-function applyBreakupConfig(estimate, input) {
+function applyBreakupConfig(estimate, input, config = readConfig()) {
   if (!state.breakupConfig) state.breakupConfig = {};
 
   estimate.options.forEach(option => {
