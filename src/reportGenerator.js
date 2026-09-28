@@ -520,7 +520,17 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.setTextColor(COLORS.text);
     const splitIncludes = doc.splitTextToSize(includesText, 210 - margin * 2);
     doc.text(splitIncludes, margin, yPos);
-    yPos += (splitIncludes.length * 5) + 5;
+    yPos += (splitIncludes.length * 5) + 3;
+
+    // Bold note in bigger font: Only cabling/wiring charges will be at actuals
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11.5);
+    doc.setTextColor(COLORS.black);
+    const noteText = "Note: Only cabling/wiring charges will be at actuals";
+    const splitNote = doc.splitTextToSize(noteText, 210 - margin * 2);
+    doc.text(splitNote, margin, yPos);
+    yPos += (splitNote.length * 5.5) + 5;
+    doc.setFont("helvetica", "normal");
   
     const costData = [];
     costData.push(["Total System Cost (Inc. GST)", formatCurrency(option.totalPreSubsidy)]);

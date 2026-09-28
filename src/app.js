@@ -377,6 +377,7 @@ function renderBreakup(option, input, customerView, config) {
     <div style="margin-bottom: 10px;">
       <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">System Includes (shown in report)</label>
       <textarea class="system-includes-text" data-sys="${sysType}" rows="2" style="width: 100%; font-size: 12px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); resize: vertical; line-height: 1.4; font-family: inherit;">${currentIncludesText}</textarea>
+      <div style="font-size: 13px; font-weight: 700; color: var(--text, #1e293b); margin-top: 5px;">Note: Only cabling/wiring charges will be at actuals</div>
     </div>`;
 
     // Build calculation detail map for each cost item
@@ -488,6 +489,7 @@ function renderBreakup(option, input, customerView, config) {
 
     itemsHtml = `<div style="margin-bottom: 12px; font-size: 13px; color: var(--text-light); line-height: 1.4;">
       <strong>Includes:</strong> ${includesText}
+      <div style="font-size: 13.5px; font-weight: 700; color: var(--text, #0f172a); margin-top: 6px;">Note: Only cabling/wiring charges will be at actuals</div>
     </div>`;
 
     itemsHtml += `<div><dt style="font-weight: bold; color: var(--text);">Total System Cost (Inc. GST)</dt><dd style="font-weight: bold;">${money(option.totalPreSubsidy)}</dd></div>`;
