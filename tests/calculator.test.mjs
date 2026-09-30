@@ -344,8 +344,10 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
     jspdf: {
       jsPDF: class MockPDF {
         constructor() {
+          globalThis.window.jspdf.lastInstance = this;
           this.pages = [1];
           this.lastAutoTable = { finalY: 50 };
+          this.textCalls = [];
           this.internal = {
             pageSize: { getWidth: () => 210, getHeight: () => 297 },
             getNumberOfPages: () => this.pages.length,
@@ -354,7 +356,9 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
         setFont() {}
         setFontSize() {}
         setTextColor() {}
-        text() {}
+        text(content, x, y, opts) {
+          this.textCalls.push(content);
+        }
         line() {}
         setDrawColor() {}
         setLineWidth() {}
@@ -412,6 +416,21 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.equal(warrantyTable.body[4][3], "10 Year");
   assert.equal(warrantyTable.body[5][1], "ONGRID INVERTER");
   assert.ok(warrantyTable.body[5][3].includes("10 Year"), "Inverter warranty must be 10 Year");
+
+  // Verify Warranty Terms & Conditions printed in PDF
+  const flatTexts = [];
+  // Find instance of MockPDF
+  // In generateProposalPDF, new jsPDF() was instantiated
+  const lastPdfInstance = globalThis.window.jspdf.lastInstance;
+  assert.ok(lastPdfInstance, "MockPDF instance must be recorded");
+  const allTexts = lastPdfInstance.textCalls.flat();
+
+  assert.ok(allTexts.some(t => String(t).includes("Warranty and Details")), "Warranty and Details heading must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Terms and Conditions for Warranty")), "Terms and Conditions for Warranty heading must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Natural Calamity")), "Term 1: Natural Calamity must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Force Majeure")), "Term 2: Force Majeure must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Change in Government Policies")), "Term 3: Change in Government Policies must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Operation, Maintenance & Pass-Through Warranty")), "Term 4: Operation & Maintenance must be rendered");
 }
 
 console.log("calculator tests passed");
