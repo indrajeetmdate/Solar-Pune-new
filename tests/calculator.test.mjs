@@ -73,9 +73,13 @@ const zeroWiringConfig = {
 };
 const zeroWiringEstimate = calculateEstimate(makeInput({ capacityOverride: 13 }), zeroWiringConfig);
 assert.equal(
-  zeroWiringEstimate.recommended.costBreakup.electricalSafetyAndWiring,
+  zeroWiringEstimate.recommended.costBreakup.wiringExcludingCable,
   0,
-  "Wiring and cabling cost must be 0 when rate/W is 0 (no basic 55000 protection cost)"
+  "Wiring excluding cable cost must be 0 when rate/W is 0"
+);
+assert.ok(
+  zeroWiringEstimate.recommended.costBreakup.safetyAndEarthing > 0,
+  "Safety and earthing cost must be independent and retained"
 );
 
 // Systems without battery must NOT include peak penalty avoided
@@ -178,5 +182,238 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.equal(customPdfText, "System Includes: Solar Panels, Structure, Inverter, and GST.");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Daily & Monthly Generation, Current Bill Breakdown Reconcilation & Save/mo Tests
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  // 1. Daily and Monthly Generation outputs
+  const testInput = makeInput({ monthlyUnits: 450, capacityOverride: 4 });
+  const est = calculateEstimate(testInput, DEFAULT_CONFIG);
+  const opt = est.recommended;
+
+  assert.ok(opt.monthlyGeneration > 0, "Monthly generation should be positive");
+  assert.ok(opt.dailyGeneration > 0, "Daily generation should be positive");
+  assert.equal(
+    opt.dailyGeneration,
+    Math.round((opt.monthlyGeneration / 30) * 10) / 10,
+    "Daily generation should equal monthly generation divided by 30"
+  );
+
+  const dailyPerKw = Number((opt.dailyGeneration / opt.dcCapacityKw).toFixed(2));
+  const monthlyPerKw = Number((opt.monthlyGeneration / opt.dcCapacityKw).toFixed(1));
+  assert.ok(dailyPerKw >= 3.0 && dailyPerKw <= 6.0, "Daily kWh/kW should be within typical Pune range (3.5 - 5.5)");
+  assert.ok(monthlyPerKw >= 90 && monthlyPerKw <= 180, "Monthly kWh/kW should be within typical range (100 - 165)");
+
+  // 2. Current Bill Breakdown Reconciliation with actual monthly bill
+  // 2a. Bill higher than slab base (with Wheeling and FAC charges)
+  const highBillInput = makeInput({ monthlyUnits: 450, monthlyBill: 7200, capacityOverride: 4 });
+  const highEst = calculateEstimate(highBillInput, DEFAULT_CONFIG);
+  const highCb = highEst.recommended.currentBillBreakdown;
+
+  assert.equal(highCb.total, 7200, "Current bill breakdown total must match input.monthlyBill exactly");
+  assert.ok(highCb.fixedCharge > 0, "Fixed charges must be present");
+  assert.ok(highCb.energyCharge > 0, "Energy charges must be present");
+  assert.ok(highCb.wheelingFac > 0, "Wheeling and FAC charges must be reconciled when actual bill exceeds slab bill");
+  assert.ok(highCb.duty > 0, "Electricity duty must be present");
+  assert.equal(
+    highCb.fixedCharge + highCb.energyCharge + highCb.wheelingFac + highCb.duty,
+    highCb.total,
+    "Reconciled components must sum up exactly to the total monthly bill (7200)"
+  );
+
+  // 2b. Bill lower than or equal to slab model
+  const manualBillInput = makeInput({ monthlyUnits: 450, monthlyBill: 5800, capacityOverride: 4 });
+  const manualEst = calculateEstimate(manualBillInput, DEFAULT_CONFIG);
+  const manualOpt = manualEst.recommended;
+  const cb = manualOpt.currentBillBreakdown;
+
+  assert.equal(cb.total, 5800, "Current bill breakdown total must match input.monthlyBill exactly");
+  assert.ok(cb.fixedCharge > 0, "Fixed charges must be present");
+  assert.ok(cb.energyCharge > 0, "Energy charges must be present");
+  assert.equal(cb.wheelingFac, 0, "Wheeling & FAC is 0 when bill is below slab model");
+  assert.ok(cb.duty > 0, "Electricity duty must be present");
+  assert.equal(
+    cb.fixedCharge + cb.energyCharge + cb.wheelingFac + cb.duty,
+    cb.total,
+    "Reconciled components must sum up exactly to the total monthly bill (5800)"
+  );
+
+  // 3. Current Bill Breakdown with OCR extracted charges
+  const ocrCharges = [
+    { label: "Fixed Charges", amount: 128 },
+    { label: "Energy Charges", amount: 3200 },
+    { label: "Wheeling Charges", amount: 550 },
+    { label: "FAC", amount: 220 },
+    { label: "Electricity Duty", amount: 655 }
+  ];
+  const ocrInput = makeInput({
+    monthlyUnits: 450,
+    monthlyBill: 4753,
+    charges: ocrCharges,
+    capacityOverride: 4
+  });
+  const ocrEst = calculateEstimate(ocrInput, DEFAULT_CONFIG);
+  const ocrOpt = ocrEst.recommended;
+  const ocrCb = ocrOpt.currentBillBreakdown;
+
+  assert.ok(ocrCb.items && ocrCb.items.length === 5, "OCR charges must be preserved in currentBillBreakdown.items");
+  assert.equal(ocrCb.total, 4753, "Current bill total must match OCR total");
+  assert.equal(ocrCb.items[0].label, "Fixed Charges");
+  assert.equal(ocrCb.items[0].amount, 128);
+
+  // 4. Save/mo (monthlySavings) calculation revision
+  // When solar generation covers 100% or more of consumption:
+  const largeSystemInput = makeInput({
+    monthlyUnits: 300,
+    monthlyBill: 4000,
+    capacityOverride: 5 // Generates ~600 units, well above 300 units
+  });
+  const largeEst = calculateEstimate(largeSystemInput, DEFAULT_CONFIG);
+  const largeOpt = largeEst.recommended;
+  const fixedCharge = DEFAULT_CONFIG.tariff.fixedCharge || 130;
+  const expectedMaxBaseSavings = 4000 - fixedCharge; // ₹3870
+
+  assert.equal(
+    largeOpt.savingsBreakdown.baseSavings,
+    expectedMaxBaseSavings,
+    "100% solar offset must save the full variable bill (actual monthly bill minus fixed charge)"
+  );
+  assert.ok(
+    largeOpt.monthlySavings >= expectedMaxBaseSavings,
+    "Total Save/mo should be at least baseSavings plus any bonus incentives"
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Revised Pricing Rates & Separated Safety vs Wiring Tests
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  // 1. Verify default pricing values match requirements
+  assert.equal(DEFAULT_CONFIG.pricing.panelDcrRatePerWp, 25, "Default DCR rate should be ₹25/Wp");
+  assert.equal(DEFAULT_CONFIG.pricing.panelNonDcrRatePerWp, 15, "Default Non-DCR rate should be ₹15/Wp");
+  assert.equal(DEFAULT_CONFIG.pricing.batteryRatePerWh, 17.5, "Default Battery rate should be ₹17.5/Wh");
+  assert.equal(DEFAULT_CONFIG.pricing.structureRates.hotDip, 6, "Default Hot-dip structure rate should be ₹6/W");
+  assert.equal(DEFAULT_CONFIG.pricing.structureRates.galvalume, 5.3, "Default Galvalume structure rate should be ₹5.3/W");
+  assert.equal(DEFAULT_CONFIG.pricing.structureRates.gpPurlin, 4.8, "Default GP purlin structure rate should be ₹4.8/W");
+  assert.equal(DEFAULT_CONFIG.pricing.wiringRatePerW, 0, "Default Wiring rate should be ₹0/W (excluding cable)");
+  assert.equal(DEFAULT_CONFIG.pricing.installationRatePerW, 2.5, "Default Installation rate should be ₹2.5/W");
+  assert.equal(DEFAULT_CONFIG.pricing.consultancyRatePerW, 1, "Default Consultancy rate should be ₹1/W");
+  assert.equal(DEFAULT_CONFIG.pricing.contingencyRate, 0, "Default Contingency rate should be 0%");
+  assert.equal(DEFAULT_CONFIG.pricing.marginRate, 30, "Default Margin rate should be 30%");
+
+  // 2. Verify separation of safetyAndEarthing and wiringExcludingCable
+  const testInput = makeInput({ capacityOverride: 10 });
+  const estDefault = calculateEstimate(testInput, DEFAULT_CONFIG);
+  const optDefault = estDefault.recommended;
+
+  assert.equal(optDefault.costBreakup.wiringExcludingCable, 0, "Default wiring cost must be 0 when rate is 0");
+  assert.ok(optDefault.costBreakup.safetyAndEarthing > 0, "Safety and earthing cost must be > 0 (hardware protection)");
+  assert.equal(
+    optDefault.costBreakup.electricalSafetyAndWiring,
+    optDefault.costBreakup.safetyAndEarthing + optDefault.costBreakup.wiringExcludingCable,
+    "electricalSafetyAndWiring should equal sum of safetyAndEarthing + wiringExcludingCable"
+  );
+
+  // 3. Verify with custom wiring rate
+  const customWiringConfig = {
+    ...DEFAULT_CONFIG,
+    pricing: {
+      ...DEFAULT_CONFIG.pricing,
+      wiringRatePerW: 3,
+    }
+  };
+  const estCustom = calculateEstimate(testInput, customWiringConfig);
+  const optCustom = estCustom.recommended;
+  const expectedWiringCost = Math.round(optCustom.dcCapacityKw * 1000 * 3);
+  assert.equal(optCustom.costBreakup.wiringExcludingCable, expectedWiringCost, "Wiring cost must equal dcCapacityWp * wiringRatePerW");
+  assert.equal(optCustom.costBreakup.safetyAndEarthing, optDefault.costBreakup.safetyAndEarthing, "Safety cost remains independent");
+  assert.equal(
+    optCustom.costBreakup.electricalSafetyAndWiring,
+    optCustom.costBreakup.safetyAndEarthing + expectedWiringCost,
+    "Combined electricalSafetyAndWiring must reflect both"
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF Warranty & Details Section Tests
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const mockCalls = [];
+  globalThis.alert = () => {};
+  globalThis.window = {
+    jspdf: {
+      jsPDF: class MockPDF {
+        constructor() {
+          this.pages = [1];
+          this.lastAutoTable = { finalY: 50 };
+          this.internal = {
+            pageSize: { getWidth: () => 210, getHeight: () => 297 },
+            getNumberOfPages: () => this.pages.length,
+          };
+        }
+        setFont() {}
+        setFontSize() {}
+        setTextColor() {}
+        text() {}
+        line() {}
+        setDrawColor() {}
+        setLineWidth() {}
+        setFillColor() {}
+        rect() {}
+        roundedRect() {}
+        addPage() { this.pages.push(this.pages.length + 1); }
+        getNumberOfPages() { return this.pages.length; }
+        setPage() {}
+        addImage() {}
+        output() { return 'pdf-blob'; }
+        save() {}
+        splitTextToSize(text) { return [text]; }
+        autoTable(opts) {
+          this.lastAutoTable = { finalY: (opts.startY || 50) + (opts.body ? opts.body.length * 6 : 20) };
+          mockCalls.push(opts);
+        }
+      }
+    }
+  };
+  globalThis.document = {
+    createElement: () => ({ getContext: () => ({ fillStyle: '', fillRect: () => {}, drawImage: () => {} }), toDataURL: () => 'data:image/jpeg;base64,123' }),
+    getElementById: () => null
+  };
+  globalThis.Image = class {
+    set src(url) {
+      this.width = 100;
+      this.height = 100;
+      setTimeout(() => this.onload && this.onload(), 10);
+    }
+  };
+
+  const { generateProposalPDF } = await import("../src/reportGenerator.js");
+  const testInput = makeInput();
+  const est = calculateEstimate(testInput, DEFAULT_CONFIG);
+  await generateProposalPDF(est, est.recommended, { hidePayback: false });
+
+  const warrantyTable = mockCalls.find(c => c.body && c.body.some(row => row[1] === "SOLAR PANEL"));
+  assert.ok(warrantyTable, "Warranty table must be generated in proposal PDF");
+  assert.equal(warrantyTable.head[0][0], "Sr. No.");
+  assert.equal(warrantyTable.head[0][1], "Product");
+  assert.equal(warrantyTable.head[0][2], "Make & Specification");
+  assert.equal(warrantyTable.head[0][3], "Warranty");
+
+  assert.equal(warrantyTable.body.length, 6, "Must contain all 6 specified product rows");
+  assert.equal(warrantyTable.body[0][1], "SOLAR PANEL");
+  assert.ok(warrantyTable.body[0][3].includes("12 Year"), "Solar panel warranty must include 12 Year");
+  assert.equal(warrantyTable.body[1][1], "DCDB");
+  assert.equal(warrantyTable.body[1][2], "HAVELLS 1 IN 1 OUT 600 V");
+  assert.equal(warrantyTable.body[1][3], "5 Year");
+  assert.equal(warrantyTable.body[2][1], "EARTHING");
+  assert.equal(warrantyTable.body[3][1], "DC CABLE");
+  assert.equal(warrantyTable.body[3][3], "20 Year");
+  assert.equal(warrantyTable.body[4][1], "CIVIL CHAMBER");
+  assert.equal(warrantyTable.body[4][3], "10 Year");
+  assert.equal(warrantyTable.body[5][1], "ONGRID INVERTER");
+  assert.ok(warrantyTable.body[5][3].includes("10 Year"), "Inverter warranty must be 10 Year");
+}
+
 console.log("calculator tests passed");
+
 

@@ -172,18 +172,18 @@ export const TARIFF_PROFILES = {
 
 export const DEFAULT_CONFIG = {
   pricing: {
-    panelDcrRatePerWp: 26,
-    panelNonDcrRatePerWp: 17,
+    panelDcrRatePerWp: 25,
+    panelNonDcrRatePerWp: 15,
     batteryRatePerWh: 17.5,
     structureRates: {
       hotDip: 6,
       galvalume: 5.3,
       gpPurlin: 4.8,
     },
-    wiringRatePerW: 3.5,
-    installationRatePerW: 4,
-    consultancyRatePerW: 3,
-    contingencyRate: 3,
+    wiringRatePerW: 0,
+    installationRatePerW: 2.5,
+    consultancyRatePerW: 1,
+    contingencyRate: 0,
     marginRate: 30, // Default 30% margin on total component costs incl. of GST
   },
   performance: {

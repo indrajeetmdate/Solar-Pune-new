@@ -473,6 +473,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const banking = calculateBankingDeduction(dcCapacityKw, monthlyGeneration, selfConsumedEstimate, input);
   const usableGeneration = selfConsumedEstimate + banking.usableInjected;
   const offsetUnits = Math.min(usableGeneration, input.monthlyUnits);
+  const dailyGeneration = round(monthlyGeneration / 30, 1);
 
   // Bill calculation
   const modelCurrentBill = calculateBill(input.monthlyUnits, config.tariff);
@@ -485,13 +486,24 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const energyOnlyBill = userBillForEnergy / (1 + dutyRate);
   const effectiveTariff = input.monthlyUnits > 0 ? energyOnlyBill / input.monthlyUnits : 0;
 
+  const modelVariableBill = Math.max(modelCurrentBill.total - (config.tariff.fixedCharge || 0), 0);
+  const actualOffsettableBill = input.monthlyBill > 0
+    ? Math.max(input.monthlyBill - (config.tariff.fixedCharge || 0), 0)
+    : modelVariableBill;
+  const slabSavings = Math.max(modelCurrentBill.total - postSolarBill.total, 0);
+
   let baseSavings;
-  if (input.savingsMethod === "effective" || (input.savingsMethod === "auto" && input.monthlyBill > 0)) {
+  if (offsetUnits >= input.monthlyUnits && input.monthlyUnits > 0) {
+    baseSavings = actualOffsettableBill;
+  } else if (input.savingsMethod === "effective") {
     const energySaved = offsetUnits * effectiveTariff;
     const dutySaved = energySaved * dutyRate;
-    baseSavings = Math.min(energySaved + dutySaved, Math.max(modelCurrentBill.total - (config.tariff.fixedCharge || 0), 0));
+    baseSavings = Math.min(energySaved + dutySaved, actualOffsettableBill);
+  } else if (input.monthlyBill > 0 && modelVariableBill > 0) {
+    const slabFraction = slabSavings / modelVariableBill;
+    baseSavings = Math.min(round(actualOffsettableBill * slabFraction, 0), actualOffsettableBill);
   } else {
-    baseSavings = Math.max(modelCurrentBill.total - postSolarBill.total, 0);
+    baseSavings = Math.min(slabSavings, actualOffsettableBill);
   }
 
   // Category-aware bonus savings
@@ -505,8 +517,78 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const promptPayPostSolar = calculatePromptPayDiscount(postSolarBill.energyCharge, postSolarBill.fixedCharge);
   const promptPay = Math.max(promptPayPreSolar - promptPayPostSolar, 0);
 
-  const monthlySavings = round(baseSavings + todSavings.totalTod + pfIncentive + promptPay, 0);
+  const monthlySavings = round(
+    baseSavings +
+    todSavings.daytimeRebate +
+    (hasBattery ? todSavings.peakPenaltyAvoided : 0) +
+    pfIncentive +
+    promptPay,
+    0
+  );
   const annualSavings = monthlySavings * 12;
+
+  // Current Bill Breakdown: prioritize OCR extracted charges, then manual bill reconciliation, then model bill
+  let currentBillBreakdown;
+  const todPenalty = round(hasBattery ? todSavings.peakPenaltyAvoided : 0, 0);
+
+  if (input.charges && Array.isArray(input.charges) && input.charges.length > 0) {
+    const items = input.charges.map(c => ({
+      label: c.label,
+      amount: round(Number(c.amount) || 0, 0),
+    }));
+    const totalCharges = round(items.reduce((s, c) => s + c.amount, 0), 0);
+    const fixedItem = items.find(c => c.label.toLowerCase().includes("fixed") || c.label.toLowerCase().includes("demand"));
+    const fixedVal = fixedItem ? fixedItem.amount : (config.tariff.fixedCharge || 0);
+    const dutyItem = items.find(c => c.label.toLowerCase().includes("duty") || c.label.toLowerCase().includes("tax"));
+    const dutyVal = dutyItem ? dutyItem.amount : 0;
+    const energyItems = items.filter(c => c !== fixedItem && c !== dutyItem);
+    const energyVal = energyItems.reduce((s, c) => s + c.amount, 0);
+
+    currentBillBreakdown = {
+      items,
+      fixedCharge: fixedVal,
+      energyCharge: energyVal,
+      wheelingFac: 0,
+      duty: dutyVal,
+      todPenalty,
+      total: input.monthlyBill > 0 ? input.monthlyBill : totalCharges,
+    };
+  } else if (input.monthlyBill > 0) {
+    const fixedCharge = round(config.tariff.fixedCharge || 0, 0);
+    const dutyRateVal = (config.tariff.electricityDuty || 0) / 100;
+    const actualVariableBill = Math.max(input.monthlyBill - fixedCharge, 0);
+    const preDutyVariable = dutyRateVal > 0 ? actualVariableBill / (1 + dutyRateVal) : actualVariableBill;
+    const slabEnergy = round(modelCurrentBill.energyCharge, 0);
+    
+    let energyChargeVal;
+    let wheelingFac;
+    if (preDutyVariable >= slabEnergy) {
+      energyChargeVal = slabEnergy;
+      wheelingFac = round(preDutyVariable - slabEnergy, 0);
+    } else {
+      energyChargeVal = round(preDutyVariable, 0);
+      wheelingFac = 0;
+    }
+    const duty = Math.max(input.monthlyBill - fixedCharge - energyChargeVal - wheelingFac, 0);
+
+    currentBillBreakdown = {
+      fixedCharge,
+      energyCharge: energyChargeVal,
+      wheelingFac,
+      duty,
+      todPenalty,
+      total: input.monthlyBill,
+    };
+  } else {
+    currentBillBreakdown = {
+      fixedCharge: round(modelCurrentBill.fixedCharge, 0),
+      energyCharge: round(modelCurrentBill.energyCharge, 0),
+      wheelingFac: 0,
+      duty: round(modelCurrentBill.duty, 0),
+      todPenalty,
+      total: round(modelCurrentBill.total + todPenalty, 0),
+    };
+  }
 
   // Cost breakup
   const pricing = config.pricing;
@@ -525,17 +607,19 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       batteryCost = 35000;
     }
   }
-  const wiringRate = pricing.wiringRatePerW !== undefined ? pricing.wiringRatePerW : 3.5;
+  const wiringRate = pricing.wiringRatePerW !== undefined && pricing.wiringRatePerW !== null && !isNaN(pricing.wiringRatePerW)
+    ? Number(pricing.wiringRatePerW)
+    : 0;
   const wiringCost = dcCapacityWp * wiringRate;
-  const installationCost = dcCapacityWp * (pricing.installationRatePerW || 0);
-  const protectionCost = pricing.protectionCost !== undefined
-    ? pricing.protectionCost
-    : (wiringRate > 0 ? getProtectionCost(dcCapacityKw) : 0);
-  const consultancyCost = dcCapacityWp * (pricing.consultancyRatePerW || 0);
+  const installationCost = dcCapacityWp * (pricing.installationRatePerW !== undefined ? pricing.installationRatePerW : 2.5);
+  const safetyAndEarthingCost = pricing.safetyAndEarthingCost !== undefined
+    ? pricing.safetyAndEarthingCost
+    : (pricing.protectionCost !== undefined ? pricing.protectionCost : getProtectionCost(dcCapacityKw));
+  const consultancyCost = dcCapacityWp * (pricing.consultancyRatePerW !== undefined ? pricing.consultancyRatePerW : 1);
 
   const preTaxSubtotal =
     panelCost + structureCost + inverterCost + backupInverterCost + batteryCost +
-    wiringCost + installationCost + protectionCost + consultancyCost;
+    safetyAndEarthingCost + wiringCost + installationCost + consultancyCost;
 
   // GST: Supply of Goods (70% @ 5%) + Supply of Services (30% @ 18%) = 8.9% effective
   const goodsShare = 0.70;
@@ -581,6 +665,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
     dcCapacityKw: round(dcCapacityKw, 2),
     inverterCapacityKw: round(inverterCapacityKw, 1),
     batteryCapacityKwh: round(batteryCapacityKwh, 1),
+    dailyGeneration,
     monthlyGeneration,
     offsetUnits: round(offsetUnits, 0),
     monthlySavings: round(monthlySavings, 0),
@@ -594,13 +679,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
     paybackYears: Number.isFinite(paybackYears) ? round(paybackYears, 1) : Infinity,
     roiPercent: round(roiPercent, 1),
     sizing,
-    currentBillBreakdown: {
-      energyCharge: round(modelCurrentBill.energyCharge, 0),
-      fixedCharge: round(modelCurrentBill.fixedCharge, 0),
-      duty: round(modelCurrentBill.duty, 0),
-      todPenalty: round(hasBattery ? todSavings.peakPenaltyAvoided : 0, 0),
-      total: round(modelCurrentBill.total + (hasBattery ? todSavings.peakPenaltyAvoided : 0), 0)
-    },
+    currentBillBreakdown,
     savingsBreakdown: {
       baseSavings: round(baseSavings, 0),
       bankingLoss: round(banking.deductedUnits * avgRate, 0),
@@ -615,7 +694,9 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       inverter: round(inverterCost, 0),
       backupInverter: round(backupInverterCost, 0),
       battery: round(batteryCost, 0),
-      electricalSafetyAndWiring: round(wiringCost + protectionCost, 0),
+      safetyAndEarthing: round(safetyAndEarthingCost, 0),
+      wiringExcludingCable: round(wiringCost, 0),
+      electricalSafetyAndWiring: round(wiringCost + safetyAndEarthingCost, 0),
       installation: round(installationCost, 0),
       consultancy: round(consultancyCost, 0),
       gst: round(gst, 0),

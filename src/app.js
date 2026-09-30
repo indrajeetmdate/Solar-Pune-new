@@ -160,6 +160,9 @@ function readInput() {
     orientationDir: safeStr("orientationDir"),
     optimizationStrategy: safeStr("optimizationStrategy") || "optimum",
     extractedPeakUnits: state.extractedBill?.fields?.peakUnitsKwh || null,
+    charges: (state.extractedBill?.charges && Array.isArray(state.extractedBill.charges) && state.extractedBill.charges.length > 0)
+      ? state.extractedBill.charges
+      : null,
     backupNeeded: true,
     customerView: false,
     panelType: safeStr("panelType"),
@@ -207,19 +210,19 @@ function readConfig() {
 
   return {
     pricing: {
-      panelDcrRatePerWp: numberValue("panelDcrRate"),
-      panelNonDcrRatePerWp: numberValue("panelNonDcrRate"),
-      batteryRatePerWh: numberValue("batteryRate"),
+      panelDcrRatePerWp: $("panelDcrRate") && $("panelDcrRate").value !== "" ? numberValue("panelDcrRate") : DEFAULT_CONFIG.pricing.panelDcrRatePerWp,
+      panelNonDcrRatePerWp: $("panelNonDcrRate") && $("panelNonDcrRate").value !== "" ? numberValue("panelNonDcrRate") : DEFAULT_CONFIG.pricing.panelNonDcrRatePerWp,
+      batteryRatePerWh: $("batteryRate") && $("batteryRate").value !== "" ? numberValue("batteryRate") : DEFAULT_CONFIG.pricing.batteryRatePerWh,
       structureRates: {
-        hotDip: numberValue("hotDipStructureRate"),
-        galvalume: numberValue("galvalumeStructureRate"),
-        gpPurlin: numberValue("gpPurlinStructureRate"),
+        hotDip: $("hotDipStructureRate") && $("hotDipStructureRate").value !== "" ? numberValue("hotDipStructureRate") : DEFAULT_CONFIG.pricing.structureRates.hotDip,
+        galvalume: $("galvalumeStructureRate") && $("galvalumeStructureRate").value !== "" ? numberValue("galvalumeStructureRate") : DEFAULT_CONFIG.pricing.structureRates.galvalume,
+        gpPurlin: $("gpPurlinStructureRate") && $("gpPurlinStructureRate").value !== "" ? numberValue("gpPurlinStructureRate") : DEFAULT_CONFIG.pricing.structureRates.gpPurlin,
       },
       wiringRatePerW: numberValue("wiringRate"),
-      installationRatePerW: numberValue("installationRate"),
-      consultancyRatePerW: numberValue("consultancyRate"),
-      contingencyRate: numberValue("contingencyRate"),
-      marginRate: numberValue("marginRate") !== undefined && !isNaN(numberValue("marginRate")) ? numberValue("marginRate") : 30,
+      installationRatePerW: $("installationRate") && $("installationRate").value !== "" ? numberValue("installationRate") : DEFAULT_CONFIG.pricing.installationRatePerW,
+      consultancyRatePerW: $("consultancyRate") && $("consultancyRate").value !== "" ? numberValue("consultancyRate") : DEFAULT_CONFIG.pricing.consultancyRatePerW,
+      contingencyRate: $("contingencyRate") && $("contingencyRate").value !== "" ? numberValue("contingencyRate") : 0,
+      marginRate: $("marginRate") && $("marginRate").value !== "" ? numberValue("marginRate") : 30,
     },
     performance: {
       panelWp: numberValue("panelWp") || 550,
@@ -403,10 +406,16 @@ function renderBreakup(option, input, customerView, config) {
       const battKwh = option.batteryCapacityKwh;
       calcDetails['battery'] = `${battKwh} kWh × ${pricing.batteryRatePerWh || 0} Rs/Wh`;
     }
-    const wiringRateVal = pricing.wiringRatePerW !== undefined ? pricing.wiringRatePerW : 0;
+    const wiringRateVal = pricing.wiringRatePerW !== undefined && pricing.wiringRatePerW !== null && !isNaN(pricing.wiringRatePerW)
+      ? Number(pricing.wiringRatePerW)
+      : 0;
+    calcDetails['safetyAndEarthing'] = `Earthing, DCDB, ACDB, LA & surge protection`;
+    calcDetails['wiringExcludingCable'] = wiringRateVal > 0
+      ? `${wiringRateVal} Rs/W × ${dcWp.toLocaleString('en-IN')} W`
+      : `0 Rs/W (excluded - cabling at actuals)`;
     calcDetails['electricalSafetyAndWiring'] = wiringRateVal > 0
       ? `${wiringRateVal} Rs/W × ${dcWp.toLocaleString('en-IN')} W + protection`
-      : `0 Rs/W (excluded)`;
+      : `Protection switchgear only`;
     calcDetails['installation'] = `${pricing.installationRatePerW || 0} Rs/W × ${dcWp.toLocaleString('en-IN')} W`;
     calcDetails['consultancy'] = `${pricing.consultancyRatePerW || 0} Rs/W × ${dcWp.toLocaleString('en-IN')} W`;
 
@@ -825,6 +834,9 @@ function applyExtractedBill() {
   const result = state.extractedBill;
   if (!result?.fields) return;
   const fields = result.fields;
+
+  // Reset billConfig so newly extracted bill items take effect
+  state.billConfig = {};
 
   if (fields.name) $("customerName").value = fields.name;
   
@@ -3331,14 +3343,28 @@ function applyBillConfig(estimate, input) {
     let cb = option.currentBillBreakdown;
     if (!cb) return;
     
-    let defaultItems = [
-      { id: 'fixedCharge', label: 'Fixed Charges', value: cb.fixedCharge, isRed: false },
-      { id: 'energyCharge', label: 'Energy Charges', value: cb.energyCharge, isRed: true },
-      { id: 'duty', label: 'Electricity Duty', value: cb.duty, isRed: true },
-      { id: 'todPenalty', label: 'ToD Peak Penalty', value: cb.todPenalty, isRed: true },
-    ];
+    let defaultItems = [];
+    if (cb.items && cb.items.length > 0) {
+      defaultItems = cb.items.map((item, idx) => ({
+        id: `ocr_item_${idx}`,
+        label: item.label,
+        value: item.amount,
+        isRed: !item.label.toLowerCase().includes("fixed") && !item.label.toLowerCase().includes("demand")
+      }));
+    } else {
+      defaultItems.push({ id: 'fixedCharge', label: 'Fixed Charges', value: cb.fixedCharge, isRed: false });
+      defaultItems.push({ id: 'energyCharge', label: 'Energy Charges', value: cb.energyCharge, isRed: true });
+      if (cb.wheelingFac > 0) {
+        defaultItems.push({ id: 'wheelingFac', label: 'Wheeling & Fuel Adj. (FAC)', value: cb.wheelingFac, isRed: true });
+      }
+      defaultItems.push({ id: 'duty', label: 'Electricity Duty', value: cb.duty, isRed: true });
+      if (cb.todPenalty > 0) {
+        defaultItems.push({ id: 'todPenalty', label: 'ToD Peak Penalty', value: cb.todPenalty, isRed: true });
+      }
+    }
     
-    if (!state.billConfig[sysType]) {
+    const hasOcrItems = state.billConfig[sysType]?.some(x => x.id.startsWith("ocr_item_"));
+    if (!state.billConfig[sysType] || (cb.items && state.billConfig[sysType].length !== defaultItems.length) || (!cb.items && hasOcrItems)) {
       state.billConfig[sysType] = defaultItems.map(di => ({
         id: di.id,
         label: di.label,
@@ -3347,6 +3373,19 @@ function applyBillConfig(estimate, input) {
         overrideValue: di.value,
         isRed: di.isRed
       }));
+    } else {
+      defaultItems.forEach(di => {
+        if (!state.billConfig[sysType].some(x => x.id === di.id)) {
+          state.billConfig[sysType].push({
+            id: di.id,
+            label: di.label,
+            isHidden: false,
+            isOverride: false,
+            overrideValue: di.value,
+            isRed: di.isRed
+          });
+        }
+      });
     }
     
     let configList = state.billConfig[sysType];
@@ -3358,6 +3397,10 @@ function applyBillConfig(estimate, input) {
       let di = defaultItems.find(x => x.id === c.id);
       let computedValue = di ? di.value : 0;
       item.value = c.isOverride ? c.overrideValue : computedValue;
+      if (di) {
+        item.label = di.label;
+        item.isRed = di.isRed;
+      }
       
       if (!c.isHidden && item.value !== 0) {
         totalBill += item.value;
@@ -3389,7 +3432,8 @@ function applyBreakupConfig(estimate, input, config = readConfig()) {
       defaultItems.push({ id: 'battery', label: option.costBreakup.backupInverter > 0 ? 'Backup Battery Storage' : 'Battery Storage', value: option.costBreakup.battery });
     }
     defaultItems.push(
-      { id: 'electricalSafetyAndWiring', label: 'Electrical safety and wiring', value: option.costBreakup.electricalSafetyAndWiring },
+      { id: 'safetyAndEarthing', label: 'Safety and earthing', value: option.costBreakup.safetyAndEarthing },
+      { id: 'wiringExcludingCable', label: 'Wiring excluding cable cost', value: option.costBreakup.wiringExcludingCable },
       { id: 'installation', label: 'Installation & Commissioning', value: option.costBreakup.installation },
       { id: 'consultancy', label: 'Consultancy', value: option.costBreakup.consultancy }
     );
@@ -3404,6 +3448,30 @@ function applyBreakupConfig(estimate, input, config = readConfig()) {
         isOverride: false,
         overrideValue: di.value
       }));
+    } else {
+      // Migrate legacy electricalSafetyAndWiring to separate items if present
+      const oldIdx = state.breakupConfig[sysType].findIndex(x => x.id === 'electricalSafetyAndWiring');
+      if (oldIdx !== -1) {
+        const oldItem = state.breakupConfig[sysType][oldIdx];
+        state.breakupConfig[sysType].splice(oldIdx, 1,
+          {
+            id: 'safetyAndEarthing',
+            label: 'Safety and earthing',
+            isHeader: false,
+            isHidden: oldItem.isHidden,
+            isOverride: false,
+            overrideValue: option.costBreakup.safetyAndEarthing,
+          },
+          {
+            id: 'wiringExcludingCable',
+            label: 'Wiring excluding cable cost',
+            isHeader: false,
+            isHidden: oldItem.isHidden,
+            isOverride: false,
+            overrideValue: option.costBreakup.wiringExcludingCable,
+          }
+        );
+      }
     }
 
     let configList = state.breakupConfig[sysType];

@@ -98,7 +98,8 @@ export function buildSystemIncludesText(option) {
         "Solar Panels",
         `${mainInverterPrefix} Inverter`,
         "Mounting Structure",
-        "Electrical safety and wiring",
+        "Safety and earthing",
+        "Wiring excluding cable cost",
         "Installation & Commissioning",
         "Consultancy"
       );
@@ -300,11 +301,20 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.text("Capacity Requirements", margin, yPos);
   yPos += 8;
 
+  const dailyGenKwh = option.dailyGeneration !== undefined
+    ? option.dailyGeneration
+    : Math.round(((option.monthlyGeneration || 0) / 30) * 10) / 10;
+  const monthlyGenKwh = option.monthlyGeneration || 0;
+  const dailyPerKw = option.dcCapacityKw > 0 ? (dailyGenKwh / option.dcCapacityKw).toFixed(2) : "0.00";
+  const monthlyPerKw = option.dcCapacityKw > 0 ? (monthlyGenKwh / option.dcCapacityKw).toFixed(1) : "0.0";
+
   const reqData = [
     ["Required by Consumption", `${option.sizing.byConsumptionKw} kW`],
     ["Supported by Roof Area", `${option.sizing.byAreaKw} kW`],
     ["Sanctioned Load Limit", option.sizing.byLoadKw ? `${option.sizing.byLoadKw} kW` : "N/A"],
     [solarInstalled ? "Installed Solar Capacity" : "Recommended Solar Capacity", `${option.dcCapacityKw} kWp`],
+    ["Daily Solar Generation", `${dailyGenKwh.toLocaleString("en-IN")} kWh (${dailyPerKw} kWh/kW)`],
+    ["Monthly Solar Generation", `${monthlyGenKwh.toLocaleString("en-IN")} kWh (${monthlyPerKw} kWh/kW)`],
     ["Sanction Status", sanctionedStatus.label]
   ];
 
@@ -609,7 +619,17 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   }
 
   // Current Bill Breakdown
-  if (option.currentBillBreakdownList) {
+  const billItems = option.currentBillBreakdownList || (option.currentBillBreakdown ? [
+    ...(option.currentBillBreakdown.items ? option.currentBillBreakdown.items.map(it => ({ label: it.label, value: it.amount })) : [
+      { label: "Fixed Charges", value: option.currentBillBreakdown.fixedCharge },
+      { label: "Energy Charges", value: option.currentBillBreakdown.energyCharge },
+      ...(option.currentBillBreakdown.wheelingFac > 0 ? [{ label: "Wheeling & Fuel Adj. (FAC)", value: option.currentBillBreakdown.wheelingFac }] : []),
+      { label: "Electricity Duty", value: option.currentBillBreakdown.duty },
+      ...(option.currentBillBreakdown.todPenalty > 0 ? [{ label: "ToD Peak Penalty", value: option.currentBillBreakdown.todPenalty }] : [])
+    ])
+  ] : null);
+
+  if (billItems && billItems.length > 0) {
     doc.setTextColor(COLORS.black);
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
@@ -617,13 +637,14 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     yPos += 6;
     
     const billData = [];
-    option.currentBillBreakdownList.forEach(item => {
+    billItems.forEach(item => {
       if (!item.isHidden && item.value !== 0) {
         billData.push([item.label, formatCurrency(item.value)]);
       }
     });
     billData.push(["-------------------", "-------------------"]);
-    billData.push(["Estimated Current Bill", formatCurrency(option.currentBillBreakdown.total)]);
+    const billTotal = option.currentBillBreakdown?.total || billItems.reduce((s, it) => s + (it.value || 0), 0);
+    billData.push(["Estimated Current Bill", formatCurrency(billTotal)]);
     
     doc.autoTable({
       startY: yPos,
@@ -634,14 +655,9 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
         1: { halign: "right", fontStyle: "normal" }
       },
       didParseCell: function (data) {
-        if (data.row.raw[0].includes("Estimated Current Bill")) {
+        if (data.row.raw[0].includes("Estimated Current Bill") || data.row.raw[0].includes("Total Current Bill")) {
           data.cell.styles.fontStyle = "bold";
-          data.cell.styles.fillColor = COLORS.bgLight;
-        } else {
-          const matchedItem = option.currentBillBreakdownList.find(i => i.label === data.row.raw[0]);
-          if (matchedItem && matchedItem.isRed) {
-            data.cell.styles.textColor = [211, 47, 47];
-          }
+          // Unhighlighted as requested: current bill breakdown should not be highlighted
         }
       },
       margin: { left: margin },
@@ -691,8 +707,10 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     });
     
     savingsData.push(["-------------------", "-------------------", ""]);
+    savingsData.push(["Estimated Savings / Month (Save/mo)", formatCurrency(option.monthlySavings), "Direct monthly electricity bill reduction."]);
     savingsData.push(["Total Annual Savings", formatCurrency(option.annualSavings), "Projected savings in the first year of operation."]);
   } else {
+    savingsData.push(["Estimated Savings / Month (Save/mo)", formatCurrency(option.monthlySavings), "Direct monthly electricity bill reduction."]);
     savingsData.push(["Total Annual Savings", formatCurrency(option.annualSavings), "Projected savings in the first year of operation."]);
   }
 
@@ -701,13 +719,17 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     body: savingsData,
     theme: "plain",
     columnStyles: {
-      0: { fontStyle: "bold", width: 45 },
+      0: { fontStyle: "bold", width: 60 },
       1: { halign: "right", fontStyle: "bold", textColor: COLORS.primary },
       2: { fontStyle: "italic", fontSize: 9, textColor: COLORS.textLight }
     },
     didParseCell: function (data) {
-      if (data.row.raw[0].includes("Total Annual Savings")) {
+      if (data.row.raw[0].includes("Estimated Savings / Month") || data.row.raw[0].includes("Save/mo")) {
         data.cell.styles.fillColor = COLORS.bgLight;
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.textColor = COLORS.primary;
+      } else if (data.row.raw[0].includes("Total Annual Savings")) {
+        data.cell.styles.fontStyle = "bold";
       }
     },
     margin: { left: margin },
@@ -890,7 +912,105 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     });
   }
 
-  // ================= SECTION 4 (or 3): Solar System Types =================
+  // ================= SECTION: Warranty and Details =================
+  doc.addPage();
+  yPos = 30;
+  addHeader("Warranty and Details");
+
+  doc.setTextColor(COLORS.black);
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text(`${sectionNumber}. Warranty and Details`, margin, yPos);
+  yPos += 8;
+  sectionNumber++;
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(COLORS.text);
+  doc.text("Comprehensive component warranties and manufacturer guarantees for all major system products.", margin, yPos);
+  yPos += 8;
+
+  const warrantyData = [
+    ["1", "SOLAR PANEL", "Tier-1 Mono PERC / TOPCon (DCR / Non-DCR as per proposal)", "12 Year Warranty /\n30 Year Performance Warranty"],
+    ["2", "DCDB", "HAVELLS 1 IN 1 OUT 600 V", "5 Year"],
+    ["3", "EARTHING", "16 SQ MM EARTHING ALU. CONDUCTOR ROD;\n14 SQ MM × 1 MTR COPPER ROD", "—"],
+    ["4", "DC CABLE", "4 SQ MM COPPER TIN", "20 Year"],
+    ["5", "CIVIL CHAMBER", "ISI STANDARD", "10 Year"],
+    ["6", "ONGRID INVERTER", "Grid-Tied Solar Inverter (IP65)", "10 Year Warranty"],
+  ];
+
+  doc.autoTable({
+    startY: yPos,
+    head: [["Sr. No.", "Product", "Make & Specification", "Warranty"]],
+    body: warrantyData,
+    theme: "grid",
+    headStyles: { fillColor: COLORS.primary, fontStyle: "bold", fontSize: 9.5, halign: "center" },
+    bodyStyles: { fontSize: 8.5, cellPadding: 3 },
+    columnStyles: {
+      0: { width: 15, halign: "center", fontStyle: "bold" },
+      1: { width: 38, fontStyle: "bold" },
+      2: { width: 77 },
+      3: { width: 50, fontStyle: "bold", textColor: COLORS.primary, halign: "center" },
+    },
+    margin: { left: margin },
+  });
+
+  yPos = doc.lastAutoTable.finalY + 4;
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "italic");
+  doc.setTextColor(COLORS.textLight);
+  doc.text("* Note: Other product warranties not mentioned above will be added later / as per project BOM.", margin, yPos);
+  yPos += 9;
+
+  // Terms and Conditions for Warranty
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(COLORS.black);
+  doc.text("Terms and Conditions for Warranty", margin, yPos);
+  yPos += 6;
+
+  const warrantyTerms = [
+    {
+      title: "1. Natural Calamity & Extreme Weather:",
+      desc: "Equipment warranties cover manufacturing, material, and workmanship defects under standard rated operating conditions. Damages directly or indirectly caused by natural calamities, severe weather anomalies (cyclones, gale winds exceeding structure design rating, hailstorms, flooding, earthquakes, landslides), or direct lightning strikes exceeding surge suppression (SPD) capacities are excluded from manufacturer warranty and must be insured under comprehensive plant insurance."
+    },
+    {
+      title: "2. Force Majeure:",
+      desc: "Neither the contractor nor original manufacturers shall be held liable for any delay, performance shortfall, or warranty voidance arising from Force Majeure events beyond reasonable human control, including but not limited to war, civil disturbances, riots, sabotage, fire, epidemics, labor disputes, or statutory grid shutdowns."
+    },
+    {
+      title: "3. Change in Government Policies & Regulatory Framework:",
+      desc: "Generation estimates, solar savings, and financial payback calculations are based strictly on prevailing MERC (Maharashtra Electricity Regulatory Commission) tariff orders, MSEDCL net metering rules, and MNRE PM Surya Ghar subsidy regulations. Any future retrospective or prospective amendments, changes in net metering provisions, imposition of grid-support / banking charges, revision of fixed/demand tariffs, or delays in DISCOM approvals shall not be construed as a defect or warranty violation by the installer."
+    },
+    {
+      title: "4. Operation, Maintenance & Pass-Through Warranty:",
+      desc: "All product warranties are original equipment manufacturer (OEM) pass-through warranties. The warranty remains in full force provided that: (a) panels are periodically washed with non-abrasive soft water, (b) the plant is operated within rated electrical parameters, and (c) no unauthorized modifications, repairs, or component tampering are carried out by uncertified third parties."
+    }
+  ];
+
+  warrantyTerms.forEach(term => {
+    const splitDesc = doc.splitTextToSize(term.desc, pageWidth - margin * 2);
+    const neededHeight = 4 + splitDesc.length * 3.6 + 4;
+    if (yPos + neededHeight > pageHeight - 22) {
+      doc.addPage();
+      yPos = 30;
+      addHeader("Warranty and Details (Contd.)");
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(COLORS.text);
+    doc.text(term.title, margin, yPos);
+    yPos += 4;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(COLORS.textLight);
+    doc.text(splitDesc, margin, yPos);
+    yPos += splitDesc.length * 3.6 + 3;
+  });
+
+  // ================= SECTION: Solar System Types =================
   doc.addPage();
   yPos = 30;
   addHeader("Solar System Types");
