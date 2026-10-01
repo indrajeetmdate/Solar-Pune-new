@@ -743,5 +743,36 @@ console.log("Running RooftopCAD tests...");
   console.log("✓ Test 12 Passed: Building Height Adjustment & Always-Visible Rooftop Solar Simulations");
 }
 
+// Test 13: Roof Area Dimensions Synchronization & Net Usable Area
+{
+  const canvas = new MockCanvas();
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 26,
+    roofBreadthFt: 25,
+    requiredPanels: 8,
+  });
+
+  const stats1 = cad.getAreaStats();
+  assert.equal(stats1.grossSqft, 650, "Initial gross area should be 26x25 = 650 sq ft");
+  assert.equal(stats1.netUsableSqft, 650, "Initial net usable area should match 650 sq ft");
+
+  // Change roof dimensions to 30 x 20 = 600 sq ft
+  cad.setRoofDimensions(30, 20);
+  const stats2 = cad.getAreaStats();
+  assert.equal(stats2.grossSqft, 600, "Gross area should update to 30x20 = 600 sq ft");
+  assert.equal(stats2.netUsableSqft, 600, "Net usable area should update to 600 sq ft");
+
+  // Add an obstacle cutout: 10 ft x 5 ft = 50 sq ft
+  const rectW = 10 * cad.scalePxPerFt;
+  const rectH = 5 * cad.scalePxPerFt;
+  cad.addCutout(cad.roofX + 10, cad.roofY + 10, rectW, rectH, "rectangle", "Small Vent");
+  const stats3 = cad.getAreaStats();
+  assert.equal(stats3.grossSqft, 600);
+  assert.equal(stats3.cutoutSqft, 50);
+  assert.equal(stats3.netUsableSqft, 550, "Net usable should be 600 - 50 = 550 sq ft");
+
+  console.log("✓ Test 13 Passed: Roof Area Dimensions Synchronization & Net Usable Area");
+}
+
 console.log("All RooftopCAD tests passed successfully!");
 

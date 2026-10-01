@@ -1710,9 +1710,15 @@ function setupCadEventListeners(cad) {
   const pwInput = $("cadPathwayWidth");
 
   const syncDimensions = () => {
-    const l = Math.max(5, Number(lenInput?.value) || 30);
-    const b = Math.max(5, Number(brInput?.value) || 20);
+    const l = Math.max(5, Number(lenInput?.value) || 26);
+    const b = Math.max(5, Number(brInput?.value) || 25);
     cad.setRoofDimensions(l, b);
+    const stats = cad.getAreaStats();
+    const roofInput = $("roofArea");
+    if (roofInput && document.activeElement !== roofInput) {
+      roofInput.value = stats.netUsableSqft;
+      render();
+    }
   };
 
   lenInput?.addEventListener("input", syncDimensions);
@@ -2385,6 +2391,51 @@ function setupCadEventListeners(cad) {
   });
 }
 
+function solveRoofDimensions(targetGrossSqft, preferredRatio = 1.35) {
+  const area = Math.max(25, Number(targetGrossSqft) || 650);
+  let bestL = 0, bestB = 0, bestRatioDiff = Infinity;
+  const targetL = Math.sqrt(area * preferredRatio);
+  const minL = Math.max(5, Math.floor(Math.sqrt(area)));
+  const maxL = Math.max(minL, Math.ceil(Math.sqrt(area * 2.5)));
+
+  // 1. Check exact integer factors within a balanced aspect ratio (1.0 to 2.2)
+  for (let l = minL; l <= maxL; l++) {
+    if (area % l === 0) {
+      const b = area / l;
+      const ratio = l / b;
+      const ratioDiff = Math.abs(ratio - preferredRatio);
+      if (ratio >= 1.0 && ratio <= 2.2 && ratioDiff < bestRatioDiff) {
+        bestRatioDiff = ratioDiff;
+        bestL = l;
+        bestB = b;
+      }
+    }
+  }
+  if (bestL > 0) return { l: bestL, b: bestB };
+
+  // 2. Try half-integer (0.5 ft) factors
+  for (let l2 = Math.floor(minL * 2); l2 <= Math.ceil(maxL * 2); l2++) {
+    const l = l2 / 2;
+    const b = area / l;
+    if (Math.abs(Math.round(b * 2) - b * 2) < 0.001) {
+      const bHalf = Math.round(b * 2) / 2;
+      const ratio = l / bHalf;
+      const ratioDiff = Math.abs(ratio - preferredRatio);
+      if (ratio >= 1.0 && ratio <= 2.2 && ratioDiff < bestRatioDiff) {
+        bestRatioDiff = ratioDiff;
+        bestL = l;
+        bestB = bHalf;
+      }
+    }
+  }
+  if (bestL > 0) return { l: bestL, b: bestB };
+
+  // 3. Clean integer L, rounded B so that L * B matches targetGrossSqft
+  const roundL = Math.max(5, Math.round(targetL));
+  const roundB = Math.max(5, Math.round((area / roundL) * 10) / 10);
+  return { l: roundL, b: roundB };
+}
+
 function renderDiagram(pl, input) {
   const section = $("panelDiagramSection");
   const canvas = $("panelDiagramCanvas");
@@ -2397,21 +2448,16 @@ function renderDiagram(pl, input) {
 
   section.style.display = "block";
 
-  // Check initial roof dimensions from input
-  const initialRoofArea = Number(input.roofArea) || 600;
-  let initialLen = Number($("cadRoofLength")?.value);
-  let initialBr = Number($("cadRoofBreadth")?.value);
-
-  if (!initialLen || !initialBr || Math.abs(initialLen * initialBr - initialRoofArea) > initialRoofArea * 0.5) {
-    // Estimate L and B from roofArea with a ~1.3 aspect ratio
-    initialLen = Math.max(10, Math.round(Math.sqrt(initialRoofArea * 1.3)));
-    initialBr = Math.max(10, Math.round(initialRoofArea / initialLen));
-    if ($("cadRoofLength")) $("cadRoofLength").value = initialLen;
-    if ($("cadRoofBreadth")) $("cadRoofBreadth").value = initialBr;
-  }
+  const targetUsableArea = Math.max(25, Number(input.roofArea) || 650);
 
   let cad = getActiveRooftopCAD();
   if (!cad || cad.canvas !== canvas) {
+    // Initial CAD creation: derive dimensions directly from input.roofArea
+    const { l: initialLen, b: initialBr } = solveRoofDimensions(targetUsableArea, 1.35);
+
+    if ($("cadRoofLength")) $("cadRoofLength").value = initialLen;
+    if ($("cadRoofBreadth")) $("cadRoofBreadth").value = initialBr;
+
     cad = initRooftopCAD(canvas, {
       roofLengthFt: initialLen,
       roofBreadthFt: initialBr,
@@ -2445,16 +2491,33 @@ function renderDiagram(pl, input) {
     if (state.pendingCadState) {
       cad.loadState(state.pendingCadState);
       state.pendingCadState = null;
+    } else {
+      const currentStats = cad.getAreaStats();
+      const isEditingCadDirectly = document.activeElement === $("cadRoofLength") || document.activeElement === $("cadRoofBreadth");
+
+      // When Usable Roof Area changes in input, reflect it as it is in Rooftop CAD
+      if (!isEditingCadDirectly && Math.abs(currentStats.netUsableSqft - targetUsableArea) >= 1) {
+        const deductions = (currentStats.cutoutSqft || 0) + (currentStats.pathwaySqft || 0);
+        const targetGross = targetUsableArea + deductions;
+        let preferredRatio = 1.35;
+        if (cad.roofLengthFt > 0 && cad.roofBreadthFt > 0) {
+          const r = cad.roofLengthFt / cad.roofBreadthFt;
+          if (r >= 0.8 && r <= 2.5) preferredRatio = r;
+        }
+        const { l, b } = solveRoofDimensions(targetGross, preferredRatio);
+        cad.setRoofDimensions(l, b);
+      }
     }
   }
 
   // Update initial UI stats
   const stats = cad.getAreaStats();
+  const isEditingCad = document.activeElement === $("cadRoofLength") || document.activeElement === $("cadRoofBreadth");
   if ($("cadGrossArea")) $("cadGrossArea").textContent = stats.grossSqft;
   if ($("cadCutoutArea")) $("cadCutoutArea").textContent = stats.cutoutSqft + stats.pathwaySqft;
   if ($("cadNetArea")) $("cadNetArea").textContent = stats.netUsableSqft;
-  if ($("cadRoofLength")) $("cadRoofLength").value = cad.roofLengthFt;
-  if ($("cadRoofBreadth")) $("cadRoofBreadth").value = cad.roofBreadthFt;
+  if ($("cadRoofLength") && !isEditingCad) $("cadRoofLength").value = cad.roofLengthFt;
+  if ($("cadRoofBreadth") && !isEditingCad) $("cadRoofBreadth").value = cad.roofBreadthFt;
   if ($("cadPathwayWidth")) $("cadPathwayWidth").value = cad.defaultPathwayWidthFt;
   if ($("cadNorthAngleInput")) $("cadNorthAngleInput").value = cad.northAngleDeg;
   if ($("cadBuildingHeightInput")) $("cadBuildingHeightInput").value = cad.buildingHeightFt;
