@@ -559,8 +559,9 @@
 
         <!-- Sidebar Actions Bar -->
         <div class="sidebar-footer">
-          <button class="sidebar-footer-btn" id="openLoadProposalModalButton" type="button">Load Data 📂</button>
-          <button class="sidebar-footer-btn primary" id="sidebarCalculateBtn" type="button">Recalculate ⚡</button>
+          <button class="sidebar-footer-btn" id="sidebarSaveProposalBtn" type="button" title="Save current proposal data">Save Data 💾</button>
+          <button class="sidebar-footer-btn" id="openLoadProposalModalButton" type="button" title="Load saved proposals or import JSON">Load Data 📂</button>
+          <button class="sidebar-footer-btn primary" id="sidebarCalculateBtn" type="button">Calculate ⚡</button>
         </div>
       </aside>
 
@@ -1351,6 +1352,15 @@
           <button id="closeLoadProposalModal" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted);">&times;</button>
         </div>
         <div style="padding: 16px 20px; display: flex; flex-direction: column; overflow: hidden;">
+          <!-- File Import / Export Bar -->
+          <div style="display: flex; gap: 8px; margin-bottom: 12px; justify-content: space-between; align-items: center; background: #f8fafc; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 6px;">
+            <span style="font-size: 12px; font-weight: 600; color: var(--text-muted);">Backup & Transfer:</span>
+            <div style="display: flex; gap: 6px;">
+              <input type="file" id="loadProposalFileInput" accept=".json,application/json" style="display: none;">
+              <button id="importJsonProposalBtn" class="secondary-button" style="padding: 4px 10px; font-size: 12px;" type="button" title="Load a saved proposal .json file from your computer">📂 Import JSON File</button>
+              <button id="exportJsonProposalBtn" class="secondary-button" style="padding: 4px 10px; font-size: 12px;" type="button" title="Download current proposal data as a .json file">💾 Export JSON File</button>
+            </div>
+          </div>
           <div style="display: flex; gap: 8px; margin-bottom: 12px;">
             <input type="text" id="searchProposalInput" placeholder="Search by Name, Mobile, or Email..." style="flex: 1; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;">
             <button id="searchProposalBtn" class="primary-button" style="padding: 8px 14px; font-size: 13px;">Search</button>

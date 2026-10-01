@@ -2491,7 +2491,7 @@ function renderDiagram(pl, input) {
     if (state.pendingCadState) {
       cad.loadState(state.pendingCadState);
       state.pendingCadState = null;
-    } else {
+    } else if (!state.isRestoringProposal) {
       const currentStats = cad.getAreaStats();
       const isEditingCadDirectly = document.activeElement === $("cadRoofLength") || document.activeElement === $("cadRoofBreadth");
 
@@ -3102,19 +3102,21 @@ function attachEvents() {
     }
   });
 
-  $("saveProposalButtonInternal")?.addEventListener("click", () => {
-    if (state.estimates) {
-      saveProposalData();
-    } else {
-      alert("Please ensure all inputs are filled to calculate the estimate before saving.");
+  const handleSaveClick = () => {
+    if (!state.estimates) {
+      try { render(); } catch (_) {}
     }
-  });
+    saveProposalData();
+  };
+
+  $("saveProposalButtonInternal")?.addEventListener("click", handleSaveClick);
+  $("sidebarSaveProposalBtn")?.addEventListener("click", handleSaveClick);
 
   $("openLoadProposalModalButton")?.addEventListener("click", () => {
     const modal = $("loadProposalModal");
     if (modal) {
       modal.style.display = "flex";
-      searchProposals('');
+      searchProposals("");
     }
   });
 
@@ -3124,14 +3126,30 @@ function attachEvents() {
   });
 
   $("searchProposalBtn")?.addEventListener("click", () => {
-    const query = $("searchProposalInput")?.value || '';
+    const query = $("searchProposalInput")?.value || "";
     searchProposals(query);
   });
 
   $("searchProposalInput")?.addEventListener("keyup", (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       searchProposals(e.target.value);
     }
+  });
+
+  $("importJsonProposalBtn")?.addEventListener("click", () => {
+    $("loadProposalFileInput")?.click();
+  });
+
+  $("loadProposalFileInput")?.addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      window.importProposalJSONFile(file);
+      e.target.value = "";
+    }
+  });
+
+  $("exportJsonProposalBtn")?.addEventListener("click", () => {
+    window.exportCurrentProposalJSON();
   });
 
   $("downloadProposalButtonInternal")?.addEventListener("click", () => {
@@ -3673,11 +3691,7 @@ function captureFormValues() {
   return values;
 }
 
-async function saveProposalData() {
-  const btn = $("saveProposalButtonInternal");
-  const origText = btn ? btn.textContent : "Save Data 💾";
-  if (btn) btn.textContent = "Saving...";
-
+function buildProposalSnapshot() {
   const input = readInput();
   const config = readConfig();
   const formValues = captureFormValues();
@@ -3804,238 +3818,418 @@ async function saveProposalData() {
   const custName = input.customerName || $("internalCustomerName")?.value || $("customerName")?.value || "Draft Customer";
   const mobile = input.mobileNumber || $("internalMobileNumber")?.value || $("mobileNumber")?.value || "";
   const email = input.emailAddress || $("internalEmailAddress")?.value || $("emailAddress")?.value || "";
+  const serialNo = reportDisplay.proposalSerialNo || $("proposalSerialNo")?.value || "DC/2026-27/PROP-1001";
+  const sysCap = state.estimates?.recommended?.dcCapacityKw || formValues.capacityOverride || "";
+  const totCost = state.estimates?.recommended?.netCost || 0;
 
-  // 1. Cache to local storage immediately for robust offline draft restoration
+  return {
+    customerName: custName,
+    mobileNumber: mobile,
+    emailAddress: email,
+    proposalSerialNo: serialNo,
+    systemCapacityKw: sysCap,
+    totalCost: totCost,
+    stateData
+  };
+}
+
+async function saveProposalData() {
+  const btnInternal = $("saveProposalButtonInternal");
+  const btnSidebar = $("sidebarSaveProposalBtn");
+  const origTextInternal = btnInternal ? btnInternal.textContent : "Save Data 💾";
+  const origTextSidebar = btnSidebar ? btnSidebar.textContent : "Save Data 💾";
+
+  const setButtonsText = (txt, color) => {
+    if (btnInternal) {
+      btnInternal.textContent = txt;
+      if (color) {
+        btnInternal.style.borderColor = color;
+        btnInternal.style.color = color;
+      }
+    }
+    if (btnSidebar) {
+      btnSidebar.textContent = txt;
+      if (color) {
+        btnSidebar.style.borderColor = color;
+        btnSidebar.style.color = color;
+      }
+    }
+  };
+
+  const resetButtons = () => {
+    if (btnInternal) {
+      btnInternal.textContent = origTextInternal;
+      btnInternal.style.borderColor = "var(--line)";
+      btnInternal.style.color = "";
+    }
+    if (btnSidebar) {
+      btnSidebar.textContent = origTextSidebar;
+      btnSidebar.style.borderColor = "";
+      btnSidebar.style.color = "";
+    }
+  };
+
+  setButtonsText("Saving...", null);
+
+  const snapshot = buildProposalSnapshot();
+  const proposalRecord = {
+    id: "prop_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
+    customerName: snapshot.customerName,
+    mobileNumber: snapshot.mobileNumber,
+    emailAddress: snapshot.emailAddress,
+    proposalSerialNo: snapshot.proposalSerialNo,
+    systemCapacityKw: snapshot.systemCapacityKw,
+    totalCost: snapshot.totalCost,
+    savedAt: new Date().toISOString(),
+    stateData: snapshot.stateData
+  };
+
+  // 1. Cache to local storage immediately for multi-proposal history & offline recovery
   try {
-    const localPayload = {
-      customerName: custName,
-      mobileNumber: mobile,
-      emailAddress: email,
-      proposalSerialNo: reportDisplay.proposalSerialNo,
-      savedAt: new Date().toISOString(),
-      stateData
-    };
-    localStorage.setItem("solar_proposal_last_saved", JSON.stringify(localPayload));
+    localStorage.setItem("solar_proposal_last_saved", JSON.stringify(proposalRecord));
+
+    let savedList = [];
+    try {
+      const raw = localStorage.getItem("solar_saved_proposals");
+      if (raw) savedList = JSON.parse(raw);
+    } catch (_) {}
+    if (!Array.isArray(savedList)) savedList = [];
+
+    const existingIdx = savedList.findIndex(p =>
+      (snapshot.proposalSerialNo && p.proposalSerialNo === snapshot.proposalSerialNo) ||
+      (p.customerName === snapshot.customerName && snapshot.mobileNumber && p.mobileNumber === snapshot.mobileNumber)
+    );
+    if (existingIdx >= 0) {
+      proposalRecord.id = savedList[existingIdx].id || proposalRecord.id;
+      savedList[existingIdx] = proposalRecord;
+    } else {
+      savedList.unshift(proposalRecord);
+    }
+    if (savedList.length > 50) savedList = savedList.slice(0, 50);
+    localStorage.setItem("solar_saved_proposals", JSON.stringify(savedList));
   } catch (err) {
     console.warn("Could not save to localStorage", err);
   }
 
-  // 2. Persist to backend server / database
+  // 2. Persist to backend server / database (safe and non-blocking)
+  let serverSaved = false;
   try {
     const res = await fetch("/api/save-proposal", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        customerName: custName,
-        mobileNumber: mobile,
-        emailAddress: email,
-        stateData
+        customerName: snapshot.customerName,
+        mobileNumber: snapshot.mobileNumber,
+        emailAddress: snapshot.emailAddress,
+        proposalSerialNo: snapshot.proposalSerialNo,
+        systemCapacityKw: snapshot.systemCapacityKw,
+        totalCost: snapshot.totalCost,
+        stateData: snapshot.stateData
       })
     });
-    const data = await res.json();
-    if (data.success) {
-      console.log("Proposal saved successfully:", data.id);
-      if (btn) {
-        btn.textContent = "Saved! ✅";
-        btn.style.borderColor = "var(--primary-green, #10b981)";
-        btn.style.color = "var(--primary-green, #10b981)";
-        setTimeout(() => {
-          btn.textContent = origText;
-          btn.style.borderColor = "var(--line)";
-          btn.style.color = "";
-        }, 2500);
-      }
-    } else {
-      console.error("Save failed:", data.error);
-      if (btn) {
-        btn.textContent = "Saved locally! 💾";
-        setTimeout(() => btn.textContent = origText, 2500);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success) {
+        serverSaved = true;
+        console.log("Proposal saved to server:", data.id);
       }
     }
   } catch (e) {
-    console.error("Error saving proposal:", e);
-    if (btn) {
-      btn.textContent = "Saved locally! 💾";
-      setTimeout(() => btn.textContent = origText, 2500);
-    }
+    console.warn("Server save skipped or offline:", e);
   }
+
+  if (serverSaved) {
+    setButtonsText("Saved! ✅", "var(--primary-green, #10b981)");
+  } else {
+    setButtonsText("Saved locally! 💾", "var(--primary-green, #10b981)");
+  }
+  setTimeout(resetButtons, 2500);
+}
+
+function exportCurrentProposalJSON() {
+  const snapshot = buildProposalSnapshot();
+  const exportPayload = {
+    customerName: snapshot.customerName,
+    mobileNumber: snapshot.mobileNumber,
+    emailAddress: snapshot.emailAddress,
+    proposalSerialNo: snapshot.proposalSerialNo,
+    exportedAt: new Date().toISOString(),
+    stateData: snapshot.stateData
+  };
+
+  const jsonStr = JSON.stringify(exportPayload, null, 2);
+  const blob = new Blob([jsonStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const safeFilename = `${snapshot.proposalSerialNo}_${snapshot.customerName}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+  a.href = url;
+  a.download = `Solar_Proposal_${safeFilename}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importProposalJSONFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data) throw new Error("Empty JSON");
+      window.loadProposalState(data);
+      const name = data.customerName || data.stateData?.input?.customerName || data.state_data?.input?.customerName || "Proposal";
+      alert(`Proposal "${name}" successfully loaded from file!`);
+    } catch (err) {
+      console.error("Failed to parse JSON proposal file", err);
+      alert("Invalid proposal file format. Please ensure you are uploading a valid Solar Calculator JSON backup.");
+    }
+  };
+  reader.readAsText(file);
 }
 
 async function searchProposals(query) {
   const listEl = $("proposalList");
   if (!listEl) return;
-  listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">Searching...</div>';
+  listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">Searching saved proposals...</div>';
 
-  let localDraftHtml = "";
+  // 1. Gather local proposals from solar_saved_proposals and solar_proposal_last_saved
+  let localProposals = [];
   try {
-    const localRaw = localStorage.getItem("solar_proposal_last_saved");
-    if (localRaw) {
-      const localData = JSON.parse(localRaw);
-      const q = (query || "").toLowerCase().trim();
-      const matchName = !q || (localData.customerName && localData.customerName.toLowerCase().includes(q));
-      const matchMobile = !q || (localData.mobileNumber && localData.mobileNumber.includes(q));
-      const matchSerial = !q || (localData.proposalSerialNo && localData.proposalSerialNo.toLowerCase().includes(q)) ||
-                                (localData.stateData?.reportDisplay?.proposalSerialNo && localData.stateData.reportDisplay.proposalSerialNo.toLowerCase().includes(q));
-      if (matchName || matchMobile || matchSerial) {
-        const serialTag = localData.proposalSerialNo || localData.stateData?.reportDisplay?.proposalSerialNo || "Draft";
-        localDraftHtml = `
-          <div style="padding: 10px 14px; border: 1px solid #86efac; background: #f0fdf4; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 3px;">
-                <span style="font-size: 10px; font-weight:700; background: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 4px;">⚡ Local Auto-Save Draft</span>
-                <span style="font-size: 11px; font-weight: 600; color: #0284c7;">${serialTag}</span>
-              </div>
-              <strong style="color: #0f172a; font-size: 13.5px;">${localData.customerName || "Draft"}</strong>
-              <span style="font-size: 12px; color: #64748b; margin-left: 6px;">${localData.mobileNumber || ""}</span><br>
-              <span style="font-size: 11px; color: #94a3b8;">${new Date(localData.savedAt).toLocaleString()}</span>
-            </div>
-            <button class="primary-button load-local-btn" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button">Load</button>
-          </div>
-        `;
+    const raw = localStorage.getItem("solar_saved_proposals");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) localProposals = parsed;
+    }
+  } catch (_) {}
+
+  try {
+    const lastRaw = localStorage.getItem("solar_proposal_last_saved");
+    if (lastRaw) {
+      const lastSaved = JSON.parse(lastRaw);
+      const exists = localProposals.some(p =>
+        (lastSaved.proposalSerialNo && p.proposalSerialNo === lastSaved.proposalSerialNo) ||
+        (lastSaved.id && p.id === lastSaved.id)
+      );
+      if (!exists && (lastSaved.customerName || lastSaved.stateData)) {
+        localProposals.unshift(lastSaved);
       }
     }
-  } catch (err) {
-    console.warn("Could not parse local draft", err);
-  }
+  } catch (_) {}
 
-  try {
-    const res = await fetch("/api/load-proposals?search=" + encodeURIComponent(query));
-    const json = await res.json();
-    let serverHtml = "";
-    if (json.success && json.data.length > 0) {
-      window._currentServerProposals = json.data;
-      serverHtml = json.data.map((p, idx) => {
-        const serialNo = p.proposal_serial_no || p.state_data?.reportDisplay?.proposalSerialNo || p.state_data?.input?.proposalSerialNo || "";
-        const capKw = p.system_capacity_kw || p.state_data?.state?.estimates?.recommended?.dcCapacityKw || p.state_data?.formValues?.capacityOverride || "";
-        const costVal = p.total_cost || p.state_data?.state?.estimates?.recommended?.netCost || "";
-        return `
-        <div style="padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 2px;">
-              <strong style="color: #0f172a; font-size: 13.5px;">${p.customer_name || "Unknown"}</strong>
+  const q = (query || "").toLowerCase().trim();
+  const filteredLocal = localProposals.filter(p => {
+    if (!q) return true;
+    const name = (p.customerName || p.stateData?.input?.customerName || "").toLowerCase();
+    const mob = (p.mobileNumber || p.stateData?.input?.mobileNumber || "");
+    const serial = (p.proposalSerialNo || p.stateData?.reportDisplay?.proposalSerialNo || "").toLowerCase();
+    const email = (p.emailAddress || p.stateData?.input?.emailAddress || "").toLowerCase();
+    return name.includes(q) || mob.includes(q) || serial.includes(q) || email.includes(q);
+  });
+
+  window._currentLocalProposals = filteredLocal;
+
+  let localHtml = "";
+  if (filteredLocal.length > 0) {
+    localHtml = filteredLocal.map((p, idx) => {
+      const serialNo = p.proposalSerialNo || p.stateData?.reportDisplay?.proposalSerialNo || "Draft";
+      const capKw = p.systemCapacityKw || p.stateData?.state?.estimates?.recommended?.dcCapacityKw || p.stateData?.formValues?.capacityOverride || "";
+      const costVal = p.totalCost || p.stateData?.state?.estimates?.recommended?.netCost || 0;
+      const dateStr = p.savedAt ? new Date(p.savedAt).toLocaleString() : "";
+      return `
+        <div style="padding: 10px 14px; border: 1px solid #86efac; background: #f0fdf4; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 3px; flex-wrap: wrap;">
+              <span style="font-size: 10px; font-weight: 700; background: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 4px;">⚡ Local Save</span>
               ${serialNo ? `<span style="font-size: 11px; font-weight: 600; color: #0284c7; background: #e0f2fe; padding: 1px 6px; border-radius: 4px;">${serialNo}</span>` : ""}
               ${capKw ? `<span style="font-size: 11px; font-weight: 600; color: #166534; background: #dcfce7; padding: 1px 6px; border-radius: 4px;">${capKw} kW</span>` : ""}
             </div>
-            <span style="font-size: 12px; color: var(--text-muted);">${p.mobile_number || ""} ${p.email_address ? "| " + p.email_address : ""}</span><br>
-            <span style="font-size: 11px; color: var(--text-muted);">${new Date(p.created_at).toLocaleString()}${costVal ? " • ₹" + Math.round(costVal).toLocaleString("en-IN") : ""}</span>
+            <strong style="color: #0f172a; font-size: 13.5px; display: inline-block;">${p.customerName || "Draft Customer"}</strong>
+            <span style="font-size: 12px; color: #64748b; margin-left: 6px;">${p.mobileNumber || ""} ${p.emailAddress ? "| " + p.emailAddress : ""}</span><br>
+            <span style="font-size: 11px; color: #94a3b8;">${dateStr}${costVal ? " • ₹" + Math.round(costVal).toLocaleString("en-IN") : ""}</span>
           </div>
-          <button class="primary-button load-server-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button">Load</button>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button class="primary-button load-local-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button">Load</button>
+            <button class="ghost-button delete-local-btn" data-idx="${idx}" style="padding: 6px 8px; font-size: 13px; min-height: 32px; color: #ef4444;" type="button" title="Delete proposal">🗑️</button>
+          </div>
         </div>
       `;
-      }).join("");
-    } else if (!localDraftHtml) {
-      serverHtml = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">No proposals found.</div>';
+    }).join("");
+  }
+
+  // 2. Fetch server proposals safely
+  let serverHtml = "";
+  try {
+    const res = await fetch("/api/load-proposals?search=" + encodeURIComponent(query));
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.success && Array.isArray(json.data) && json.data.length > 0) {
+        window._currentServerProposals = json.data;
+        serverHtml = json.data.map((p, idx) => {
+          const serialNo = p.proposal_serial_no || p.state_data?.reportDisplay?.proposalSerialNo || p.state_data?.input?.proposalSerialNo || "";
+          const capKw = p.system_capacity_kw || p.state_data?.state?.estimates?.recommended?.dcCapacityKw || p.state_data?.formValues?.capacityOverride || "";
+          const costVal = p.total_cost || p.state_data?.state?.estimates?.recommended?.netCost || "";
+          return `
+          <div style="padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 2px; flex-wrap: wrap;">
+                <span style="font-size: 10px; font-weight: 700; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px;">☁️ Server</span>
+                <strong style="color: #0f172a; font-size: 13.5px;">${p.customer_name || "Unknown"}</strong>
+                ${serialNo ? `<span style="font-size: 11px; font-weight: 600; color: #0284c7; background: #e0f2fe; padding: 1px 6px; border-radius: 4px;">${serialNo}</span>` : ""}
+                ${capKw ? `<span style="font-size: 11px; font-weight: 600; color: #166534; background: #dcfce7; padding: 1px 6px; border-radius: 4px;">${capKw} kW</span>` : ""}
+              </div>
+              <span style="font-size: 12px; color: var(--text-muted);">${p.mobile_number || ""} ${p.email_address ? "| " + p.email_address : ""}</span><br>
+              <span style="font-size: 11px; color: var(--text-muted);">${new Date(p.created_at).toLocaleString()}${costVal ? " • ₹" + Math.round(costVal).toLocaleString("en-IN") : ""}</span>
+            </div>
+            <button class="primary-button load-server-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button">Load</button>
+          </div>
+        `;
+        }).join("");
+      }
     }
+  } catch (err) {
+    console.warn("Server search offline or unavailable:", err);
+  }
 
-    listEl.innerHTML = localDraftHtml + serverHtml;
+  if (!localHtml && !serverHtml) {
+    listEl.innerHTML = `
+      <div style="text-align: center; color: var(--text-muted); padding: 24px;">
+        <span style="font-size: 24px; display: block; margin-bottom: 8px;">📂</span>
+        No saved proposals found.<br>
+        <span style="font-size: 12px;">Click "Save Data 💾" in the sidebar to save, or "Import JSON File" to load a file.</span>
+      </div>
+    `;
+    return;
+  }
 
-    listEl.querySelector(".load-local-btn")?.addEventListener("click", () => {
-      try {
-        const localData = JSON.parse(localStorage.getItem("solar_proposal_last_saved"));
-        if (localData?.stateData) window.loadProposalState(localData.stateData);
-      } catch (e) {
-        console.error("Failed to load local draft", e);
+  listEl.innerHTML = localHtml + (serverHtml ? `<div style="margin: 10px 0 4px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Cloud / Server Proposals</div>` + serverHtml : "");
+
+  // Wire local Load buttons
+  listEl.querySelectorAll(".load-local-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      const p = window._currentLocalProposals?.[idx];
+      if (p) {
+        window.loadProposalState(p.stateData || p);
       }
     });
+  });
 
-    listEl.querySelectorAll(".load-server-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const idx = parseInt(btn.dataset.idx, 10);
-        const p = window._currentServerProposals?.[idx];
-        if (p?.state_data) window.loadProposalState(p.state_data);
-      });
-    });
-
-  } catch (e) {
-    console.error(e);
-    if (localDraftHtml) {
-      listEl.innerHTML = localDraftHtml + '<div style="text-align: center; color: var(--text-muted); padding: 12px; font-size: 12px;">(Server offline - loaded local draft)</div>';
-      listEl.querySelector(".load-local-btn")?.addEventListener("click", () => {
+  // Wire local Delete buttons
+  listEl.querySelectorAll(".delete-local-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      const p = window._currentLocalProposals?.[idx];
+      if (p && confirm(`Delete saved proposal for "${p.customerName || 'Customer'}"?`)) {
         try {
-          const localData = JSON.parse(localStorage.getItem("solar_proposal_last_saved"));
-          if (localData?.stateData) window.loadProposalState(localData.stateData);
-        } catch (err) {
-          console.error("Failed to load local draft", err);
+          const raw = localStorage.getItem("solar_saved_proposals");
+          let list = raw ? JSON.parse(raw) : [];
+          if (Array.isArray(list)) {
+            list = list.filter(item => (p.id ? item.id !== p.id : item.proposalSerialNo !== p.proposalSerialNo));
+            localStorage.setItem("solar_saved_proposals", JSON.stringify(list));
+          }
+          const lastRaw = localStorage.getItem("solar_proposal_last_saved");
+          if (lastRaw) {
+            const lastSaved = JSON.parse(lastRaw);
+            if ((p.id && lastSaved.id === p.id) || (p.proposalSerialNo && lastSaved.proposalSerialNo === p.proposalSerialNo)) {
+              localStorage.removeItem("solar_proposal_last_saved");
+            }
+          }
+        } catch (e) {
+          console.error("Failed to delete proposal", e);
         }
-      });
-    } else {
-      listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">Error loading data from server.</div>';
-    }
-  }
+        searchProposals(query);
+      }
+    });
+  });
+
+  // Wire server Load buttons
+  listEl.querySelectorAll(".load-server-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      const p = window._currentServerProposals?.[idx];
+      if (p) {
+        window.loadProposalState(p.state_data || p);
+      }
+    });
+  });
 }
 
 window.loadProposalState = function(data) {
   if (!data) return;
 
+  state.isRestoringProposal = true;
+  const sData = (data.stateData || data.state_data || data);
+
   // 1. If formValues exists (v2 schema), restore all DOM inputs, selects, textareas, and checkboxes directly
-  if (data.formValues && typeof data.formValues === "object") {
-    Object.keys(data.formValues).forEach((id) => {
+  if (sData.formValues && typeof sData.formValues === "object") {
+    Object.keys(sData.formValues).forEach((id) => {
       const el = $(id);
       if (!el) return;
       if (el.type === "checkbox") {
-        el.checked = !!data.formValues[id];
+        el.checked = !!sData.formValues[id];
       } else if (el.type === "radio") {
-        if (el.value === data.formValues[id]) el.checked = true;
+        if (el.value === sData.formValues[id]) el.checked = true;
       } else {
-        el.value = data.formValues[id] !== undefined && data.formValues[id] !== null ? data.formValues[id] : "";
+        el.value = sData.formValues[id] !== undefined && sData.formValues[id] !== null ? sData.formValues[id] : "";
       }
     });
   }
 
   // 2. Restore state properties (multi-meter, extracted bill, overrides, configs)
-  if (data.state) {
-    if (data.state.meters && Array.isArray(data.state.meters)) {
-      state.meters = JSON.parse(JSON.stringify(data.state.meters));
+  if (sData.state) {
+    if (sData.state.meters && Array.isArray(sData.state.meters)) {
+      state.meters = JSON.parse(JSON.stringify(sData.state.meters));
     }
-    if (data.state.meteringMode) {
-      state.meteringMode = data.state.meteringMode;
+    if (sData.state.meteringMode) {
+      state.meteringMode = sData.state.meteringMode;
     }
-    if (data.state.allocationStrategy) {
-      state.allocationStrategy = data.state.allocationStrategy;
+    if (sData.state.allocationStrategy) {
+      state.allocationStrategy = sData.state.allocationStrategy;
     }
-    if (data.state.extractedBill !== undefined) {
-      state.extractedBill = data.state.extractedBill ? JSON.parse(JSON.stringify(data.state.extractedBill)) : null;
+    if (sData.state.extractedBill !== undefined) {
+      state.extractedBill = sData.state.extractedBill ? JSON.parse(JSON.stringify(sData.state.extractedBill)) : null;
     }
-    if (data.state.costOverrides) {
-      state.costOverrides = JSON.parse(JSON.stringify(data.state.costOverrides));
+    if (sData.state.costOverrides) {
+      state.costOverrides = JSON.parse(JSON.stringify(sData.state.costOverrides));
     }
-    if (data.state.systemIncludesText) {
-      state.systemIncludesText = JSON.parse(JSON.stringify(data.state.systemIncludesText));
+    if (sData.state.systemIncludesText) {
+      state.systemIncludesText = JSON.parse(JSON.stringify(sData.state.systemIncludesText));
     }
-    if (data.state.breakupConfig) {
-      state.breakupConfig = JSON.parse(JSON.stringify(data.state.breakupConfig));
+    if (sData.state.breakupConfig) {
+      state.breakupConfig = JSON.parse(JSON.stringify(sData.state.breakupConfig));
     }
-    if (data.state.breakupConfigGst) {
-      state.breakupConfigGst = JSON.parse(JSON.stringify(data.state.breakupConfigGst));
+    if (sData.state.breakupConfigGst) {
+      state.breakupConfigGst = JSON.parse(JSON.stringify(sData.state.breakupConfigGst));
     }
-    if (data.state.breakupConfigContingency) {
-      state.breakupConfigContingency = JSON.parse(JSON.stringify(data.state.breakupConfigContingency));
+    if (sData.state.breakupConfigContingency) {
+      state.breakupConfigContingency = JSON.parse(JSON.stringify(sData.state.breakupConfigContingency));
     }
-    if (data.state.breakupConfigMarginPct) {
-      state.breakupConfigMarginPct = JSON.parse(JSON.stringify(data.state.breakupConfigMarginPct));
+    if (sData.state.breakupConfigMarginPct) {
+      state.breakupConfigMarginPct = JSON.parse(JSON.stringify(sData.state.breakupConfigMarginPct));
     }
-    if (data.state.savingsConfig) {
-      state.savingsConfig = JSON.parse(JSON.stringify(data.state.savingsConfig));
+    if (sData.state.savingsConfig) {
+      state.savingsConfig = JSON.parse(JSON.stringify(sData.state.savingsConfig));
     }
-    if (data.state.billConfig) {
-      state.billConfig = JSON.parse(JSON.stringify(data.state.billConfig));
+    if (sData.state.billConfig) {
+      state.billConfig = JSON.parse(JSON.stringify(sData.state.billConfig));
     }
-    if (data.state.selectedSystemIndex !== undefined) {
-      state.selectedSystemIndex = data.state.selectedSystemIndex;
+    if (sData.state.selectedSystemIndex !== undefined) {
+      state.selectedSystemIndex = sData.state.selectedSystemIndex;
     }
-    if (data.state.ongridBackup !== undefined) {
-      state.ongridBackup = data.state.ongridBackup;
+    if (sData.state.ongridBackup !== undefined) {
+      state.ongridBackup = sData.state.ongridBackup;
     }
   }
 
   // 3. Fallback / Explicit sections unpacking (Rates, Loans, Sizing, ReportDisplay)
-  if (data.rates && typeof data.rates === "object") {
-    Object.keys(data.rates).forEach((id) => {
+  if (sData.rates && typeof sData.rates === "object") {
+    Object.keys(sData.rates).forEach((id) => {
       const el = $(id);
-      if (el && data.rates[id] !== undefined) el.value = data.rates[id];
+      if (el && sData.rates[id] !== undefined) el.value = sData.rates[id];
     });
-  } else if (data.config && data.config.pricing) {
-    const p = data.config.pricing;
+  } else if (sData.config && sData.config.pricing) {
+    const p = sData.config.pricing;
     if ($("panelDcrRate") && p.panelDcrRatePerWp !== undefined) $("panelDcrRate").value = p.panelDcrRatePerWp;
     if ($("panelNonDcrRate") && p.panelNonDcrRatePerWp !== undefined) $("panelNonDcrRate").value = p.panelNonDcrRatePerWp;
     if ($("batteryRate") && p.batteryRatePerWh !== undefined) $("batteryRate").value = p.batteryRatePerWh;
@@ -4050,8 +4244,8 @@ window.loadProposalState = function(data) {
     if ($("contingencyRate") && p.contingencyRate !== undefined) $("contingencyRate").value = p.contingencyRate;
     if ($("marginRate") && p.marginRate !== undefined) $("marginRate").value = p.marginRate;
 
-    if (data.config.performance) {
-      const perf = data.config.performance;
+    if (sData.config.performance) {
+      const perf = sData.config.performance;
       if ($("panelWp") && perf.panelWp !== undefined) $("panelWp").value = perf.panelWp;
       if ($("dailyGeneration") && perf.dailyGenerationPerKw !== undefined) $("dailyGeneration").value = perf.dailyGenerationPerKw;
       if ($("shadingLoss") && perf.shadingLoss !== undefined) $("shadingLoss").value = perf.shadingLoss;
@@ -4064,8 +4258,8 @@ window.loadProposalState = function(data) {
       if ($("selfConsumptionPct") && perf.selfConsumptionPct !== undefined) $("selfConsumptionPct").value = perf.selfConsumptionPct;
     }
 
-    if (data.config.tariff) {
-      const tar = data.config.tariff;
+    if (sData.config.tariff) {
+      const tar = sData.config.tariff;
       if ($("fixedCharge") && tar.fixedCharge !== undefined) $("fixedCharge").value = tar.fixedCharge;
       if ($("electricityDuty") && tar.electricityDuty !== undefined) $("electricityDuty").value = tar.electricityDuty;
       if ($("tariffEscalation") && tar.tariffEscalation !== undefined) $("tariffEscalation").value = tar.tariffEscalation;
@@ -4079,73 +4273,73 @@ window.loadProposalState = function(data) {
   }
 
   // Legacy input object unpacking
-  if (data.input && typeof data.input === "object") {
-    Object.keys(data.input).forEach((key) => {
+  if (sData.input && typeof sData.input === "object") {
+    Object.keys(sData.input).forEach((key) => {
       const el = $(key);
       if (el && el.type !== "radio" && el.type !== "checkbox") {
-        el.value = data.input[key] || "";
+        el.value = sData.input[key] || "";
       } else if (el && el.type === "checkbox") {
-        el.checked = !!data.input[key];
+        el.checked = !!sData.input[key];
       }
     });
-    if (data.input.backupLoadPercent !== undefined && $("backupLoad")) {
-      $("backupLoad").value = data.input.backupLoadPercent;
+    if (sData.input.backupLoadPercent !== undefined && $("backupLoad")) {
+      $("backupLoad").value = sData.input.backupLoadPercent;
     }
-    if (data.input.loanTenureMonths !== undefined && $("internalLoanTenureMonths")) {
-      $("internalLoanTenureMonths").value = data.input.loanTenureMonths;
+    if (sData.input.loanTenureMonths !== undefined && $("internalLoanTenureMonths")) {
+      $("internalLoanTenureMonths").value = sData.input.loanTenureMonths;
     }
   }
 
   // Loans unpacking
-  if (data.loans && typeof data.loans === "object") {
-    Object.keys(data.loans).forEach((id) => {
+  if (sData.loans && typeof sData.loans === "object") {
+    Object.keys(sData.loans).forEach((id) => {
       const el = $(id);
-      if (el && data.loans[id] !== undefined) el.value = data.loans[id];
+      if (el && sData.loans[id] !== undefined) el.value = sData.loans[id];
     });
   }
 
   // Sizing & overrides unpacking
-  if (data.sizing && typeof data.sizing === "object") {
-    Object.keys(data.sizing).forEach((key) => {
+  if (sData.sizing && typeof sData.sizing === "object") {
+    Object.keys(sData.sizing).forEach((key) => {
       const el = $(key);
       if (el && el.type !== "checkbox" && el.type !== "radio") {
-        el.value = data.sizing[key] !== undefined ? data.sizing[key] : "";
+        el.value = sData.sizing[key] !== undefined ? sData.sizing[key] : "";
       }
     });
-    if (data.sizing.selectedSystemIndex !== undefined) state.selectedSystemIndex = data.sizing.selectedSystemIndex;
-    if (data.sizing.ongridBackup !== undefined) state.ongridBackup = data.sizing.ongridBackup;
-    if (data.sizing.costOverrides) state.costOverrides = data.sizing.costOverrides;
-    if (data.sizing.systemIncludesText) state.systemIncludesText = data.sizing.systemIncludesText;
-    if (data.sizing.breakupConfig) state.breakupConfig = data.sizing.breakupConfig;
-    if (data.sizing.breakupConfigGst) state.breakupConfigGst = data.sizing.breakupConfigGst;
-    if (data.sizing.breakupConfigContingency) state.breakupConfigContingency = data.sizing.breakupConfigContingency;
-    if (data.sizing.breakupConfigMarginPct) state.breakupConfigMarginPct = data.sizing.breakupConfigMarginPct;
-    if (data.sizing.savingsConfig) state.savingsConfig = data.sizing.savingsConfig;
-    if (data.sizing.billConfig) state.billConfig = data.sizing.billConfig;
+    if (sData.sizing.selectedSystemIndex !== undefined) state.selectedSystemIndex = sData.sizing.selectedSystemIndex;
+    if (sData.sizing.ongridBackup !== undefined) state.ongridBackup = sData.sizing.ongridBackup;
+    if (sData.sizing.costOverrides) state.costOverrides = sData.sizing.costOverrides;
+    if (sData.sizing.systemIncludesText) state.systemIncludesText = sData.sizing.systemIncludesText;
+    if (sData.sizing.breakupConfig) state.breakupConfig = sData.sizing.breakupConfig;
+    if (sData.sizing.breakupConfigGst) state.breakupConfigGst = sData.sizing.breakupConfigGst;
+    if (sData.sizing.breakupConfigContingency) state.breakupConfigContingency = sData.sizing.breakupConfigContingency;
+    if (sData.sizing.breakupConfigMarginPct) state.breakupConfigMarginPct = sData.sizing.breakupConfigMarginPct;
+    if (sData.sizing.savingsConfig) state.savingsConfig = sData.sizing.savingsConfig;
+    if (sData.sizing.billConfig) state.billConfig = sData.sizing.billConfig;
   }
 
   // Report Display checkboxes & options unpacking
-  if (data.reportDisplay && typeof data.reportDisplay === "object") {
-    Object.keys(data.reportDisplay).forEach((key) => {
+  if (sData.reportDisplay && typeof sData.reportDisplay === "object") {
+    Object.keys(sData.reportDisplay).forEach((key) => {
       const el = $(key);
       if (el && el.type === "checkbox") {
-        el.checked = !!data.reportDisplay[key];
+        el.checked = !!sData.reportDisplay[key];
       } else if (el) {
-        el.value = data.reportDisplay[key] || "";
+        el.value = sData.reportDisplay[key] || "";
       }
     });
   }
 
   // Synchronize twin fields (customer vs internal)
-  const custName = $("customerName")?.value || $("internalCustomerName")?.value || "";
+  const custName = $("customerName")?.value || $("internalCustomerName")?.value || sData.customerName || "";
   if ($("customerName")) $("customerName").value = custName;
   if ($("internalCustomerName")) $("internalCustomerName").value = custName;
 
-  const mob = $("mobileNumber")?.value || $("internalMobileNumber")?.value || "";
+  const mob = $("mobileNumber")?.value || $("internalMobileNumber")?.value || sData.mobileNumber || "";
   if ($("mobileNumber")) $("mobileNumber").value = mob;
   if ($("internalMobileNumber")) $("internalMobileNumber").value = mob;
 
-  const email = $("emailAddress")?.value || $("internalEmailAddress")?.value || "";
+  const email = $("emailAddress")?.value || $("internalEmailAddress")?.value || sData.emailAddress || "";
   if ($("emailAddress")) $("emailAddress").value = email;
   if ($("internalEmailAddress")) $("internalEmailAddress").value = email;
 
@@ -4168,22 +4362,22 @@ window.loadProposalState = function(data) {
   if ($("internalLoanMonthlyEmi")) $("internalLoanMonthlyEmi").value = lEmi;
 
   // 4. Restore Rooftop CAD state
-  if (data.cad) {
-    state.pendingCadState = data.cad;
+  if (sData.cad) {
+    state.pendingCadState = sData.cad;
     const cad = getActiveRooftopCAD();
     if (cad && typeof cad.loadState === "function") {
-      cad.loadState(data.cad);
+      cad.loadState(sData.cad);
       state.pendingCadState = null;
 
-      if ($("cadRoofLength") && data.cad.roofLengthFt !== undefined) $("cadRoofLength").value = data.cad.roofLengthFt;
-      if ($("cadRoofBreadth") && data.cad.roofBreadthFt !== undefined) $("cadRoofBreadth").value = data.cad.roofBreadthFt;
-      if ($("cadPathwayWidth") && data.cad.defaultPathwayWidthFt !== undefined) $("cadPathwayWidth").value = data.cad.defaultPathwayWidthFt;
-      if ($("cadBuildingHeightInput") && data.cad.buildingHeightFt !== undefined) $("cadBuildingHeightInput").value = data.cad.buildingHeightFt;
-      if ($("cadElevationBldgHeightInput") && data.cad.buildingHeightFt !== undefined) $("cadElevationBldgHeightInput").value = data.cad.buildingHeightFt;
-      if ($("cadNorthAngleInput") && data.cad.northAngleDeg !== undefined) $("cadNorthAngleInput").value = data.cad.northAngleDeg;
-      if ($("cadSunTimeSlider") && data.cad.sunSim?.timeHour !== undefined) $("cadSunTimeSlider").value = data.cad.sunSim.timeHour;
+      if ($("cadRoofLength") && sData.cad.roofLengthFt !== undefined) $("cadRoofLength").value = sData.cad.roofLengthFt;
+      if ($("cadRoofBreadth") && sData.cad.roofBreadthFt !== undefined) $("cadRoofBreadth").value = sData.cad.roofBreadthFt;
+      if ($("cadPathwayWidth") && sData.cad.defaultPathwayWidthFt !== undefined) $("cadPathwayWidth").value = sData.cad.defaultPathwayWidthFt;
+      if ($("cadBuildingHeightInput") && sData.cad.buildingHeightFt !== undefined) $("cadBuildingHeightInput").value = sData.cad.buildingHeightFt;
+      if ($("cadElevationBldgHeightInput") && sData.cad.buildingHeightFt !== undefined) $("cadElevationBldgHeightInput").value = sData.cad.buildingHeightFt;
+      if ($("cadNorthAngleInput") && sData.cad.northAngleDeg !== undefined) $("cadNorthAngleInput").value = sData.cad.northAngleDeg;
+      if ($("cadSunTimeSlider") && sData.cad.sunSim?.timeHour !== undefined) $("cadSunTimeSlider").value = sData.cad.sunSim.timeHour;
 
-      if (data.cad.image && data.cad.image.isLoaded) {
+      if (sData.cad.image && sData.cad.image.isLoaded) {
         const imgControls = $("cadImageControls");
         if (imgControls) imgControls.style.display = "flex";
         const lockBtn = $("cadLockImageBtn");
@@ -4192,7 +4386,7 @@ window.loadProposalState = function(data) {
           lockBtn.style.color = cad.image.locked ? "#38bdf8" : "#fbbf24";
         }
         if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale || 1.0;
-        if ($("cadOpacitySlider") && data.cad.image.opacity !== undefined) $("cadOpacitySlider").value = data.cad.image.opacity;
+        if ($("cadOpacitySlider") && sData.cad.image.opacity !== undefined) $("cadOpacitySlider").value = sData.cad.image.opacity;
       }
       cad.render();
       cad.notifyChanges();
@@ -4220,7 +4414,12 @@ window.loadProposalState = function(data) {
   if ($("loadProposalModal")) $("loadProposalModal").style.display = "none";
 
   render();
+  state.isRestoringProposal = false;
 };
 
 window.saveProposalData = saveProposalData;
 window.captureFormValues = captureFormValues;
+window.exportCurrentProposalJSON = exportCurrentProposalJSON;
+window.importProposalJSONFile = importProposalJSONFile;
+window.searchProposals = searchProposals;
+window.buildProposalSnapshot = buildProposalSnapshot;

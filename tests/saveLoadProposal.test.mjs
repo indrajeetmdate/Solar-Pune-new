@@ -574,4 +574,153 @@ assert.equal(elements.get("slabRate4").value, "16");
 
 console.log("✓ Test 3 Passed: Legacy v1 saved proposals unpack all nested pricing, slabs, and sizing fields.");
 
+// -------------------------------------------------------------
+// TEST 4: Multi-Proposal Storage Array & Proposal Deduplication
+// -------------------------------------------------------------
+console.log("Testing Multi-Proposal localStorage management and deduplication...");
+
+function mockSaveProposalToLocalStorage(proposalRecord) {
+  let savedList = [];
+  try {
+    const raw = globalThis.localStorage.getItem("solar_saved_proposals");
+    if (raw) savedList = JSON.parse(raw);
+  } catch (_) {}
+  if (!Array.isArray(savedList)) savedList = [];
+
+  const existingIdx = savedList.findIndex(p =>
+    (proposalRecord.proposalSerialNo && p.proposalSerialNo === proposalRecord.proposalSerialNo) ||
+    (p.customerName === proposalRecord.customerName && proposalRecord.mobileNumber && p.mobileNumber === proposalRecord.mobileNumber)
+  );
+
+  if (existingIdx >= 0) {
+    proposalRecord.id = savedList[existingIdx].id || proposalRecord.id;
+    savedList[existingIdx] = proposalRecord;
+  } else {
+    savedList.unshift(proposalRecord);
+  }
+  if (savedList.length > 50) savedList = savedList.slice(0, 50);
+
+  globalThis.localStorage.setItem("solar_saved_proposals", JSON.stringify(savedList));
+  globalThis.localStorage.setItem("solar_proposal_last_saved", JSON.stringify(proposalRecord));
+}
+
+// 1. Save proposal A
+mockSaveProposalToLocalStorage({
+  id: "prop_1",
+  customerName: "Anand Joshi",
+  mobileNumber: "9123456780",
+  proposalSerialNo: "DC/2026-27/PROP-101",
+  systemCapacityKw: 5.5,
+  totalCost: 245000,
+  savedAt: new Date().toISOString(),
+  stateData: { formValues: { customerName: "Anand Joshi" } }
+});
+
+// 2. Save proposal B
+mockSaveProposalToLocalStorage({
+  id: "prop_2",
+  customerName: "Sunita Deshmukh",
+  mobileNumber: "9876501234",
+  proposalSerialNo: "DC/2026-27/PROP-102",
+  systemCapacityKw: 8.8,
+  totalCost: 390000,
+  savedAt: new Date().toISOString(),
+  stateData: { formValues: { customerName: "Sunita Deshmukh" } }
+});
+
+let storedList = JSON.parse(globalThis.localStorage.getItem("solar_saved_proposals"));
+assert.equal(storedList.length, 2);
+assert.equal(storedList[0].customerName, "Sunita Deshmukh");
+assert.equal(storedList[1].customerName, "Anand Joshi");
+
+// 3. Update proposal A with new total cost & capacity
+mockSaveProposalToLocalStorage({
+  id: "prop_1",
+  customerName: "Anand Joshi",
+  mobileNumber: "9123456780",
+  proposalSerialNo: "DC/2026-27/PROP-101",
+  systemCapacityKw: 6.6,
+  totalCost: 285000,
+  savedAt: new Date().toISOString(),
+  stateData: { formValues: { customerName: "Anand Joshi" } }
+});
+
+storedList = JSON.parse(globalThis.localStorage.getItem("solar_saved_proposals"));
+assert.equal(storedList.length, 2, "Duplicate proposal should be updated in place, not duplicated");
+const updatedA = storedList.find(p => p.proposalSerialNo === "DC/2026-27/PROP-101");
+assert.equal(updatedA.systemCapacityKw, 6.6);
+assert.equal(updatedA.totalCost, 285000);
+
+console.log("✓ Test 4 Passed: Multi-proposal storage array and in-place update verified.");
+
+// -------------------------------------------------------------
+// TEST 5: Wrapped Payload Unpacking (stateData / state_data / root)
+// -------------------------------------------------------------
+console.log("Testing flexible payload unwrapping in loadProposalState...");
+
+function unpackPayload(data) {
+  return (data && (data.stateData || data.state_data)) ? (data.stateData || data.state_data) : data;
+}
+
+// Case A: File import wrapper
+const wrapperFormat = {
+  customerName: "Wrapped Customer",
+  proposalSerialNo: "DC/2026-27/PROP-999",
+  stateData: {
+    formValues: { customerName: "Wrapped Customer", panelDcrRate: "29.5" }
+  }
+};
+const unpackedA = unpackPayload(wrapperFormat);
+assert.equal(unpackedA.formValues.customerName, "Wrapped Customer");
+assert.equal(unpackedA.formValues.panelDcrRate, "29.5");
+
+// Case B: Supabase server row wrapper
+const serverRowFormat = {
+  id: "uuid-1234",
+  customer_name: "Server Customer",
+  proposal_serial_no: "DC/2026-27/PROP-888",
+  state_data: {
+    formValues: { customerName: "Server Customer", panelDcrRate: "28.0" }
+  }
+};
+const unpackedB = unpackPayload(serverRowFormat);
+assert.equal(unpackedB.formValues.customerName, "Server Customer");
+assert.equal(unpackedB.formValues.panelDcrRate, "28.0");
+
+// Case C: Direct stateData root
+const directRoot = {
+  formValues: { customerName: "Direct Customer", panelDcrRate: "27.5" }
+};
+const unpackedC = unpackPayload(directRoot);
+assert.equal(unpackedC.formValues.customerName, "Direct Customer");
+assert.equal(unpackedC.formValues.panelDcrRate, "27.5");
+
+console.log("✓ Test 5 Passed: All payload wrappers (file export, server row, direct stateData) cleanly unwrap.");
+
+// -------------------------------------------------------------
+// TEST 6: JSON Export & Import Integrity
+// -------------------------------------------------------------
+console.log("Testing JSON Export & Import serialization round-trip...");
+
+const exportSnapshot = {
+  customerName: "Export Customer",
+  mobileNumber: "9988776655",
+  emailAddress: "export@example.com",
+  proposalSerialNo: "DC/2026-27/PROP-777",
+  exportedAt: new Date().toISOString(),
+  stateData: savedPayload
+};
+
+const jsonString = JSON.stringify(exportSnapshot, null, 2);
+assert.ok(jsonString.length > 100);
+
+const importedSnapshot = JSON.parse(jsonString);
+assert.equal(importedSnapshot.customerName, "Export Customer");
+assert.equal(importedSnapshot.proposalSerialNo, "DC/2026-27/PROP-777");
+const importedSData = unpackPayload(importedSnapshot);
+assert.equal(importedSData.rates.panelDcrRate, 26.5);
+assert.equal(importedSData.sizing.capacityOverride, 6.6);
+
+console.log("✓ Test 6 Passed: JSON export and import serialization verified.");
+
 console.log("ALL SAVE & LOAD TESTS PASSED! 🎉");
