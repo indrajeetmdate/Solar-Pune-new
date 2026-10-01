@@ -380,7 +380,7 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
     }
   };
   globalThis.document = {
-    createElement: () => ({ getContext: () => ({ fillStyle: '', fillRect: () => {}, drawImage: () => {} }), toDataURL: () => 'data:image/jpeg;base64,123' }),
+    createElement: () => ({ getContext: () => ({ fillStyle: '', fillRect: () => {}, clearRect: () => {}, drawImage: () => {} }), toDataURL: () => 'data:image/jpeg;base64,123' }),
     getElementById: () => null
   };
   globalThis.Image = class {
@@ -446,6 +446,16 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.equal(savingsTable.head[0][0], "Offsettable Bill Component");
   assert.equal(savingsTable.head[0][1], "Monthly Savings");
   assert.equal(savingsTable.head[0][2], "Annual Savings");
+
+  // Verify updated cost breakdown text labels
+  const costTable = mockCalls.find(c => c.body && c.body.some(row => row[0] && row[0].includes("Total System Cost")));
+  assert.ok(costTable, "Cost breakdown table must be generated in PDF");
+  assert.ok(costTable.body.some(row => row[0].includes("Total System Cost (Inc. GST) (as payable to Datlion Cnergy Pvt. Ltd.)")), "Total System Cost label must match");
+  assert.ok(costTable.body.some(row => row[0].includes("Expected Subsidy (PM Surya Ghar Direct bank transfer to Customers bank account)")), "Expected Subsidy label must match");
+  assert.ok(costTable.body.some(row => row[0].includes("Net Payable Cost to customer")), "Net Payable Cost to customer label must match");
+
+  // Verify Bank Partner Loan Proposal heading with disclaimer
+  assert.ok(allTexts.some(t => String(t).includes("Bank Partner Loan Proposal") && String(t).includes("For illustrative purposes only actual cost depends on actual loan rates")), "Bank Partner Loan Proposal disclaimer title must be rendered");
 }
 
 console.log("calculator tests passed");

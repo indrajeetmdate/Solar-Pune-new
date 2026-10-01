@@ -18,11 +18,13 @@ const loadImage = (url, maxDim = 400) => {
       canvas.width = img.width * scale;
       canvas.height = img.height * scale;
       const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if (typeof ctx?.clearRect === 'function') {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       resolve({
-        data: canvas.toDataURL('image/jpeg', 0.8),
+        data: canvas.toDataURL('image/png'),
+        format: 'PNG',
         width: canvas.width,
         height: canvas.height
       });
@@ -133,10 +135,11 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
 
   try {
     // Load logo and system differences image in parallel
-    const [logoResult, sysDiffResult] = await Promise.all([
+    const [logoResultInitial, sysDiffResult] = await Promise.all([
       loadImage("https://bfkxdpripwjxenfvwpfu.supabase.co/storage/v1/object/public/Logo/DC_Energy.png"),
       loadImage("https://solarcalculator.cnergy.co.in/src/system_differences.png", 2400),
     ]);
+    const logoResult = logoResultInitial || await loadImage("logo.png");
 
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -177,17 +180,56 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   };
 
   const addHeader = (title) => {
+    // Elegant, corporate header banner
+    // Full width top accent stripe in primary solar green
     doc.setFillColor(COLORS.primary);
-    doc.rect(0, 0, pageWidth, 20, "F");
+    doc.rect(0, 0, pageWidth, 2.5, "F");
 
-    doc.setTextColor(COLORS.white);
+    // Clean white header background
+    doc.setFillColor(COLORS.white);
+    doc.rect(0, 2.5, pageWidth, 18, "F");
+
+    // Sleek divider line separating header from page content
+    doc.setDrawColor(226, 232, 240); // #e2e8f0 border
+    doc.setLineWidth(0.4);
+    doc.line(margin, 20.5, pageWidth - margin, 20.5);
+
+    let textStartX = margin;
+
+    // Top Left: DC Energy Logo
+    if (logoResult && logoResult.data) {
+      const logoH = 14;
+      const logoW = logoResult.height ? (logoResult.width / logoResult.height) * logoH : 14;
+      const fmt = (logoResult.data && logoResult.data.includes('image/png')) ? 'PNG' : (logoResult.format || 'JPEG');
+      try {
+        doc.addImage(logoResult.data, fmt, margin, 4.2, logoW, logoH, 'companyLogo');
+        textStartX = margin + logoW + 3.5;
+      } catch (e) {
+        console.warn("Failed to render logo in header:", e);
+      }
+    }
+
+    // Top Left Branding text next to logo
+    doc.setTextColor(30, 41, 59); // Slate-800 (#1e293b)
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(15);
-    doc.text("DATLION CNERGY", margin, 14);
+    doc.setFontSize(13);
+    doc.text("DATLION CNERGY", textStartX, 11.5);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.8);
+    doc.setTextColor(COLORS.primary);
+    doc.text("SOLAR EPC & CLEAN ENERGY SOLUTIONS", textStartX, 15.5);
+
+    // Top Right: Section Title & Proposal Reference
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10.5);
+    doc.setTextColor(COLORS.primary);
+    doc.text(title, pageWidth - margin, 11.5, { align: "right" });
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(`${title}  |  Ref: ${proposalSerialNo}`, pageWidth - margin, 14, { align: "right" });
+    doc.setFontSize(7.5);
+    doc.setTextColor(COLORS.textLight);
+    doc.text(`Ref: ${proposalSerialNo}`, pageWidth - margin, 15.5, { align: "right" });
   };
 
   // ================= PAGE 1: System Design Considerations =================
@@ -700,25 +742,25 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     yPos += pillH + 5;
 
     const costData = [];
-    costData.push(["Total System Cost (Inc. GST)", formatCurrency(option.totalPreSubsidy)]);
+    costData.push(["Total System Cost (Inc. GST) (as payable to Datlion Cnergy Pvt. Ltd.)", formatCurrency(option.totalPreSubsidy)]);
 
     // Conditionally include subsidy
     if (!hideSubsidy) {
       const isMulti = input.meters && Array.isArray(input.meters) && input.meters.length > 1;
       const subLabel = isMulti
-        ? `Expected Subsidy (PM Surya Ghar across ${input.meters.length} flats)`
-        : "Expected Subsidy (PM Surya Ghar Direct DBT)";
+        ? `Expected Subsidy (PM Surya Ghar Direct bank transfer to Customers bank account across ${input.meters.length} flats)`
+        : "Expected Subsidy (PM Surya Ghar Direct bank transfer to Customers bank account)";
       costData.push([subLabel, `- ${formatCurrency(option.subsidy)}`]);
     }
-    costData.push(["Net Payable Cost", formatCurrency(option.netCost)]);
+    costData.push(["Net Payable Cost to customer", formatCurrency(option.netCost)]);
 
     doc.autoTable({
       startY: yPos,
       body: costData,
       theme: "plain",
       columnStyles: {
-        0: { fontStyle: "normal", width: 120 },
-        1: { halign: "right" },
+        0: { fontStyle: "normal", cellWidth: 135 },
+        1: { halign: "right", cellWidth: 45 },
       },
       didParseCell: function (data) {
         if (
@@ -903,13 +945,15 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     const fin = option.financing;
     doc.addPage();
     yPos = 30;
-    addHeader("Commercial Proposal");
+    addHeader("Bank Partner Loan Proposal");
 
     doc.setTextColor(COLORS.black);
-    doc.setFontSize(18);
+    doc.setFontSize(13);
     doc.setFont("helvetica", "bold");
-    doc.text(`${sectionNumber}. Bank Partner Loan Proposal (Zero Out-of-Pocket)`, margin, yPos);
-    yPos += 7;
+    const loanProposalTitle = `${sectionNumber}. Bank Partner Loan Proposal (For illustrative purposes only actual cost depends on actual loan rates)`;
+    const splitLoanTitle = doc.splitTextToSize(loanProposalTitle, pageWidth - margin * 2);
+    doc.text(splitLoanTitle, margin, yPos);
+    yPos += splitLoanTitle.length * 5.5 + 2.5;
     sectionNumber++;
 
     doc.setFontSize(10);
@@ -1229,16 +1273,10 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     // Center: Page X of Y | Ref: proposalSerialNo
     doc.text(`Page ${i} of ${totalPages}  |  Ref: ${proposalSerialNo}`, pageWidth / 2, footerY, { align: "center" });
 
-    // Right: Company Name, Location & Logo
+    // Right: Company Name & Location
     doc.setFontSize(7.5);
     doc.text("DATLION CNERGY PRIVATE LIMITED", pageWidth - margin, footerY - 4, { align: "right" });
     doc.text("GSTIN: 27AALCD8550A1ZP | Pune", pageWidth - margin, footerY, { align: "right" });
-
-    if (logoResult) {
-      const targetWidth = 16;
-      const targetHeight = (logoResult.height / logoResult.width) * targetWidth;
-      doc.addImage(logoResult.data, 'JPEG', pageWidth - margin - targetWidth, footerY - 8 - targetHeight, targetWidth, targetHeight, 'companyLogo');
-    }
   }
 
   const filename = input.customerName
