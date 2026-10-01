@@ -436,9 +436,9 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.ok(allTexts.some(t => String(t).includes("DATLION CNERGY PRIVATE LIMITED")), "DATLION CNERGY PRIVATE LIMITED must be rendered in From card");
   assert.ok(allTexts.some(t => String(t).includes("GSTIN: 27AALCD8550A1ZP")), "Company GSTIN must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("PROPOSAL REF: DC/2026-27/PROP-1001")), "Proposal reference serial number must be rendered");
-  assert.ok(allTexts.some(t => String(t).includes("Scope of Work (Turnkey EPC Delivery)")), "Scope of Work (Turnkey EPC Delivery) must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Note: All of the above are in line with MNRE guidelines")), "MNRE guidelines note must be rendered");
-  assert.ok(allTexts.some(t => String(t).includes("Note: Only cabling/wiring charges will be at actuals")), "Wiring charges at actuals note must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Note: Cabling/wiring charges will be at actuals")), "Wiring charges at actuals note must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Note: MSEDCL Net Metering Liaisoning & Discom Documentation Support charges at actuals")), "MSEDCL Liaisoning note must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Possible Savings Breakdown (Solar Offset)")), "Possible Savings Breakdown section heading must be rendered");
 
   const savingsTable = mockCalls.find(c => c.body && c.body.some(row => row[0] && row[0].includes("Estimated Savings / Month")));

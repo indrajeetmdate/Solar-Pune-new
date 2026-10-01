@@ -626,7 +626,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.setFillColor(248, 250, 252);
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.3);
-    const sowHeight = 44;
+    const sowHeight = 35;
     doc.roundedRect(margin, yPos, pageWidth - margin * 2, sowHeight, 1.5, 1.5, "FD");
 
     let sowY = yPos + 4.5;
@@ -650,19 +650,54 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     ];
     sowLines.forEach(line => {
       doc.text(line, margin + 4, sowY);
-      sowY += 3.4;
+      sowY += 3.3;
     });
 
-    sowY += 1;
+    yPos += sowHeight + 4;
+
+    // --- 3 Prominently Highlighted Project Notes ---
+    const notesW = pageWidth - margin * 2;
+    const pillH = 6.8;
+    const pillGap = 2;
+
+    // 1. MNRE Guidelines Note (Emerald Green Highlight Pill)
+    doc.setFillColor(236, 253, 245); // #ecfdf5
+    doc.setDrawColor(167, 243, 208); // #a7f3d0
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, yPos, notesW, pillH, 1.2, 1.2, "FD");
+    doc.setFillColor(16, 185, 129);  // #10b981 left accent
+    doc.roundedRect(margin, yPos, 2.2, pillH, 0.8, 0.8, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.setTextColor(COLORS.primary);
-    doc.text("• Note: All of the above are in line with MNRE guidelines.", margin + 4, sowY);
-    sowY += 3.5;
-    doc.setTextColor(COLORS.black);
-    doc.text("• Note: Only cabling/wiring charges will be at actuals.", margin + 4, sowY);
+    doc.setTextColor(6, 95, 70);     // #065f46 dark emerald
+    doc.text("• Note: All of the above are in line with MNRE guidelines.", margin + 5, yPos + 4.7);
+    yPos += pillH + pillGap;
 
-    yPos += sowHeight + 6;
+    // 2. Cabling/Wiring Charges Note (Amber Highlight Pill)
+    doc.setFillColor(255, 251, 235); // #fffbeb
+    doc.setDrawColor(253, 230, 138); // #fde68a
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, yPos, notesW, pillH, 1.2, 1.2, "FD");
+    doc.setFillColor(245, 158, 11);  // #f59e0b left accent
+    doc.roundedRect(margin, yPos, 2.2, pillH, 0.8, 0.8, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(146, 64, 14);   // #92400e dark amber
+    doc.text("• Note: Cabling/wiring charges will be at actuals.", margin + 5, yPos + 4.7);
+    yPos += pillH + pillGap;
+
+    // 3. Liaisoning & Discom Support Note (Blue Highlight Pill)
+    doc.setFillColor(239, 246, 255); // #eff6ff
+    doc.setDrawColor(191, 219, 254); // #bfdbfe
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, yPos, notesW, pillH, 1.2, 1.2, "FD");
+    doc.setFillColor(59, 130, 246);  // #3b82f6 left accent
+    doc.roundedRect(margin, yPos, 2.2, pillH, 0.8, 0.8, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(30, 64, 175);   // #1e40af dark blue
+    doc.text("• Note: MSEDCL Net Metering Liaisoning & Discom Documentation Support charges at actuals.", margin + 5, yPos + 4.7);
+    yPos += pillH + 5;
 
     const costData = [];
     costData.push(["Total System Cost (Inc. GST)", formatCurrency(option.totalPreSubsidy)]);
@@ -706,9 +741,8 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.setFontSize(7.5);
     doc.setFont("helvetica", "italic");
     doc.setTextColor(COLORS.textLight);
-    doc.text("* Net metering and liaisoning costs are additional and will be quoted separately.", margin, yPos);
-    doc.text("* GST: 70% goods @ 5% + 30% services @ 18% = 8.9% effective rate.", margin, yPos + 3.5);
-    yPos += 9;
+    doc.text("* GST: 70% goods @ 5% + 30% services @ 18% = 8.9% effective rate.", margin, yPos);
+    yPos += 7;
   } else {
     doc.addPage();
     yPos = 30;

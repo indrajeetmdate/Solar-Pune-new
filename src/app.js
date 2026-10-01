@@ -389,8 +389,11 @@ function renderBreakup(option, input, customerView, config) {
     <div style="margin-bottom: 10px;">
       <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">Scope of Work (shown in report)</label>
       <textarea class="system-includes-text" data-sys="${sysType}" rows="2" style="width: 100%; font-size: 12px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); resize: vertical; line-height: 1.4; font-family: inherit;">${currentIncludesText}</textarea>
-      <div style="font-size: 12.5px; font-weight: 700; color: #16a34a; margin-top: 5px;">Note: All of the above are in line with MNRE guidelines.</div>
-      <div style="font-size: 12.5px; font-weight: 700; color: var(--text, #1e293b); margin-top: 2px;">Note: Only cabling/wiring charges will be at actuals</div>
+      <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 6px;">
+        <div style="font-size: 12px; font-weight: 700; color: #16a34a; background: #ecfdf5; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #10b981;">• Note: All of the above are in line with MNRE guidelines.</div>
+        <div style="font-size: 12px; font-weight: 700; color: #92400e; background: #fffbeb; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #f59e0b;">• Note: Cabling/wiring charges will be at actuals.</div>
+        <div style="font-size: 12px; font-weight: 700; color: #1e40af; background: #eff6ff; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #3b82f6;">• Note: MSEDCL Net Metering Liaisoning & Discom Documentation Support charges at actuals.</div>
+      </div>
     </div>`;
 
     // Build calculation detail map for each cost item
@@ -537,8 +540,11 @@ function renderBreakup(option, input, customerView, config) {
 
     itemsHtml = `<div style="margin-bottom: 12px; font-size: 13px; color: var(--text-light); line-height: 1.4;">
       <strong>Scope of Work:</strong> ${includesText}
-      <div style="font-size: 12.5px; font-weight: 700; color: #16a34a; margin-top: 5px;">Note: All of the above are in line with MNRE guidelines.</div>
-      <div style="font-size: 13px; font-weight: 700; color: var(--text, #0f172a); margin-top: 2px;">Note: Only cabling/wiring charges will be at actuals</div>
+      <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 6px;">
+        <div style="font-size: 12px; font-weight: 700; color: #16a34a; background: #ecfdf5; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #10b981;">• Note: All of the above are in line with MNRE guidelines.</div>
+        <div style="font-size: 12px; font-weight: 700; color: #92400e; background: #fffbeb; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #f59e0b;">• Note: Cabling/wiring charges will be at actuals.</div>
+        <div style="font-size: 12px; font-weight: 700; color: #1e40af; background: #eff6ff; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #3b82f6;">• Note: MSEDCL Net Metering Liaisoning & Discom Documentation Support charges at actuals.</div>
+      </div>
     </div>`;
 
     itemsHtml += `<div><dt style="font-weight: bold; color: var(--text);">Total System Cost (Inc. GST)</dt><dd style="font-weight: bold;">${money(option.totalPreSubsidy)}</dd></div>`;
