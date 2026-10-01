@@ -16,24 +16,63 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'stateData is required' });
     }
 
-    const { data, error } = await supabase
+    const proposalSerialNo = stateData.reportDisplay?.proposalSerialNo || 
+                             stateData.formValues?.proposalSerialNo || 
+                             stateData.input?.proposalSerialNo || null;
+
+    const customerAddress = stateData.reportDisplay?.customerAddress || 
+                            stateData.formValues?.customerAddress || 
+                            stateData.input?.customerAddress || null;
+
+    const sanctionedLoad = stateData.formValues?.sanctionedLoad !== undefined ? Number(stateData.formValues.sanctionedLoad) :
+                          (stateData.input?.sanctionedLoad !== undefined ? Number(stateData.input.sanctionedLoad) : null);
+
+    const systemCapacityKw = stateData.state?.estimates?.recommended?.dcCapacityKw !== undefined ? Number(stateData.state.estimates.recommended.dcCapacityKw) :
+                             (stateData.sizing?.capacityOverride !== undefined ? Number(stateData.sizing.capacityOverride) : null);
+
+    const totalCost = stateData.state?.estimates?.recommended?.netCost !== undefined ? Number(stateData.state.estimates.recommended.netCost) :
+                      (stateData.state?.estimates?.recommended?.totalPreSubsidy !== undefined ? Number(stateData.state.estimates.recommended.totalPreSubsidy) : null);
+
+    const recordWithExtras = {
+      customer_name: customerName || '',
+      mobile_number: mobileNumber || '',
+      email_address: emailAddress || '',
+      proposal_serial_no: proposalSerialNo,
+      customer_address: customerAddress,
+      sanctioned_load: Number.isFinite(sanctionedLoad) ? sanctionedLoad : null,
+      system_capacity_kw: Number.isFinite(systemCapacityKw) ? systemCapacityKw : null,
+      total_cost: Number.isFinite(totalCost) ? totalCost : null,
+      state_data: stateData
+    };
+
+    let result = await supabase
       .from('proposals')
-      .insert([
-        {
-          customer_name: customerName || '',
-          mobile_number: mobileNumber || '',
-          email_address: emailAddress || '',
-          state_data: stateData
-        }
-      ])
+      .insert([recordWithExtras])
       .select('id')
       .single();
 
-    if (error) throw error;
+    // If database table does not yet have newly added columns, fall back gracefully to core schema
+    if (result.error && (result.error.code === '42703' || (result.error.message && result.error.message.includes('column')))) {
+      console.warn('Top-level proposal columns not yet migrated in database, falling back to core schema:', result.error.message);
+      const fallbackRecord = {
+        customer_name: customerName || '',
+        mobile_number: mobileNumber || '',
+        email_address: emailAddress || '',
+        state_data: stateData
+      };
+
+      result = await supabase
+        .from('proposals')
+        .insert([fallbackRecord])
+        .select('id')
+        .single();
+    }
+
+    if (result.error) throw result.error;
     
     return res.status(200).json({ 
       success: true, 
-      id: data.id,
+      id: result.data.id,
       message: 'Proposal saved successfully'
     });
   } catch (error) {

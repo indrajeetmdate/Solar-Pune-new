@@ -11,18 +11,39 @@ export default async function handler(req, res) {
 
   try {
     const { search } = req.query;
-    let query = supabase
-      .from('proposals')
-      .select('id, customer_name, mobile_number, email_address, created_at, state_data')
-      .order('created_at', { ascending: false })
-      .limit(50);
 
     if (search && search.trim() !== '') {
       const searchTerm = `%${search.trim()}%`;
-      query = query.or(`customer_name.ilike.${searchTerm},mobile_number.ilike.${searchTerm},email_address.ilike.${searchTerm}`);
+      
+      // Attempt search including proposal_serial_no
+      const { data: advancedData, error: advancedError } = await supabase
+        .from('proposals')
+        .select('*')
+        .or(`customer_name.ilike.${searchTerm},mobile_number.ilike.${searchTerm},email_address.ilike.${searchTerm},proposal_serial_no.ilike.${searchTerm}`)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (!advancedError) {
+        return res.status(200).json({ success: true, data: advancedData });
+      }
+
+      // If proposal_serial_no column not yet migrated in database, fall back to core columns search
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('proposals')
+        .select('*')
+        .or(`customer_name.ilike.${searchTerm},mobile_number.ilike.${searchTerm},email_address.ilike.${searchTerm}`)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (fallbackError) throw fallbackError;
+      return res.status(200).json({ success: true, data: fallbackData });
     }
 
-    const { data, error } = await query;
+    const { data, error } = await supabase
+      .from('proposals')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
 
     if (error) throw error;
     

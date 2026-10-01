@@ -2436,9 +2436,16 @@ function renderDiagram(pl, input) {
       },
     });
     setupCadEventListeners(cad);
-    // NOTE: All panels remain LATENT initially (cad.panels = [])
+    if (state.pendingCadState) {
+      cad.loadState(state.pendingCadState);
+      state.pendingCadState = null;
+    }
   } else {
     cad.setRequiredPanels(pl.numPanels, pl.panelWidthMm, pl.panelHeightMm);
+    if (state.pendingCadState) {
+      cad.loadState(state.pendingCadState);
+      state.pendingCadState = null;
+    }
   }
 
   // Update initial UI stats
@@ -2446,6 +2453,9 @@ function renderDiagram(pl, input) {
   if ($("cadGrossArea")) $("cadGrossArea").textContent = stats.grossSqft;
   if ($("cadCutoutArea")) $("cadCutoutArea").textContent = stats.cutoutSqft + stats.pathwaySqft;
   if ($("cadNetArea")) $("cadNetArea").textContent = stats.netUsableSqft;
+  if ($("cadRoofLength")) $("cadRoofLength").value = cad.roofLengthFt;
+  if ($("cadRoofBreadth")) $("cadRoofBreadth").value = cad.roofBreadthFt;
+  if ($("cadPathwayWidth")) $("cadPathwayWidth").value = cad.defaultPathwayWidthFt;
   if ($("cadNorthAngleInput")) $("cadNorthAngleInput").value = cad.northAngleDeg;
   if ($("cadBuildingHeightInput")) $("cadBuildingHeightInput").value = cad.buildingHeightFt;
   if ($("cadElevationBldgHeightInput")) $("cadElevationBldgHeightInput").value = cad.buildingHeightFt;
@@ -3584,6 +3594,22 @@ function applyBreakupConfig(estimate, input, config = readConfig()) {
   });
 }
 
+function captureFormValues() {
+  const values = {};
+  const ignoredTypes = new Set(["file", "password"]);
+  const ignoredIds = new Set(["searchProposalInput", "presetSelect"]);
+
+  document.querySelectorAll("input, select, textarea").forEach((el) => {
+    if (!el.id || ignoredIds.has(el.id) || ignoredTypes.has(el.type)) return;
+    if (el.type === "checkbox") {
+      values[el.id] = el.checked;
+    } else {
+      values[el.id] = el.value;
+    }
+  });
+  return values;
+}
+
 async function saveProposalData() {
   const btn = $("saveProposalButtonInternal");
   const origText = btn ? btn.textContent : "Save Data 💾";
@@ -3591,6 +3617,78 @@ async function saveProposalData() {
 
   const input = readInput();
   const config = readConfig();
+  const formValues = captureFormValues();
+
+  // Structured Rates snapshot for direct inspection and export
+  const rates = {
+    panelDcrRate: numberValue("panelDcrRate"),
+    panelNonDcrRate: numberValue("panelNonDcrRate"),
+    batteryRate: numberValue("batteryRate"),
+    hotDipStructureRate: numberValue("hotDipStructureRate"),
+    galvalumeStructureRate: numberValue("galvalumeStructureRate"),
+    gpPurlinStructureRate: numberValue("gpPurlinStructureRate"),
+    wiringRate: numberValue("wiringRate"),
+    installationRate: numberValue("installationRate"),
+    consultancyRate: numberValue("consultancyRate"),
+    contingencyRate: numberValue("contingencyRate"),
+    marginRate: numberValue("marginRate"),
+    panelWp: numberValue("panelWp"),
+    dailyGeneration: numberValue("dailyGeneration"),
+    shadingLoss: numberValue("shadingLoss"),
+    orientationLoss: numberValue("orientationLoss"),
+    systemLoss: numberValue("systemLoss"),
+    degradationRate: numberValue("degradationRate"),
+    panelEfficiency: numberValue("panelEfficiency"),
+    batteryDod: numberValue("batteryDod"),
+    inverterEfficiency: numberValue("inverterEfficiency"),
+    selfConsumptionPct: numberValue("selfConsumptionPct"),
+    fixedCharge: numberValue("fixedCharge"),
+    electricityDuty: numberValue("electricityDuty"),
+    tariffEscalation: numberValue("tariffEscalation"),
+    savingsMethod: $("savingsMethod")?.value || "marginal",
+    slabRate1: numberValue("slabRate1"),
+    slabRate2: numberValue("slabRate2"),
+    slabRate3: numberValue("slabRate3"),
+    slabRate4: numberValue("slabRate4"),
+  };
+
+  // Structured Loans snapshot
+  const loans = {
+    paymentMode: $("paymentMode")?.value || "upfront",
+    loanInterestRate: numberValue("loanInterestRate") || 9.5,
+    loanAmount: numberValue("loanAmount") || 0,
+    loanMonthlyEmi: numberValue("loanMonthlyEmi") || 0,
+    internalPaymentMode: $("internalPaymentMode")?.value || "upfront",
+    internalLoanInterestRate: numberValue("internalLoanInterestRate") || 9.5,
+    internalLoanAmount: numberValue("internalLoanAmount") || 0,
+    internalLoanMonthlyEmi: numberValue("internalLoanMonthlyEmi") || 0,
+    internalLoanTenureMonths: numberValue("internalLoanTenureMonths") || 60,
+  };
+
+  // Structured Sizing & Overrides snapshot
+  const sizing = {
+    capacityOverride: numberValue("capacityOverride"),
+    inverterOverride: numberValue("inverterOverride"),
+    batteryOverride: numberValue("batteryOverride"),
+    backupLoad: numberValue("backupLoad"),
+    backupHours: numberValue("backupHours"),
+    savingsMethod: $("savingsMethod")?.value || "marginal",
+    goal: $("goal")?.value || "ongrid",
+    panelType: $("panelType")?.value || "dcr",
+    subsidyCategory: $("subsidyCategory")?.value || "residential",
+    structureType: $("structureType")?.value || "galvalume",
+    selectedSystemIndex: state.selectedSystemIndex,
+    ongridBackup: state.ongridBackup,
+    costOverrides: state.costOverrides ? JSON.parse(JSON.stringify(state.costOverrides)) : {},
+    systemIncludesText: state.systemIncludesText ? JSON.parse(JSON.stringify(state.systemIncludesText)) : {},
+    breakupConfig: state.breakupConfig ? JSON.parse(JSON.stringify(state.breakupConfig)) : null,
+    breakupConfigGst: state.breakupConfigGst ? JSON.parse(JSON.stringify(state.breakupConfigGst)) : null,
+    breakupConfigContingency: state.breakupConfigContingency ? JSON.parse(JSON.stringify(state.breakupConfigContingency)) : null,
+    breakupConfigMarginPct: state.breakupConfigMarginPct ? JSON.parse(JSON.stringify(state.breakupConfigMarginPct)) : null,
+    savingsConfig: state.savingsConfig ? JSON.parse(JSON.stringify(state.savingsConfig)) : null,
+    billConfig: state.billConfig ? JSON.parse(JSON.stringify(state.billConfig)) : null,
+  };
+
   const reportDisplay = {
     showCadDiagram: $("showCadDiagram")?.checked !== false,
     hidePayback: $("hidePayback")?.checked || false,
@@ -3599,25 +3697,58 @@ async function saveProposalData() {
     hideCost: $("hideCost")?.checked || false,
     hideFinancing: $("hideFinancing")?.checked || false,
     solarInstalled: $("solarInstalled")?.checked || false,
+    proposalSerialNo: $("proposalSerialNo")?.value || "DC/2026-27/PROP-1001",
+    customerAddress: $("customerAddress")?.value || "Pune, Maharashtra",
+    saveEnergyCharges: $("saveEnergyCharges")?.checked !== false,
+    saveElectricityDuty: $("saveElectricityDuty")?.checked !== false,
+    saveWheelingFac: $("saveWheelingFac")?.checked !== false,
+    saveTodRebate: $("saveTodRebate")?.checked !== false,
   };
 
   const cad = getActiveRooftopCAD();
   const cadState = cad && typeof cad.serialize === "function" ? cad.serialize() : null;
 
-  const stateData = { 
-    state, 
+  const serializedState = {
+    meters: state.meters ? JSON.parse(JSON.stringify(state.meters)) : [],
+    meteringMode: state.meteringMode || "single",
+    allocationStrategy: state.allocationStrategy || "proportional",
+    extractedBill: state.extractedBill ? JSON.parse(JSON.stringify(state.extractedBill)) : null,
+    costOverrides: state.costOverrides ? JSON.parse(JSON.stringify(state.costOverrides)) : {},
+    systemIncludesText: state.systemIncludesText ? JSON.parse(JSON.stringify(state.systemIncludesText)) : {},
+    breakupConfig: state.breakupConfig ? JSON.parse(JSON.stringify(state.breakupConfig)) : {},
+    breakupConfigGst: state.breakupConfigGst ? JSON.parse(JSON.stringify(state.breakupConfigGst)) : {},
+    breakupConfigContingency: state.breakupConfigContingency ? JSON.parse(JSON.stringify(state.breakupConfigContingency)) : {},
+    breakupConfigMarginPct: state.breakupConfigMarginPct ? JSON.parse(JSON.stringify(state.breakupConfigMarginPct)) : {},
+    savingsConfig: state.savingsConfig ? JSON.parse(JSON.stringify(state.savingsConfig)) : {},
+    billConfig: state.billConfig ? JSON.parse(JSON.stringify(state.billConfig)) : {},
+    selectedSystemIndex: state.selectedSystemIndex,
+    ongridBackup: state.ongridBackup,
+  };
+
+  const stateData = {
+    version: 2,
+    formValues,
+    rates,
+    loans,
+    sizing,
+    reportDisplay,
+    cad: cadState,
+    state: serializedState,
     input,
     config,
-    reportDisplay,
-    cad: cadState
   };
+
+  const custName = input.customerName || $("internalCustomerName")?.value || $("customerName")?.value || "Draft Customer";
+  const mobile = input.mobileNumber || $("internalMobileNumber")?.value || $("mobileNumber")?.value || "";
+  const email = input.emailAddress || $("internalEmailAddress")?.value || $("emailAddress")?.value || "";
 
   // 1. Cache to local storage immediately for robust offline draft restoration
   try {
     const localPayload = {
-      customerName: input.customerName || "Draft Customer",
-      mobileNumber: input.mobileNumber || "",
-      emailAddress: input.emailAddress || "",
+      customerName: custName,
+      mobileNumber: mobile,
+      emailAddress: email,
+      proposalSerialNo: reportDisplay.proposalSerialNo,
       savedAt: new Date().toISOString(),
       stateData
     };
@@ -3628,19 +3759,19 @@ async function saveProposalData() {
 
   // 2. Persist to backend server / database
   try {
-    const res = await fetch('/api/save-proposal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await fetch("/api/save-proposal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        customerName: input.customerName,
-        mobileNumber: input.mobileNumber,
-        emailAddress: input.emailAddress,
+        customerName: custName,
+        mobileNumber: mobile,
+        emailAddress: email,
         stateData
       })
     });
     const data = await res.json();
     if (data.success) {
-      console.log('Proposal saved successfully:', data.id);
+      console.log("Proposal saved successfully:", data.id);
       if (btn) {
         btn.textContent = "Saved! ✅";
         btn.style.borderColor = "var(--primary-green, #10b981)";
@@ -3652,14 +3783,14 @@ async function saveProposalData() {
         }, 2500);
       }
     } else {
-      console.error('Save failed:', data.error);
+      console.error("Save failed:", data.error);
       if (btn) {
         btn.textContent = "Saved locally! 💾";
         setTimeout(() => btn.textContent = origText, 2500);
       }
     }
   } catch (e) {
-    console.error('Error saving proposal:', e);
+    console.error("Error saving proposal:", e);
     if (btn) {
       btn.textContent = "Saved locally! 💾";
       setTimeout(() => btn.textContent = origText, 2500);
@@ -3672,21 +3803,27 @@ async function searchProposals(query) {
   if (!listEl) return;
   listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">Searching...</div>';
 
-  let localDraftHtml = '';
+  let localDraftHtml = "";
   try {
     const localRaw = localStorage.getItem("solar_proposal_last_saved");
     if (localRaw) {
       const localData = JSON.parse(localRaw);
-      const q = (query || '').toLowerCase().trim();
+      const q = (query || "").toLowerCase().trim();
       const matchName = !q || (localData.customerName && localData.customerName.toLowerCase().includes(q));
       const matchMobile = !q || (localData.mobileNumber && localData.mobileNumber.includes(q));
-      if (matchName || matchMobile) {
+      const matchSerial = !q || (localData.proposalSerialNo && localData.proposalSerialNo.toLowerCase().includes(q)) ||
+                                (localData.stateData?.reportDisplay?.proposalSerialNo && localData.stateData.reportDisplay.proposalSerialNo.toLowerCase().includes(q));
+      if (matchName || matchMobile || matchSerial) {
+        const serialTag = localData.proposalSerialNo || localData.stateData?.reportDisplay?.proposalSerialNo || "Draft";
         localDraftHtml = `
           <div style="padding: 10px 14px; border: 1px solid #86efac; background: #f0fdf4; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <span style="display:inline-block; font-size: 10px; font-weight:700; background: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 4px; margin-bottom: 3px;">⚡ Local Auto-Save Draft</span><br>
-              <strong style="color: #0f172a; font-size: 13.5px;">${localData.customerName || 'Draft'}</strong>
-              <span style="font-size: 12px; color: #64748b; margin-left: 6px;">${localData.mobileNumber || ''}</span><br>
+              <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 3px;">
+                <span style="font-size: 10px; font-weight:700; background: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 4px;">⚡ Local Auto-Save Draft</span>
+                <span style="font-size: 11px; font-weight: 600; color: #0284c7;">${serialTag}</span>
+              </div>
+              <strong style="color: #0f172a; font-size: 13.5px;">${localData.customerName || "Draft"}</strong>
+              <span style="font-size: 12px; color: #64748b; margin-left: 6px;">${localData.mobileNumber || ""}</span><br>
               <span style="font-size: 11px; color: #94a3b8;">${new Date(localData.savedAt).toLocaleString()}</span>
             </div>
             <button class="primary-button load-local-btn" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button">Load</button>
@@ -3699,21 +3836,30 @@ async function searchProposals(query) {
   }
 
   try {
-    const res = await fetch('/api/load-proposals?search=' + encodeURIComponent(query));
+    const res = await fetch("/api/load-proposals?search=" + encodeURIComponent(query));
     const json = await res.json();
-    let serverHtml = '';
+    let serverHtml = "";
     if (json.success && json.data.length > 0) {
       window._currentServerProposals = json.data;
-      serverHtml = json.data.map((p, idx) => `
+      serverHtml = json.data.map((p, idx) => {
+        const serialNo = p.proposal_serial_no || p.state_data?.reportDisplay?.proposalSerialNo || p.state_data?.input?.proposalSerialNo || "";
+        const capKw = p.system_capacity_kw || p.state_data?.state?.estimates?.recommended?.dcCapacityKw || p.state_data?.formValues?.capacityOverride || "";
+        const costVal = p.total_cost || p.state_data?.state?.estimates?.recommended?.netCost || "";
+        return `
         <div style="padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
           <div>
-            <strong style="color: #0f172a; font-size: 13.5px;">${p.customer_name || 'Unknown'}</strong><br>
-            <span style="font-size: 12px; color: var(--text-muted);">${p.mobile_number || ''} ${p.email_address ? '| ' + p.email_address : ''}</span><br>
-            <span style="font-size: 11px; color: var(--text-muted);">${new Date(p.created_at).toLocaleString()}</span>
+            <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 2px;">
+              <strong style="color: #0f172a; font-size: 13.5px;">${p.customer_name || "Unknown"}</strong>
+              ${serialNo ? `<span style="font-size: 11px; font-weight: 600; color: #0284c7; background: #e0f2fe; padding: 1px 6px; border-radius: 4px;">${serialNo}</span>` : ""}
+              ${capKw ? `<span style="font-size: 11px; font-weight: 600; color: #166534; background: #dcfce7; padding: 1px 6px; border-radius: 4px;">${capKw} kW</span>` : ""}
+            </div>
+            <span style="font-size: 12px; color: var(--text-muted);">${p.mobile_number || ""} ${p.email_address ? "| " + p.email_address : ""}</span><br>
+            <span style="font-size: 11px; color: var(--text-muted);">${new Date(p.created_at).toLocaleString()}${costVal ? " • ₹" + Math.round(costVal).toLocaleString("en-IN") : ""}</span>
           </div>
           <button class="primary-button load-server-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button">Load</button>
         </div>
-      `).join('');
+      `;
+      }).join("");
     } else if (!localDraftHtml) {
       serverHtml = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">No proposals found.</div>';
     }
@@ -3729,7 +3875,7 @@ async function searchProposals(query) {
       }
     });
 
-    listEl.querySelectorAll(".load-server-btn").forEach(btn => {
+    listEl.querySelectorAll(".load-server-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const idx = parseInt(btn.dataset.idx, 10);
         const p = window._currentServerProposals?.[idx];
@@ -3757,56 +3903,223 @@ async function searchProposals(query) {
 
 window.loadProposalState = function(data) {
   if (!data) return;
-  if (data.state) {
-    Object.assign(state, data.state);
-  }
-  if (data.input) {
-    if (data.input.meteringMode) state.meteringMode = data.input.meteringMode;
-    if (data.input.meters && Array.isArray(data.input.meters)) state.meters = data.input.meters;
-    if (data.input.allocationStrategy) state.allocationStrategy = data.input.allocationStrategy;
-    Object.keys(data.input).forEach(key => {
-       const el = $(key);
-       if (el && el.type !== 'radio' && el.type !== 'checkbox') {
-         el.value = data.input[key] || "";
-       } else if (el && el.type === 'checkbox') {
-         el.checked = !!data.input[key];
-       }
-    });
-    if (data.input.customerName) {
-      if ($('customerName')) $('customerName').value = data.input.customerName;
-      if ($('internalCustomerName')) $('internalCustomerName').value = data.input.customerName;
-    }
-    if (data.input.mobileNumber) {
-      if ($('mobileNumber')) $('mobileNumber').value = data.input.mobileNumber;
-      if ($('internalMobileNumber')) $('internalMobileNumber').value = data.input.mobileNumber;
-    }
-    if (data.input.emailAddress) {
-      if ($('emailAddress')) $('emailAddress').value = data.input.emailAddress;
-      if ($('internalEmailAddress')) $('internalEmailAddress').value = data.input.emailAddress;
-    }
-  }
-  if (data.config) {
-    Object.keys(data.config).forEach(key => {
-      const el = $(key);
-      if (el && el.type !== 'radio' && el.type !== 'checkbox') {
-        el.value = data.config[key] || "";
-      }
-    });
-  }
-  if (data.reportDisplay) {
-    Object.keys(data.reportDisplay).forEach(key => {
-      const el = $(key);
-      if (el && el.type === 'checkbox') {
-        el.checked = !!data.reportDisplay[key];
+
+  // 1. If formValues exists (v2 schema), restore all DOM inputs, selects, textareas, and checkboxes directly
+  if (data.formValues && typeof data.formValues === "object") {
+    Object.keys(data.formValues).forEach((id) => {
+      const el = $(id);
+      if (!el) return;
+      if (el.type === "checkbox") {
+        el.checked = !!data.formValues[id];
+      } else if (el.type === "radio") {
+        if (el.value === data.formValues[id]) el.checked = true;
+      } else {
+        el.value = data.formValues[id] !== undefined && data.formValues[id] !== null ? data.formValues[id] : "";
       }
     });
   }
 
-  // Restore Rooftop CAD state
+  // 2. Restore state properties (multi-meter, extracted bill, overrides, configs)
+  if (data.state) {
+    if (data.state.meters && Array.isArray(data.state.meters)) {
+      state.meters = JSON.parse(JSON.stringify(data.state.meters));
+    }
+    if (data.state.meteringMode) {
+      state.meteringMode = data.state.meteringMode;
+    }
+    if (data.state.allocationStrategy) {
+      state.allocationStrategy = data.state.allocationStrategy;
+    }
+    if (data.state.extractedBill !== undefined) {
+      state.extractedBill = data.state.extractedBill ? JSON.parse(JSON.stringify(data.state.extractedBill)) : null;
+    }
+    if (data.state.costOverrides) {
+      state.costOverrides = JSON.parse(JSON.stringify(data.state.costOverrides));
+    }
+    if (data.state.systemIncludesText) {
+      state.systemIncludesText = JSON.parse(JSON.stringify(data.state.systemIncludesText));
+    }
+    if (data.state.breakupConfig) {
+      state.breakupConfig = JSON.parse(JSON.stringify(data.state.breakupConfig));
+    }
+    if (data.state.breakupConfigGst) {
+      state.breakupConfigGst = JSON.parse(JSON.stringify(data.state.breakupConfigGst));
+    }
+    if (data.state.breakupConfigContingency) {
+      state.breakupConfigContingency = JSON.parse(JSON.stringify(data.state.breakupConfigContingency));
+    }
+    if (data.state.breakupConfigMarginPct) {
+      state.breakupConfigMarginPct = JSON.parse(JSON.stringify(data.state.breakupConfigMarginPct));
+    }
+    if (data.state.savingsConfig) {
+      state.savingsConfig = JSON.parse(JSON.stringify(data.state.savingsConfig));
+    }
+    if (data.state.billConfig) {
+      state.billConfig = JSON.parse(JSON.stringify(data.state.billConfig));
+    }
+    if (data.state.selectedSystemIndex !== undefined) {
+      state.selectedSystemIndex = data.state.selectedSystemIndex;
+    }
+    if (data.state.ongridBackup !== undefined) {
+      state.ongridBackup = data.state.ongridBackup;
+    }
+  }
+
+  // 3. Fallback / Explicit sections unpacking (Rates, Loans, Sizing, ReportDisplay)
+  if (data.rates && typeof data.rates === "object") {
+    Object.keys(data.rates).forEach((id) => {
+      const el = $(id);
+      if (el && data.rates[id] !== undefined) el.value = data.rates[id];
+    });
+  } else if (data.config && data.config.pricing) {
+    const p = data.config.pricing;
+    if ($("panelDcrRate") && p.panelDcrRatePerWp !== undefined) $("panelDcrRate").value = p.panelDcrRatePerWp;
+    if ($("panelNonDcrRate") && p.panelNonDcrRatePerWp !== undefined) $("panelNonDcrRate").value = p.panelNonDcrRatePerWp;
+    if ($("batteryRate") && p.batteryRatePerWh !== undefined) $("batteryRate").value = p.batteryRatePerWh;
+    if (p.structureRates) {
+      if ($("hotDipStructureRate") && p.structureRates.hotDip !== undefined) $("hotDipStructureRate").value = p.structureRates.hotDip;
+      if ($("galvalumeStructureRate") && p.structureRates.galvalume !== undefined) $("galvalumeStructureRate").value = p.structureRates.galvalume;
+      if ($("gpPurlinStructureRate") && p.structureRates.gpPurlin !== undefined) $("gpPurlinStructureRate").value = p.structureRates.gpPurlin;
+    }
+    if ($("wiringRate") && p.wiringRatePerW !== undefined) $("wiringRate").value = p.wiringRatePerW;
+    if ($("installationRate") && p.installationRatePerW !== undefined) $("installationRate").value = p.installationRatePerW;
+    if ($("consultancyRate") && p.consultancyRatePerW !== undefined) $("consultancyRate").value = p.consultancyRatePerW;
+    if ($("contingencyRate") && p.contingencyRate !== undefined) $("contingencyRate").value = p.contingencyRate;
+    if ($("marginRate") && p.marginRate !== undefined) $("marginRate").value = p.marginRate;
+
+    if (data.config.performance) {
+      const perf = data.config.performance;
+      if ($("panelWp") && perf.panelWp !== undefined) $("panelWp").value = perf.panelWp;
+      if ($("dailyGeneration") && perf.dailyGenerationPerKw !== undefined) $("dailyGeneration").value = perf.dailyGenerationPerKw;
+      if ($("shadingLoss") && perf.shadingLoss !== undefined) $("shadingLoss").value = perf.shadingLoss;
+      if ($("orientationLoss") && perf.orientationLoss !== undefined) $("orientationLoss").value = perf.orientationLoss;
+      if ($("systemLoss") && perf.systemLoss !== undefined) $("systemLoss").value = perf.systemLoss;
+      if ($("degradationRate") && perf.degradationRate !== undefined) $("degradationRate").value = perf.degradationRate;
+      if ($("panelEfficiency") && perf.panelEfficiency !== undefined) $("panelEfficiency").value = perf.panelEfficiency;
+      if ($("batteryDod") && perf.batteryDod !== undefined) $("batteryDod").value = perf.batteryDod;
+      if ($("inverterEfficiency") && perf.inverterEfficiency !== undefined) $("inverterEfficiency").value = perf.inverterEfficiency;
+      if ($("selfConsumptionPct") && perf.selfConsumptionPct !== undefined) $("selfConsumptionPct").value = perf.selfConsumptionPct;
+    }
+
+    if (data.config.tariff) {
+      const tar = data.config.tariff;
+      if ($("fixedCharge") && tar.fixedCharge !== undefined) $("fixedCharge").value = tar.fixedCharge;
+      if ($("electricityDuty") && tar.electricityDuty !== undefined) $("electricityDuty").value = tar.electricityDuty;
+      if ($("tariffEscalation") && tar.tariffEscalation !== undefined) $("tariffEscalation").value = tar.tariffEscalation;
+      if (Array.isArray(tar.slabs)) {
+        tar.slabs.forEach((s, idx) => {
+          const el = $(`slabRate${idx + 1}`);
+          if (el && s.rate !== undefined) el.value = s.rate;
+        });
+      }
+    }
+  }
+
+  // Legacy input object unpacking
+  if (data.input && typeof data.input === "object") {
+    Object.keys(data.input).forEach((key) => {
+      const el = $(key);
+      if (el && el.type !== "radio" && el.type !== "checkbox") {
+        el.value = data.input[key] || "";
+      } else if (el && el.type === "checkbox") {
+        el.checked = !!data.input[key];
+      }
+    });
+    if (data.input.backupLoadPercent !== undefined && $("backupLoad")) {
+      $("backupLoad").value = data.input.backupLoadPercent;
+    }
+    if (data.input.loanTenureMonths !== undefined && $("internalLoanTenureMonths")) {
+      $("internalLoanTenureMonths").value = data.input.loanTenureMonths;
+    }
+  }
+
+  // Loans unpacking
+  if (data.loans && typeof data.loans === "object") {
+    Object.keys(data.loans).forEach((id) => {
+      const el = $(id);
+      if (el && data.loans[id] !== undefined) el.value = data.loans[id];
+    });
+  }
+
+  // Sizing & overrides unpacking
+  if (data.sizing && typeof data.sizing === "object") {
+    Object.keys(data.sizing).forEach((key) => {
+      const el = $(key);
+      if (el && el.type !== "checkbox" && el.type !== "radio") {
+        el.value = data.sizing[key] !== undefined ? data.sizing[key] : "";
+      }
+    });
+    if (data.sizing.selectedSystemIndex !== undefined) state.selectedSystemIndex = data.sizing.selectedSystemIndex;
+    if (data.sizing.ongridBackup !== undefined) state.ongridBackup = data.sizing.ongridBackup;
+    if (data.sizing.costOverrides) state.costOverrides = data.sizing.costOverrides;
+    if (data.sizing.systemIncludesText) state.systemIncludesText = data.sizing.systemIncludesText;
+    if (data.sizing.breakupConfig) state.breakupConfig = data.sizing.breakupConfig;
+    if (data.sizing.breakupConfigGst) state.breakupConfigGst = data.sizing.breakupConfigGst;
+    if (data.sizing.breakupConfigContingency) state.breakupConfigContingency = data.sizing.breakupConfigContingency;
+    if (data.sizing.breakupConfigMarginPct) state.breakupConfigMarginPct = data.sizing.breakupConfigMarginPct;
+    if (data.sizing.savingsConfig) state.savingsConfig = data.sizing.savingsConfig;
+    if (data.sizing.billConfig) state.billConfig = data.sizing.billConfig;
+  }
+
+  // Report Display checkboxes & options unpacking
+  if (data.reportDisplay && typeof data.reportDisplay === "object") {
+    Object.keys(data.reportDisplay).forEach((key) => {
+      const el = $(key);
+      if (el && el.type === "checkbox") {
+        el.checked = !!data.reportDisplay[key];
+      } else if (el) {
+        el.value = data.reportDisplay[key] || "";
+      }
+    });
+  }
+
+  // Synchronize twin fields (customer vs internal)
+  const custName = $("customerName")?.value || $("internalCustomerName")?.value || "";
+  if ($("customerName")) $("customerName").value = custName;
+  if ($("internalCustomerName")) $("internalCustomerName").value = custName;
+
+  const mob = $("mobileNumber")?.value || $("internalMobileNumber")?.value || "";
+  if ($("mobileNumber")) $("mobileNumber").value = mob;
+  if ($("internalMobileNumber")) $("internalMobileNumber").value = mob;
+
+  const email = $("emailAddress")?.value || $("internalEmailAddress")?.value || "";
+  if ($("emailAddress")) $("emailAddress").value = email;
+  if ($("internalEmailAddress")) $("internalEmailAddress").value = email;
+
+  const pMode = $("paymentMode")?.value || $("internalPaymentMode")?.value || "upfront";
+  if ($("paymentMode")) $("paymentMode").value = pMode;
+  if ($("internalPaymentMode")) $("internalPaymentMode").value = pMode;
+  $("customerLoanFields")?.classList.toggle("hidden", pMode !== "loan");
+
+  // Synchronize loan values between customer and internal views
+  const lRate = $("loanInterestRate")?.value || $("internalLoanInterestRate")?.value || 9.5;
+  if ($("loanInterestRate")) $("loanInterestRate").value = lRate;
+  if ($("internalLoanInterestRate")) $("internalLoanInterestRate").value = lRate;
+
+  const lAmt = $("loanAmount")?.value || $("internalLoanAmount")?.value || "";
+  if ($("loanAmount")) $("loanAmount").value = lAmt;
+  if ($("internalLoanAmount")) $("internalLoanAmount").value = lAmt;
+
+  const lEmi = $("loanMonthlyEmi")?.value || $("internalLoanMonthlyEmi")?.value || "";
+  if ($("loanMonthlyEmi")) $("loanMonthlyEmi").value = lEmi;
+  if ($("internalLoanMonthlyEmi")) $("internalLoanMonthlyEmi").value = lEmi;
+
+  // 4. Restore Rooftop CAD state
   if (data.cad) {
+    state.pendingCadState = data.cad;
     const cad = getActiveRooftopCAD();
-    if (cad && typeof cad.loadState === 'function') {
+    if (cad && typeof cad.loadState === "function") {
       cad.loadState(data.cad);
+      state.pendingCadState = null;
+
+      if ($("cadRoofLength") && data.cad.roofLengthFt !== undefined) $("cadRoofLength").value = data.cad.roofLengthFt;
+      if ($("cadRoofBreadth") && data.cad.roofBreadthFt !== undefined) $("cadRoofBreadth").value = data.cad.roofBreadthFt;
+      if ($("cadPathwayWidth") && data.cad.defaultPathwayWidthFt !== undefined) $("cadPathwayWidth").value = data.cad.defaultPathwayWidthFt;
+      if ($("cadBuildingHeightInput") && data.cad.buildingHeightFt !== undefined) $("cadBuildingHeightInput").value = data.cad.buildingHeightFt;
+      if ($("cadElevationBldgHeightInput") && data.cad.buildingHeightFt !== undefined) $("cadElevationBldgHeightInput").value = data.cad.buildingHeightFt;
+      if ($("cadNorthAngleInput") && data.cad.northAngleDeg !== undefined) $("cadNorthAngleInput").value = data.cad.northAngleDeg;
+      if ($("cadSunTimeSlider") && data.cad.sunSim?.timeHour !== undefined) $("cadSunTimeSlider").value = data.cad.sunSim.timeHour;
+
       if (data.cad.image && data.cad.image.isLoaded) {
         const imgControls = $("cadImageControls");
         if (imgControls) imgControls.style.display = "flex";
@@ -3815,21 +4128,36 @@ window.loadProposalState = function(data) {
           lockBtn.textContent = cad.image.locked ? "🔒 Locked" : "🔓 Unlocked";
           lockBtn.style.color = cad.image.locked ? "#38bdf8" : "#fbbf24";
         }
-        if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale;
+        if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale || 1.0;
+        if ($("cadOpacitySlider") && data.cad.image.opacity !== undefined) $("cadOpacitySlider").value = data.cad.image.opacity;
       }
+      cad.render();
+      cad.notifyChanges();
+      cad.notifyLayersChange();
     }
   }
 
-  // Remove blur overlay when a proposal is loaded
-  const resultsPanel = document.querySelector('.results-panel');
-  if (resultsPanel) resultsPanel.classList.remove('blurred-overlay');
-
-  if ($('loadProposalModal')) $('loadProposalModal').style.display = 'none';
-
+  // 5. Restore Multi-Meter / Single Meter mode and re-render table
   if (state.meteringMode === "multi") {
     setMeteringMode("multi");
   } else {
     setMeteringMode("single");
   }
+  renderMultiMeterTable();
+
+  // 6. Re-render Extracted Bill OCR card if present
+  if (state.extractedBill) {
+    renderExtractedBill(state.extractedBill);
+  }
+
+  // Remove blur overlay when a proposal is loaded
+  const resultsPanel = document.querySelector(".results-panel");
+  if (resultsPanel) resultsPanel.classList.remove("blurred-overlay");
+
+  if ($("loadProposalModal")) $("loadProposalModal").style.display = "none";
+
   render();
 };
+
+window.saveProposalData = saveProposalData;
+window.captureFormValues = captureFormValues;
