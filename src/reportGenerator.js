@@ -797,21 +797,6 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   const saveWheelingFac = hideFlags.saveWheelingFac !== false;
   const saveTodRebate = hideFlags.saveTodRebate !== false;
 
-  const cbb = option.currentBillBreakdown || {};
-  const sb = option.savingsBreakdown || {};
-  const offsetFraction = (input.monthlyUnits > 0 && option.offsetUnits > 0)
-    ? Math.min(1, option.offsetUnits / input.monthlyUnits)
-    : 1;
-
-  const fullEnergy = cbb.energyCharge || (option.monthlySavings ? Math.round(option.monthlySavings * 0.85) : 0);
-  const fullDuty = cbb.duty || (fullEnergy ? Math.round(fullEnergy * 0.16) : 0);
-  const fullWheeling = cbb.wheelingFac || 0;
-
-  const energyOffsetMonthly = Math.round(fullEnergy * offsetFraction);
-  const dutyOffsetMonthly = Math.round(fullDuty * offsetFraction);
-  const wheelingOffsetMonthly = Math.round(fullWheeling * offsetFraction);
-  const todRebateMonthly = sb.todDaytimeRebate || 0;
-
   doc.setTextColor(COLORS.black);
   doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
@@ -824,59 +809,56 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.text("Electricity bill components offset & reduced through rooftop solar generation:", margin, yPos);
   yPos += 6;
 
-  const savingsTableBody = [];
-  if (saveEnergyCharges && energyOffsetMonthly > 0) {
-    savingsTableBody.push([
-      "Energy Charges Offset",
-      formatCurrency(energyOffsetMonthly),
-      formatCurrency(energyOffsetMonthly * 12),
-      "Direct slab-wise energy charge reduction from solar generation"
-    ]);
-  }
-  if (saveElectricityDuty && dutyOffsetMonthly > 0) {
-    savingsTableBody.push([
-      "Electricity Duty Offset",
-      formatCurrency(dutyOffsetMonthly),
-      formatCurrency(dutyOffsetMonthly * 12),
-      "Avoided state electricity duty on self-generated solar units"
-    ]);
-  }
-  if (saveWheelingFac && wheelingOffsetMonthly > 0) {
-    savingsTableBody.push([
-      "Wheeling & Fuel Adjustment (FAC) Offset",
-      formatCurrency(wheelingOffsetMonthly),
-      formatCurrency(wheelingOffsetMonthly * 12),
-      "Avoided DISCOM wheeling & fuel adjustment charges"
-    ]);
-  }
-  if (saveTodRebate && todRebateMonthly > 0) {
-    savingsTableBody.push([
-      "ToD Daytime Solar Generation Credit",
-      formatCurrency(todRebateMonthly),
-      formatCurrency(todRebateMonthly * 12),
-      "Time-of-day solar generation incentive credited by DISCOM"
-    ]);
-  }
+  const tipMap = {
+    "Energy Charges Offset": "Direct slab-wise energy charge reduction from solar generation",
+    "Electricity Duty Offset": "Avoided state electricity duty on self-generated solar units",
+    "Wheeling & Fuel Adjustment (FAC) Offset": "Avoided DISCOM wheeling & fuel adjustment charges",
+    "ToD Daytime Solar Generation Credit": "Time-of-day solar generation incentive credited by DISCOM",
+    "Peak penalty avoided": "Using battery during peak hours (5PM-10PM) avoids expensive peak tariffs.",
+    "PF improvement": "Smart inverters maintain a high Power Factor, earning a discount from MSEDCL.",
+    "Prompt pay discount": "1% bill discount for prompt payment differential."
+  };
 
-  // Include any other positive savings items if present in option.savingsBreakdownList
-  if (option.savingsBreakdownList) {
-    const tipMap = {
-      "Peak penalty avoided": "Using battery during peak hours (5PM-10PM) avoids expensive peak tariffs.",
-      "PF improvement": "Smart inverters maintain a high Power Factor, earning a discount from MSEDCL.",
-      "Prompt pay discount": "1% bill discount for prompt payment differential."
-    };
+  const savingsTableBody = [];
+  if (option.savingsBreakdownList && option.savingsBreakdownList.length > 0) {
     option.savingsBreakdownList.forEach(item => {
       if (item.value > 0 && !item.isHidden) {
-        if (tipMap[item.label]) {
-          savingsTableBody.push([
-            item.label,
-            formatCurrency(item.value),
-            formatCurrency(item.value * 12),
-            tipMap[item.label]
-          ]);
-        }
+        if (item.label === "Energy Charges Offset" && !saveEnergyCharges) return;
+        if (item.label === "Electricity Duty Offset" && !saveElectricityDuty) return;
+        if (item.label === "Wheeling & Fuel Adjustment (FAC) Offset" && !saveWheelingFac) return;
+        if (item.label === "ToD Daytime Solar Generation Credit" && !saveTodRebate) return;
+
+        savingsTableBody.push([
+          item.label,
+          formatCurrency(item.value),
+          formatCurrency(item.value * 12),
+          tipMap[item.label] || "Solar net metering bill reduction benefit"
+        ]);
       }
     });
+  } else {
+    const sb = option.savingsBreakdown || {};
+    if (saveEnergyCharges && sb.energyChargeOffset > 0) {
+      savingsTableBody.push(["Energy Charges Offset", formatCurrency(sb.energyChargeOffset), formatCurrency(sb.energyChargeOffset * 12), tipMap["Energy Charges Offset"]]);
+    }
+    if (saveElectricityDuty && sb.dutyOffset > 0) {
+      savingsTableBody.push(["Electricity Duty Offset", formatCurrency(sb.dutyOffset), formatCurrency(sb.dutyOffset * 12), tipMap["Electricity Duty Offset"]]);
+    }
+    if (saveWheelingFac && sb.wheelingFacOffset > 0) {
+      savingsTableBody.push(["Wheeling & Fuel Adjustment (FAC) Offset", formatCurrency(sb.wheelingFacOffset), formatCurrency(sb.wheelingFacOffset * 12), tipMap["Wheeling & Fuel Adjustment (FAC) Offset"]]);
+    }
+    if (saveTodRebate && sb.todDaytimeRebate > 0) {
+      savingsTableBody.push(["ToD Daytime Solar Generation Credit", formatCurrency(sb.todDaytimeRebate), formatCurrency(sb.todDaytimeRebate * 12), tipMap["ToD Daytime Solar Generation Credit"]]);
+    }
+    if (sb.todPeakAvoided > 0) {
+      savingsTableBody.push(["Peak penalty avoided", formatCurrency(sb.todPeakAvoided), formatCurrency(sb.todPeakAvoided * 12), tipMap["Peak penalty avoided"]]);
+    }
+    if (sb.pfIncentive > 0) {
+      savingsTableBody.push(["PF improvement", formatCurrency(sb.pfIncentive), formatCurrency(sb.pfIncentive * 12), tipMap["PF improvement"]]);
+    }
+    if (sb.promptPayDiscount > 0) {
+      savingsTableBody.push(["Prompt pay discount", formatCurrency(sb.promptPayDiscount), formatCurrency(sb.promptPayDiscount * 12), tipMap["Prompt pay discount"]]);
+    }
   }
 
   savingsTableBody.push(["-------------------", "-------------------", "-------------------", ""]);

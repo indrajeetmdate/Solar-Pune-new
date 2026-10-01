@@ -1268,12 +1268,12 @@ function render() {
       const items = option.currentBillBreakdownList.filter(it => !it.isHidden && it.value !== 0);
       if (items.length > 0) {
         bbEl.classList.remove("hidden");
-        let html = `<div style="font-weight: 600; margin-bottom: 8px; font-size: 13px;">Estimated Current Bill</div>`;
+        let html = `<div style="font-weight: 600; margin-bottom: 8px; font-size: 13px;">Current Bill Breakdown</div>`;
         html += items.map(item => {
           let colorStyle = item.isRed ? 'color: #d32f2f; font-weight: 500;' : '';
           return `<div style="display: flex; justify-content: space-between; margin-bottom: 4px; ${colorStyle}"><div><span>${item.label}</span></div><div>${money(Math.abs(item.value))}/mo</div></div>`;
         }).join("");
-        html += `<div style="display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); font-weight: bold;"><div>Total</div><div>${money(option.currentBillBreakdown.total)}/mo</div></div>`;
+        html += `<div style="display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); font-weight: bold;"><div>Total Current Bill</div><div>${money(option.currentBillBreakdown.total)}/mo</div></div>`;
         bbEl.innerHTML = html;
       } else {
         bbEl.classList.add("hidden");
@@ -1281,11 +1281,11 @@ function render() {
     }
   }
 
-  // Savings breakdown
+  // Savings breakdown: Possible Savings Breakdown (Solar Offset)
   const sbEl = $("savingsBreakdownPanel");
   if (sbEl && option.savingsBreakdownList) {
     if (state.internalUnlocked) {
-      let html = `<table style="width: 100%; border-collapse: collapse; font-size: 13px;">`;
+      let html = `<div style="font-weight: 600; margin-bottom: 8px; font-size: 13px;">Possible Savings Breakdown (Solar Offset)</div><table style="width: 100%; border-collapse: collapse; font-size: 13px;">`;
       option.savingsBreakdownList.forEach((item, index) => {
         let isOverridden = state.savingsConfig[option.systemType][index]?.isOverride;
         let hiddenStyle = item.isHidden ? 'opacity: 0.45; text-decoration: line-through;' : '';
@@ -1304,7 +1304,12 @@ function render() {
           </td>
         </tr>`;
       });
-      html += `</table>`;
+      html += `
+        <tr>
+          <td style="padding: 8px 6px 4px; font-weight: bold;">Total Savings / Month</td>
+          <td colspan="3" style="padding: 8px 4px 4px; text-align: right; font-weight: bold; color: var(--brand-green);">${money(option.monthlySavings)}/mo</td>
+        </tr>
+      </table>`;
       sbEl.innerHTML = html;
       sbEl.classList.remove("hidden");
       
@@ -1335,8 +1340,10 @@ function render() {
       });
     } else {
       const tipMap = {
-        "Slab/tariff offset": "Savings from reducing units in expensive MSEDCL slab tiers. More solar = lower per-unit rate.",
-        "ToD daytime rebate": "Solar generates during 9AM-5PM when MSEDCL offers a rebate on Time-of-Day tariff. You earn credits at a lower cost.",
+        "Energy Charges Offset": "Direct slab-wise energy charge reduction from solar generation.",
+        "Electricity Duty Offset": "Avoided state electricity duty on self-generated solar units.",
+        "Wheeling & Fuel Adjustment (FAC) Offset": "Avoided DISCOM wheeling and fuel adjustment charges.",
+        "ToD Daytime Solar Generation Credit": "Solar generates during daytime peak hours (09:00–17:00), earning ToD tariff rebates from MSEDCL.",
         "Peak penalty avoided": "Battery discharges during expensive peak hours (5PM-10PM), avoiding the highest tariff rates.",
         "PF improvement": "Smart inverters improve your Power Factor, earning a discount from MSEDCL on your bill.",
         "Prompt pay discount": "1% discount for paying your reduced bill on time. Solar makes this easier with lower bills.",
@@ -1345,13 +1352,16 @@ function render() {
       const items = option.savingsBreakdownList.filter(it => !it.isHidden && it.value > 0);
       if (items.length > 0) {
         sbEl.classList.remove("hidden");
-        sbEl.innerHTML = items
+        let html = `<div style="font-weight: 600; margin-bottom: 8px; font-size: 13px;">Possible Savings Breakdown (Solar Offset)</div>`;
+        html += items
           .map(item => {
             const tip = tipMap[item.label] || "";
             const icon = tip ? ` <i class="info-tip" data-tip="${tip}">i</i>` : "";
             return `<div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><div><span style="font-weight: 600;">${item.label}</span>${icon}</div><div>+${money(item.value)}/mo</div></div>`;
           })
           .join("");
+        html += `<div style="display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); font-weight: bold;"><div>Total Savings / Month</div><div style="color: var(--brand-green);">${money(option.monthlySavings)}/mo</div></div>`;
+        sbEl.innerHTML = html;
       } else {
         sbEl.classList.add("hidden");
       }
@@ -3393,25 +3403,38 @@ function applySavingsConfig(estimate, input) {
     const hasBattery = (option.batteryCapacityKwh > 0) || (option.costBreakup && option.costBreakup.battery > 0);
     
     let defaultItems = [
-      { id: 'baseSavings', label: 'Slab/tariff offset', value: sb.baseSavings },
-      { id: 'todDaytimeRebate', label: 'ToD daytime rebate', value: sb.todDaytimeRebate },
+      { id: 'energyChargeOffset', label: 'Energy Charges Offset', value: sb.energyChargeOffset !== undefined ? sb.energyChargeOffset : sb.baseSavings },
+      { id: 'dutyOffset', label: 'Electricity Duty Offset', value: sb.dutyOffset || 0 },
     ];
+    if (sb.wheelingFacOffset > 0) {
+      defaultItems.push({ id: 'wheelingFacOffset', label: 'Wheeling & Fuel Adjustment (FAC) Offset', value: sb.wheelingFacOffset });
+    }
+    if (sb.todDaytimeRebate > 0) {
+      defaultItems.push({ id: 'todDaytimeRebate', label: 'ToD Daytime Solar Generation Credit', value: sb.todDaytimeRebate });
+    }
     // Only include Peak penalty avoided for systems with a battery
     if (hasBattery && sb.todPeakAvoided > 0) {
       defaultItems.push({ id: 'todPeakAvoided', label: 'Peak penalty avoided', value: sb.todPeakAvoided });
     }
-    defaultItems.push(
-      { id: 'pfIncentive', label: 'PF improvement', value: sb.pfIncentive },
-      { id: 'promptPayDiscount', label: 'Prompt pay discount', value: sb.promptPayDiscount }
-    );
+    if (sb.pfIncentive > 0) {
+      defaultItems.push({ id: 'pfIncentive', label: 'PF improvement', value: sb.pfIncentive });
+    }
+    if (sb.promptPayDiscount > 0) {
+      defaultItems.push({ id: 'promptPayDiscount', label: 'Prompt pay discount', value: sb.promptPayDiscount });
+    }
     
-    // Purge any bankingLoss or non-battery peak penalty from saved or active config
+    // Purge any legacy baseSavings/slab offset or bankingLoss from saved or active config
     if (state.savingsConfig[sysType]) {
-      state.savingsConfig[sysType] = state.savingsConfig[sysType].filter(item => {
-        if (item.id === 'bankingLoss' || (item.label && item.label.toLowerCase().includes('banking'))) return false;
-        if (!hasBattery && (item.id === 'todPeakAvoided' || (item.label && item.label.toLowerCase().includes('peak penalty')))) return false;
-        return true;
-      });
+      const hasLegacy = state.savingsConfig[sysType].some(x => x.id === 'baseSavings' || (x.label && x.label.toLowerCase().includes('slab')));
+      if (hasLegacy) {
+        delete state.savingsConfig[sysType];
+      } else {
+        state.savingsConfig[sysType] = state.savingsConfig[sysType].filter(item => {
+          if (item.id === 'bankingLoss' || (item.label && item.label.toLowerCase().includes('banking'))) return false;
+          if (!hasBattery && (item.id === 'todPeakAvoided' || (item.label && item.label.toLowerCase().includes('peak penalty')))) return false;
+          return true;
+        });
+      }
     }
 
     if (!state.savingsConfig[sysType] || state.savingsConfig[sysType].length === 0) {
@@ -3448,6 +3471,7 @@ function applySavingsConfig(estimate, input) {
       let di = defaultItems.find(x => x.id === c.id);
       let computedValue = di ? di.value : 0;
       item.value = c.isOverride ? c.overrideValue : computedValue;
+      if (di) item.label = di.label;
       
       // Negative value components should not be included in estimated savings
       if (item.value < 0) return;
@@ -3462,10 +3486,13 @@ function applySavingsConfig(estimate, input) {
     
     // Update calculated totals based on visible savings components, matching effective monthly bill
     const effBill = input.monthlyBill > 0 ? input.monthlyBill : (option.currentBillBreakdown?.total || totalMonthlySavings);
-    if (option.offsetUnits >= (input.monthlyUnits || 0) && input.monthlyUnits > 0) {
-      totalMonthlySavings = effBill;
-    } else if (effBill > 0) {
-      totalMonthlySavings = Math.min(totalMonthlySavings, effBill);
+    const hasAnyOverride = configList.some(c => c.isOverride);
+    if (!hasAnyOverride) {
+      if (option.offsetUnits >= (input.monthlyUnits || 0) && input.monthlyUnits > 0) {
+        totalMonthlySavings = effBill;
+      } else if (effBill > 0) {
+        totalMonthlySavings = Math.min(totalMonthlySavings, effBill);
+      }
     }
 
     option.monthlySavings = totalMonthlySavings;

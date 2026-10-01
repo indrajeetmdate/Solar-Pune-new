@@ -277,12 +277,24 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
     "100% solar offset Save/mo must match the Monthly bill (₹4000)"
   );
   assert.equal(
-    largeOpt.financing.monthlyEmi,
-    4000,
-    "100% solar offset EMI must match the Monthly bill (₹4000)"
+    largeOpt.savingsBreakdown.energyChargeOffset,
+    largeOpt.currentBillBreakdown.energyCharge,
+    "Energy Charges Offset must match Current Bill Breakdown Energy Charges"
+  );
+  assert.equal(
+    largeOpt.savingsBreakdown.dutyOffset,
+    largeOpt.currentBillBreakdown.duty,
+    "Electricity Duty Offset must match Current Bill Breakdown Electricity Duty"
+  );
+  assert.equal(
+    largeOpt.savingsBreakdown.wheelingFacOffset,
+    largeOpt.currentBillBreakdown.wheelingFac,
+    "Wheeling Offset must match Current Bill Breakdown Wheeling FAC"
   );
   const totalItemizedSavings =
-    largeOpt.savingsBreakdown.baseSavings +
+    largeOpt.savingsBreakdown.energyChargeOffset +
+    largeOpt.savingsBreakdown.dutyOffset +
+    largeOpt.savingsBreakdown.wheelingFacOffset +
     largeOpt.savingsBreakdown.todDaytimeRebate +
     largeOpt.savingsBreakdown.promptPayDiscount;
   assert.equal(
@@ -454,6 +466,11 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.equal(savingsTable.head[0][0], "Offsettable Bill Component");
   assert.equal(savingsTable.head[0][1], "Monthly Savings");
   assert.equal(savingsTable.head[0][2], "Annual Savings");
+
+  assert.ok(savingsTable.body.some(row => row[0] === "Energy Charges Offset"), "Savings table must include Energy Charges Offset");
+  assert.ok(savingsTable.body.some(row => row[0] === "Electricity Duty Offset"), "Savings table must include Electricity Duty Offset");
+  assert.ok(savingsTable.body.some(row => row[0] === "ToD Daytime Solar Generation Credit"), "Savings table must include ToD Daytime Solar Generation Credit");
+  assert.ok(savingsTable.body.some(row => row[0] === "Prompt pay discount"), "Savings table must include Prompt pay discount");
 
   // Verify updated cost breakdown text labels
   const costTable = mockCalls.find(c => c.body && c.body.some(row => row[0] && row[0].includes("Total System Cost")));

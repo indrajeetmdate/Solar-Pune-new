@@ -674,6 +674,54 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       })
     : null;
 
+  // Possible savings breakdown aligned with currentBillBreakdown
+  const offsetFraction = (input.monthlyUnits > 0 && offsetUnits > 0)
+    ? Math.min(1, offsetUnits / input.monthlyUnits)
+    : 1;
+
+  let energyChargeOffset = round((currentBillBreakdown.energyCharge || 0) * offsetFraction, 0);
+  let dutyOffset = round((currentBillBreakdown.duty || 0) * offsetFraction, 0);
+  let wheelingFacOffset = round((currentBillBreakdown.wheelingFac || 0) * offsetFraction, 0);
+
+  if (offsetFraction >= 1) {
+    energyChargeOffset = currentBillBreakdown.energyCharge || 0;
+    dutyOffset = currentBillBreakdown.duty || 0;
+    wheelingFacOffset = currentBillBreakdown.wheelingFac || 0;
+  }
+
+  const directBillOffset = energyChargeOffset + dutyOffset + wheelingFacOffset;
+  const remainingSavings = Math.max(0, monthlySavings - directBillOffset);
+
+  const rawTodRebate = todSavings.daytimeRebate || 0;
+  const rawPeakAvoided = hasBattery ? (todSavings.peakPenaltyAvoided || 0) : 0;
+  const rawPfIncentive = pfIncentive || 0;
+  const rawPromptPay = promptPay || 0;
+  const totalIncentives = rawTodRebate + rawPeakAvoided + rawPfIncentive + rawPromptPay;
+
+  let finalTodRebate = 0;
+  let finalPeakAvoided = 0;
+  let finalPfIncentive = 0;
+  let finalPromptPay = 0;
+
+  if (totalIncentives > 0 && remainingSavings > 0) {
+    if (totalIncentives <= remainingSavings) {
+      finalTodRebate = rawTodRebate;
+      finalPeakAvoided = rawPeakAvoided;
+      finalPfIncentive = rawPfIncentive;
+      finalPromptPay = remainingSavings - (finalTodRebate + finalPeakAvoided + finalPfIncentive);
+    } else {
+      const factor = remainingSavings / totalIncentives;
+      finalTodRebate = round(rawTodRebate * factor, 0);
+      finalPeakAvoided = round(rawPeakAvoided * factor, 0);
+      finalPfIncentive = round(rawPfIncentive * factor, 0);
+      finalPromptPay = Math.max(0, remainingSavings - (finalTodRebate + finalPeakAvoided + finalPfIncentive));
+    }
+  } else if (remainingSavings > 0 && totalIncentives === 0) {
+    energyChargeOffset += remainingSavings;
+  }
+
+  const alignedBaseSavings = energyChargeOffset + dutyOffset + wheelingFacOffset;
+
   return {
     systemType,
     panelType,
@@ -696,12 +744,16 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
     sizing,
     currentBillBreakdown,
     savingsBreakdown: {
-      baseSavings: round(Math.max(0, monthlySavings - todSavings.daytimeRebate - (hasBattery ? todSavings.peakPenaltyAvoided : 0) - pfIncentive - promptPay), 0),
+      energyChargeOffset,
+      dutyOffset,
+      wheelingFacOffset,
+      baseSavings: alignedBaseSavings,
       bankingLoss: round(banking.deductedUnits * avgRate, 0),
-      todDaytimeRebate: todSavings.daytimeRebate,
-      todPeakAvoided: hasBattery ? todSavings.peakPenaltyAvoided : 0,
-      pfIncentive: round(pfIncentive, 0),
-      promptPayDiscount: round(promptPay, 0),
+      todDaytimeRebate: finalTodRebate,
+      todPeakAvoided: finalPeakAvoided,
+      pfIncentive: finalPfIncentive,
+      promptPayDiscount: finalPromptPay,
+      netMonthlySavings: monthlySavings,
     },
     costBreakup: {
       panels: round(panelCost, 0),
