@@ -391,7 +391,7 @@ function renderBreakup(option, input, customerView, config) {
       <textarea class="system-includes-text" data-sys="${sysType}" rows="2" style="width: 100%; font-size: 12px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); resize: vertical; line-height: 1.4; font-family: inherit;">${currentIncludesText}</textarea>
       <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 6px;">
         <div style="font-size: 12px; font-weight: 700; color: #16a34a; background: #ecfdf5; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #10b981;">• Note: All of the above are in line with MNRE guidelines.</div>
-        <div style="font-size: 12px; font-weight: 700; color: #92400e; background: #fffbeb; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #f59e0b;">• Note: Cabling/wiring charges will be at actuals.</div>
+        <div style="font-size: 12px; font-weight: 700; color: #92400e; background: #fffbeb; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #f59e0b;">• Note: Cabling/wiring charges will be at actual length of DC and AC cabling required.</div>
         <div style="font-size: 12px; font-weight: 700; color: #1e40af; background: #eff6ff; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #3b82f6;">• Note: MSEDCL Net Metering Liaisoning & Discom Documentation Support charges at actuals.</div>
       </div>
     </div>`;
@@ -542,7 +542,7 @@ function renderBreakup(option, input, customerView, config) {
       <strong>Scope of Work:</strong> ${includesText}
       <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 6px;">
         <div style="font-size: 12px; font-weight: 700; color: #16a34a; background: #ecfdf5; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #10b981;">• Note: All of the above are in line with MNRE guidelines.</div>
-        <div style="font-size: 12px; font-weight: 700; color: #92400e; background: #fffbeb; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #f59e0b;">• Note: Cabling/wiring charges will be at actuals.</div>
+        <div style="font-size: 12px; font-weight: 700; color: #92400e; background: #fffbeb; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #f59e0b;">• Note: Cabling/wiring charges will be at actual length of DC and AC cabling required.</div>
         <div style="font-size: 12px; font-weight: 700; color: #1e40af; background: #eff6ff; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #3b82f6;">• Note: MSEDCL Net Metering Liaisoning & Discom Documentation Support charges at actuals.</div>
       </div>
     </div>`;

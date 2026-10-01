@@ -725,7 +725,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
     doc.setTextColor(146, 64, 14);   // #92400e dark amber
-    doc.text("• Note: Cabling/wiring charges will be at actuals.", margin + 5, yPos + 4.7);
+    doc.text("• Note: Cabling/wiring charges will be at actual length of DC and AC cabling required.", margin + 5, yPos + 4.7);
     yPos += pillH + pillGap;
 
     // 3. Liaisoning & Discom Support Note (Blue Highlight Pill)
