@@ -141,6 +141,8 @@ function readInput() {
     customerName: state.internalUnlocked ? (safeStr("internalCustomerName") || safeStr("customerName")) : safeStr("customerName"),
     mobileNumber: state.internalUnlocked ? (safeStr("internalMobileNumber") || safeStr("mobileNumber")) : safeStr("mobileNumber"),
     emailAddress: state.internalUnlocked ? (safeStr("internalEmailAddress") || safeStr("emailAddress")) : safeStr("emailAddress"),
+    customerAddress: safeStr("customerAddress") || "Pune, Maharashtra",
+    proposalSerialNo: safeStr("proposalSerialNo") || "DC/2026-27/PROP-1001",
     monthlyUnits: isMulti ? multiUnits : numberValue("monthlyUnits"),
     monthlyBill: isMulti ? multiBill : numberValue("monthlyBill"),
     roofArea: numberValue("roofArea"),
@@ -382,12 +384,13 @@ function renderBreakup(option, input, customerView, config) {
     currentIncludesText = currentIncludesText.replace(/,?\s*(?:and\s+)?contingency\.?/gi, "").trim();
     if (!currentIncludesText.endsWith(".")) currentIncludesText += ".";
 
-    // System Includes editable textarea
+    // Scope of Work editable textarea
     itemsHtml += `
     <div style="margin-bottom: 10px;">
-      <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">System Includes (shown in report)</label>
+      <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">Scope of Work (shown in report)</label>
       <textarea class="system-includes-text" data-sys="${sysType}" rows="2" style="width: 100%; font-size: 12px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); resize: vertical; line-height: 1.4; font-family: inherit;">${currentIncludesText}</textarea>
-      <div style="font-size: 13px; font-weight: 700; color: var(--text, #1e293b); margin-top: 5px;">Note: Only cabling/wiring charges will be at actuals</div>
+      <div style="font-size: 12.5px; font-weight: 700; color: #16a34a; margin-top: 5px;">Note: All of the above are in line with MNRE guidelines.</div>
+      <div style="font-size: 12.5px; font-weight: 700; color: var(--text, #1e293b); margin-top: 2px;">Note: Only cabling/wiring charges will be at actuals</div>
     </div>`;
 
     // Build calculation detail map for each cost item
@@ -533,8 +536,9 @@ function renderBreakup(option, input, customerView, config) {
     if (!includesText.endsWith(".")) includesText += ".";
 
     itemsHtml = `<div style="margin-bottom: 12px; font-size: 13px; color: var(--text-light); line-height: 1.4;">
-      <strong>Includes:</strong> ${includesText}
-      <div style="font-size: 13.5px; font-weight: 700; color: var(--text, #0f172a); margin-top: 6px;">Note: Only cabling/wiring charges will be at actuals</div>
+      <strong>Scope of Work:</strong> ${includesText}
+      <div style="font-size: 12.5px; font-weight: 700; color: #16a34a; margin-top: 5px;">Note: All of the above are in line with MNRE guidelines.</div>
+      <div style="font-size: 13px; font-weight: 700; color: var(--text, #0f172a); margin-top: 2px;">Note: Only cabling/wiring charges will be at actuals</div>
     </div>`;
 
     itemsHtml += `<div><dt style="font-weight: bold; color: var(--text);">Total System Cost (Inc. GST)</dt><dd style="font-weight: bold;">${money(option.totalPreSubsidy)}</dd></div>`;
@@ -1373,6 +1377,26 @@ function render() {
   renderNotes(option, input);
   renderExtractedBill(state.extractedBill);
   renderDiagram(pl, input);
+
+  // Sync Proposal Preview Card: Prepared For (To)
+  if ($("proposalToCustomerName")) {
+    $("proposalToCustomerName").textContent = input.customerName || "Valued Customer";
+  }
+  if ($("proposalToCustomerAddress")) {
+    $("proposalToCustomerAddress").textContent = input.customerAddress || "Pune, Maharashtra";
+  }
+  if ($("proposalToCustomerPhone")) {
+    $("proposalToCustomerPhone").textContent = input.mobileNumber || "—";
+  }
+  if ($("proposalToCustomerLoad")) {
+    $("proposalToCustomerLoad").textContent = `${input.sanctionedLoad || 5} kW`;
+  }
+  if ($("proposalToCustomerCategory")) {
+    $("proposalToCustomerCategory").textContent = input.consumerCategory || "LT-I Residential";
+  }
+  if ($("proposalToCustomerUnits")) {
+    $("proposalToCustomerUnits").textContent = `${input.monthlyUnits || 450} units`;
+  }
 
   // Report Display: toggle visibility of optional sections
   const hidePayback = $("hidePayback")?.checked || $("hideCost")?.checked;
@@ -2972,6 +2996,12 @@ function attachEvents() {
         hideCost: $("hideCost")?.checked || false,
         hideFinancing: $("hideFinancing")?.checked || false,
         solarInstalled: $("solarInstalled")?.checked || false,
+        proposalSerialNo: $("proposalSerialNo")?.value || "DC/2026-27/PROP-1001",
+        customerAddress: $("customerAddress")?.value || "Pune, Maharashtra",
+        saveEnergyCharges: $("saveEnergyCharges")?.checked !== false,
+        saveElectricityDuty: $("saveElectricityDuty")?.checked !== false,
+        saveWheelingFac: $("saveWheelingFac")?.checked !== false,
+        saveTodRebate: $("saveTodRebate")?.checked !== false,
       };
 
       setTimeout(() => {
@@ -3064,6 +3094,12 @@ function attachEvents() {
         hideCost: $("hideCost")?.checked || false,
         hideFinancing: $("hideFinancing")?.checked || false,
         solarInstalled: $("solarInstalled")?.checked || false,
+        proposalSerialNo: $("proposalSerialNo")?.value || "DC/2026-27/PROP-1001",
+        customerAddress: $("customerAddress")?.value || "Pune, Maharashtra",
+        saveEnergyCharges: $("saveEnergyCharges")?.checked !== false,
+        saveElectricityDuty: $("saveElectricityDuty")?.checked !== false,
+        saveWheelingFac: $("saveWheelingFac")?.checked !== false,
+        saveTodRebate: $("saveTodRebate")?.checked !== false,
       };
 
       setTimeout(() => {

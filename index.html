@@ -86,6 +86,10 @@
                 <span>Email address</span>
                 <input id="emailAddress" type="email" placeholder="name@example.com">
               </label>
+              <label class="field" style="grid-column: 1 / -1;">
+                <span>Site / Installation address</span>
+                <input id="customerAddress" type="text" placeholder="e.g. Plot 14, Hingne Khurd, Pune">
+              </label>
               <label class="field">
                 <span>Sanctioned load (kW) <i class="info-tip" data-tip="Approved contract load on your electricity bill.">i</i></span>
                 <input id="sanctionedLoad" type="number" min="0" step="0.5" value="5">
@@ -1051,11 +1055,57 @@
 
         <!-- PANE 5: PROPOSAL & EXPORT -->
         <div class="workspace-tab-pane" id="paneProposal" data-pane="proposal" style="display: none;">
+          <!-- Proposal Header Preview Card: From & To -->
+          <div class="detail-card" style="margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text);">Official Solar Proposal</h3>
+                <p class="muted small" style="margin: 2px 0 0;">Turnkey Solar PV Rooftop Installation & Commissioning</p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);">Proposal Serial No:</label>
+                <input type="text" id="proposalSerialNo" value="DC/2026-27/PROP-1001" style="font-family: monospace; font-size: 12.5px; font-weight: 700; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; width: 190px;">
+              </div>
+            </div>
+
+            <!-- Corporate From & To Side-by-Side Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-bottom: 14px;">
+              <!-- FROM CARD -->
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px;">
+                <div style="font-size: 11px; font-weight: 700; color: #0284c7; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Issued By (From)</div>
+                <div style="font-size: 13.5px; font-weight: 700; color: #0f172a; margin-bottom: 4px;">DATLION CNERGY PRIVATE LIMITED</div>
+                <div style="font-size: 11.5px; color: #475569; line-height: 1.4; margin-bottom: 6px;">
+                  Ground, Shed No. 1, Shashitara Pratishthan BJP Office,<br>
+                  Late Narayanrao Kondiba Jagtap Path, Shashitara Pratishthan Jansampark Karyalay,<br>
+                  Hingne Khurd, Pune, Maharashtra - 411051
+                </div>
+                <div style="font-size: 11.5px; color: #334155; line-height: 1.5;">
+                  <div><strong>GSTIN:</strong> 27AALCD8550A1ZP</div>
+                  <div><strong>Email:</strong> datlioncnergy@gmail.com</div>
+                  <div><strong>Phone:</strong> +91 8956340980</div>
+                </div>
+              </div>
+
+              <!-- TO CARD -->
+              <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 14px;">
+                <div style="font-size: 11px; font-weight: 700; color: #16a34a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Prepared For (To)</div>
+                <div id="proposalToCustomerName" style="font-size: 13.5px; font-weight: 700; color: #0f172a; margin-bottom: 4px;">Valued Customer</div>
+                <div id="proposalToCustomerAddress" style="font-size: 11.5px; color: #475569; line-height: 1.4; margin-bottom: 6px;">Pune, Maharashtra</div>
+                <div style="font-size: 11.5px; color: #334155; line-height: 1.5;">
+                  <div><strong>Contact:</strong> <span id="proposalToCustomerPhone">—</span></div>
+                  <div><strong>Sanctioned Load:</strong> <span id="proposalToCustomerLoad">5 kW</span> | <span id="proposalToCustomerCategory">LT-I Residential</span></div>
+                  <div><strong>Monthly Consumption:</strong> <span id="proposalToCustomerUnits">450 units</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Proposal Customization & Download Card -->
           <div class="detail-card" style="margin-bottom: 12px;">
             <div class="section-heading compact" style="margin-bottom: 8px;">
               <h3 style="margin: 0; font-size: 15px; font-weight: 600;">Proposal Export & Report Customization</h3>
             </div>
-            <p class="muted small" style="margin: 0 0 10px;">Configure which sections appear in the official client proposal PDF.</p>
+            <p class="muted small" style="margin: 0 0 10px;">Configure which sections and savings breakdown appear in the official client proposal PDF.</p>
 
             <fieldset style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-top: 6px; background: #f8fafc;">
               <legend style="font-size: 11.5px; font-weight: 600; padding: 0 6px; color: #64748b;">Report Sections Customization</legend>
@@ -1084,10 +1134,148 @@
               </div>
             </fieldset>
 
+            <fieldset style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-top: 10px; background: #f8fafc;">
+              <legend style="font-size: 11.5px; font-weight: 600; padding: 0 6px; color: #64748b;">Solar Bill Savings Customization (Shown on PDF)</legend>
+              <p class="muted small" style="margin: 0 0 8px;">Select which offsettable bill components are included in the PDF savings table:</p>
+              <div style="display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px;">
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="saveEnergyCharges" checked> Energy Charges (Unit Offset)
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="saveElectricityDuty" checked> Electricity Duty Saved
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="saveWheelingFac" checked> Wheeling & Fuel Adj. (FAC)
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="saveTodRebate" checked> ToD Daytime Solar Export Incentive
+                </label>
+              </div>
+            </fieldset>
+
             <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
               <button class="primary-button" id="downloadProposalButtonInternal" type="button" style="flex: 1; min-width: 200px; padding: 10px 18px;">Download Proposal PDF ↓</button>
               <button class="primary-button hidden" id="downloadProposalButton" type="button">Download Proposal ↓</button>
               <button class="secondary-button" id="saveProposalButtonInternal" type="button" style="padding: 10px 16px; font-weight: 600; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; background: white;">Save Data 💾</button>
+            </div>
+          </div>
+
+          <!-- Scope of Work Card -->
+          <div class="detail-card" style="margin-bottom: 12px;">
+            <div class="section-heading compact" style="margin-bottom: 8px;">
+              <h3 style="margin: 0; font-size: 14.5px; font-weight: 600;">📋 Scope of Work (Turnkey EPC Delivery)</h3>
+            </div>
+            <p class="muted small" style="margin: 0 0 10px;">Turnkey engineering, procurement, installation, and statutory commissioning services included in the project delivery:</p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; font-size: 12px; margin-bottom: 12px;">
+              <div style="padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                <strong style="color: #0f172a;">1. Design & Engineering:</strong> Complete 3D shadow analysis, array layout engineering, structural wind-load verification, and electrical single-line diagram (SLD).
+              </div>
+              <div style="padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                <strong style="color: #0f172a;">2. Supply & Procurement:</strong> MNRE/ALMM approved Tier-1 Solar PV modules, high-efficiency grid-tied inverter, certified mounting structure, and Balance of System (BOS).
+              </div>
+              <div style="padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                <strong style="color: #0f172a;">3. Mounting & Civil Works:</strong> Structure installation, module clamping, anchoring/ballast civil works, and weather-resistant civil chambers for earthing pits.
+              </div>
+              <div style="padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                <strong style="color: #0f172a;">4. Electrical Safety & Protection:</strong> ACDB & DCDB switchgear with Class-II Surge Protection Devices (SPD) & MCBs, chemical earthing with copper/aluminum rods, and lightning arrestor (LA).
+              </div>
+              <div style="padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                <strong style="color: #0f172a;">5. Testing & Commissioning:</strong> Array insulation testing, earth loop resistance verification, inverter synchronization, and safety compliance checks.
+              </div>
+              <div style="padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                <strong style="color: #0f172a;">6. Net Metering & Subsidy Liaisoning:</strong> End-to-end MSEDCL documentation, sanction approval, bi-directional net meter installation, and PM Surya Ghar National Portal subsidy claim processing.
+              </div>
+              <div style="padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                <strong style="color: #0f172a;">7. Handover & User Training:</strong> As-built documentation, plant operation manual, safety guidelines, and real-time cloud mobile monitoring app configuration.
+              </div>
+            </div>
+            <div style="padding: 8px 12px; background: #ecfdf5; border-left: 4px solid #10b981; border-radius: 4px; font-size: 13px; font-weight: 700; color: #065f46; margin-bottom: 6px;">
+              Note: All of the above are in line with MNRE guidelines.
+            </div>
+            <div style="font-size: 12.5px; font-weight: 700; color: var(--text, #1e293b); padding-left: 4px;">
+              Note: Only cabling/wiring charges will be at actuals.
+            </div>
+          </div>
+
+          <!-- Product Warranty & Terms and Conditions Card (VISIBLE IN APP) -->
+          <div class="detail-card" style="margin-bottom: 12px;" id="appWarrantySection">
+            <div class="section-heading compact" style="margin-bottom: 10px;">
+              <h3 style="margin: 0; font-size: 14.5px; font-weight: 700; color: var(--text);">🛡️ Product Warranty & Details</h3>
+            </div>
+            <p class="muted small" style="margin: 0 0 10px;">Comprehensive equipment warranties and original manufacturer guarantees for all installed components:</p>
+
+            <!-- 4-Column Warranty Table -->
+            <div style="overflow-x: auto; margin-bottom: 8px;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; background: white; border: 1px solid var(--line);">
+                <thead>
+                  <tr style="background: var(--bg-alt, #f1f5f9); border-bottom: 2px solid var(--line);">
+                    <th style="padding: 8px 10px; text-align: center; width: 60px;">Sr. No.</th>
+                    <th style="padding: 8px 10px; text-align: left; width: 140px;">Product</th>
+                    <th style="padding: 8px 10px; text-align: left;">Make & Specification</th>
+                    <th style="padding: 8px 10px; text-align: center; width: 180px;">Warranty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style="border-bottom: 1px solid var(--line);">
+                    <td style="padding: 8px 10px; text-align: center; font-weight: 700;">1</td>
+                    <td style="padding: 8px 10px; font-weight: 700;">SOLAR PANEL</td>
+                    <td style="padding: 8px 10px;">Tier-1 Mono PERC / TOPCon (DCR / Non-DCR as per proposal)</td>
+                    <td style="padding: 8px 10px; text-align: center; font-weight: 700; color: #16a34a;">12 Year Warranty /<br>30 Year Performance Warranty</td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid var(--line); background: var(--bg-alt, #fafafa);">
+                    <td style="padding: 8px 10px; text-align: center; font-weight: 700;">2</td>
+                    <td style="padding: 8px 10px; font-weight: 700;">DCDB</td>
+                    <td style="padding: 8px 10px;">HAVELLS 1 IN 1 OUT 600 V</td>
+                    <td style="padding: 8px 10px; text-align: center; font-weight: 700; color: #16a34a;">5 Year</td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid var(--line);">
+                    <td style="padding: 8px 10px; text-align: center; font-weight: 700;">3</td>
+                    <td style="padding: 8px 10px; font-weight: 700;">EARTHING</td>
+                    <td style="padding: 8px 10px;">16 SQ MM EARTHING ALU. CONDUCTOR ROD; 14 SQ MM × 1 MTR COPPER ROD</td>
+                    <td style="padding: 8px 10px; text-align: center; font-weight: 700; color: var(--text-muted);">—</td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid var(--line); background: var(--bg-alt, #fafafa);">
+                    <td style="padding: 8px 10px; text-align: center; font-weight: 700;">4</td>
+                    <td style="padding: 8px 10px; font-weight: 700;">DC CABLE</td>
+                    <td style="padding: 8px 10px;">4 SQ MM COPPER TIN</td>
+                    <td style="padding: 8px 10px; text-align: center; font-weight: 700; color: #16a34a;">20 Year</td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid var(--line);">
+                    <td style="padding: 8px 10px; text-align: center; font-weight: 700;">5</td>
+                    <td style="padding: 8px 10px; font-weight: 700;">CIVIL CHAMBER</td>
+                    <td style="padding: 8px 10px;">ISI STANDARD</td>
+                    <td style="padding: 8px 10px; text-align: center; font-weight: 700; color: #16a34a;">10 Year</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 10px; text-align: center; font-weight: 700;">6</td>
+                    <td style="padding: 8px 10px; font-weight: 700;">ONGRID INVERTER</td>
+                    <td style="padding: 8px 10px;">Grid-Tied Solar Inverter (IP65)</td>
+                    <td style="padding: 8px 10px; text-align: center; font-weight: 700; color: #16a34a;">10 Year Warranty</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p style="font-size: 11px; font-style: italic; color: #64748b; margin: 4px 0 12px;">
+              * Note: Other product warranties not mentioned above will be added later / as per project BOM.
+            </p>
+
+            <!-- Terms & Conditions Heading & 4 clauses -->
+            <div style="margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px;">
+              <h4 style="margin: 0 0 8px; font-size: 13.5px; font-weight: 700; color: var(--text);">Terms and Conditions for Warranty</h4>
+              <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px; line-height: 1.5; color: var(--text-light);">
+                <div style="background: #f8fafc; border-left: 3px solid #64748b; padding: 6px 10px; border-radius: 0 4px 4px 0;">
+                  <strong style="color: var(--text);">1. Natural Calamity & Extreme Weather:</strong> Equipment warranties cover manufacturing, material, and workmanship defects under standard rated operating conditions. Damages directly or indirectly caused by natural calamities, severe weather anomalies (cyclones, gale winds exceeding structure design rating, hailstorms, flooding, earthquakes, landslides), or direct lightning strikes exceeding surge suppression (SPD) capacities are excluded from manufacturer warranty and must be insured under comprehensive plant insurance.
+                </div>
+                <div style="background: #f8fafc; border-left: 3px solid #64748b; padding: 6px 10px; border-radius: 0 4px 4px 0;">
+                  <strong style="color: var(--text);">2. Force Majeure:</strong> Neither the contractor nor original manufacturers shall be held liable for any delay, performance shortfall, or warranty voidance arising from Force Majeure events beyond reasonable human control, including but not limited to war, civil disturbances, riots, sabotage, fire, epidemics, labor disputes, or statutory grid shutdowns.
+                </div>
+                <div style="background: #f8fafc; border-left: 3px solid #64748b; padding: 6px 10px; border-radius: 0 4px 4px 0;">
+                  <strong style="color: var(--text);">3. Change in Government Policies & Regulatory Framework:</strong> Generation estimates, solar savings, and financial payback calculations are based strictly on prevailing MERC (Maharashtra Electricity Regulatory Commission) tariff orders, MSEDCL net metering rules, and MNRE PM Surya Ghar subsidy regulations. Any future retrospective or prospective amendments, changes in net metering provisions, imposition of grid-support / banking charges, revision of fixed/demand tariffs, or delays in DISCOM approvals shall not be construed as a defect or warranty violation by the installer.
+                </div>
+                <div style="background: #f8fafc; border-left: 3px solid #64748b; padding: 6px 10px; border-radius: 0 4px 4px 0;">
+                  <strong style="color: var(--text);">4. Operation, Maintenance & Pass-Through Warranty:</strong> All product warranties are original equipment manufacturer (OEM) pass-through warranties. The warranty remains in full force provided that: (a) panels are periodically washed with non-abrasive soft water, (b) the plant is operated within rated electrical parameters, and (c) no unauthorized modifications, repairs, or component tampering are carried out by uncertified third parties.
+                </div>
+              </div>
             </div>
           </div>
 

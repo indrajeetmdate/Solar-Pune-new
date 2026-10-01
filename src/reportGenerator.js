@@ -159,6 +159,9 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   const option = selectedOption || estimates.recommended;
 
   const { hidePayback, hideAreaFit, hideSubsidy, hideCost, hideFinancing, solarInstalled } = hideFlags;
+  const proposalSerialNo = hideFlags.proposalSerialNo || option.proposalSerialNo || "DC/2026-27/PROP-1001";
+  const customerAddress = hideFlags.customerAddress || input.customerAddress || "Pune, Maharashtra";
+  const proposalDate = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 
   // --- Helpers ---
   const formatCurrency = (val) =>
@@ -179,62 +182,136 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
 
     doc.setTextColor(COLORS.white);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text("DC ENERGY", margin, 14);
+    doc.setFontSize(15);
+    doc.text("DATLION CNERGY", margin, 14);
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(12);
-    doc.text(title, pageWidth - margin, 14, { align: "right" });
+    doc.setFontSize(10);
+    doc.text(`${title}  |  Ref: ${proposalSerialNo}`, pageWidth - margin, 14, { align: "right" });
   };
 
   // ================= PAGE 1: System Design Considerations =================
-  let yPos = 30;
   addHeader("Solar System Proposal");
+  let yPos = 25;
 
-  doc.setTextColor(COLORS.black);
-  doc.setFontSize(18);
+  // Metadata ribbon: Proposal Reference & Date
+  doc.setFontSize(8.5);
   doc.setFont("helvetica", "bold");
-  doc.text("1. System Design Considerations", margin, yPos);
-  yPos += 10;
+  doc.setTextColor(COLORS.primary);
+  doc.text(`PROPOSAL REF: ${proposalSerialNo}`, margin, yPos);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(COLORS.textLight);
+  doc.text(`DATE: ${proposalDate}`, pageWidth - margin, yPos, { align: "right" });
+  yPos += 4;
 
   const isMultiMeter = input.meters && Array.isArray(input.meters) && input.meters.length > 1;
 
-  // Customer details
-  doc.setFontSize(11);
+  // --- Side-by-Side Corporate Cards: FROM (DC Energy) and TO (Customer) ---
+  const cardWidth = (pageWidth - margin * 2 - 6) / 2;
+  const cardHeight = 44;
+  const leftCardX = margin;
+  const rightCardX = margin + cardWidth + 6;
+
+  // Left Card: FROM (DC Energy)
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(leftCardX, yPos, cardWidth, cardHeight, 1.5, 1.5, "FD");
+
+  let fromY = yPos + 4.5;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(COLORS.primary);
+  doc.text("PROPOSAL FROM (SOLAR EPC):", leftCardX + 4, fromY);
+  fromY += 4;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(COLORS.black);
+  doc.text("DATLION CNERGY PRIVATE LIMITED", leftCardX + 4, fromY);
+  fromY += 3.8;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
   doc.setTextColor(COLORS.text);
-  doc.text(`Customer / Society: ${input.customerName || (isMultiMeter ? "Apartment Society" : "Valued Customer")}`, margin, yPos);
-  yPos += 6;
-  if (isMultiMeter) {
-    doc.text(`Property Type: Multi-Flat Residential Building (${input.meters.length} Flats / Meters)`, margin, yPos);
-    yPos += 6;
-  }
-  if (input.mobileNumber) {
-    doc.text(`Mobile: ${input.mobileNumber}`, margin, yPos);
-    yPos += 6;
-  }
-  if (input.emailAddress) {
-    doc.text(`Email: ${input.emailAddress}`, margin, yPos);
-    yPos += 6;
-  }
-  doc.text(`Total Monthly Consumption: ${input.monthlyUnits} units`, margin, yPos);
-  yPos += 6;
-  doc.text(`Total Current Bill: ${formatCurrency(input.monthlyBill || 0)}`, margin, yPos);
-  yPos += 6;
-  doc.text(`Total Sanctioned Load: ${input.sanctionedLoad} kW`, margin, yPos);
-  yPos += 6;
-  doc.text(`Usable Roof Area: ${input.roofArea} sq ft`, margin, yPos);
-  yPos += 6;
+  const companyAddr = "Ground, Shed No. 1, Shashitara Pratishthan BJP Office, Late Narayanrao Kondiba Jagtap Path, Hingne Khurd, Pune, 411051";
+  const splitCompAddr = doc.splitTextToSize(companyAddr, cardWidth - 8);
+  doc.text(splitCompAddr, leftCardX + 4, fromY);
+  fromY += splitCompAddr.length * 3 + 1.5;
+
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(COLORS.black);
+  doc.text("GSTIN: 27AALCD8550A1ZP", leftCardX + 4, fromY);
+  fromY += 3.2;
+
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(COLORS.textLight);
+  doc.text("Email: datlioncnergy@gmail.com", leftCardX + 4, fromY);
+  fromY += 3;
+  doc.text("Phone: +91 8956340980 | www.cnergy.co.in", leftCardX + 4, fromY);
+
+  // Right Card: TO (Customer)
+  doc.setFillColor(240, 253, 244);
+  doc.setDrawColor(187, 247, 208);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(rightCardX, yPos, cardWidth, cardHeight, 1.5, 1.5, "FD");
+
+  let toY = yPos + 4.5;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(COLORS.primary);
+  doc.text("PREPARED FOR (VALUED CLIENT):", rightCardX + 4, toY);
+  toY += 4;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(COLORS.black);
+  const custName = input.customerName || (isMultiMeter ? "Apartment Society" : "Valued Customer");
+  doc.text(custName, rightCardX + 4, toY);
+  toY += 3.8;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(COLORS.text);
+  const splitCustAddr = doc.splitTextToSize(`Site Address: ${customerAddress}`, cardWidth - 8);
+  doc.text(splitCustAddr, rightCardX + 4, toY);
+  toY += splitCustAddr.length * 3 + 1.5;
+
+  doc.setTextColor(COLORS.textLight);
+  const contactText = `Phone: ${input.mobileNumber || "—"}${input.emailAddress ? " | " + input.emailAddress : ""}`;
+  doc.text(doc.splitTextToSize(contactText, cardWidth - 8), rightCardX + 4, toY);
+  toY += 3.2;
+
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(COLORS.text);
+  doc.text(`Sanctioned Load: ${input.sanctionedLoad} kW  |  Category: ${input.consumerCategory || "LT-I Residential"}`, rightCardX + 4, toY);
+  toY += 3;
+  doc.text(`Monthly Usage: ${input.monthlyUnits} units  |  Avg Bill: ${formatCurrency(input.monthlyBill || 0)}`, rightCardX + 4, toY);
+  toY += 3;
+  doc.text(`Usable Roof Area: ${input.roofArea} sq ft`, rightCardX + 4, toY);
+
+  yPos += cardHeight + 7;
+
+  // Section 1 Heading
+  doc.setTextColor(COLORS.black);
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.text("1. System Design Considerations", margin, yPos);
+  yPos += 8;
+
   if (input.coordinates || input.tiltAngle !== null || input.orientationDir) {
     const geoInfo = [];
     if (input.coordinates) geoInfo.push(`Coordinates: ${input.coordinates}`);
     if (input.tiltAngle !== null) geoInfo.push(`Tilt: ${input.tiltAngle} deg`);
     if (input.orientationDir) geoInfo.push(`Orientation: ${input.orientationDir}`);
     if (geoInfo.length > 0) {
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(COLORS.textLight);
       doc.text(geoInfo.join(" | "), margin, yPos);
-      yPos += 6;
+      yPos += 5;
     }
   }
-  yPos += 4;
 
   // If multi-meter, add the meter-wise breakdown table
   if (isMultiMeter) {
@@ -526,59 +603,80 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     yPos = doc.lastAutoTable.finalY + 12;
   }
 
-  // ================= FINANCIAL QUOTE SECTION =================
+  // ================= FINANCIAL QUOTE & SCOPE OF WORK SECTION =================
   if (!hideCost) {
     doc.addPage();
     yPos = 30;
-    addHeader("Financial Quote");
+    addHeader("Financial Quote & Scope of Work");
   
     doc.setTextColor(COLORS.black);
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text(`${sectionNumber}. Financial Quote & Breakup`, margin, yPos);
-    yPos += 10;
+    doc.text(`${sectionNumber}. Financial Quote & Scope of Work`, margin, yPos);
+    yPos += 8;
     sectionNumber++;
   
-    doc.setFontSize(12);
-    doc.text(`Selected Option: ${formatSysType(option.systemType)} (${option.dcCapacityKw} kWp)`, margin, yPos);
-    yPos += 10;
-  
-    const cBreakup = option.costBreakup;
-    mainInverterPrefix = "On-grid";
-    if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
-    if (option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
-    // Build system includes text - never include Contingency in the PDF
-    const includesText = buildSystemIncludesText(option);
-  
-    doc.setFontSize(10);
-    doc.setTextColor(COLORS.text);
-    const splitIncludes = doc.splitTextToSize(includesText, 210 - margin * 2);
-    doc.text(splitIncludes, margin, yPos);
-    yPos += (splitIncludes.length * 5) + 3;
-
-    // Bold note in bigger font: Only cabling/wiring charges will be at actuals
+    doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11.5);
+    doc.setTextColor(COLORS.primary);
+    doc.text(`Selected Option: ${formatSysType(option.systemType)} (${option.dcCapacityKw} kWp)`, margin, yPos);
+    yPos += 7;
+
+    // Scope of Work Card (Turnkey EPC Delivery)
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    const sowHeight = 44;
+    doc.roundedRect(margin, yPos, pageWidth - margin * 2, sowHeight, 1.5, 1.5, "FD");
+
+    let sowY = yPos + 4.5;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
     doc.setTextColor(COLORS.black);
-    const noteText = "Note: Only cabling/wiring charges will be at actuals";
-    const splitNote = doc.splitTextToSize(noteText, 210 - margin * 2);
-    doc.text(splitNote, margin, yPos);
-    yPos += (splitNote.length * 5.5) + 5;
+    doc.text("Scope of Work (Turnkey EPC Delivery):", margin + 4, sowY);
+    sowY += 4;
+
     doc.setFont("helvetica", "normal");
-  
+    doc.setFontSize(7.5);
+    doc.setTextColor(COLORS.text);
+    const sowLines = [
+      "• Comprehensive Site Survey, 3D Shadow Modeling & System Engineering Design",
+      "• Procurement & Supply of Tier-1 High-Efficiency Solar PV Modules & Grid-Tied Inverter",
+      "• Module Mounting Structure (Hot-Dip Galvanized / Anodized Aluminum) & Civil Anchoring",
+      "• ACDB & DCDB Protection Switchgear with Type-II Surge Protection (SPD) & MCB/MCCBs",
+      "• Chemical Earthing System (Dual Rods/Electrodes) & Lightning Arrestor Protection",
+      "• System Integration, Pre-Commissioning & Grid Synchronisation",
+      "• MSEDCL Net Metering Liaisoning & Discom Documentation Support"
+    ];
+    sowLines.forEach(line => {
+      doc.text(line, margin + 4, sowY);
+      sowY += 3.4;
+    });
+
+    sowY += 1;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(COLORS.primary);
+    doc.text("• Note: All of the above are in line with MNRE guidelines.", margin + 4, sowY);
+    sowY += 3.5;
+    doc.setTextColor(COLORS.black);
+    doc.text("• Note: Only cabling/wiring charges will be at actuals.", margin + 4, sowY);
+
+    yPos += sowHeight + 6;
+
     const costData = [];
     costData.push(["Total System Cost (Inc. GST)", formatCurrency(option.totalPreSubsidy)]);
-  
+
     // Conditionally include subsidy
     if (!hideSubsidy) {
       const isMulti = input.meters && Array.isArray(input.meters) && input.meters.length > 1;
       const subLabel = isMulti
         ? `Expected Subsidy (PM Surya Ghar across ${input.meters.length} flats)`
-        : "Expected Subsidy";
+        : "Expected Subsidy (PM Surya Ghar Direct DBT)";
       costData.push([subLabel, `- ${formatCurrency(option.subsidy)}`]);
     }
     costData.push(["Net Payable Cost", formatCurrency(option.netCost)]);
-  
+
     doc.autoTable({
       startY: yPos,
       body: costData,
@@ -588,167 +686,179 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
         1: { halign: "right" },
       },
       didParseCell: function (data) {
-        // Bold the total rows
         if (
-          data.row.raw[0].includes("Subtotal") ||
-          data.row.raw[0].includes("Total Cost") ||
+          data.row.raw[0].includes("Total System Cost") ||
           data.row.raw[0].includes("Net Payable")
         ) {
           data.cell.styles.fontStyle = "bold";
         }
         if (data.row.raw[0].includes("Expected Subsidy")) {
           data.cell.styles.textColor = COLORS.primary;
+          data.cell.styles.fontStyle = "bold";
         }
       },
       margin: { left: margin },
     });
-  
-    yPos = doc.lastAutoTable.finalY + 5;
-  
+
+    yPos = doc.lastAutoTable.finalY + 4;
+
     // Additional costs note
-    doc.setFontSize(8);
+    doc.setFontSize(7.5);
     doc.setFont("helvetica", "italic");
-    doc.setTextColor(COLORS.text);
+    doc.setTextColor(COLORS.textLight);
     doc.text("* Net metering and liaisoning costs are additional and will be quoted separately.", margin, yPos);
-    doc.text("* GST: 70% goods @ 5% + 30% services @ 18% = 8.9% effective rate.", margin, yPos + 4);
-    yPos += 13;
+    doc.text("* GST: 70% goods @ 5% + 30% services @ 18% = 8.9% effective rate.", margin, yPos + 3.5);
+    yPos += 9;
   } else {
     doc.addPage();
     yPos = 30;
     addHeader("Estimated Savings");
   }
 
-  // Current Bill Breakdown
-  const billItems = option.currentBillBreakdownList || (option.currentBillBreakdown ? [
-    ...(option.currentBillBreakdown.items ? option.currentBillBreakdown.items.map(it => ({ label: it.label, value: it.amount })) : [
-      { label: "Fixed Charges", value: option.currentBillBreakdown.fixedCharge },
-      { label: "Energy Charges", value: option.currentBillBreakdown.energyCharge },
-      ...(option.currentBillBreakdown.wheelingFac > 0 ? [{ label: "Wheeling & Fuel Adj. (FAC)", value: option.currentBillBreakdown.wheelingFac }] : []),
-      { label: "Electricity Duty", value: option.currentBillBreakdown.duty },
-      ...(option.currentBillBreakdown.todPenalty > 0 ? [{ label: "ToD Peak Penalty", value: option.currentBillBreakdown.todPenalty }] : [])
-    ])
-  ] : null);
+  // ================= POSSIBLE SAVINGS BREAKDOWN (SOLAR OFFSET) =================
+  const saveEnergyCharges = hideFlags.saveEnergyCharges !== false;
+  const saveElectricityDuty = hideFlags.saveElectricityDuty !== false;
+  const saveWheelingFac = hideFlags.saveWheelingFac !== false;
+  const saveTodRebate = hideFlags.saveTodRebate !== false;
 
-  if (billItems && billItems.length > 0) {
-    doc.setTextColor(COLORS.black);
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text("Current Bill Breakdown", margin, yPos);
-    yPos += 6;
-    
-    const billData = [];
-    billItems.forEach(item => {
-      if (!item.isHidden && item.value !== 0) {
-        billData.push([item.label, formatCurrency(item.value)]);
-      }
-    });
-    billData.push(["-------------------", "-------------------"]);
-    const billTotal = option.currentBillBreakdown?.total || billItems.reduce((s, it) => s + (it.value || 0), 0);
-    billData.push(["Estimated Current Bill", formatCurrency(billTotal)]);
-    
-    doc.autoTable({
-      startY: yPos,
-      body: billData,
-      theme: "plain",
-      columnStyles: {
-        0: { fontStyle: "normal", width: 120 },
-        1: { halign: "right", fontStyle: "normal" }
-      },
-      didParseCell: function (data) {
-        if (data.row.raw[0].includes("Estimated Current Bill") || data.row.raw[0].includes("Total Current Bill")) {
-          data.cell.styles.fontStyle = "bold";
-          // Unhighlighted as requested: current bill breakdown should not be highlighted
-        }
-      },
-      margin: { left: margin },
-    });
-    yPos = doc.lastAutoTable.finalY + 12;
-  }
+  const cbb = option.currentBillBreakdown || {};
+  const sb = option.savingsBreakdown || {};
+  const offsetFraction = (input.monthlyUnits > 0 && option.offsetUnits > 0)
+    ? Math.min(1, option.offsetUnits / input.monthlyUnits)
+    : 1;
 
-  // Estimated Savings summary
+  const fullEnergy = cbb.energyCharge || (option.monthlySavings ? Math.round(option.monthlySavings * 0.85) : 0);
+  const fullDuty = cbb.duty || (fullEnergy ? Math.round(fullEnergy * 0.16) : 0);
+  const fullWheeling = cbb.wheelingFac || 0;
+
+  const energyOffsetMonthly = Math.round(fullEnergy * offsetFraction);
+  const dutyOffsetMonthly = Math.round(fullDuty * offsetFraction);
+  const wheelingOffsetMonthly = Math.round(fullWheeling * offsetFraction);
+  const todRebateMonthly = sb.todDaytimeRebate || 0;
+
   doc.setTextColor(COLORS.black);
-  doc.setFontSize(14);
+  doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
-  doc.text("Estimated Savings", margin, yPos);
+  doc.text("Possible Savings Breakdown (Solar Offset)", margin, yPos);
   yPos += 5;
-  
-  doc.setFontSize(9);
+
+  doc.setFontSize(8);
   doc.setFont("helvetica", "italic");
   doc.setTextColor(COLORS.textLight);
-  doc.text("* Note: These are system-generated estimates and actual figures may vary.", margin, yPos);
-  yPos += 8;
+  doc.text("Electricity bill components offset & reduced through rooftop solar generation:", margin, yPos);
+  yPos += 6;
 
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(COLORS.text);
-  
-  const savingsData = [];
-  
+  const savingsTableBody = [];
+  if (saveEnergyCharges && energyOffsetMonthly > 0) {
+    savingsTableBody.push([
+      "Energy Charges Offset",
+      formatCurrency(energyOffsetMonthly),
+      formatCurrency(energyOffsetMonthly * 12),
+      "Direct slab-wise energy charge reduction from solar generation"
+    ]);
+  }
+  if (saveElectricityDuty && dutyOffsetMonthly > 0) {
+    savingsTableBody.push([
+      "Electricity Duty Offset",
+      formatCurrency(dutyOffsetMonthly),
+      formatCurrency(dutyOffsetMonthly * 12),
+      "Avoided state electricity duty on self-generated solar units"
+    ]);
+  }
+  if (saveWheelingFac && wheelingOffsetMonthly > 0) {
+    savingsTableBody.push([
+      "Wheeling & Fuel Adjustment (FAC) Offset",
+      formatCurrency(wheelingOffsetMonthly),
+      formatCurrency(wheelingOffsetMonthly * 12),
+      "Avoided DISCOM wheeling & fuel adjustment charges"
+    ]);
+  }
+  if (saveTodRebate && todRebateMonthly > 0) {
+    savingsTableBody.push([
+      "ToD Daytime Solar Generation Credit",
+      formatCurrency(todRebateMonthly),
+      formatCurrency(todRebateMonthly * 12),
+      "Time-of-day solar generation incentive credited by DISCOM"
+    ]);
+  }
+
+  // Include any other positive savings items if present in option.savingsBreakdownList
   if (option.savingsBreakdownList) {
     const tipMap = {
-      "Slab/tariff offset": "Savings from generating your own electricity & shifting to lower MSEDCL slabs.",
-      "ToD daytime rebate": "Time-of-Day credits earned for generating solar during daytime (9AM-5PM).",
-      "Peak penalty avoided": "Using battery during peak hours (5PM-10PM) avoids expensive MSEDCL peak tariffs.",
+      "Peak penalty avoided": "Using battery during peak hours (5PM-10PM) avoids expensive peak tariffs.",
       "PF improvement": "Smart inverters maintain a high Power Factor, earning a discount from MSEDCL.",
-      "Prompt pay discount": "1% bill discount for prompt payment, easier with significantly lowered bills.",
-      "Banking loss": "MSEDCL grid-support charges on excess solar energy exported to the grid.",
+      "Prompt pay discount": "1% bill discount for prompt payment differential."
     };
-    const hasBattery = (option.batteryCapacityKwh > 0) || (option.costBreakup && option.costBreakup.battery > 0);
     option.savingsBreakdownList.forEach(item => {
-      // Exclude negative value components, banking loss, and battery-only savings on systems without battery
-      if (item.value <= 0 || item.id === 'bankingLoss' || (item.label && item.label.toLowerCase().includes('banking'))) return;
-      if (!hasBattery && (item.id === 'todPeakAvoided' || (item.label && item.label.toLowerCase().includes('peak penalty')))) return;
-      if (!item.isHidden) {
-        let label = item.label;
-        let valueStr = formatCurrency(item.value * 12);
-        let tip = tipMap[item.label] || "";
-        savingsData.push([label, valueStr, tip]);
+      if (item.value > 0 && !item.isHidden) {
+        if (tipMap[item.label]) {
+          savingsTableBody.push([
+            item.label,
+            formatCurrency(item.value),
+            formatCurrency(item.value * 12),
+            tipMap[item.label]
+          ]);
+        }
       }
     });
-    
-    savingsData.push(["-------------------", "-------------------", ""]);
-    savingsData.push(["Estimated Savings / Month (Save/mo)", formatCurrency(option.monthlySavings), "Direct monthly electricity bill reduction."]);
-    savingsData.push(["Total Annual Savings", formatCurrency(option.annualSavings), "Projected savings in the first year of operation."]);
-  } else {
-    savingsData.push(["Estimated Savings / Month (Save/mo)", formatCurrency(option.monthlySavings), "Direct monthly electricity bill reduction."]);
-    savingsData.push(["Total Annual Savings", formatCurrency(option.annualSavings), "Projected savings in the first year of operation."]);
   }
+
+  savingsTableBody.push(["-------------------", "-------------------", "-------------------", ""]);
+  savingsTableBody.push([
+    "Estimated Savings / Month (Save/mo)",
+    formatCurrency(option.monthlySavings),
+    formatCurrency(option.annualSavings),
+    "Direct monthly electricity bill reduction"
+  ]);
+  savingsTableBody.push([
+    "Total Projected Annual Savings",
+    formatCurrency(option.annualSavings),
+    formatCurrency(option.annualSavings),
+    "First year projected cumulative financial savings"
+  ]);
 
   doc.autoTable({
     startY: yPos,
-    body: savingsData,
+    head: [["Offsettable Bill Component", "Monthly Savings", "Annual Savings", "Solar Benefit Description"]],
+    body: savingsTableBody,
     theme: "plain",
+    headStyles: { fillColor: COLORS.primary, fontSize: 8.5, textColor: COLORS.white },
+    bodyStyles: { fontSize: 8, cellPadding: 2.2 },
     columnStyles: {
-      0: { fontStyle: "bold", width: 60 },
-      1: { halign: "right", fontStyle: "bold", textColor: COLORS.primary },
-      2: { fontStyle: "italic", fontSize: 9, textColor: COLORS.textLight }
+      0: { fontStyle: "normal", width: 62 },
+      1: { halign: "right", width: 28 },
+      2: { halign: "right", width: 28 },
+      3: { fontStyle: "italic", fontSize: 7.5, textColor: COLORS.textLight, width: 62 },
     },
     didParseCell: function (data) {
       if (data.row.raw[0].includes("Estimated Savings / Month") || data.row.raw[0].includes("Save/mo")) {
         data.cell.styles.fillColor = COLORS.bgLight;
         data.cell.styles.fontStyle = "bold";
         data.cell.styles.textColor = COLORS.primary;
-      } else if (data.row.raw[0].includes("Total Annual Savings")) {
+      } else if (data.row.raw[0].includes("Total Projected Annual Savings")) {
         data.cell.styles.fontStyle = "bold";
       }
     },
     margin: { left: margin },
   });
 
-  yPos = doc.lastAutoTable.finalY + 8;
+  yPos = doc.lastAutoTable.finalY + 7;
 
   // Conditionally include payback
   if (!hidePayback) {
     doc.setFont("helvetica", "bold");
     doc.setTextColor(COLORS.text);
-    doc.text(`Estimated Payback Period: `, margin, yPos);
+    doc.setFontSize(10);
+    doc.text("Estimated Payback Period: ", margin, yPos);
     doc.setFont("helvetica", "normal");
     doc.text(`${option.paybackYears.toFixed(1)} Years`, margin + 50, yPos);
-    yPos += 6;
+    yPos += 5.5;
   }
 
   doc.setFont("helvetica", "bold");
-  doc.text(`25-Year Lifetime Savings: `, margin, yPos);
+  doc.setFontSize(10);
+  doc.setTextColor(COLORS.text);
+  doc.text("25-Year Lifetime Savings: ", margin, yPos);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(COLORS.primary);
   doc.text(`${formatCurrency(option.lifetimeSavings)}`, margin + 50, yPos);
@@ -1076,19 +1186,19 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.setPage(i);
     const footerY = pageHeight - 10;
     doc.setTextColor(COLORS.text);
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setFont("helvetica", "normal");
 
     // Left: URL
     doc.text("www.cnergy.co.in", margin, footerY);
 
-    // Center: Page X of Y
-    doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, footerY, { align: "center" });
+    // Center: Page X of Y | Ref: proposalSerialNo
+    doc.text(`Page ${i} of ${totalPages}  |  Ref: ${proposalSerialNo}`, pageWidth / 2, footerY, { align: "center" });
 
     // Right: Company Name, Location & Logo
-    doc.setFontSize(8);
-    doc.text("Datlion Cnergy Pvt. Ltd.", pageWidth - margin, footerY - 4, { align: "right" });
-    doc.text("Pune, Maharashtra", pageWidth - margin, footerY, { align: "right" });
+    doc.setFontSize(7.5);
+    doc.text("DATLION CNERGY PRIVATE LIMITED", pageWidth - margin, footerY - 4, { align: "right" });
+    doc.text("GSTIN: 27AALCD8550A1ZP | Pune", pageWidth - margin, footerY, { align: "right" });
 
     if (logoResult) {
       const targetWidth = 16;

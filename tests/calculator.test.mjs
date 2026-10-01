@@ -431,6 +431,21 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.ok(allTexts.some(t => String(t).includes("Force Majeure")), "Term 2: Force Majeure must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Change in Government Policies")), "Term 3: Change in Government Policies must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Operation, Maintenance & Pass-Through Warranty")), "Term 4: Operation & Maintenance must be rendered");
+
+  // Verify Corporate From & To cards, Ref Serial No, Scope of Work & Possible Savings table
+  assert.ok(allTexts.some(t => String(t).includes("DATLION CNERGY PRIVATE LIMITED")), "DATLION CNERGY PRIVATE LIMITED must be rendered in From card");
+  assert.ok(allTexts.some(t => String(t).includes("GSTIN: 27AALCD8550A1ZP")), "Company GSTIN must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("PROPOSAL REF: DC/2026-27/PROP-1001")), "Proposal reference serial number must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Scope of Work (Turnkey EPC Delivery)")), "Scope of Work (Turnkey EPC Delivery) must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Note: All of the above are in line with MNRE guidelines")), "MNRE guidelines note must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Note: Only cabling/wiring charges will be at actuals")), "Wiring charges at actuals note must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Possible Savings Breakdown (Solar Offset)")), "Possible Savings Breakdown section heading must be rendered");
+
+  const savingsTable = mockCalls.find(c => c.body && c.body.some(row => row[0] && row[0].includes("Estimated Savings / Month")));
+  assert.ok(savingsTable, "Possible savings table must be generated in PDF");
+  assert.equal(savingsTable.head[0][0], "Offsettable Bill Component");
+  assert.equal(savingsTable.head[0][1], "Monthly Savings");
+  assert.equal(savingsTable.head[0][2], "Annual Savings");
 }
 
 console.log("calculator tests passed");
