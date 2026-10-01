@@ -270,17 +270,25 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   });
   const largeEst = calculateEstimate(largeSystemInput, DEFAULT_CONFIG);
   const largeOpt = largeEst.recommended;
-  const fixedCharge = DEFAULT_CONFIG.tariff.fixedCharge || 130;
-  const expectedMaxBaseSavings = 4000 - fixedCharge; // ₹3870
-
+  // When solar generation covers 100% or more of consumption, Save/mo and EMI must match the monthly bill
   assert.equal(
-    largeOpt.savingsBreakdown.baseSavings,
-    expectedMaxBaseSavings,
-    "100% solar offset must save the full variable bill (actual monthly bill minus fixed charge)"
+    largeOpt.monthlySavings,
+    4000,
+    "100% solar offset Save/mo must match the Monthly bill (₹4000)"
   );
-  assert.ok(
-    largeOpt.monthlySavings >= expectedMaxBaseSavings,
-    "Total Save/mo should be at least baseSavings plus any bonus incentives"
+  assert.equal(
+    largeOpt.financing.monthlyEmi,
+    4000,
+    "100% solar offset EMI must match the Monthly bill (₹4000)"
+  );
+  const totalItemizedSavings =
+    largeOpt.savingsBreakdown.baseSavings +
+    largeOpt.savingsBreakdown.todDaytimeRebate +
+    largeOpt.savingsBreakdown.promptPayDiscount;
+  assert.equal(
+    totalItemizedSavings,
+    4000,
+    "Itemized savings components must cleanly sum to the monthly bill (₹4000)"
   );
 }
 

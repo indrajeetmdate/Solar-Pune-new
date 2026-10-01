@@ -1,5 +1,5 @@
 import { DEFAULT_CONFIG, TARIFF_PROFILES, PANEL_LABELS, STRUCTURE_LABELS, SYSTEM_LABELS } from "./config.js";
-import { calculateEstimate, getPanelConfigurations, calculateSingleMeterSubsidy, distributeCapacityAcrossMeters } from "./calculator.js";
+import { calculateEstimate, calculateSolarFinancing, getPanelConfigurations, calculateSingleMeterSubsidy, distributeCapacityAcrossMeters } from "./calculator.js";
 import { parseMsebBillFile, parseMultipleMsebBillFiles } from "./billParser.js";
 import { isSupportedBillFile } from "./ocrExtractor.js";
 import { drawPanelArray, initRooftopCAD, getActiveRooftopCAD } from "./panelDiagram.js";
@@ -682,7 +682,7 @@ function renderFinancing(option, input) {
     <tbody>
       <tr style="border-bottom: 1px solid var(--line);">
         <td style="padding: 6px 8px;">Upfront Customer Payment</td>
-        <td style="text-align: right; padding: 6px 8px; font-weight: 600;">${money(fin.upfrontNetCost)}</td>
+        <td style="text-align: right; padding: 6px 8px; font-weight: 600;">${money(fin.totalPreSubsidy)}</td>
         <td style="text-align: right; padding: 6px 8px; font-weight: 600; color: var(--brand-green);">${money(fin.downPayment)}</td>
       </tr>
       <tr style="border-bottom: 1px solid var(--line); background: var(--bg-alt, #fafafa);">
@@ -3460,7 +3460,14 @@ function applySavingsConfig(estimate, input) {
     
     option.savingsBreakdownList = finalSavingsItems;
     
-    // Update calculated totals based on visible savings components
+    // Update calculated totals based on visible savings components, matching effective monthly bill
+    const effBill = input.monthlyBill > 0 ? input.monthlyBill : (option.currentBillBreakdown?.total || totalMonthlySavings);
+    if (option.offsetUnits >= (input.monthlyUnits || 0) && input.monthlyUnits > 0) {
+      totalMonthlySavings = effBill;
+    } else if (effBill > 0) {
+      totalMonthlySavings = Math.min(totalMonthlySavings, effBill);
+    }
+
     option.monthlySavings = totalMonthlySavings;
     option.annualSavings = totalMonthlySavings * 12;
     // Basic recalculation of lifetime assuming default escalation, or just simple multiple
@@ -3668,7 +3675,20 @@ function applyBreakupConfig(estimate, input, config = readConfig()) {
     option.roiPercent = option.netCost > 0 ? (option.annualSavings / option.netCost) * 100 : Infinity;
 
     if (option.financing) {
-      option.financing.principal = option.netCost;
+      const effBill = input.monthlyBill > 0 ? input.monthlyBill : (option.currentBillBreakdown?.total || 0);
+      option.financing = calculateSolarFinancing({
+        netCost: option.netCost,
+        totalPreSubsidy: option.totalPreSubsidy,
+        subsidy: option.subsidy,
+        monthlyBill: effBill,
+        monthlySavings: option.monthlySavings,
+        lifetimeSavings: option.lifetimeSavings,
+        paymentMode: input.paymentMode || "upfront",
+        loanAmountOverride: input.loanAmount,
+        interestRatePct: input.loanInterestRate ?? 9.5,
+        loanMonthlyEmiOverride: input.loanMonthlyEmi,
+        loanTenureMonthsOverride: input.loanTenureMonths,
+      });
     }
 
     option.costBreakupList = finalItems;

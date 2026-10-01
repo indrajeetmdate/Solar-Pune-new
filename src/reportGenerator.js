@@ -1043,7 +1043,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
 
     // Commercial Comparison Table
     const finTableBody = [
-      ["Upfront Customer Payment (Down Payment)", formatCurrency(fin.upfrontNetCost), formatCurrency(fin.downPayment)],
+      ["Upfront Customer Payment (Down Payment)", formatCurrency(fin.totalPreSubsidy), formatCurrency(fin.downPayment)],
       ["Loan Principal Amount (Bank Funded)", "-", formatCurrency(fin.principal)],
       ["Bank Partner Interest Rate", "-", `${fin.interestRatePct}% p.a.`],
       ["Monthly Installment (EMI)", "Rs 0 / mo", `${formatCurrency(fin.monthlyEmi)} / mo`],

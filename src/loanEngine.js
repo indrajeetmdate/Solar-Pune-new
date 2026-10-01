@@ -178,15 +178,16 @@ export function calculateSolarFinancing({
 
   let loanResult;
 
-  if (loanTenureMonthsOverride !== null && loanTenureMonthsOverride !== undefined && Number(loanTenureMonthsOverride) > 0) {
-    // Calculate EMI from custom tenure
+  // Target EMI: defaults to monthly electricity bill amount (zero out-of-pocket match)
+  let targetEmi = cleanMonthlyBill > 0 ? cleanMonthlyBill : cleanMonthlySavings;
+  if (loanMonthlyEmiOverride !== null && loanMonthlyEmiOverride !== undefined && Number(loanMonthlyEmiOverride) > 0) {
+    targetEmi = Number(loanMonthlyEmiOverride);
+  }
+
+  if (loanTenureMonthsOverride !== null && loanTenureMonthsOverride !== undefined && Number(loanTenureMonthsOverride) > 0 && (!loanMonthlyEmiOverride || Number(loanMonthlyEmiOverride) <= 0) && cleanMonthlyBill <= 0) {
+    // Calculate EMI from custom tenure only when monthly bill is unknown and tenure is explicitly requested
     loanResult = calculateLoanEmiFromTenure(loanPrincipal, cleanRate, Number(loanTenureMonthsOverride));
   } else {
-    // Target EMI: defaults to monthly electricity bill amount (zero extra burden)
-    let targetEmi = cleanMonthlyBill > 0 ? cleanMonthlyBill : cleanMonthlySavings;
-    if (loanMonthlyEmiOverride !== null && loanMonthlyEmiOverride !== undefined && Number(loanMonthlyEmiOverride) > 0) {
-      targetEmi = Number(loanMonthlyEmiOverride);
-    }
     if (targetEmi <= 0) {
       // Fallback: 5-year loan EMI
       targetEmi = calculateLoanEmiFromTenure(loanPrincipal, cleanRate, 60).monthlyEmi;

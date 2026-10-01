@@ -517,14 +517,29 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const promptPayPostSolar = calculatePromptPayDiscount(postSolarBill.energyCharge, postSolarBill.fixedCharge);
   const promptPay = Math.max(promptPayPreSolar - promptPayPostSolar, 0);
 
-  const monthlySavings = round(
-    baseSavings +
-    todSavings.daytimeRebate +
-    (hasBattery ? todSavings.peakPenaltyAvoided : 0) +
-    pfIncentive +
-    promptPay,
+  const effectiveMonthlyBill = round(
+    input.monthlyBill > 0 ? input.monthlyBill : modelCurrentBill.total,
     0
   );
+
+  let monthlySavings;
+  if (input.monthlyUnits > 0 && offsetUnits >= input.monthlyUnits) {
+    // 100% solar offset: Solar generation covers total electricity consumption, matching monthly electricity bill
+    monthlySavings = effectiveMonthlyBill;
+  } else if (input.monthlyUnits > 0) {
+    const rawSavings = round(
+      baseSavings +
+      todSavings.daytimeRebate +
+      (hasBattery ? todSavings.peakPenaltyAvoided : 0) +
+      pfIncentive +
+      promptPay,
+      0
+    );
+    const ratioSavings = round((offsetUnits / input.monthlyUnits) * effectiveMonthlyBill, 0);
+    monthlySavings = Math.min(rawSavings, ratioSavings, effectiveMonthlyBill);
+  } else {
+    monthlySavings = effectiveMonthlyBill;
+  }
   const annualSavings = monthlySavings * 12;
 
   // Current Bill Breakdown: prioritize OCR extracted charges, then manual bill reconciliation, then model bill
@@ -681,7 +696,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
     sizing,
     currentBillBreakdown,
     savingsBreakdown: {
-      baseSavings: round(baseSavings, 0),
+      baseSavings: round(Math.max(0, monthlySavings - todSavings.daytimeRebate - (hasBattery ? todSavings.peakPenaltyAvoided : 0) - pfIncentive - promptPay), 0),
       bankingLoss: round(banking.deductedUnits * avgRate, 0),
       todDaytimeRebate: todSavings.daytimeRebate,
       todPeakAvoided: hasBattery ? todSavings.peakPenaltyAvoided : 0,
@@ -710,7 +725,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       netCost,
       totalPreSubsidy,
       subsidy,
-      monthlyBill: input?.monthlyBill || 0,
+      monthlyBill: effectiveMonthlyBill,
       monthlySavings,
       lifetimeSavings: calculateLifetimeSavings(annualSavings, config),
       paymentMode: input?.paymentMode || config.financing?.defaultPaymentMode || "upfront",
