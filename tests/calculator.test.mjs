@@ -493,6 +493,12 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.ok(allTexts.some(t => String(t).includes("Pune, Maharashtra, India")), "Exclusive Pune jurisdiction must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Design & Generation Note")), "In-section System Design note must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Structural & Layout Note")), "In-section CAD note must be rendered");
+
+  // Verify Strategic Opportunity Cost & Loan EMI Note
+  assert.ok(allTexts.some(t => String(t).includes("Strategic Opportunity Cost & Loan EMI Note")), "Strategic Opportunity Cost & Loan EMI Note must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Loan EMI vs Current Bill Substitution")), "Loan EMI vs Current Bill Substitution bullet must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Save Upfront Cash & Invest in Business (Opportunity Cost)")), "Save Upfront Cash & Invest in Business bullet must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("electricity bill payments (current bill) will make the solar system 100% free in just")), "Bill-to-EMI substitution text must be rendered");
 }
 
 console.log("calculator tests passed");

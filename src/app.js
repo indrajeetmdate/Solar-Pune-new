@@ -726,7 +726,17 @@ function renderFinancing(option, input) {
         <td style="text-align: right; padding: 8px; color: var(--brand-green);">${money(fin.lifetimeNetGainWithLoan)}</td>
       </tr>
     </tbody>
-  </table>`;
+  </table>
+
+  <div style="margin-top: 14px; background: #f0fdf4; border: 1px solid #bbf7d0; border-left: 4px solid var(--brand-green, #63923E); border-radius: var(--radius); padding: 12px 14px;">
+    <div style="font-weight: 700; color: #166534; font-size: 13.5px; margin-bottom: 5px;">
+      💼 Strategic Opportunity Cost & Loan EMI Note (Option B vs Upfront Cash):
+    </div>
+    <div style="font-size: 12.5px; color: #1e293b; line-height: 1.55;">
+      • <strong>Loan EMI vs Current Bill Substitution:</strong> Paying EMI (<strong>${money(fin.monthlyEmi)}/mo</strong>) to the bank instead of current electricity bill payments makes the solar system <strong>100% free in just ${fin.tenureFormatted}</strong>, followed by <strong>${fin.freeElectricityYears} years</strong> of ₹0 electricity bills.<br/>
+      • <strong>Save Upfront Cash & Invest in Business (Opportunity Cost):</strong> Preserve <strong>${money(fin.totalPreSubsidy)}</strong> in upfront cash and invest it in your business or commercial expansion (earning 15%–25%+ annual business returns) while your existing electricity bill budget pays off the entire solar power plant!
+    </div>
+  </div>`;
 
   container.innerHTML = html;
 }

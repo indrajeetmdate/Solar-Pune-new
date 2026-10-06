@@ -995,13 +995,13 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9.5);
     doc.setTextColor(COLORS.primary);
-    doc.text("Zero Out-of-Pocket Principle", margin + 5, yPos + 6);
+    doc.text("Zero Out-of-Pocket Principle & Strategic Capital Advantage", margin + 5, yPos + 6);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
     doc.setTextColor(COLORS.text);
     const zeroPocketDesc = fin.isZeroOutOfPocket
-      ? `Instead of paying MSEDCL Rs ${formatCurrency(fin.targetBillAmount)}/mo, you redirect that exact amount as a bank EMI (${formatCurrency(fin.monthlyEmi)}/mo). You incur Rs 0 extra monthly burden, and after ${fin.tenureFormatted}, the entire system is 100% owned, giving you free electricity for the next ${fin.freeElectricityYears} years!`
+      ? `Instead of paying your current MSEDCL electricity bill of Rs ${formatCurrency(fin.targetBillAmount)}/mo, you redirect that exact amount as a bank EMI (${formatCurrency(fin.monthlyEmi)}/mo). You incur Rs 0 extra monthly burden, and in just ${fin.tenureFormatted}, the entire system is 100% free and fully owned, giving you free electricity for the next ${fin.freeElectricityYears} years!`
       : `Finance your solar plant with an affordable bank EMI of ${formatCurrency(fin.monthlyEmi)}/mo for ${fin.tenureFormatted}, after which you enjoy 100% free solar power for the remaining ${fin.freeElectricityYears} years of system life.`;
     const splitFinDesc = doc.splitTextToSize(zeroPocketDesc, pageWidth - margin * 2 - 10);
     doc.text(splitFinDesc, margin + 5, yPos + 12);
@@ -1098,28 +1098,76 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
       margin: { left: margin },
     });
 
-    yPos = doc.lastAutoTable.finalY + 8;
+    yPos = doc.lastAutoTable.finalY + 5;
+
+    // Strategic EMI & Opportunity Cost Advantage Card
+    const optCostCardW = pageWidth - margin * 2;
+    const bulletIndent = 6;
+    const emiSubstText = `Paying EMI (${formatCurrency(fin.monthlyEmi)}/mo) to the bank instead of electricity bill payments (current bill) will make the solar system 100% free in just ${fin.tenureFormatted} (Option B vs Upfront Cash comparison). You incur zero extra monthly burden, and after payoff, you enjoy ${fin.freeElectricityYears} years of 100% free electricity!`;
+    const oppCostText = `Save upfront cash (${formatCurrency(fin.totalPreSubsidy)}) and invest it in your business or high-yield assets (opportunity cost advantage). Keeping capital liquid for business expansion or working capital while letting your existing utility bill budget pay off the solar plant is the smartest financial leverage.`;
+
+    const splitEmi = doc.splitTextToSize(emiSubstText, optCostCardW - 12);
+    const splitOpp = doc.splitTextToSize(oppCostText, optCostCardW - 12);
+    const optCostBoxH = 5 + 4 + (splitEmi.length * 3.2 + 2.5) + (splitOpp.length * 3.2 + 2);
+
+    doc.setFillColor(240, 253, 244);
+    doc.setDrawColor(187, 247, 208);
+    doc.setLineWidth(0.35);
+    doc.roundedRect(margin, yPos, optCostCardW, optCostBoxH, 1.5, 1.5, "FD");
+    doc.setFillColor(16, 185, 129);
+    doc.roundedRect(margin, yPos, 2.5, optCostBoxH, 0.8, 0.8, "F");
+
+    let cardTextY = yPos + 4.5;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(6, 95, 70);
+    doc.text("Strategic Opportunity Cost & Loan EMI Note (Option B vs Upfront Cash):", margin + bulletIndent, cardTextY);
+    cardTextY += 4.2;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(22, 101, 52);
+    doc.text("1. Loan EMI vs Current Bill Substitution:", margin + bulletIndent, cardTextY);
+    cardTextY += 3.3;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.3);
+    doc.setTextColor(51, 65, 85);
+    doc.text(splitEmi, margin + bulletIndent + 3, cardTextY);
+    cardTextY += splitEmi.length * 3.2 + 2.5;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(22, 101, 52);
+    doc.text("2. Save Upfront Cash & Invest in Business (Opportunity Cost):", margin + bulletIndent, cardTextY);
+    cardTextY += 3.3;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.3);
+    doc.setTextColor(51, 65, 85);
+    doc.text(splitOpp, margin + bulletIndent + 3, cardTextY);
+
+    yPos += optCostBoxH + 6;
 
     // Loan Advantages Box
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10.5);
+    doc.setFontSize(10);
     doc.setTextColor(COLORS.black);
     doc.text("Key Advantages of Bank Partner Solar Financing:", margin, yPos);
-    yPos += 5;
+    yPos += 4.5;
 
     const benefits = [
-      "Zero Incremental Monthly Budget: Redirect your existing electricity bill to pay off the solar plant.",
+      `Zero Incremental Monthly Budget: Paying EMI to the bank instead of bill payments makes the system free in just ${fin.tenureFormatted}.`,
+      `Save Upfront Cash for Business: Preserve ${formatCurrency(fin.totalPreSubsidy)} liquidity for business working capital, inventory, or investment opportunity cost.`,
       "Nationalized Bank Schemes: Easy processing under PM Surya Ghar with subsidized interest rates.",
       "Asset Creation & Long-Term Wealth: Switch from a perpetual utility expense to owning a high-ROI power plant.",
       "No Prepayment Penalty: Option to prepay or foreclose at any time to eliminate interest and accelerate free power."
     ];
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
+    doc.setFontSize(8.2);
     doc.setTextColor(COLORS.text);
     benefits.forEach((benefit) => {
       doc.text(`- ${benefit}`, margin + 2, yPos);
-      yPos += 4.5;
+      yPos += 4.2;
     });
 
     yPos += 2;
