@@ -481,6 +481,18 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
 
   // Verify Bank Partner Loan Proposal heading with disclaimer
   assert.ok(allTexts.some(t => String(t).includes("Bank Partner Loan Proposal") && String(t).includes("For illustrative purposes only actual cost depends on actual loan rates")), "Bank Partner Loan Proposal disclaimer title must be rendered");
+
+  // Verify Comprehensive Section Terms and Proposal-Wide Terms (EPC Protections)
+  assert.ok(allTexts.some(t => String(t).includes("System Design & Generation Feasibility Terms")), "System Design Terms category must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Rooftop Layout, Civil & Structural Responsibilities")), "Rooftop Layout Terms category must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Commercial, Pricing & Milestone Payment Terms")), "Commercial & Payment Terms category must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("MSEDCL Net Metering, Grid Interconnection & PM Surya Ghar Subsidy Terms")), "Net Metering & Subsidy Terms category must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Bank Partner Financing Facilitation Terms")), "Bank Partner Financing Terms category must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Proposal-Wide General EPC Terms & Conditions")), "Proposal-Wide General EPC Terms category must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Limitation of EPC Liability (Capped at 5%)")), "Limitation of Liability capped at 5% must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Pune, Maharashtra, India")), "Exclusive Pune jurisdiction must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Design & Generation Note")), "In-section System Design note must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Structural & Layout Note")), "In-section CAD note must be rendered");
 }
 
 console.log("calculator tests passed");

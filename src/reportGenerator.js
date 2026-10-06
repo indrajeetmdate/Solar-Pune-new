@@ -525,7 +525,24 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     },
     margin: { left: margin },
   });
-  yPos = doc.lastAutoTable.finalY + 15;
+  yPos = doc.lastAutoTable.finalY + 5;
+
+  // System Design Disclaimer Note
+  const sysNoteW = pageWidth - margin * 2;
+  const sysNoteText = "• Design & Generation Note: Solar PV generation figures are computer-simulated engineering estimations based on historical NASA/Meteonorm irradiance data. Actual power yield depends on real-time solar irradiance, weather variations, utility grid availability, and routine soft-water module cleaning.";
+  const splitSysNote = doc.splitTextToSize(sysNoteText, sysNoteW - 8);
+  const sysPillH = 4 + splitSysNote.length * 3.3;
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, yPos, sysNoteW, sysPillH, 1.2, 1.2, "FD");
+  doc.setFillColor(99, 146, 62);
+  doc.roundedRect(margin, yPos, 2.2, sysPillH, 0.8, 0.8, "F");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.3);
+  doc.setTextColor(51, 65, 85);
+  doc.text(splitSysNote, margin + 5, yPos + 3.8);
+  yPos += sysPillH + 8;
 
   let sectionNumber = 2;
 
@@ -642,7 +659,23 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
       },
       margin: { left: margin },
     });
-    yPos = doc.lastAutoTable.finalY + 12;
+    yPos = doc.lastAutoTable.finalY + 4;
+
+    const cadNoteW = pageWidth - margin * 2;
+    const cadNoteText = "• Structural & Layout Note: Rooftop CAD array layout is preliminary and subject to minor adjustments during physical installation. The client warrants that the roof slab possesses adequate structural load-bearing capacity; roof waterproofing and sealing integrity remain the client's sole responsibility.";
+    const splitCadNote = doc.splitTextToSize(cadNoteText, cadNoteW - 8);
+    const cadPillH = 4 + splitCadNote.length * 3.3;
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, yPos, cadNoteW, cadPillH, 1.2, 1.2, "FD");
+    doc.setFillColor(99, 146, 62);
+    doc.roundedRect(margin, yPos, 2.2, cadPillH, 0.8, 0.8, "F");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.3);
+    doc.setTextColor(51, 65, 85);
+    doc.text(splitCadNote, margin + 5, yPos + 3.8);
+    yPos += cadPillH + 8;
   }
 
   // ================= FINANCIAL QUOTE & SCOPE OF WORK SECTION =================
@@ -784,7 +817,9 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.setFont("helvetica", "italic");
     doc.setTextColor(COLORS.textLight);
     doc.text("* GST: 70% goods @ 5% + 30% services @ 18% = 8.9% effective rate.", margin, yPos);
-    yPos += 7;
+    yPos += 3.8;
+    doc.text("* Quotation validity: 15 days. Full contract value is payable to Datlion Cnergy Pvt. Ltd. regardless of central subsidy disbursement.", margin, yPos);
+    yPos += 6;
   } else {
     doc.addPage();
     yPos = 30;
@@ -920,7 +955,13 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.setFont("helvetica", "normal");
   doc.setTextColor(COLORS.primary);
   doc.text(`${formatCurrency(option.lifetimeSavings)}`, margin + 50, yPos);
-  yPos += 10;
+  yPos += 5.5;
+
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(7.5);
+  doc.setTextColor(COLORS.textLight);
+  doc.text("* Note: Financial payback and bill savings projections are modeled on prevailing MSEDCL tariffs and MERC net metering regulations; subject to customer consumption patterns and grid availability.", margin, yPos);
+  yPos += 8;
 
   // ================= SECTION 3 (or dynamic): Bank Partner Loan Proposal =================
   if (!hideFinancing && !hideCost && option.financing) {
@@ -1080,9 +1121,16 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
       doc.text(`- ${benefit}`, margin + 2, yPos);
       yPos += 4.5;
     });
+
+    yPos += 2;
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7.5);
+    doc.setTextColor(COLORS.textLight);
+    doc.text("* Note: Loan approval, interest rates, and final terms are governed exclusively by the lending bank. Financing delays or rejections do not alter payment milestone obligations to Datlion Cnergy Pvt. Ltd.", margin + 2, yPos);
+    yPos += 6;
   }
 
-  // ================= SECTION: Warranty and Details =================
+  // ================= SECTION: Terms & Conditions, Warranty and Details =================
   doc.addPage();
   yPos = 30;
   addHeader("Warranty and Details");
@@ -1090,14 +1138,14 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.setTextColor(COLORS.black);
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
-  doc.text(`${sectionNumber}. Warranty and Details`, margin, yPos);
+  doc.text(`${sectionNumber}. Terms & Conditions, Warranty and Details`, margin, yPos);
   yPos += 8;
   sectionNumber++;
 
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(COLORS.text);
-  doc.text("Comprehensive component warranties and manufacturer guarantees for all major system products.", margin, yPos);
+  doc.text("Comprehensive component warranties, manufacturer guarantees, and contractual terms governing this EPC proposal.", margin, yPos);
   yPos += 8;
 
   const warrantyData = [
@@ -1132,52 +1180,238 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.text("* Note: Other product warranties not mentioned above will be added later / as per project BOM.", margin, yPos);
   yPos += 9;
 
-  // Terms and Conditions for Warranty
+  // Terms and Conditions Section Title
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(COLORS.black);
-  doc.text("Terms and Conditions for Warranty", margin, yPos);
+  doc.text("Terms and Conditions for Warranty, System Design, Installation & Commercials", margin, yPos);
+  yPos += 5.5;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(COLORS.textLight);
+  doc.text("The following binding terms and conditions govern this EPC proposal and form the integral contractual basis between Datlion Cnergy Pvt. Ltd. and the Client.", margin, yPos);
   yPos += 6;
 
-  const warrantyTerms = [
+  const categorizedTerms = [
     {
-      title: "1. Natural Calamity & Extreme Weather:",
-      desc: "Equipment warranties cover manufacturing, material, and workmanship defects under standard rated operating conditions. Damages directly or indirectly caused by natural calamities, severe weather anomalies (cyclones, gale winds exceeding structure design rating, hailstorms, flooding, earthquakes, landslides), or direct lightning strikes exceeding surge suppression (SPD) capacities are excluded from manufacturer warranty and must be insured under comprehensive plant insurance."
+      categoryTitle: "A. System Design & Generation Feasibility Terms",
+      terms: [
+        {
+          title: "1. Simulated Solar Generation & Environmental Yield:",
+          desc: "All solar PV system capacities, simulated daily/monthly generation, performance ratios (PR), and carbon offset values in this proposal are computer-modeled engineering estimations based on standard test conditions (STC: 1000 W/m², 25°C, AM 1.5) and historical meteorological data (NASA SSE / Meteonorm / MNRE irradiance datasets for Pune region). These projections do not constitute a guaranteed generation yield, performance warranty, or contractual assurance of minimum power production. Actual solar energy generation is subject to local weather, cloud cover, seasonal variances, atmospheric haze, temperature fluctuations, and utility grid availability."
+        },
+        {
+          title: "2. Grid Outages, Utility Curtailment & Anti-Islanding:",
+          desc: "On-grid solar PV inverters are mandated by Central Electricity Authority (CEA) and MSEDCL regulations to disconnect instantaneously upon utility grid power failure (anti-islanding protection). Datlion Cnergy Pvt. Ltd. shall not be liable for any generation loss, deemed generation, or lost energy savings during MSEDCL grid outages, phase imbalance, frequency fluctuation, load shedding, or inverter grid-voltage tripping (over-voltage > 253V / under-voltage < 195V) caused by local distribution network instability."
+        },
+        {
+          title: "3. Future Shading Obstructions & Site Alterations:",
+          desc: "System design and array layouts are engineered based on site shading conditions surveyed at the time of proposal preparation. Datlion Cnergy Pvt. Ltd. bears no responsibility for reduced generation caused by subsequent vertical construction, neighbouring buildings, trees/vegetation growth, telecommunication towers, hoardings, or architectural modifications erected on or around the premises after commissioning."
+        },
+        {
+          title: "4. No Liquidated Damages for Generation Shortfall:",
+          desc: "Under no circumstances shall Datlion Cnergy Pvt. Ltd. be subject to liquidated damages, financial penalties, tariff compensation, or deemed savings offsets for any generation shortfall or performance ratio variance."
+        }
+      ]
     },
     {
-      title: "2. Force Majeure:",
-      desc: "Neither the contractor nor original manufacturers shall be held liable for any delay, performance shortfall, or warranty voidance arising from Force Majeure events beyond reasonable human control, including but not limited to war, civil disturbances, riots, sabotage, fire, epidemics, labor disputes, or statutory grid shutdowns."
+      categoryTitle: "B. Rooftop Layout, Civil & Structural Responsibilities",
+      terms: [
+        {
+          title: "1. Roof Structural Soundness & Load-Bearing Capacity:",
+          desc: "The client unconditionally certifies and warrants that the designated roof slab, purlins, trusses, or structural members possess adequate load-bearing structural integrity to support the dead load of solar PV modules, mounting structures, ballast, and dynamic wind uplift forces (engineered for wind speeds up to 150 km/h). Datlion Cnergy Pvt. Ltd. disclaims all liability for pre-existing structural weakness, roof deflection, building settlement, or structural collapse."
+        },
+        {
+          title: "2. Waterproofing & Roof Seepage Disclaimer:",
+          desc: "While Datlion Cnergy Pvt. Ltd. employs standard engineering practices for base plate anchoring, chemical grouting, and fastener weatherproofing, roof waterproofing integrity remains the sole responsibility of the client. EPC assumes no liability for pre-existing or post-installation water ingress, ceiling dampness, cracks, or seepage in aged, unsealed, or compromised roof slabs. Any specialized waterproofing membranes or re-sealing shall be arranged and funded entirely by the client."
+        },
+        {
+          title: "3. Unobstructed Rooftop Access & Safe Working Conditions:",
+          desc: "The client shall provide safe, unobstructed, and permanent rooftop access (via staircase or secured ladder) for installation personnel, materials, and ongoing maintenance. The client must ensure a hazard-free work area conforming to rooftop occupational safety standards."
+        },
+        {
+          title: "4. Preliminary CAD Blueprint & Field Adjustments:",
+          desc: "The rooftop CAD drawing included herein represents an indicative layout. Datlion Cnergy Pvt. Ltd. reserves the right to make minor adjustments to module layout, string configurations, walkway clearances, or inverter mounting positions during actual physical execution to accommodate site-specific conduit runs, plumbing vents, structural beams, or obstacle clearances without compromising total contracted DC capacity."
+        },
+        {
+          title: "5. Module Cleaning & Pressurized Soft-Water Supply:",
+          desc: "Optimal solar generation requires regular module washing (recommended fortnightly) using clean, low-TDS, non-abrasive soft water. The client is solely responsible for providing pressurized water piping to the rooftop. Generation losses, hot-spots, or module degradation caused by dust accumulation, industrial fallout, bird droppings, or failure to perform periodic water washing are strictly excluded from warranty claims."
+        }
+      ]
     },
     {
-      title: "3. Change in Government Policies & Regulatory Framework:",
-      desc: "Generation estimates, solar savings, and financial payback calculations are based strictly on prevailing MERC (Maharashtra Electricity Regulatory Commission) tariff orders, MSEDCL net metering rules, and MNRE PM Surya Ghar subsidy regulations. Any future retrospective or prospective amendments, changes in net metering provisions, imposition of grid-support / banking charges, revision of fixed/demand tariffs, or delays in DISCOM approvals shall not be construed as a defect or warranty violation by the installer."
+      categoryTitle: "C. Commercial, Pricing & Milestone Payment Terms",
+      terms: [
+        {
+          title: "1. Quotation Validity:",
+          desc: "All pricing, commercial terms, and equipment specifications stated in this proposal are valid for 15 calendar days from the date of issue. Upon expiry of 15 days, Datlion Cnergy Pvt. Ltd. reserves the right to revise pricing based on prevailing market fluctuations in PV module commodity prices, foreign exchange rates, or Balance of System (BOS) raw material costs."
+        },
+        {
+          title: "2. Strict Milestone Payment Schedule:",
+          desc: "Payments shall be released strictly in accordance with agreed project milestones (Advance token booking, Dispatch of panels & inverters, Completion of physical installation, and Commissioning). Equipment dispatch and site work shall be paused if preceding milestone payments are not credited in cleared funds."
+        },
+        {
+          title: "3. Retention of Title & Ownership:",
+          desc: "Legal ownership and title of all solar PV modules, inverters, structures, cables, and BOS materials delivered to the site shall remain exclusively with Datlion Cnergy Pvt. Ltd. until 100% of the total system contract value is received in full. In the event of client default or non-payment, Datlion Cnergy Pvt. Ltd. reserves the unconditional legal right to repossess and dismantle installed equipment from the premises."
+        },
+        {
+          title: "4. Penal Interest on Delayed Payments:",
+          desc: "Any overdue payment beyond 7 calendar days of milestone invoice date shall attract penal interest at 18% per annum, compounded monthly from the due date until full settlement. Datlion Cnergy Pvt. Ltd. reserves the right to demobilize installation teams and extend project completion timelines without penalty during any payment default period."
+        },
+        {
+          title: "5. Cabling, Wiring & Civil Works at Actuals:",
+          desc: "Quoted pricing covers standard bill of materials (BOM) allowances. Cabling and wiring charges will be at actual measured length of DC and AC cabling required on site. Any specialized underground trenching, multi-floor cable tray risers, core cutting, or structural civil height extensions beyond standard BOM shall be billed separately at actuals."
+        },
+        {
+          title: "6. Statutory Taxes & Regulatory Levies:",
+          desc: "Quoted pricing is based on prevailing GST rates (effective 8.9% composite rate). Any statutory revisions in GST, customs duties (BCD), ALMM mandates, or state/municipal cess announced by Central/State authorities prior to final invoicing shall be payable additionally by the client."
+        }
+      ]
     },
     {
-      title: "4. Operation, Maintenance & Pass-Through Warranty:",
-      desc: "All product warranties are original equipment manufacturer (OEM) pass-through warranties. The warranty remains in full force provided that: (a) panels are periodically washed with non-abrasive soft water, (b) the plant is operated within rated electrical parameters, and (c) no unauthorized modifications, repairs, or component tampering are carried out by uncertified third parties."
+      categoryTitle: "D. MSEDCL Net Metering, Grid Interconnection & PM Surya Ghar Subsidy Terms",
+      terms: [
+        {
+          title: "1. Unconditional Client Liability for Full Contract Value:",
+          desc: "The client is unconditionally liable to pay the Total System Cost (Inc. GST) in full to Datlion Cnergy Pvt. Ltd. The PM Surya Ghar: Muft Bijli Yojana central subsidy is a Direct Benefit Transfer (DBT) credited by the Government of India directly into the client's Aadhaar-linked bank account. Any delay, deduction, or rejection of subsidy disbursement by MNRE or the National Portal does NOT entitle the client to withhold, delay, or deduct payments owed to Datlion Cnergy Pvt. Ltd."
+        },
+        {
+          title: "2. Subsidy Eligibility & National Portal Compliance:",
+          desc: "Datlion Cnergy Pvt. Ltd. will assist with MSEDCL documentation and National Portal registration. However, subsidy approval is subject to client fulfilling statutory MNRE criteria (domestic residential consumer category, active MSEDCL bill in applicant's name, DCR-compliant modules, valid bank account mapping). EPC assumes no liability for subsidy deductions resulting from documentation discrepancies, consumer tariff reclassifications, or governmental policy changes."
+        },
+        {
+          title: "3. DISCOM Grid Sanction & Distribution Transformer (DT) Capacity:",
+          desc: "Net metering grid connectivity is strictly subject to MSEDCL technical feasibility, local distribution transformer (DT) solar loading capacity (capped per MERC regulations), and statutory sanctioned load enhancement. Delays, capacity rejection, or refusal of net meter connectivity due to DT transformer exhaustion or utility grid constraints are outside EPC control and shall not constitute a breach by Datlion Cnergy Pvt. Ltd."
+        },
+        {
+          title: "4. Liaisoning Charges & DISCOM Processing Timelines:",
+          desc: "MSEDCL Net Metering Liaisoning & Discom Documentation Support charges are at actuals. Official DISCOM fees (registration, testing fees, infrastructure augmentation) are payable by the client. Processing and commissioning timelines are governed by MSEDCL field offices and meter testing laboratories; utility administrative delays shall not be attributed to the EPC contractor."
+        }
+      ]
+    },
+    {
+      categoryTitle: "E. Bank Partner Financing Facilitation Terms",
+      terms: [
+        {
+          title: "1. Illustrative Financing Projections:",
+          desc: "All loan calculations, EMI amounts, interest rates (e.g. 9.5% p.a.), zero out-of-pocket tenures, and financial payback projections presented in this proposal are purely illustrative and indicative. Actual loan terms, approved loan amounts, interest rates, processing fees, and repayment tenures are determined solely by the lending financial institution (SBI, Canara Bank, Union Bank, or partner NBFCs) based on borrower eligibility and underwriting standards."
+        },
+        {
+          title: "2. Facilitation Only - No Underwriting Guarantee:",
+          desc: "Datlion Cnergy Pvt. Ltd. acts solely as an EPC technology facilitator providing project cost documentation and does NOT act as a bank, financial institution, or credit underwriter. EPC provides no guarantee of loan sanction, interest rate fixation, or credit approval."
+        },
+        {
+          title: "3. Independent Milestone Payment Obligations:",
+          desc: "The client's obligation to make milestone payments to Datlion Cnergy Pvt. Ltd. remains completely independent of their bank loan processing. Any loan approval delay, verification hold, or loan rejection by the lending institution shall not relieve the client of payment obligations or extend agreed EPC project payment milestones."
+        }
+      ]
+    },
+    {
+      categoryTitle: "F. Terms and Conditions for Warranty & OEM Pass-Through",
+      terms: [
+        {
+          title: "1. Original Equipment Manufacturer (OEM) Pass-Through:",
+          desc: "All equipment warranties for Solar PV Modules (12-year product warranty / 30-year performance warranty), Inverters (10-year warranty), and Balance of System (BOS) switchgear are backed directly by the respective OEMs. Datlion Cnergy Pvt. Ltd. facilitates manufacturer RMA claims, but legal and financial liability for component replacement, repair, or manufacturing defects rests solely with the original equipment manufacturers."
+        },
+        {
+          title: "2. Natural Calamity & Extreme Weather:",
+          desc: "Equipment warranties cover manufacturing, material, and workmanship defects under standard rated operating conditions. Damages directly or indirectly caused by natural calamities, severe weather anomalies (cyclones, gale winds exceeding structure design rating, hailstorms, flooding, earthquakes, landslides), or direct lightning strikes exceeding surge suppression (SPD) capacities are excluded from manufacturer warranty and must be insured under comprehensive plant insurance."
+        },
+        {
+          title: "3. Force Majeure:",
+          desc: "Neither the contractor nor original manufacturers shall be held liable for any delay, performance shortfall, or warranty voidance arising from Force Majeure events beyond reasonable human control, including but not limited to war, civil disturbances, riots, sabotage, fire, epidemics, labor disputes, or statutory grid shutdowns."
+        },
+        {
+          title: "4. Change in Government Policies & Regulatory Framework:",
+          desc: "Generation estimates, solar savings, and financial payback calculations are based strictly on prevailing MERC (Maharashtra Electricity Regulatory Commission) tariff orders, MSEDCL net metering rules, and MNRE PM Surya Ghar subsidy regulations. Any future retrospective or prospective amendments, changes in net metering provisions, imposition of grid-support / banking charges, revision of fixed/demand tariffs, or delays in DISCOM approvals shall not be construed as a defect or warranty violation by the installer."
+        },
+        {
+          title: "5. Operation, Maintenance & Pass-Through Warranty:",
+          desc: "All product warranties are original equipment manufacturer (OEM) pass-through warranties. The warranty remains in full force provided that: (a) panels are periodically washed with non-abrasive soft water, (b) the plant is operated within rated electrical parameters, and (c) no unauthorized modifications, repairs, or component tampering are carried out by uncertified third parties."
+        },
+        {
+          title: "6. Grid Surges & External Electrical Disturbances:",
+          desc: "Equipment failures caused by utility grid surges, transformer short circuits, phase drops, lightning induction exceeding Type-II SPD protection ratings, absence of dedicated earth pits, soil moisture depletion, or tampering with electrical earthing conductors are excluded from warranty coverage."
+        }
+      ]
+    },
+    {
+      categoryTitle: "G. Proposal-Wide General EPC Terms & Conditions",
+      terms: [
+        {
+          title: "1. Limitation of EPC Liability (Capped at 5%):",
+          desc: "To the maximum extent permitted by applicable law, the total cumulative aggregate liability of Datlion Cnergy Pvt. Ltd., its directors, officers, employees, and subcontractors for any and all claims, disputes, breaches of contract, indemnity claims, or torts arising out of or related to this proposal or the resulting project shall be strictly capped and limited to a maximum of 5% of the total contract value actually received by Datlion Cnergy Pvt. Ltd. under this proposal."
+        },
+        {
+          title: "2. Exclusion of Consequential, Indirect & Downtime Damages:",
+          desc: "In no event shall Datlion Cnergy Pvt. Ltd. be liable to the client or any third party for any indirect, special, incidental, punitive, exemplary, or consequential damages, including but not limited to loss of anticipated electricity bill savings, loss of business revenue, commercial downtime, power outage losses, or utility penal charges, even if advised of the possibility of such damages."
+        },
+        {
+          title: "3. Site Facilities & Free Utilities:",
+          desc: "The client shall provide, at zero cost to Datlion Cnergy Pvt. Ltd.: (a) continuous electrical power supply for installation machinery, welding tools, and commissioning tests, (b) adequate water supply for civil grouting, foundation curing, and cleaning, and (c) safe, dry, locked, and weatherproof on-site storage for materials, tools, and equipment throughout project execution."
+        },
+        {
+          title: "4. Material Custody & Risk of Loss at Site:",
+          desc: "Upon physical delivery of solar panels, inverters, mounting structures, and BOS materials to the client's premises, all risk of loss, damage, theft, pilferage, vandalism, water immersion, or fire shall immediately transfer to the client. The client is advised to maintain adequate on-site custody and transit/storage insurance until final commissioning."
+        },
+        {
+          title: "5. Project Cancellation & Token Forfeiture:",
+          desc: "In the event the client cancels the order after contract signing or advance token payment, the advance booking token shall be fully forfeited to cover engineering site survey, CAD modeling, and procurement overheads. The client shall additionally reimburse Datlion Cnergy Pvt. Ltd. for all non-cancellable customized fabricated structures, ordered equipment, and transport expenses incurred up to the cancellation date."
+        },
+        {
+          title: "6. Intellectual Property & Design Ownership:",
+          desc: "All system sizing computations, CAD rooftop layout drawings, single-line diagrams (SLD), 3D shadow models, and engineering proposals generated by Datlion Cnergy Pvt. Ltd. remain the proprietary intellectual property of Datlion Cnergy Pvt. Ltd. The client shall not disclose, replicate, or use these engineering designs for third-party execution or competitive tendering without prior written authorization."
+        },
+        {
+          title: "7. Dispute Resolution & Exclusive Jurisdiction:",
+          desc: "Any dispute, claim, or difference arising out of or relating to this proposal, contract execution, or equipment installation shall first be addressed through good-faith executive negotiation. If unresolved within 30 days, the dispute shall be submitted to the exclusive jurisdiction of the competent courts of law in Pune, Maharashtra, India, to the exclusion of all other courts."
+        }
+      ]
     }
   ];
 
-  warrantyTerms.forEach(term => {
-    const splitDesc = doc.splitTextToSize(term.desc, pageWidth - margin * 2);
-    const neededHeight = 4 + splitDesc.length * 3.6 + 4;
-    if (yPos + neededHeight > pageHeight - 22) {
+  categorizedTerms.forEach(cat => {
+    // If remaining page height is too small for category header, add page
+    if (yPos + 16 > pageHeight - 22) {
       doc.addPage();
       yPos = 30;
-      addHeader("Warranty and Details (Contd.)");
+      addHeader("Terms and Conditions (Contd.)");
     }
 
+    doc.setFillColor(241, 245, 249);
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, yPos, pageWidth - margin * 2, 6.2, 1, 1, "FD");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
-    doc.setTextColor(COLORS.text);
-    doc.text(term.title, margin, yPos);
-    yPos += 4;
+    doc.setTextColor(COLORS.primary);
+    doc.text(cat.categoryTitle, margin + 3.5, yPos + 4.3);
+    yPos += 8.5;
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(COLORS.textLight);
-    doc.text(splitDesc, margin, yPos);
-    yPos += splitDesc.length * 3.6 + 3;
+    cat.terms.forEach(term => {
+      const splitDesc = doc.splitTextToSize(term.desc, pageWidth - margin * 2);
+      const neededHeight = 4 + splitDesc.length * 3.4 + 3;
+      if (yPos + neededHeight > pageHeight - 22) {
+        doc.addPage();
+        yPos = 30;
+        addHeader("Terms and Conditions (Contd.)");
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(COLORS.text);
+      doc.text(term.title, margin, yPos);
+      yPos += 3.7;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.3);
+      doc.setTextColor(COLORS.textLight);
+      doc.text(splitDesc, margin, yPos);
+      yPos += splitDesc.length * 3.4 + 2.8;
+    });
+
+    yPos += 2;
   });
 
   // ================= SECTION: Solar System Types =================
