@@ -390,7 +390,7 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
         setPage() {}
         addImage() {}
         output() { return 'pdf-blob'; }
-        save() {}
+        save(filename) { this.savedFilename = filename; }
         splitTextToSize(text) { return [text]; }
         autoTable(opts) {
           this.lastAutoTable = { finalY: (opts.startY || 50) + (opts.body ? opts.body.length * 6 : 20) };
@@ -455,7 +455,8 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   // Verify Corporate From & To cards, Ref Serial No, Scope of Work & Possible Savings table
   assert.ok(allTexts.some(t => String(t).includes("DATLION CNERGY PRIVATE LIMITED")), "DATLION CNERGY PRIVATE LIMITED must be rendered in From card");
   assert.ok(allTexts.some(t => String(t).includes("GSTIN: 27AALCD8550A1ZP")), "Company GSTIN must be rendered");
-  assert.ok(allTexts.some(t => String(t).includes("PROPOSAL REF: DC/2026-27/PROP-1001")), "Proposal reference serial number must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("PROPOSAL REF: DC/2026-27/PROP-101")), "Proposal reference serial number must be rendered");
+  assert.equal(lastPdfInstance.savedFilename, "DC-2026-27-PROP-101.pdf", "PDF must be saved as sanitized serial number filename");
   assert.ok(allTexts.some(t => String(t).includes("Note: All of the above are in line with MNRE guidelines")), "MNRE guidelines note must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Note: Cabling/wiring charges will be at actual length of DC and AC cabling required")), "Wiring charges at actual length note must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Note: MSEDCL Net Metering Liaisoning & Discom Documentation Support charges at actuals")), "MSEDCL Liaisoning note must be rendered");

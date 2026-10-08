@@ -24,7 +24,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'stateData is required' });
     }
 
-    const proposalSerialNo = stateData.reportDisplay?.proposalSerialNo || 
+    const proposalSerialNo = req.body.proposalSerialNo ||
+                             req.body.proposal_serial_no ||
+                             stateData.reportDisplay?.proposalSerialNo || 
                              stateData.formValues?.proposalSerialNo || 
                              stateData.input?.proposalSerialNo || null;
 
@@ -53,11 +55,32 @@ export default async function handler(req, res) {
       state_data: stateData
     };
 
-    let result = await supabase
-      .from('proposals')
-      .insert([recordWithExtras])
-      .select('id')
-      .single();
+    // Check if a proposal with this unique proposal_serial_no already exists
+    let existing = null;
+    if (proposalSerialNo) {
+      const { data: found } = await supabase
+        .from('proposals')
+        .select('id')
+        .eq('proposal_serial_no', proposalSerialNo)
+        .maybeSingle();
+      existing = found;
+    }
+
+    let result;
+    if (existing && existing.id) {
+      result = await supabase
+        .from('proposals')
+        .update(recordWithExtras)
+        .eq('id', existing.id)
+        .select('id')
+        .single();
+    } else {
+      result = await supabase
+        .from('proposals')
+        .insert([recordWithExtras])
+        .select('id')
+        .single();
+    }
 
     // If database table does not yet have newly added columns, fall back gracefully to core schema
     if (result.error && (result.error.code === '42703' || (result.error.message && result.error.message.includes('column')))) {
@@ -69,11 +92,20 @@ export default async function handler(req, res) {
         state_data: stateData
       };
 
-      result = await supabase
-        .from('proposals')
-        .insert([fallbackRecord])
-        .select('id')
-        .single();
+      if (existing && existing.id) {
+        result = await supabase
+          .from('proposals')
+          .update(fallbackRecord)
+          .eq('id', existing.id)
+          .select('id')
+          .single();
+      } else {
+        result = await supabase
+          .from('proposals')
+          .insert([fallbackRecord])
+          .select('id')
+          .single();
+      }
     }
 
     if (result.error) throw result.error;
@@ -81,6 +113,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ 
       success: true, 
       id: result.data.id,
+      proposal_serial_no: proposalSerialNo,
       message: 'Proposal saved successfully'
     });
   } catch (error) {

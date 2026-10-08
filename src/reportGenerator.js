@@ -162,7 +162,10 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   const option = selectedOption || estimates.recommended;
 
   const { hidePayback, hideAreaFit, hideSubsidy, hideCost, hideFinancing, solarInstalled } = hideFlags;
-  const proposalSerialNo = hideFlags.proposalSerialNo || option.proposalSerialNo || "DC/2026-27/PROP-1001";
+  const proposalSerialNo = hideFlags.proposalSerialNo || 
+                           option.proposalSerialNo || 
+                           (typeof document !== "undefined" && document.getElementById("proposalSerialNo")?.value) || 
+                           "DC/2026-27/PROP-101";
   const customerAddress = hideFlags.customerAddress || input.customerAddress || "Pune, Maharashtra";
   const proposalDate = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 
@@ -1488,9 +1491,13 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.text("GSTIN: 27AALCD8550A1ZP | Pune", pageWidth - margin, footerY, { align: "right" });
   }
 
-  const filename = input.customerName
-    ? `DC_Energy_Proposal_${input.customerName.replace(/\s+/g, "_")}.pdf`
-    : `DC_Energy_Proposal.pdf`;
+  // Dynamic PDF naming based on proposal serial number (slashes sanitized to dashes)
+  const cleanSerial = String(proposalSerialNo || "")
+    .trim()
+    .replaceAll("/", "-")
+    .replace(/[^a-zA-Z0-9_-]/g, "");
+
+  const filename = `${cleanSerial || "DC-2026-27-PROP-101"}.pdf`;
 
   doc.save(filename);
   } catch (error) {

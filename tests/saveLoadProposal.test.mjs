@@ -723,4 +723,127 @@ assert.equal(importedSData.sizing.capacityOverride, 6.6);
 
 console.log("✓ Test 6 Passed: JSON export and import serialization verified.");
 
+// -------------------------------------------------------------
+// TEST 7: Financial Year, Auto-Incrementing Serial No & PDF Naming
+// -------------------------------------------------------------
+console.log("Testing Financial Year calculation, Auto-increment Serial Numbering, and PDF file naming...");
+
+function getFinancialYear(date = new Date()) {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  if (month >= 3) {
+    const nextYearTwoDigits = ((year + 1) % 100).toString().padStart(2, "0");
+    return `${year}-${nextYearTwoDigits}`;
+  } else {
+    const curYearTwoDigits = (year % 100).toString().padStart(2, "0");
+    return `${year - 1}-${curYearTwoDigits}`;
+  }
+}
+
+function getNextProposalSerialNo(existingProposals = null, date = new Date()) {
+  const fy = getFinancialYear(date);
+  const allProposals = [];
+
+  if (Array.isArray(existingProposals)) {
+    allProposals.push(...existingProposals);
+  } else {
+    if (typeof localStorage !== "undefined") {
+      try {
+        const raw = localStorage.getItem("solar_saved_proposals");
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) allProposals.push(...list);
+        }
+      } catch (_) {}
+      try {
+        const lastRaw = localStorage.getItem("solar_proposal_last_saved");
+        if (lastRaw) {
+          const lastSaved = JSON.parse(lastRaw);
+          if (lastSaved) allProposals.push(lastSaved);
+        }
+      } catch (_) {}
+    }
+    if (typeof window !== "undefined" && Array.isArray(window._currentServerProposals)) {
+      allProposals.push(...window._currentServerProposals);
+    }
+  }
+
+  const prefixRegex = new RegExp(`^DC[/-]${fy}[/-]PROP-(\\d+)$`, "i");
+  let maxNum = 100;
+
+  allProposals.forEach(p => {
+    if (!p) return;
+    const candidates = [
+      p.proposalSerialNo,
+      p.proposal_serial_no,
+      p.serialNo,
+      p.stateData?.reportDisplay?.proposalSerialNo,
+      p.state_data?.reportDisplay?.proposalSerialNo,
+      p.stateData?.input?.proposalSerialNo,
+      p.state_data?.input?.proposalSerialNo,
+      p.stateData?.formValues?.proposalSerialNo,
+      p.state_data?.formValues?.proposalSerialNo,
+    ];
+    candidates.forEach(cand => {
+      if (typeof cand === "string") {
+        const m = cand.trim().match(prefixRegex);
+        if (m && m[1]) {
+          const num = parseInt(m[1], 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+          }
+        }
+      }
+    });
+  });
+
+  return `DC/${fy}/PROP-${maxNum + 1}`;
+}
+
+// 7a: Financial Year calculation across fiscal boundary (April 1)
+assert.equal(getFinancialYear(new Date(2026, 9, 8)), "2026-27"); // Oct 8, 2026
+assert.equal(getFinancialYear(new Date(2027, 0, 15)), "2026-27"); // Jan 15, 2027
+assert.equal(getFinancialYear(new Date(2027, 2, 31)), "2026-27"); // March 31, 2027
+assert.equal(getFinancialYear(new Date(2027, 3, 1)), "2027-28"); // April 1, 2027
+assert.equal(getFinancialYear(new Date(2025, 11, 25)), "2025-26"); // Dec 25, 2025
+
+// 7b: Starting number is 101 when no existing proposals
+const fyDate = new Date(2026, 9, 8);
+assert.equal(getNextProposalSerialNo([], fyDate), "DC/2026-27/PROP-101");
+
+// 7c: Auto-increment by +1
+const testList = [
+  { proposalSerialNo: "DC/2026-27/PROP-101" },
+  { proposalSerialNo: "DC/2026-27/PROP-102" }
+];
+assert.equal(getNextProposalSerialNo(testList, fyDate), "DC/2026-27/PROP-103");
+
+// 7d: Gap handling (jumps above highest existing number)
+testList.push({ proposalSerialNo: "DC/2026-27/PROP-108" });
+assert.equal(getNextProposalSerialNo(testList, fyDate), "DC/2026-27/PROP-109");
+
+// 7e: Annual FY Reset - proposals from prior FY do not increase current FY sequence
+const priorYearList = [
+  { proposalSerialNo: "DC/2025-26/PROP-150" },
+  { proposalSerialNo: "DC/2025-26/PROP-199" }
+];
+assert.equal(getNextProposalSerialNo(priorYearList, fyDate), "DC/2026-27/PROP-101");
+
+// 7f: Sanitized PDF file naming (/ replaced with -)
+function getPdfDownloadFilename(serialNo) {
+  const cleanSerial = String(serialNo || "")
+    .trim()
+    .replaceAll("/", "-")
+    .replace(/[^a-zA-Z0-9_-]/g, "");
+  return `${cleanSerial || "DC-2026-27-PROP-101"}.pdf`;
+}
+
+assert.equal(getPdfDownloadFilename("DC/2026-27/PROP-101"), "DC-2026-27-PROP-101.pdf");
+assert.equal(getPdfDownloadFilename("DC/2026-27/PROP-102"), "DC-2026-27-PROP-102.pdf");
+assert.equal(getPdfDownloadFilename("DC/2027-28/PROP-101"), "DC-2027-28-PROP-101.pdf");
+assert.equal(getPdfDownloadFilename(""), "DC-2026-27-PROP-101.pdf");
+
+console.log("✓ Test 7 Passed: Financial Year, Auto-increment Serial Numbering, and PDF file naming verified.");
+
 console.log("ALL SAVE & LOAD TESTS PASSED! 🎉");

@@ -4,8 +4,8 @@
 
 -- 1. Create table with complete schema (all columns + JSONB state_data)
 CREATE TABLE IF NOT EXISTS proposals (
-  id SERIAL PRIMARY KEY,
-  proposal_serial_no VARCHAR(100),
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  proposal_serial_no VARCHAR(100) UNIQUE NOT NULL,
   customer_name VARCHAR(255),
   mobile_number VARCHAR(50),
   email_address VARCHAR(255),
@@ -18,7 +18,19 @@ CREATE TABLE IF NOT EXISTS proposals (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. Indexes for fast search and filtering
+-- 2. Enable Row Level Security (RLS) & Policies
+ALTER TABLE proposals ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public read access" ON proposals
+  FOR SELECT USING (true);
+
+CREATE POLICY "Allow public insert" ON proposals
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Allow public update" ON proposals
+  FOR UPDATE USING (true) WITH CHECK (true);
+
+-- 3. Indexes for fast search and filtering
 CREATE INDEX IF NOT EXISTS idx_proposals_serial_no ON proposals(proposal_serial_no);
 CREATE INDEX IF NOT EXISTS idx_proposals_customer_name ON proposals(customer_name);
 CREATE INDEX IF NOT EXISTS idx_proposals_mobile_number ON proposals(mobile_number);

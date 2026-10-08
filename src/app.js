@@ -128,6 +128,97 @@ function plainValue(value, suffix = "") {
   return `${value}${suffix}`;
 }
 
+/**
+ * Calculates Indian Financial Year string (e.g., '2026-27') from a date.
+ * Fiscal year runs from April 1 to March 31.
+ * @param {Date|string|number} [date=new Date()]
+ * @returns {string} Financial Year string (e.g. '2026-27')
+ */
+export function getFinancialYear(date = new Date()) {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = d.getMonth(); // 0 = Jan, 2 = Mar, 3 = Apr
+  if (month >= 3) {
+    const nextYearTwoDigits = ((year + 1) % 100).toString().padStart(2, "0");
+    return `${year}-${nextYearTwoDigits}`;
+  } else {
+    const curYearTwoDigits = (year % 100).toString().padStart(2, "0");
+    return `${year - 1}-${curYearTwoDigits}`;
+  }
+}
+
+/**
+ * Computes the next auto-incrementing proposal serial number in format:
+ * DC/{Financial_Year}/PROP-{Number} (starting at 101, resets to 101 each FY).
+ * Scans provided proposals array, local storage, and server proposals.
+ * @param {Array} [existingProposals=null] Optional array of existing proposals to scan
+ * @param {Date|string|number} [date=new Date()]
+ * @returns {string} e.g. 'DC/2026-27/PROP-101'
+ */
+export function getNextProposalSerialNo(existingProposals = null, date = new Date()) {
+  const fy = getFinancialYear(date);
+  const allProposals = [];
+
+  if (Array.isArray(existingProposals)) {
+    allProposals.push(...existingProposals);
+  } else {
+    // 1. Gather from localStorage
+    if (typeof localStorage !== "undefined") {
+      try {
+        const raw = localStorage.getItem("solar_saved_proposals");
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) allProposals.push(...list);
+        }
+      } catch (_) {}
+      try {
+        const lastRaw = localStorage.getItem("solar_proposal_last_saved");
+        if (lastRaw) {
+          const lastSaved = JSON.parse(lastRaw);
+          if (lastSaved) allProposals.push(lastSaved);
+        }
+      } catch (_) {}
+    }
+    // 2. Gather from server proposal cache if available
+    if (typeof window !== "undefined" && Array.isArray(window._currentServerProposals)) {
+      allProposals.push(...window._currentServerProposals);
+    }
+  }
+
+  // Regex to match DC/{fy}/PROP-{number} or DC-{fy}-PROP-{number}
+  const prefixRegex = new RegExp(`^DC[/-]${fy}[/-]PROP-(\\d+)$`, "i");
+
+  let maxNum = 100; // Counter starts at 101 when no existing proposals for this FY
+
+  allProposals.forEach(p => {
+    if (!p) return;
+    const candidates = [
+      p.proposalSerialNo,
+      p.proposal_serial_no,
+      p.serialNo,
+      p.stateData?.reportDisplay?.proposalSerialNo,
+      p.state_data?.reportDisplay?.proposalSerialNo,
+      p.stateData?.input?.proposalSerialNo,
+      p.state_data?.input?.proposalSerialNo,
+      p.stateData?.formValues?.proposalSerialNo,
+      p.state_data?.formValues?.proposalSerialNo,
+    ];
+    candidates.forEach(cand => {
+      if (typeof cand === "string") {
+        const m = cand.trim().match(prefixRegex);
+        if (m && m[1]) {
+          const num = parseInt(m[1], 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+          }
+        }
+      }
+    });
+  });
+
+  return `DC/${fy}/PROP-${maxNum + 1}`;
+}
+
 function readInput() {
   const safeStr = (id) => { const el = $(id); return el ? el.value.trim() : ""; };
   const safeChecked = (id) => { const el = $(id); return el ? el.checked : false; };
@@ -142,7 +233,7 @@ function readInput() {
     mobileNumber: state.internalUnlocked ? (safeStr("internalMobileNumber") || safeStr("mobileNumber")) : safeStr("mobileNumber"),
     emailAddress: state.internalUnlocked ? (safeStr("internalEmailAddress") || safeStr("emailAddress")) : safeStr("emailAddress"),
     customerAddress: safeStr("customerAddress") || "Pune, Maharashtra",
-    proposalSerialNo: safeStr("proposalSerialNo") || "DC/2026-27/PROP-1001",
+    proposalSerialNo: safeStr("proposalSerialNo") || getNextProposalSerialNo(),
     monthlyUnits: isMulti ? multiUnits : numberValue("monthlyUnits"),
     monthlyBill: isMulti ? multiBill : numberValue("monthlyBill"),
     roofArea: numberValue("roofArea"),
@@ -2714,7 +2805,22 @@ function toggleSidebar(collapsed) {
 }
 
 function resetForm() {
-  window.location.reload();
+  if (typeof window !== "undefined" && window.location && typeof window.location.reload === "function") {
+    try {
+      window.location.reload();
+      return;
+    } catch (_) {}
+  }
+  initProposalSerialNo();
+  render();
+}
+
+export function initProposalSerialNo() {
+  const el = $("proposalSerialNo");
+  if (!el) return;
+  if (!el.value || el.value === "DC/2026-27/PROP-1001" || el.value === "DC/2026-27/PROP-101") {
+    el.value = getNextProposalSerialNo();
+  }
 }
 
 function updatePresetDropdown() {
@@ -3102,7 +3208,7 @@ function attachEvents() {
         hideCost: $("hideCost")?.checked || false,
         hideFinancing: $("hideFinancing")?.checked || false,
         solarInstalled: $("solarInstalled")?.checked || false,
-        proposalSerialNo: $("proposalSerialNo")?.value || "DC/2026-27/PROP-1001",
+        proposalSerialNo: $("proposalSerialNo")?.value || getNextProposalSerialNo(),
         customerAddress: $("customerAddress")?.value || "Pune, Maharashtra",
         saveEnergyCharges: $("saveEnergyCharges")?.checked !== false,
         saveElectricityDuty: $("saveElectricityDuty")?.checked !== false,
@@ -3218,7 +3324,7 @@ function attachEvents() {
         hideCost: $("hideCost")?.checked || false,
         hideFinancing: $("hideFinancing")?.checked || false,
         solarInstalled: $("solarInstalled")?.checked || false,
-        proposalSerialNo: $("proposalSerialNo")?.value || "DC/2026-27/PROP-1001",
+        proposalSerialNo: $("proposalSerialNo")?.value || getNextProposalSerialNo(),
         customerAddress: $("customerAddress")?.value || "Pune, Maharashtra",
         saveEnergyCharges: $("saveEnergyCharges")?.checked !== false,
         saveElectricityDuty: $("saveElectricityDuty")?.checked !== false,
@@ -3409,6 +3515,7 @@ window.finishWizard = function() {
 
 updatePresetDropdown();
 attachEvents();
+initProposalSerialNo();
 render();
 
 function applySavingsConfig(estimate, input) {
@@ -3838,7 +3945,7 @@ function buildProposalSnapshot() {
     hideCost: $("hideCost")?.checked || false,
     hideFinancing: $("hideFinancing")?.checked || false,
     solarInstalled: $("solarInstalled")?.checked || false,
-    proposalSerialNo: $("proposalSerialNo")?.value || "DC/2026-27/PROP-1001",
+    proposalSerialNo: $("proposalSerialNo")?.value || getNextProposalSerialNo(),
     customerAddress: $("customerAddress")?.value || "Pune, Maharashtra",
     saveEnergyCharges: $("saveEnergyCharges")?.checked !== false,
     saveElectricityDuty: $("saveElectricityDuty")?.checked !== false,
@@ -3882,7 +3989,7 @@ function buildProposalSnapshot() {
   const custName = input.customerName || $("internalCustomerName")?.value || $("customerName")?.value || "Draft Customer";
   const mobile = input.mobileNumber || $("internalMobileNumber")?.value || $("mobileNumber")?.value || "";
   const email = input.emailAddress || $("internalEmailAddress")?.value || $("emailAddress")?.value || "";
-  const serialNo = reportDisplay.proposalSerialNo || $("proposalSerialNo")?.value || "DC/2026-27/PROP-1001";
+  const serialNo = reportDisplay.proposalSerialNo || $("proposalSerialNo")?.value || getNextProposalSerialNo();
   const sysCap = state.estimates?.recommended?.dcCapacityKw || formValues.capacityOverride || "";
   const totCost = state.estimates?.recommended?.netCost || 0;
 
@@ -3986,6 +4093,7 @@ async function saveProposalData() {
         mobileNumber: snapshot.mobileNumber,
         emailAddress: snapshot.emailAddress,
         proposalSerialNo: snapshot.proposalSerialNo,
+        proposal_serial_no: snapshot.proposalSerialNo,
         systemCapacityKw: snapshot.systemCapacityKw,
         totalCost: snapshot.totalCost,
         stateData: snapshot.stateData
@@ -4394,6 +4502,16 @@ window.loadProposalState = function(data) {
     });
   }
 
+  // Restore proposal serial number if present
+  const restoredSerial = sData.reportDisplay?.proposalSerialNo || 
+                         sData.formValues?.proposalSerialNo || 
+                         data.proposalSerialNo || 
+                         data.proposal_serial_no || 
+                         sData.input?.proposalSerialNo;
+  if (restoredSerial && $("proposalSerialNo")) {
+    $("proposalSerialNo").value = restoredSerial;
+  }
+
   // Synchronize twin fields (customer vs internal)
   const custName = $("customerName")?.value || $("internalCustomerName")?.value || sData.customerName || "";
   if ($("customerName")) $("customerName").value = custName;
@@ -4481,9 +4599,21 @@ window.loadProposalState = function(data) {
   state.isRestoringProposal = false;
 };
 
+window.getFinancialYear = getFinancialYear;
+window.getNextProposalSerialNo = getNextProposalSerialNo;
+window.initProposalSerialNo = initProposalSerialNo;
 window.saveProposalData = saveProposalData;
 window.captureFormValues = captureFormValues;
 window.exportCurrentProposalJSON = exportCurrentProposalJSON;
 window.importProposalJSONFile = importProposalJSONFile;
 window.searchProposals = searchProposals;
 window.buildProposalSnapshot = buildProposalSnapshot;
+
+export {
+  saveProposalData,
+  captureFormValues,
+  exportCurrentProposalJSON,
+  importProposalJSONFile,
+  searchProposals,
+  buildProposalSnapshot
+};
