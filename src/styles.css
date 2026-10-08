@@ -517,7 +517,7 @@ button {
   display: flex;
   flex-direction: column;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
   min-height: calc(100vh - 100px);
 }
 
@@ -617,8 +617,17 @@ button {
 }
 
 .workspace-tab-pane {
-  padding: 14px 18px 24px;
+  padding: 18px 18px 24px;
   animation: fadeInFast 0.2s ease;
+  scroll-margin-top: 130px;
+}
+
+#paneProposal {
+  padding-top: 18px;
+}
+
+#paneProposal > .detail-card:first-of-type {
+  padding: 22px 20px 20px;
 }
 
 .results-panel {

@@ -2649,6 +2649,13 @@ function switchWorkspaceTab(tabId) {
     pane.classList.toggle("active", isActive);
     pane.style.display = isActive ? "block" : "none";
   });
+  const wsHeader = document.querySelector(".workspace-header");
+  if (wsHeader) {
+    const rect = wsHeader.getBoundingClientRect();
+    if (rect.top < 55) {
+      wsHeader.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
   if (tabId === "cad") {
     const cad = getActiveRooftopCAD();
     if (cad) {
