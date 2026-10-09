@@ -492,6 +492,9 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.ok(allTexts.some(t => String(t).includes("Proposal-Wide General EPC Terms & Conditions")), "Proposal-Wide General EPC Terms category must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Limitation of EPC Liability (Capped at 5%)")), "Limitation of Liability capped at 5% must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Pune, Maharashtra, India")), "Exclusive Pune jurisdiction must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Roof Structural Soundness & Load Capacity")), "Roof Structural Soundness term must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Statutory Taxes & On-Site Material Custody")), "Statutory Taxes term must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("PM Surya Ghar Central Subsidy (Direct Benefit Transfer)")), "PM Surya Ghar subsidy term must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Design & Generation Note")), "In-section System Design note must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Structural & Layout Note")), "In-section CAD note must be rendered");
 

@@ -235,6 +235,19 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.text(`Ref: ${proposalSerialNo}`, pageWidth - margin, 15.5, { align: "right" });
   };
 
+  // Global layout safe bottom limit (272 mm on A4, leaving a generous 17mm cushion above fixed footer at 285-289mm)
+  const SAFE_BOTTOM = pageHeight - 25;
+
+  const ensureVerticalSpace = (requiredHeight, headerTitle = "Solar Proposal (Contd.)") => {
+    if (yPos + requiredHeight > SAFE_BOTTOM) {
+      doc.addPage();
+      yPos = 30;
+      addHeader(headerTitle);
+      return true;
+    }
+    return false;
+  };
+
   // ================= PAGE 1: System Design Considerations =================
   addHeader("Solar System Proposal");
   let yPos = 25;
@@ -456,6 +469,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   // Panel Layout Configuration
   const panelLayout = estimates.panelLayout;
   if (panelLayout) {
+    ensureVerticalSpace(38, "System Design Considerations (Contd.)");
     doc.setTextColor(COLORS.black);
     doc.setFontSize(12.5);
     doc.setFont("helvetica", "bold");
@@ -494,6 +508,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   }
 
   // Battery and Inverter Specifications
+  ensureVerticalSpace(32, "System Design Considerations (Contd.)");
   doc.setTextColor(COLORS.black);
   doc.setFontSize(12.5);
   doc.setFont("helvetica", "bold");
@@ -534,6 +549,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   yPos = doc.lastAutoTable.finalY + 4;
 
   // System Design Disclaimer Note (Minimized in words, safely above page footer)
+  ensureVerticalSpace(18, "System Design Considerations (Contd.)");
   const sysNoteW = pageWidth - margin * 2;
   const sysNoteText = "• Design & Generation Note: Simulated yield based on NASA/Meteonorm irradiance data. Actual output varies with weather, grid uptime, and routine soft-water module washing.";
   const splitSysNote = doc.splitTextToSize(sysNoteText, sysNoteW - 8);
@@ -670,6 +686,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     const cadNoteText = "• Structural & Layout Note: Rooftop CAD array layout is preliminary and subject to minor adjustments during physical installation. The client warrants that the roof slab possesses adequate structural load-bearing capacity; roof waterproofing and sealing integrity remain the client's sole responsibility.";
     const splitCadNote = doc.splitTextToSize(cadNoteText, cadNoteW - 8);
     const cadPillH = 4 + splitCadNote.length * 3.3;
+    ensureVerticalSpace(cadPillH + 4, "Rooftop Layout & CAD Blueprint");
     doc.setFillColor(248, 250, 252);
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.3);
@@ -832,6 +849,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   }
 
   // ================= POSSIBLE SAVINGS BREAKDOWN (SOLAR OFFSET) =================
+  ensureVerticalSpace(65, "Estimated Savings");
   const saveEnergyCharges = hideFlags.saveEnergyCharges !== false;
   const saveElectricityDuty = hideFlags.saveElectricityDuty !== false;
   const saveWheelingFac = hideFlags.saveWheelingFac !== false;
@@ -1116,6 +1134,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     const splitEmi = doc.splitTextToSize(emiSubstText, textWrapW);
     const splitOpp = doc.splitTextToSize(oppCostText, textWrapW);
     const optCostBoxH = 8.7 + 5.8 + (splitEmi.length * lineSpacing) + 3.3 + (splitOpp.length * lineSpacing) + 5.5;
+    ensureVerticalSpace(optCostBoxH + 5, "Bank Partner Loan Proposal (Contd.)");
 
     doc.setFillColor(240, 253, 244);
     doc.setDrawColor(187, 247, 208);
@@ -1155,6 +1174,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     yPos += optCostBoxH + 5;
 
     // Loan Advantages Box
+    ensureVerticalSpace(38, "Bank Partner Loan Proposal (Contd.)");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(COLORS.black);
@@ -1236,6 +1256,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   yPos += 9;
 
   // Terms and Conditions Section Title
+  ensureVerticalSpace(20, "Warranty and Details (Contd.)");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11.5);
   doc.setTextColor(COLORS.black);
@@ -1249,38 +1270,64 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   yPos += 5.5;
 
   const renderTermsGroup = (categories) => {
+    const badgeH = 6.8;
+    const badgeMarginBottom = 4.8; // ~15px clear margin-bottom below badge container
+
     categories.forEach(cat => {
+      // 1. Orphan Protection: measure badge + margin + first term
+      const firstTerm = cat.terms && cat.terms[0];
+      let firstTermH = 0;
+      if (firstTerm) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        const firstSplit = doc.splitTextToSize(firstTerm.desc, pageWidth - margin * 2);
+        firstTermH = 3.6 + (firstSplit.length * 3.1) + 2.8;
+      }
+      const totalHeaderBlockH = badgeH + badgeMarginBottom + firstTermH;
+      ensureVerticalSpace(totalHeaderBlockH, "Terms and Conditions (Contd.)");
+
+      // 2. Draw Category Pill Badge Container
       doc.setFillColor(241, 245, 249);
       doc.setDrawColor(203, 213, 225);
       doc.setLineWidth(0.3);
-      doc.roundedRect(margin, yPos, pageWidth - margin * 2, 5.5, 1, 1, "FD");
+      doc.roundedRect(margin, yPos, pageWidth - margin * 2, badgeH, 1.2, 1.2, "FD");
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8.2);
       doc.setTextColor(COLORS.primary);
-      doc.text(cat.categoryTitle, margin + 3.5, yPos + 3.8);
-      yPos += 7.2;
+      doc.text(cat.categoryTitle, margin + 3.5, yPos + 4.5);
+      yPos += badgeH + badgeMarginBottom;
 
+      // 3. Render child terms with atomic break-inside: avoid
       cat.terms.forEach(term => {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        const splitDesc = doc.splitTextToSize(term.desc, pageWidth - margin * 2);
+        const termTitleH = 3.6;
+        const termDescH = splitDesc.length * 3.1;
+        const termSpacing = 2.8;
+        const termTotalH = termTitleH + termDescH + termSpacing;
+
+        // Break-inside avoid: ensure whole term fits above SAFE_BOTTOM
+        ensureVerticalSpace(termTotalH, "Terms and Conditions (Contd.)");
+
         doc.setFont("helvetica", "bold");
         doc.setFontSize(7.6);
         doc.setTextColor(COLORS.text);
         doc.text(term.title, margin, yPos);
-        yPos += 3.3;
+        yPos += termTitleH;
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7);
         doc.setTextColor(COLORS.textLight);
-        const splitDesc = doc.splitTextToSize(term.desc, pageWidth - margin * 2);
         doc.text(splitDesc, margin, yPos);
-        yPos += splitDesc.length * 3.1 + 2.2;
+        yPos += termDescH + termSpacing;
       });
 
-      yPos += 1.5;
+      yPos += 2.0;
     });
   };
 
-  // --- Page 1 Terms: Categories A, B, C ---
-  const termsPage1 = [
+  const allTermsCategories = [
     {
       categoryTitle: "A. System Design & Generation Feasibility Terms",
       terms: [
@@ -1335,17 +1382,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
           desc: "Pricing reflects prevailing GST rates (effective composite 8.9%). Delivered materials stored safely at site transition to client custody, with ownership title transferring upon final milestone settlement."
         }
       ]
-    }
-  ];
-
-  renderTermsGroup(termsPage1);
-
-  // --- Page 2 Terms: Categories D, E, F, G ---
-  doc.addPage();
-  yPos = 30;
-  addHeader("Terms and Conditions (Contd.)");
-
-  const termsPage2 = [
+    },
     {
       categoryTitle: "D. MSEDCL Net Metering, Grid Interconnection & PM Surya Ghar Subsidy Terms",
       terms: [
@@ -1408,7 +1445,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     }
   ];
 
-  renderTermsGroup(termsPage2);
+  renderTermsGroup(allTermsCategories);
 
   // ================= SECTION: Solar System Types =================
   doc.addPage();
