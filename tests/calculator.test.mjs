@@ -100,6 +100,27 @@ assert.equal(commercialEstimate.options[1].systemType, "hybrid");
 assert.ok(commercialEstimate.options[1].batteryCapacityKwh > 0);
 assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hybrid with battery should calculate peak penalty avoided");
 
+// Ongrid Inverter Capacity Recommendation (1:1 with solar capacity by default)
+{
+  const est = calculateEstimate(makeInput(), DEFAULT_CONFIG);
+  const ongridOpt = est.options.find(o => o.systemType === "ongrid");
+  assert.equal(
+    ongridOpt.inverterCapacityKw,
+    ongridOpt.dcCapacityKw,
+    "Ongrid inverter capacity by default must match recommended solar capacity (dcCapacityKw)"
+  );
+
+  const estOverride = calculateEstimate(makeInput({ inverterOverride: 5 }), DEFAULT_CONFIG);
+  const ongridOverrideOpt = estOverride.options.find(o => o.systemType === "ongrid");
+  assert.equal(ongridOverrideOpt.inverterCapacityKw, 5, "Inverter override must be respected when > 0");
+
+  const hybridOpt = est.options.find(o => o.systemType === "hybrid");
+  assert.ok(
+    hybridOpt.inverterCapacityKw < hybridOpt.dcCapacityKw,
+    "Hybrid inverter capacity retains standard clipping calculation"
+  );
+}
+
 // Margin & 60 Rs/W Warning Benchmark Tests
 {
   const testInput = makeInput({ capacityOverride: 5 });

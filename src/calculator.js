@@ -437,15 +437,18 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
 
   const dcCapacityWp = dcCapacityKw * 1000;
 
-  // FIX C1: Apply industry-standard DC:AC clipping ratio of 1.2
-  // A 10 kWp DC array pairs with an ~8.3 kW AC inverter, not 10 kW.
+  // On-grid inverter capacity defaults to 1:1 match with recommended solar capacity (dcCapacityKw).
+  // For hybrid/offgrid, apply DC:AC clipping ratio and minimum backup load requirements.
   const dcToAcRatio = 1.2;
   const inverterCapacityKw =
     input.inverterOverride > 0
       ? input.inverterOverride
-      : Math.max(
-          round(dcCapacityKw / dcToAcRatio, 1),
-          systemType === "ongrid" ? 0 : dcCapacityKw * ((input.backupLoadPercent || 50) / 100)
+      : (systemType.startsWith("ongrid")
+          ? dcCapacityKw
+          : Math.max(
+              round(dcCapacityKw / dcToAcRatio, 1),
+              dcCapacityKw * ((input.backupLoadPercent || 50) / 100)
+            )
         );
   const inverterCapacityW = inverterCapacityKw * 1000;
   // FIX C2: Pass dcCapacityKw so battery can scale with PV capacity
@@ -726,7 +729,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
     systemType,
     panelType,
     dcCapacityKw: round(dcCapacityKw, 2),
-    inverterCapacityKw: round(inverterCapacityKw, 1),
+    inverterCapacityKw: round(inverterCapacityKw, 2),
     batteryCapacityKwh: round(batteryCapacityKwh, 1),
     dailyGeneration,
     monthlyGeneration,
