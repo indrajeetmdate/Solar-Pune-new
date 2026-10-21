@@ -2259,6 +2259,16 @@ function setupCadEventListeners(cad) {
     updateActiveViewButtons(view);
   };
 
+  // Viewport Zoom & Pan Controls
+  $("cadViewZoomInBtn")?.addEventListener("click", () => cad.zoomIn());
+  $("cadViewZoomOutBtn")?.addEventListener("click", () => cad.zoomOut());
+  $("cadViewResetBtn")?.addEventListener("click", () => cad.resetView());
+
+  cad.onViewportChange = (vp) => {
+    const el = $("cadViewZoomLevel");
+    if (el) el.textContent = `${vp.zoomPercent}%`;
+  };
+
   // True North Alignment Controls
   const northAngleInput = $("cadNorthAngleInput");
   const updateNorth = (deg) => {
@@ -2439,11 +2449,20 @@ function setupCadEventListeners(cad) {
     }
   };
 
+  const syncImageRotationUI = () => {
+    const rot = Math.round(cad.image.rotation || 0);
+    const rotInput = $("cadImageRotationInput");
+    const rotSlider = $("cadImageRotationSlider");
+    if (rotInput && Number(rotInput.value) !== rot) rotInput.value = rot;
+    if (rotSlider && Number(rotSlider.value) !== rot) rotSlider.value = rot;
+  };
+
   imgInput?.addEventListener("change", (e) => {
     if (e.target.files && e.target.files[0]) {
       cad.loadCustomImage(e.target.files[0]);
       if (imgControls) imgControls.style.display = "flex";
       updateLockBtnUI();
+      syncImageRotationUI();
       // Switch active tool to move image so user can immediately reposition it
       toolBtns.forEach(t => $(t.id)?.classList.remove("active"));
       $("cadToolPanBtn")?.classList.add("active");
@@ -2465,11 +2484,58 @@ function setupCadEventListeners(cad) {
     cad.setImageZoom(cad.image.scale * 0.98);
     if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale;
   });
-  $("cadRotateImageBtn")?.addEventListener("click", () => cad.rotateImage90());
+
+  $("cadImageRotationInput")?.addEventListener("input", (e) => {
+    const val = parseFloat(e.target.value);
+    if (!isNaN(val)) {
+      if (cad.image.locked) {
+        cad.setImageLocked(false);
+        updateLockBtnUI();
+      }
+      cad.setImageRotation(val, true);
+      const slider = $("cadImageRotationSlider");
+      if (slider) slider.value = ((Math.round(val) % 360) + 360) % 360;
+    }
+  });
+
+  $("cadImageRotationSlider")?.addEventListener("input", (e) => {
+    const val = parseFloat(e.target.value);
+    if (!isNaN(val)) {
+      if (cad.image.locked) {
+        cad.setImageLocked(false);
+        updateLockBtnUI();
+      }
+      cad.setImageRotation(val, true);
+      const input = $("cadImageRotationInput");
+      if (input) input.value = ((Math.round(val) % 360) + 360) % 360;
+    }
+  });
+
+  $("cadRotateImageMinus1Btn")?.addEventListener("click", () => {
+    cad.rotateImageBy(-1);
+    syncImageRotationUI();
+  });
+
+  $("cadRotateImagePlus1Btn")?.addEventListener("click", () => {
+    cad.rotateImageBy(1);
+    syncImageRotationUI();
+  });
+
+  $("cadRotateImageBtn")?.addEventListener("click", () => {
+    cad.rotateImageBy(90);
+    syncImageRotationUI();
+  });
+
+  $("cadRotateImageResetBtn")?.addEventListener("click", () => {
+    cad.setImageRotation(0, true);
+    syncImageRotationUI();
+  });
+
   $("cadOpacitySlider")?.addEventListener("input", (e) => cad.setImageOpacity(e.target.value));
   $("cadFitImageBtn")?.addEventListener("click", () => {
     cad.resetImageTransform();
     if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale;
+    syncImageRotationUI();
   });
   $("cadRemoveImageBtn")?.addEventListener("click", () => {
     cad.removeCustomImage();

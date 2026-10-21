@@ -101,11 +101,19 @@ export class RooftopCAD {
     };
     this.yearlySunPathData = generate2DYearlySunPathData(this.sunSim.latitude, this.sunSim.longitude);
 
+    // Viewport Pan and Zoom Transformation (applies to whole canvas drawing)
+    this.viewX = options.viewX || 0;
+    this.viewY = options.viewY || 0;
+    this.viewZoom = options.viewZoom || 1.0;
+    this.isSpacePressed = false;
+
     // Interaction state
-    this.dragMode = null; // 'drag_item', 'resize_item', 'draw_shape', 'pan_image', 'rotate_compass', 'drag_obstacle', 'drag_height_front', 'drag_height_side', 'drag_bldg_height'
+    this.dragMode = null; // 'drag_item', 'resize_item', 'draw_shape', 'pan_image', 'pan_view', 'rotate_compass', 'drag_obstacle', 'drag_height_front', 'drag_height_side', 'drag_bldg_height'
     this.dragItem = null;
     this.activeResizeHandle = null; // 'nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'radius', 'height'
     this.dragStart = { x: 0, y: 0 };
+    this.dragStartWorld = { x: 0, y: 0 };
+    this.panStartView = { x: 0, y: 0 };
     this.dragOffset = { x: 0, y: 0 };
     this.initialBounds = null; // snapshot of bounds at drag start for accurate resizing
     this.drawPreview = null;
@@ -123,6 +131,7 @@ export class RooftopCAD {
     this.onViewChange = options.onViewChange || null;
     this.onNorthChange = options.onNorthChange || null;
     this.onBuildingHeightChange = options.onBuildingHeightChange || null;
+    this.onViewportChange = options.onViewportChange || null;
 
     // Layer Stack Ordering, Visibility & Opacity (Order from back to front)
     this.layerOrder = ["image", "roof", "pathways", "cutouts", "panels"];
@@ -161,13 +170,13 @@ export class RooftopCAD {
     const availH = Math.max(100, logicalH - padY * 2);
 
     if (!this.externalObstacles || this.externalObstacles.length === 0) {
-      this.scalePxPerFt = Math.min(availW / Math.max(5, this.roofLengthFt), availH / Math.max(5, this.roofBreadthFt));
-      this.scalePxPerFt = Math.max(4, Math.min(32, this.scalePxPerFt));
+      const fitScale = Math.min(availW / Math.max(5, this.roofLengthFt), availH / Math.max(5, this.roofBreadthFt));
+      this.scalePxPerFt = Math.max(0.2, Math.min(32, fitScale));
 
       this.roofW = this.roofLengthFt * this.scalePxPerFt;
       this.roofH = this.roofBreadthFt * this.scalePxPerFt;
-      this.roofX = (logicalW - this.roofW) / 2;
-      this.roofY = (logicalH - this.roofH) / 2;
+      this.roofX = Math.max(padX, (logicalW - this.roofW) / 2);
+      this.roofY = Math.max(padY, (logicalH - this.roofH) / 2);
     } else {
       let minXFt = 0;
       let maxXFt = this.roofLengthFt;
@@ -192,16 +201,16 @@ export class RooftopCAD {
       const totalWFt = Math.max(12, maxXFt - minXFt);
       const totalHFt = Math.max(12, maxYFt - minYFt);
 
-      this.scalePxPerFt = Math.min(availW / totalWFt, availH / totalHFt);
-      this.scalePxPerFt = Math.max(4, Math.min(32, this.scalePxPerFt));
+      const fitScale = Math.min(availW / totalWFt, availH / totalHFt);
+      this.scalePxPerFt = Math.max(0.2, Math.min(32, fitScale));
 
       this.roofW = this.roofLengthFt * this.scalePxPerFt;
       this.roofH = this.roofBreadthFt * this.scalePxPerFt;
 
       const bboxPxW = totalWFt * this.scalePxPerFt;
       const bboxPxH = totalHFt * this.scalePxPerFt;
-      this.roofX = (logicalW - bboxPxW) / 2 - minXFt * this.scalePxPerFt;
-      this.roofY = (logicalH - bboxPxH) / 2 - minYFt * this.scalePxPerFt;
+      this.roofX = Math.max(padX, (logicalW - bboxPxW) / 2 - minXFt * this.scalePxPerFt);
+      this.roofY = Math.max(padY, (logicalH - bboxPxH) / 2 - minYFt * this.scalePxPerFt);
     }
 
     this.clampItemsToRoof();
@@ -261,18 +270,102 @@ export class RooftopCAD {
 
   setTool(tool) {
     this.activeTool = tool;
-    if (this.canvas) {
-      if (tool === "image_pan") this.canvas.style.cursor = "grab";
-      else if (tool === "select") this.canvas.style.cursor = "default";
-      else if (tool.startsWith("draw_") || tool === "subtract" || tool === "pathway" || tool === "roof") {
-        this.canvas.style.cursor = "crosshair";
-      } else if (tool === "panel") {
-        this.canvas.style.cursor = "copy";
-      } else {
-        this.canvas.style.cursor = "default";
-      }
-    }
+    this.updateCursor();
     this.render();
+  }
+
+  updateCursor() {
+    if (!this.canvas) return;
+    if (this.isSpacePressed || this.activeTool === "image_pan" || this.activeTool === "pan") {
+      this.canvas.style.cursor = this.dragMode === "pan_view" ? "grabbing" : "grab";
+    } else if (this.activeTool === "select") {
+      this.canvas.style.cursor = "default";
+    } else if (
+      this.activeTool?.startsWith("draw_") ||
+      this.activeTool === "subtract" ||
+      this.activeTool === "pathway" ||
+      this.activeTool === "roof"
+    ) {
+      this.canvas.style.cursor = "crosshair";
+    } else if (this.activeTool === "panel") {
+      this.canvas.style.cursor = "copy";
+    } else {
+      this.canvas.style.cursor = "default";
+    }
+  }
+
+  // ================= VIEWPORT PAN & ZOOM ENGINE =================
+  screenToWorld(sx, sy) {
+    const zoom = this.viewZoom || 1.0;
+    return {
+      x: (sx - this.viewX) / zoom,
+      y: (sy - this.viewY) / zoom,
+    };
+  }
+
+  worldToScreen(wx, wy) {
+    const zoom = this.viewZoom || 1.0;
+    return {
+      x: wx * zoom + this.viewX,
+      y: wy * zoom + this.viewY,
+    };
+  }
+
+  panView(dx, dy) {
+    this.viewX += dx;
+    this.viewY += dy;
+    this.render();
+    this.notifyViewportChange();
+  }
+
+  zoomViewAt(factor, screenX, screenY) {
+    const oldZoom = this.viewZoom || 1.0;
+    const newZoom = Math.max(0.2, Math.min(5.0, oldZoom * factor));
+    if (Math.abs(newZoom - oldZoom) < 0.0001) return;
+
+    const wx = (screenX - this.viewX) / oldZoom;
+    const wy = (screenY - this.viewY) / oldZoom;
+
+    this.viewZoom = newZoom;
+    this.viewX = screenX - wx * newZoom;
+    this.viewY = screenY - wy * newZoom;
+
+    this.render();
+    this.notifyViewportChange();
+  }
+
+  zoomIn() {
+    const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+    const cx = this.canvas ? (this.canvas.width / dpr) / 2 : 400;
+    const cy = this.canvas ? (this.canvas.height / dpr) / 2 : 230;
+    this.zoomViewAt(1.25, cx, cy);
+  }
+
+  zoomOut() {
+    const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+    const cx = this.canvas ? (this.canvas.width / dpr) / 2 : 400;
+    const cy = this.canvas ? (this.canvas.height / dpr) / 2 : 230;
+    this.zoomViewAt(1 / 1.25, cx, cy);
+  }
+
+  resetView() {
+    this.viewX = 0;
+    this.viewY = 0;
+    this.viewZoom = 1.0;
+    this.autoFitRoof();
+    this.render();
+    this.notifyViewportChange();
+  }
+
+  notifyViewportChange() {
+    if (this.onViewportChange) {
+      this.onViewportChange({
+        viewX: this.viewX,
+        viewY: this.viewY,
+        viewZoom: this.viewZoom,
+        zoomPercent: Math.round(this.viewZoom * 100),
+      });
+    }
   }
 
   setShapeType(shape) {
@@ -363,6 +456,9 @@ export class RooftopCAD {
     const remaining = this.requiredPanels - this.panels.length;
     if (remaining <= 0) return;
 
+    if (this.roofX < 15) this.roofX = 15;
+    if (this.roofY < 15) this.roofY = 15;
+
     const { w, h } = this.getPanelSizePx(orientation);
     const gap = 3;
     const margin = 10;
@@ -375,6 +471,11 @@ export class RooftopCAD {
       for (let c = 0; c < maxCols && placedCount < remaining; c++) {
         const candidateX = this.roofX + margin + c * (w + gap);
         const candidateY = this.roofY + margin + r * (h + gap);
+
+        // Never place off-screen negative coordinates
+        if (candidateX < 0 || candidateY < 0) {
+          continue;
+        }
 
         // Strict boundary check inside roof
         if (
@@ -1429,18 +1530,24 @@ export class RooftopCAD {
     this.notifyChanges();
   }
 
-  setImageRotation(deg) {
-    if (this.image.locked) return;
-    this.image.rotation = (Number(deg) + 360) % 360;
+  setImageRotation(deg, force = false) {
+    if (this.image.locked && !force) return;
+    this.image.rotation = ((Math.round(Number(deg)) % 360) + 360) % 360;
     this.render();
     this.notifyChanges();
   }
 
+  rotateImageBy(deltaDeg) {
+    if (this.image.locked) {
+      this.setImageLocked(false);
+    }
+    const current = this.image.rotation || 0;
+    const nextDeg = ((Math.round(current + deltaDeg) % 360) + 360) % 360;
+    this.setImageRotation(nextDeg, true);
+  }
+
   rotateImage90() {
-    if (this.image.locked) return;
-    this.image.rotation = (this.image.rotation + 90) % 360;
-    this.render();
-    this.notifyChanges();
+    this.rotateImageBy(90);
   }
 
   setImageOpacity(op) {
@@ -1655,7 +1762,7 @@ export class RooftopCAD {
   findHandleAt(x, y) {
     if (!this.selectedItem || !this.selectedItem.item) return null;
     const handles = this.getResizeHandles(this.selectedItem.item);
-    const hitRadius = 7;
+    const hitRadius = Math.max(7, 7 / (this.viewZoom || 1));
     for (const h of handles) {
       if (Math.abs(x - h.x) <= hitRadius && Math.abs(y - h.y) <= hitRadius) {
         return h;
@@ -1698,12 +1805,16 @@ export class RooftopCAD {
     this.canvas.addEventListener(
       "wheel",
       (e) => {
-        if (this.image.isLoaded && !this.image.locked && (this.activeTool === "image_pan" || e.altKey || e.ctrlKey)) {
-          e.preventDefault();
+        e.preventDefault();
+        const pos = getPos(e);
+        if (this.image.isLoaded && !this.image.locked && e.altKey) {
           const delta = e.deltaY < 0 ? 1.02 : 0.98;
           this.setImageZoom(this.image.scale * delta);
           const slider = document.getElementById("cadZoomSlider");
           if (slider) slider.value = this.image.scale.toFixed(3);
+        } else {
+          const factor = e.deltaY < 0 ? 1.1 : 0.9;
+          this.zoomViewAt(factor, pos.x, pos.y);
         }
       },
       { passive: false }
@@ -1735,7 +1846,13 @@ export class RooftopCAD {
 
     window.addEventListener("keydown", (e) => {
       if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
-      if (e.key === "Delete" || e.key === "Backspace") {
+      if (e.code === "Space") {
+        if (!this.isSpacePressed) {
+          this.isSpacePressed = true;
+          this.updateCursor();
+        }
+        e.preventDefault();
+      } else if (e.key === "Delete" || e.key === "Backspace") {
         this.removeSelectedItems();
       } else if (e.key === "r" || e.key === "R") {
         this.rotateSelectedPanels(90);
@@ -1745,11 +1862,33 @@ export class RooftopCAD {
           this.selectAllPanels();
         }
       } else if (e.key === "+" || e.key === "=") {
-        this.scaleSelectedItems(1.1);
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          this.zoomIn();
+        } else {
+          this.scaleSelectedItems(1.1);
+        }
       } else if (e.key === "-" || e.key === "_") {
-        this.scaleSelectedItems(0.9);
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          this.zoomOut();
+        } else {
+          this.scaleSelectedItems(0.9);
+        }
+      } else if (e.key === "0") {
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          this.resetView();
+        }
       } else if (e.key === "Escape") {
         this.clearSelection();
+      }
+    });
+
+    window.addEventListener("keyup", (e) => {
+      if (e.code === "Space") {
+        this.isSpacePressed = false;
+        this.updateCursor();
       }
     });
 
@@ -1812,7 +1951,7 @@ export class RooftopCAD {
     }
 
     // TOP PLAN VIEW:
-    // 1. Check True North Compass Dial click / rotate
+    // 1. Check True North Compass Dial click / rotate (Screen Space)
     if (this.compassWidget) {
       const distToCompass = Math.hypot(x - this.compassWidget.x, y - this.compassWidget.y);
       if (distToCompass <= this.compassWidget.radius + 8) {
@@ -1821,8 +1960,33 @@ export class RooftopCAD {
       }
     }
 
-    // 2. Check if clicked an interactive resize handle on the selected item
-    const clickedHandle = this.findHandleAt(x, y);
+    // 2. Check Viewport Panning (Middle click, Space+drag, or Hand tool)
+    const isMiddleClick = e && e.button === 1;
+    const isSpacePan = this.isSpacePressed || (e && e.buttons === 1 && e.spaceKey);
+    const isPanTool = this.activeTool === "image_pan" || this.activeTool === "pan";
+
+    if (isMiddleClick || isSpacePan || isPanTool) {
+      if (isPanTool && this.image.isLoaded && !this.image.locked && e && e.altKey) {
+        this.dragMode = "pan_image";
+        this.dragOffset = { x: this.image.x, y: this.image.y };
+        if (this.canvas) this.canvas.style.cursor = "grabbing";
+        return;
+      }
+      this.dragMode = "pan_view";
+      this.panStartView = { x: this.viewX, y: this.viewY };
+      this.dragStart = { x, y };
+      if (this.canvas) this.canvas.style.cursor = "grabbing";
+      return;
+    }
+
+    // Convert Screen coordinates to World coordinates for drafting elements
+    const world = this.screenToWorld(x, y);
+    const wx = world.x;
+    const wy = world.y;
+    this.dragStartWorld = { x: wx, y: wy };
+
+    // 3. Check interactive resize handles on selected item
+    const clickedHandle = this.findHandleAt(wx, wy);
     if (clickedHandle && this.selectedItem) {
       this.dragMode = "resize_item";
       this.activeResizeHandle = clickedHandle.handle;
@@ -1844,19 +2008,9 @@ export class RooftopCAD {
       return;
     }
 
-    if (this.activeTool === "image_pan") {
-      if (this.image.locked) {
-        return;
-      }
-      this.dragMode = "pan_image";
-      this.dragOffset = { x: this.image.x, y: this.image.y };
-      this.canvas.style.cursor = "grabbing";
-      return;
-    }
-
     if (this.activeTool === "roof") {
       this.dragMode = "draw_shape";
-      this.drawPreview = { category: "roof", shape: "rectangle", startX: x, startY: y, currentX: x, currentY: y };
+      this.drawPreview = { category: "roof", shape: "rectangle", startX: wx, startY: wy, currentX: wx, currentY: wy };
       return;
     }
 
@@ -1865,21 +2019,21 @@ export class RooftopCAD {
       this.drawPreview = {
         category: "cutout",
         shape: this.addShapeType || "rectangle",
-        startX: x,
-        startY: y,
-        currentX: x,
-        currentY: y,
+        startX: wx,
+        startY: wy,
+        currentX: wx,
+        currentY: wy,
       };
       return;
     }
 
     if (this.activeTool === "pathway") {
       this.dragMode = "draw_shape";
-      this.drawPreview = { category: "pathway", shape: "rectangle", startX: x, startY: y, currentX: x, currentY: y };
+      this.drawPreview = { category: "pathway", shape: "rectangle", startX: wx, startY: wy, currentX: wx, currentY: wy };
       return;
     }
 
-    // 3. Check External Obstacles in Yard
+    // 4. Check External Obstacles in Yard
     for (let i = this.externalObstacles.length - 1; i >= 0; i--) {
       const obs = this.externalObstacles[i];
       const b = this.getObstacleScreenBounds(obs);
@@ -1888,13 +2042,13 @@ export class RooftopCAD {
         const cx = b.x + b.w / 2;
         const cy = b.y + b.h / 2;
         const r = b.radius || b.w / 2;
-        inside = (x - cx) ** 2 + (y - cy) ** 2 <= r ** 2;
+        inside = (wx - cx) ** 2 + (wy - cy) ** 2 <= r ** 2;
       } else {
-        inside = x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+        inside = wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h;
       }
 
       if (inside) {
-        if (e.shiftKey) {
+        if (e && e.shiftKey) {
           this.selectItem("obstacle", obs, true);
           return;
         }
@@ -1903,7 +2057,7 @@ export class RooftopCAD {
         }
         this.dragItem = obs;
         this.dragStartSnapshot = { x: obs.distanceFromRoofX, y: obs.distanceFromRoofY };
-        this.dragOffset = { x: x - b.x, y: y - b.y };
+        this.dragOffset = { x: wx - b.x, y: wy - b.y };
         if (this.selectedItems.length > 1) {
           this.dragMode = "drag_multi";
           this.multiDragSnapshots = this.selectedItems.map((s) => ({
@@ -1921,7 +2075,7 @@ export class RooftopCAD {
       }
     }
 
-    // 4. Hit-test internal roof layers according to dynamic layerOrder
+    // 5. Hit-test internal roof layers according to dynamic layerOrder
     for (let lIdx = this.layerOrder.length - 1; lIdx >= 0; lIdx--) {
       const layer = this.layerOrder[lIdx];
       if (!this.layerVisible[layer]) continue;
@@ -1929,8 +2083,8 @@ export class RooftopCAD {
       if (layer === "panels") {
         for (let i = this.panels.length - 1; i >= 0; i--) {
           const p = this.panels[i];
-          if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) {
-            if (e.shiftKey) {
+          if (wx >= p.x && wx <= p.x + p.w && wy >= p.y && wy <= p.y + p.h) {
+            if (e && e.shiftKey) {
               this.selectItem("panel", p, true);
               return;
             }
@@ -1939,7 +2093,7 @@ export class RooftopCAD {
             }
             this.dragItem = p;
             this.dragStartSnapshot = { x: p.x, y: p.y };
-            this.dragOffset = { x: x - p.x, y: y - p.y };
+            this.dragOffset = { x: wx - p.x, y: wy - p.y };
             if (this.selectedItems.length > 1) {
               this.dragMode = "drag_multi";
               this.multiDragSnapshots = this.selectedItems.map((s) => ({
@@ -1964,17 +2118,17 @@ export class RooftopCAD {
             const cx = c.x + c.w / 2;
             const cy = c.y + c.h / 2;
             const r = c.radius || c.w / 2;
-            inside = (x - cx) ** 2 + (y - cy) ** 2 <= r ** 2;
+            inside = (wx - cx) ** 2 + (wy - cy) ** 2 <= r ** 2;
           } else if (c.shape === "l_shape") {
-            const inV = x >= c.x && x <= c.x + c.w * 0.5 && y >= c.y && y <= c.y + c.h;
-            const inH = x >= c.x && x <= c.x + c.w && y >= c.y + c.h * 0.5 && y <= c.y + c.h;
+            const inV = wx >= c.x && wx <= c.x + c.w * 0.5 && wy >= c.y && wy <= c.y + c.h;
+            const inH = wx >= c.x && wx <= c.x + c.w && wy >= c.y + c.h * 0.5 && wy <= c.y + c.h;
             inside = inV || inH;
           } else {
-            inside = x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h;
+            inside = wx >= c.x && wx <= c.x + c.w && wy >= c.y && wy <= c.y + c.h;
           }
 
           if (inside) {
-            if (e.shiftKey) {
+            if (e && e.shiftKey) {
               this.selectItem("cutout", c, true);
               return;
             }
@@ -1983,7 +2137,7 @@ export class RooftopCAD {
             }
             this.dragItem = c;
             this.dragStartSnapshot = { x: c.x, y: c.y };
-            this.dragOffset = { x: x - c.x, y: y - c.y };
+            this.dragOffset = { x: wx - c.x, y: wy - c.y };
             if (this.selectedItems.length > 1) {
               this.dragMode = "drag_multi";
               this.multiDragSnapshots = this.selectedItems.map((s) => ({
@@ -2003,8 +2157,8 @@ export class RooftopCAD {
       } else if (layer === "pathways") {
         for (let i = this.pathways.length - 1; i >= 0; i--) {
           const pw = this.pathways[i];
-          if (x >= pw.x && x <= pw.x + pw.w && y >= pw.y && y <= pw.y + pw.h) {
-            if (e.shiftKey) {
+          if (wx >= pw.x && wx <= pw.x + pw.w && wy >= pw.y && wy <= pw.y + pw.h) {
+            if (e && e.shiftKey) {
               this.selectItem("pathway", pw, true);
               return;
             }
@@ -2013,7 +2167,7 @@ export class RooftopCAD {
             }
             this.dragItem = pw;
             this.dragStartSnapshot = { x: pw.x, y: pw.y };
-            this.dragOffset = { x: x - pw.x, y: y - pw.y };
+            this.dragOffset = { x: wx - pw.x, y: wy - pw.y };
             if (this.selectedItems.length > 1) {
               this.dragMode = "drag_multi";
               this.multiDragSnapshots = this.selectedItems.map((s) => ({
@@ -2034,11 +2188,11 @@ export class RooftopCAD {
     }
 
     // Clicked empty canvas or empty roof space: start rubber-band marquee selection
-    if (!e.shiftKey) {
+    if (!e || !e.shiftKey) {
       this.selectItem(null, null);
     }
     this.dragMode = "marquee_select";
-    this.selectionMarquee = { startX: x, startY: y, currentX: x, currentY: y };
+    this.selectionMarquee = { startX: wx, startY: wy, currentX: wx, currentY: wy };
     this.render();
   }
 
@@ -2046,12 +2200,28 @@ export class RooftopCAD {
     const logicalH = 460;
     const groundY = logicalH - 65;
 
+    // Viewport Panning Mode
+    if (this.dragMode === "pan_view") {
+      const dx = x - this.dragStart.x;
+      const dy = y - this.dragStart.y;
+      this.viewX = this.panStartView.x + dx;
+      this.viewY = this.panStartView.y + dy;
+      this.render();
+      this.notifyViewportChange();
+      return;
+    }
+
     // Hover handle cursor detection when idle
     if (!this.dragMode) {
+      if (this.isSpacePressed || this.activeTool === "image_pan" || this.activeTool === "pan") {
+        if (this.canvas) this.canvas.style.cursor = "grab";
+        return;
+      }
+
       if (this.activeView === "top" && this.compassWidget) {
         const distToCompass = Math.hypot(x - this.compassWidget.x, y - this.compassWidget.y);
         if (distToCompass <= this.compassWidget.radius + 8) {
-          this.canvas.style.cursor = "crosshair";
+          if (this.canvas) this.canvas.style.cursor = "crosshair";
           return;
         }
       }
@@ -2067,7 +2237,7 @@ export class RooftopCAD {
 
         // Check roof slab / height handle hover
         if (Math.abs(y - roofTopY) <= 16 && x >= bldgX - 15 && x <= bldgX + bldgW + 15) {
-          this.canvas.style.cursor = "ns-resize";
+          if (this.canvas) this.canvas.style.cursor = "ns-resize";
           return;
         }
 
@@ -2082,23 +2252,24 @@ export class RooftopCAD {
           const topY = groundY - obsHPx;
 
           if (Math.hypot(x - (obsX + obsW / 2), y - topY) <= 14) {
-            this.canvas.style.cursor = "ns-resize";
+            if (this.canvas) this.canvas.style.cursor = "ns-resize";
             return;
           }
         }
 
-        this.canvas.style.cursor = "default";
+        if (this.canvas) this.canvas.style.cursor = "default";
         return;
       }
 
-      const hoveredHandle = this.findHandleAt(x, y);
-      if (hoveredHandle) {
+      const world = this.screenToWorld(x, y);
+      const hoveredHandle = this.findHandleAt(world.x, world.y);
+      if (hoveredHandle && this.canvas) {
         this.canvas.style.cursor = hoveredHandle.cursor;
-      } else if (this.activeTool === "image_pan") {
-        this.canvas.style.cursor = "grab";
-      } else if (this.activeTool === "select") {
-        this.canvas.style.cursor = "default";
+        return;
       }
+
+      this.updateCursor();
+      return;
     }
 
     if (this.dragMode === "drag_bldg_height") {
@@ -2114,47 +2285,12 @@ export class RooftopCAD {
       return;
     }
 
-    if (this.dragMode === "marquee_select" && this.selectionMarquee) {
-      this.selectionMarquee.currentX = x;
-      this.selectionMarquee.currentY = y;
-      this.render();
-      return;
-    }
-
-    if (this.dragMode === "drag_multi" && this.multiDragSnapshots) {
-      const dx = x - this.dragStart.x;
-      const dy = y - this.dragStart.y;
-      this.multiDragSnapshots.forEach((snap) => {
-        if (snap.type === "panel" || snap.type === "cutout" || snap.type === "pathway") {
-          snap.item.x = snap.origX + dx;
-          snap.item.y = snap.origY + dy;
-        } else if (snap.type === "obstacle") {
-          snap.item.distanceFromRoofX = Number((snap.origDistX + dx / this.scalePxPerFt).toFixed(1));
-          snap.item.distanceFromRoofY = Number((snap.origDistY + dy / this.scalePxPerFt).toFixed(1));
-        }
-      });
-      this.render();
-      return;
-    }
-
     if (this.dragMode === "rotate_compass" && this.compassWidget) {
       const dx = x - this.compassWidget.x;
       const dy = y - this.compassWidget.y;
       const deg = Math.round((Math.atan2(dx, -dy) * 180) / Math.PI);
       this.northAngleDeg = ((deg % 360) + 360) % 360;
       this.notifyChanges();
-      this.render();
-      return;
-    }
-
-    if (this.dragMode === "drag_obstacle" && this.dragItem) {
-      const rawX = x - this.dragOffset.x;
-      const rawY = y - this.dragOffset.y;
-      this.dragItem.distanceFromRoofX = Number(((rawX - this.roofX) / this.scalePxPerFt).toFixed(1));
-      this.dragItem.distanceFromRoofY = Number(((rawY - this.roofY) / this.scalePxPerFt).toFixed(1));
-      if (this.onSelectionChange) {
-        this.onSelectionChange(this.selectedItem);
-      }
       this.render();
       return;
     }
@@ -2180,22 +2316,63 @@ export class RooftopCAD {
       return;
     }
 
-    if (this.dragMode === "draw_shape") {
-      this.drawPreview.currentX = x;
-      this.drawPreview.currentY = y;
+    // Top View World Space Drag Modes:
+    const world = this.screenToWorld(x, y);
+    const wx = world.x;
+    const wy = world.y;
+
+    if (this.dragMode === "marquee_select" && this.selectionMarquee) {
+      this.selectionMarquee.currentX = wx;
+      this.selectionMarquee.currentY = wy;
+      this.render();
+      return;
+    }
+
+    if (this.dragMode === "draw_shape" && this.drawPreview) {
+      this.drawPreview.currentX = wx;
+      this.drawPreview.currentY = wy;
+      this.render();
+      return;
+    }
+
+    if (this.dragMode === "drag_multi" && this.multiDragSnapshots) {
+      const startW = this.dragStartWorld || { x: this.dragStart.x, y: this.dragStart.y };
+      const dx = wx - startW.x;
+      const dy = wy - startW.y;
+      this.multiDragSnapshots.forEach((snap) => {
+        if (snap.type === "panel" || snap.type === "cutout" || snap.type === "pathway") {
+          snap.item.x = snap.origX + dx;
+          snap.item.y = snap.origY + dy;
+        } else if (snap.type === "obstacle") {
+          snap.item.distanceFromRoofX = Number((snap.origDistX + dx / this.scalePxPerFt).toFixed(1));
+          snap.item.distanceFromRoofY = Number((snap.origDistY + dy / this.scalePxPerFt).toFixed(1));
+        }
+      });
+      this.render();
+      return;
+    }
+
+    if (this.dragMode === "drag_obstacle" && this.dragItem) {
+      const rawX = wx - this.dragOffset.x;
+      const rawY = wy - this.dragOffset.y;
+      this.dragItem.distanceFromRoofX = Number(((rawX - this.roofX) / this.scalePxPerFt).toFixed(1));
+      this.dragItem.distanceFromRoofY = Number(((rawY - this.roofY) / this.scalePxPerFt).toFixed(1));
+      if (this.onSelectionChange) {
+        this.onSelectionChange(this.selectedItem);
+      }
       this.render();
       return;
     }
 
     if (this.dragMode === "resize_item" && this.selectedItem && this.initialBounds) {
-      this.applyResize(x, y);
+      this.applyResize(wx, wy);
       this.render();
       return;
     }
 
     if (this.dragMode === "drag_item" && this.dragItem) {
-      const rawX = x - this.dragOffset.x;
-      const rawY = y - this.dragOffset.y;
+      const rawX = wx - this.dragOffset.x;
+      const rawY = wy - this.dragOffset.y;
 
       if (this.selectedItem.type === "panel") {
         const snapped = this.applyMagneticSnapping(this.dragItem, rawX, rawY);
@@ -2215,8 +2392,9 @@ export class RooftopCAD {
     const isObs = this.selectedItem && this.selectedItem.type === "obstacle";
     const it = this.selectedItem.item;
     const b = this.initialBounds;
-    const dx = mouseX - this.dragStart.x;
-    const dy = mouseY - this.dragStart.y;
+    const startW = this.dragStartWorld || { x: this.dragStart.x, y: this.dragStart.y };
+    const dx = mouseX - startW.x;
+    const dy = mouseY - startW.y;
     const minDim = 15;
 
     if (it.shape === "circle") {
@@ -2334,8 +2512,14 @@ export class RooftopCAD {
   }
 
   handlePointerUp(x, y, e) {
+    if (this.dragMode === "pan_view") {
+      this.dragMode = null;
+      this.updateCursor();
+      return;
+    }
+
     if (this.dragMode === "pan_image") {
-      this.canvas.style.cursor = "grab";
+      if (this.canvas) this.canvas.style.cursor = "grab";
     }
 
     if (this.dragMode === "marquee_select" && this.selectionMarquee) {
@@ -2369,7 +2553,7 @@ export class RooftopCAD {
         });
 
         if (found.length > 0) {
-          if (e.shiftKey) {
+          if (e && e.shiftKey) {
             const existingIds = new Set(this.selectedItems.map((s) => s.item?.id));
             found.forEach((f) => {
               if (!existingIds.has(f.item?.id)) this.selectedItems.push(f);
@@ -2484,8 +2668,13 @@ export class RooftopCAD {
   renderTopView(logicalW, logicalH) {
     const ctx = this.ctx;
 
-    // Layer 1: Modern Dark Engineering Grid Background
+    // Layer 1: Modern Dark Engineering Grid Background (Viewport Screen Space)
     this.drawGrid(logicalW, logicalH);
+
+    // Apply Viewport Pan & Zoom Transformation across all Drafting Layers
+    ctx.save();
+    ctx.translate(this.viewX, this.viewY);
+    ctx.scale(this.viewZoom, this.viewZoom);
 
     // If sun simulation is enabled: draw polar celestial dome underlay
     if (this.sunSim.enabled) {
@@ -2531,7 +2720,9 @@ export class RooftopCAD {
     this.drawSelectionGizmo();
     this.drawDimensions();
 
-    // True North Compass Dial
+    ctx.restore();
+
+    // True North Compass Dial (Fixed in Screen Space)
     this.drawCompass(logicalW, logicalH);
   }
 
@@ -4087,6 +4278,9 @@ export class RooftopCAD {
       buildingHeightFt: this.buildingHeightFt,
       northAngleDeg: this.northAngleDeg,
       activeView: this.activeView,
+      viewX: this.viewX || 0,
+      viewY: this.viewY || 0,
+      viewZoom: this.viewZoom || 1.0,
       defaultPathwayWidthFt: this.defaultPathwayWidthFt,
       panelWidthMm: this.panelWidthMm,
       panelHeightMm: this.panelHeightMm,
@@ -4131,6 +4325,9 @@ export class RooftopCAD {
     if (savedData.buildingHeightFt !== undefined) this.buildingHeightFt = Number(savedData.buildingHeightFt);
     if (savedData.northAngleDeg !== undefined) this.northAngleDeg = Number(savedData.northAngleDeg);
     if (savedData.activeView) this.activeView = savedData.activeView;
+    if (savedData.viewX !== undefined) this.viewX = Number(savedData.viewX);
+    if (savedData.viewY !== undefined) this.viewY = Number(savedData.viewY);
+    if (savedData.viewZoom !== undefined) this.viewZoom = Number(savedData.viewZoom);
     if (savedData.defaultPathwayWidthFt !== undefined) this.defaultPathwayWidthFt = Number(savedData.defaultPathwayWidthFt);
     if (savedData.panelWidthMm !== undefined) this.panelWidthMm = Number(savedData.panelWidthMm);
     if (savedData.panelHeightMm !== undefined) this.panelHeightMm = Number(savedData.panelHeightMm);
@@ -4235,11 +4432,17 @@ export class RooftopCAD {
     const prevSelected = this.selectedItem;
     const prevSelectedItems = this.selectedItems;
     const prevMarquee = this.selectionMarquee;
+    const prevViewX = this.viewX;
+    const prevViewY = this.viewY;
+    const prevViewZoom = this.viewZoom;
 
     this.isExportingSnapshot = true;
     this.selectedItem = null;
     this.selectedItems = [];
     this.selectionMarquee = null;
+    this.viewX = 0;
+    this.viewY = 0;
+    this.viewZoom = 1.0;
 
     try {
       if (offscreen && typeof offscreen.getContext === "function") {
@@ -4272,6 +4475,9 @@ export class RooftopCAD {
       this.selectedItem = prevSelected;
       this.selectedItems = prevSelectedItems;
       this.selectionMarquee = prevMarquee;
+      this.viewX = prevViewX;
+      this.viewY = prevViewY;
+      this.viewZoom = prevViewZoom;
       if (!offscreen) {
         this.render();
       }

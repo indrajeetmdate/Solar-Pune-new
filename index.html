@@ -644,6 +644,14 @@
                   <button type="button" class="cad-icon-btn" id="cadViewSideBtn" data-view="side" title="Side Elevation View (🏛️)">🏛️</button>
                 </div>
 
+                <!-- Viewport Navigation (Zoom & Pan) -->
+                <div class="cad-btn-group" title="Canvas Viewport Navigation" style="display: inline-flex; align-items: center; gap: 2px;">
+                  <button type="button" class="cad-icon-btn" id="cadViewZoomOutBtn" title="Zoom Out Canvas Viewport [Wheel Down / -]">🔍−</button>
+                  <button type="button" class="cad-icon-btn" id="cadViewResetBtn" title="Reset Viewport & Fit [0 / Space]">⛶</button>
+                  <button type="button" class="cad-icon-btn" id="cadViewZoomInBtn" title="Zoom In Canvas Viewport [Wheel Up / +]">🔍+</button>
+                  <span id="cadViewZoomLevel" style="font-size: 10.5px; color: #94a3b8; min-width: 36px; text-align: center; font-weight: 700;">100%</span>
+                </div>
+
                 <div id="cadElevationBldgHeightGroup" class="cad-input-group" style="display: none; align-items: center; gap: 4px; padding: 0 6px; background: rgba(30, 41, 59, 0.7); border: 1px solid #334155; border-radius: 4px; height: 28px;" title="Adjust Building Height (Front & Side Elevation)">
                   <label for="cadElevationBldgHeightInput" style="font-size: 11px; font-weight: 700; color: #38bdf8; cursor: pointer;">🏢 Bldg H:</label>
                   <input type="number" id="cadElevationBldgHeightInput" value="18" min="5" max="150" step="1" style="width: 46px; height: 20px; padding: 1px 3px; font-size: 11px; background: #0f172a; border: 1px solid #475569; color: #f8fafc; border-radius: 3px; text-align: center;">
@@ -664,7 +672,7 @@
                   </div>
                   <button type="button" class="cad-icon-btn" id="cadToolPathwayBtn" data-tool="pathway" title="Draw Maintenance Walkway (🚶)">🚶</button>
                   <button type="button" class="cad-icon-btn" id="cadToolPanelBtn" data-tool="panel" title="Move & Snap Panels (☀️)">☀️</button>
-                  <button type="button" class="cad-icon-btn" id="cadToolPanBtn" data-tool="image_pan" title="Pan Aerial Image (✋)">✋</button>
+                  <button type="button" class="cad-icon-btn" id="cadToolPanBtn" data-tool="image_pan" title="Pan Entire Drawing (✋) [Space+Drag or Middle Click]">✋</button>
                 </div>
 
                 <div class="cad-bar-divider"></div>
@@ -789,7 +797,14 @@
                   <button type="button" class="cad-btn-mini" id="cadZoomOutBtn" title="Zoom Out (fine 2% step)">−</button>
                   <input type="range" id="cadZoomSlider" min="0.2" max="3.0" step="0.005" value="1.0" style="width: 70px;">
                   <button type="button" class="cad-btn-mini" id="cadZoomInBtn" title="Zoom In (fine 2% step)">+</button>
-                  <button type="button" class="cad-btn-mini" id="cadRotateImageBtn">↻ 90°</button>
+                  <span style="font-size: 11px; color: #94a3b8; margin-left: 2px;">Angle:</span>
+                  <input type="number" id="cadImageRotationInput" min="0" max="359" step="1" value="0" style="width: 48px; height: 20px; padding: 1px 3px; font-size: 11px; background: #0f172a; border: 1px solid #475569; color: #f8fafc; border-radius: 3px; text-align: center;" title="Custom Image Angle (°)">
+                  <span style="font-size: 10.5px; color: #94a3b8;">°</span>
+                  <input type="range" id="cadImageRotationSlider" min="0" max="359" step="1" value="0" style="width: 65px;" title="Rotate Image Angle">
+                  <button type="button" class="cad-btn-mini" id="cadRotateImageMinus1Btn" title="Rotate Image 1° CCW">↺ 1°</button>
+                  <button type="button" class="cad-btn-mini" id="cadRotateImagePlus1Btn" title="Rotate Image 1° CW">↻ 1°</button>
+                  <button type="button" class="cad-btn-mini" id="cadRotateImageBtn" title="Rotate Image 90° CW">↻ 90°</button>
+                  <button type="button" class="cad-btn-mini" id="cadRotateImageResetBtn" title="Reset Image Rotation to 0°">0°</button>
                   <span style="font-size: 11px; color: #94a3b8; margin-left: 2px;">Opacity:</span>
                   <input type="range" id="cadOpacitySlider" min="0.1" max="1.0" step="0.05" value="0.85" style="width: 60px;">
                   <button type="button" class="cad-btn-mini" id="cadFitImageBtn">Fit to Roof</button>
@@ -875,7 +890,7 @@
                 <div class="cad-canvas-board">
                   <canvas id="panelDiagramCanvas"></canvas>
                   <div class="cad-hint-bar">
-                    <span>💡 <strong>Controls:</strong> Drag to move | Shift-click or marquee drag for multi-select | [R] Rotate | [Del] Delete (returns to latent)</span>
+                    <span>💡 <strong>Controls:</strong> Drag to move | Shift-click or marquee drag for multi-select | [R] Rotate | ✋ Hand tool or Space/Middle-drag to pan | Mouse wheel to zoom</span>
                     <span id="cadIslandsCount">1 Array Island</span>
                   </div>
                 </div>

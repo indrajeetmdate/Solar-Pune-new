@@ -170,6 +170,9 @@ createElement("cadNorthAngleInput", "number", "15");
 createElement("cadSunTimeSlider", "range", "13.5");
 createElement("cadZoomSlider", "range", "1.2");
 createElement("cadOpacitySlider", "range", "0.8");
+createElement("cadImageRotationInput", "number", "0");
+createElement("cadImageRotationSlider", "range", "0");
+createElement("cadViewZoomLevel", "span", "100%");
 createElement("cadImageControls", "div");
 createElement("cadLockImageBtn", "button");
 

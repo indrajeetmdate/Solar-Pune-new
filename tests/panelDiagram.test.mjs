@@ -774,5 +774,184 @@ console.log("Running RooftopCAD tests...");
   console.log("✓ Test 13 Passed: Roof Area Dimensions Synchronization & Net Usable Area");
 }
 
+// Test 14: Viewport Pan & Zoom, Screen-to-World Coordinate Inversion & Persistence
+{
+  const canvas = new MockCanvas();
+  let latestVp = null;
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 30,
+    roofBreadthFt: 20,
+    requiredPanels: 6,
+    onViewportChange: (vp) => { latestVp = vp; },
+  });
+
+  // 1. Initial viewport state
+  assert.equal(cad.viewX, 0);
+  assert.equal(cad.viewY, 0);
+  assert.equal(cad.viewZoom, 1.0);
+
+  // 2. Coordinate conversions at zoom 1.0, pan 0
+  const w1 = cad.screenToWorld(100, 200);
+  assert.equal(w1.x, 100);
+  assert.equal(w1.y, 200);
+
+  const s1 = cad.worldToScreen(100, 200);
+  assert.equal(s1.x, 100);
+  assert.equal(s1.y, 200);
+
+  // 3. Pan viewport by (+50, -30)
+  cad.panView(50, -30);
+  assert.equal(cad.viewX, 50);
+  assert.equal(cad.viewY, -30);
+  assert.ok(latestVp);
+  assert.equal(latestVp.viewX, 50);
+  assert.equal(latestVp.viewY, -30);
+
+  const w2 = cad.screenToWorld(150, 170);
+  assert.equal(w2.x, 100);
+  assert.equal(w2.y, 200);
+
+  const s2 = cad.worldToScreen(100, 200);
+  assert.equal(s2.x, 150);
+  assert.equal(s2.y, 170);
+
+  // 4. Zoom in (1.25x)
+  cad.zoomIn();
+  assert.equal(cad.viewZoom, 1.25);
+  assert.equal(latestVp.zoomPercent, 125);
+
+  // 5. Reset viewport
+  cad.resetView();
+  assert.equal(cad.viewX, 0);
+  assert.equal(cad.viewY, 0);
+  assert.equal(cad.viewZoom, 1.0);
+  assert.equal(latestVp.zoomPercent, 100);
+
+  // 6. Round-trip serialization preserves viewport
+  cad.panView(35, -45);
+  cad.zoomIn();
+  const vX = cad.viewX;
+  const vY = cad.viewY;
+  const vZ = cad.viewZoom;
+  const serialized = cad.serialize();
+  assert.equal(serialized.viewX, vX);
+  assert.equal(serialized.viewY, vY);
+  assert.equal(serialized.viewZoom, vZ);
+
+  const canvas2 = new MockCanvas();
+  const cad2 = new RooftopCAD(canvas2, {});
+  cad2.loadState(serialized);
+  assert.equal(cad2.viewX, vX);
+  assert.equal(cad2.viewY, vY);
+  assert.equal(cad2.viewZoom, vZ);
+
+  console.log("✓ Test 14 Passed: Viewport Pan & Zoom, Screen-to-World Coordinate Inversion & Persistence");
+}
+
+// Test 15: Custom Image Rotation Angle (arbitrary degrees e.g. 23°, 174°, 1° micro-stepping)
+{
+  const canvas = new MockCanvas();
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 30,
+    roofBreadthFt: 20,
+  });
+
+  cad.image.isLoaded = true;
+  cad.image.src = "data:image/png;base64,mockImage";
+  cad.image.locked = false;
+
+  // 1. Custom arbitrary rotation to 23°
+  cad.setImageRotation(23);
+  assert.equal(cad.image.rotation, 23, "Rotation should be exactly 23°");
+
+  // 2. Fine micro-stepping: rotate CW 1° -> 24°
+  cad.rotateImageBy(1);
+  assert.equal(cad.image.rotation, 24, "Micro-step CW 1° should result in 24°");
+
+  // 3. Custom arbitrary rotation to 174°
+  cad.setImageRotation(174);
+  assert.equal(cad.image.rotation, 174, "Rotation should be exactly 174°");
+
+  // 4. Fine micro-stepping: rotate CCW 1° -> 173°
+  cad.rotateImageBy(-1);
+  assert.equal(cad.image.rotation, 173, "Micro-step CCW 1° should result in 173°");
+
+  // 5. 90° step: 173° + 90° = 263°
+  cad.rotateImage90();
+  assert.equal(cad.image.rotation, 263, "90° step from 173° should result in 263°");
+
+  // 6. Reset to 0°
+  cad.setImageRotation(0, true);
+  assert.equal(cad.image.rotation, 0, "Reset should set rotation back to 0°");
+
+  // 7. Serialization round-trip of custom angle
+  cad.setImageRotation(174, true);
+  const state = cad.serialize();
+  assert.equal(state.image.rotation, 174);
+
+  const canvas2 = new MockCanvas();
+  const cad2 = new RooftopCAD(canvas2, {});
+  cad2.loadState(state);
+  assert.equal(cad2.image.rotation, 174, "Restored state should preserve 174° custom rotation");
+
+  console.log("✓ Test 15 Passed: Custom Image Rotation Angle (arbitrary degrees e.g. 23°, 174°, 1° micro-stepping)");
+}
+
+// Test 16: Large Roof Auto-Placement Coordinates (Fix for 5-Panel Skip Bug)
+{
+  const canvas = new MockCanvas();
+  // Large commercial roof: 180 ft x 50 ft, with 70 panels required
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 180,
+    roofBreadthFt: 50,
+    requiredPanels: 70,
+  });
+
+  // Verify roofX and roofY are strictly positive and visible inside canvas
+  assert.ok(cad.roofX >= 15, `Roof X coordinate must be positive and padded, was: ${cad.roofX}`);
+  assert.ok(cad.roofY >= 15, `Roof Y coordinate must be positive and padded, was: ${cad.roofY}`);
+  assert.ok(cad.roofW > 0, "Roof width must be positive");
+  assert.ok(cad.roofH > 0, "Roof height must be positive");
+
+  // Execute auto-fill
+  cad.autoPlaceRemainingPanels("portrait");
+  assert.ok(cad.panels.length > 0, "Panels should be placed onto the roof");
+
+  // 1. Verify every single placed panel has non-negative coordinates inside the roof bounds
+  cad.panels.forEach((p, idx) => {
+    assert.ok(
+      p.x >= cad.roofX,
+      `Panel #${idx + 1} x (${p.x}) must be >= roofX (${cad.roofX}), never placed offscreen to the left`
+    );
+    assert.ok(
+      p.x >= 0,
+      `Panel #${idx + 1} x (${p.x}) must never be negative`
+    );
+    assert.ok(
+      p.y >= cad.roofY,
+      `Panel #${idx + 1} y (${p.y}) must be >= roofY (${cad.roofY}), never placed offscreen above`
+    );
+    assert.ok(
+      p.y >= 0,
+      `Panel #${idx + 1} y (${p.y}) must never be negative`
+    );
+    assert.ok(
+      p.x + p.w <= cad.roofX + cad.roofW + 0.1,
+      `Panel #${idx + 1} right edge (${p.x + p.w}) must fit within roof boundary (${cad.roofX + cad.roofW})`
+    );
+  });
+
+  // 2. Verify that column 0 of row 0 starts immediately at roof margin (no skipped columns)
+  const firstPanel = cad.panels[0];
+  const expectedFirstX = cad.roofX + 10; // margin = 10
+  assert.equal(
+    Math.round(firstPanel.x),
+    Math.round(expectedFirstX),
+    `First panel must start at first column (x = ~${expectedFirstX}), not skipping 5 panels`
+  );
+
+  console.log("✓ Test 16 Passed: Large Roof Auto-Placement Coordinates (Fix for 5-Panel Skip Bug)");
+}
+
 console.log("All RooftopCAD tests passed successfully!");
 
