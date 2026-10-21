@@ -77,7 +77,60 @@ export function sanitizeSystemIncludes(text) {
   return s;
 }
 
-export function buildSystemIncludesText(option) {
+export function getScopeOfWorkItems(option, input = {}) {
+  // 1. If custom systemIncludesText was explicitly supplied
+  if (option.systemIncludesText && typeof option.systemIncludesText === "string") {
+    let raw = option.systemIncludesText
+      .replace(/^(?:System Includes|Scope of Work):\s*/i, "")
+      .replace(/,?\s*(?:and\s+)?contingency\.?/gi, "")
+      .trim();
+    if (raw.endsWith(".")) raw = raw.slice(0, -1).trim();
+
+    const parts = raw
+      .split(/(?:,\s*(?:and\s+)?|;\s*|\n+)/i)
+      .map(s => s.replace(/^\s*(?:and|•|-)\s+/i, "").trim())
+      .filter(Boolean);
+
+    if (parts.length > 0) {
+      return parts;
+    }
+  }
+
+  // 2. Next, use costBreakupList if present
+  if (option.costBreakupList && Array.isArray(option.costBreakupList) && option.costBreakupList.length > 0) {
+    const items = option.costBreakupList
+      .filter(it => !it.isHidden && !it.isHeader && it.label)
+      .map(it => it.label.trim())
+      .filter(Boolean);
+    if (!items.some(it => /\bgst\b/i.test(it))) {
+      items.push("GST");
+    }
+    return items;
+  }
+
+  // 3. Fallback default list
+  let mainInverterPrefix = "On-grid";
+  if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
+  if (option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
+
+  const structLabel = (input && input.structureType === "elevated") ? "Elevated GI structure" : "Hot-dip galvanized";
+  const items = [
+    "Solar Panels",
+    `Mounting Structure (${structLabel})`,
+    `${mainInverterPrefix} Inverter`,
+    "Safety and earthing",
+    "Wiring excluding cable cost",
+    "Installation & Commissioning",
+    "Consultancy"
+  ];
+  const cBreakup = option.costBreakup || {};
+  if (cBreakup.backupInverter > 0) items.push("Backup Off-grid Inverter");
+  if (cBreakup.battery > 0) items.push("Battery Storage");
+  items.push("GST");
+  return items;
+}
+
+export function buildSystemIncludesText(option, input = {}) {
   const cBreakup = option.costBreakup || {};
   let mainInverterPrefix = "On-grid";
   if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
@@ -85,10 +138,10 @@ export function buildSystemIncludesText(option) {
 
   let rawText;
   if (option.systemIncludesText) {
-    rawText = option.systemIncludesText.replace(/^System Includes:\s*/i, "");
+    rawText = option.systemIncludesText.replace(/^(?:System Includes|Scope of Work):\s*/i, "");
   } else {
     const includedItems = [];
-    if (option.costBreakupList) {
+    if (option.costBreakupList && option.costBreakupList.length > 0) {
       option.costBreakupList.forEach(it => {
         if (!it.isHidden && !it.isHeader) {
           includedItems.push(it.label);
@@ -96,10 +149,11 @@ export function buildSystemIncludesText(option) {
       });
     } else {
       // Fallback if list not found
+      const structLabel = (input && input.structureType === "elevated") ? "Elevated GI structure" : "Hot-dip galvanized";
       includedItems.push(
         "Solar Panels",
+        `Mounting Structure (${structLabel})`,
         `${mainInverterPrefix} Inverter`,
-        "Mounting Structure",
         "Safety and earthing",
         "Wiring excluding cable cost",
         "Installation & Commissioning",
@@ -720,40 +774,67 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     yPos += 7;
 
     // Scope of Work Card (Turnkey EPC Delivery)
+    const sowItems = getScopeOfWorkItems(option, estimates.input || {});
+    const notesW = pageWidth - margin * 2;
+    const colWidth = (notesW - 12) / 2;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.6);
+
+    // Calculate height dynamically
+    let sowHeight = 28;
+    let col1 = [];
+    let col2 = [];
+
+    if (sowItems.length > 1) {
+      const mid = Math.ceil(sowItems.length / 2);
+      col1 = sowItems.slice(0, mid);
+      col2 = sowItems.slice(mid);
+      
+      const col1H = col1.reduce((acc, it) => acc + doc.splitTextToSize(`• ${it}`, colWidth).length * 3.8 + 0.5, 0);
+      const col2H = col2.reduce((acc, it) => acc + doc.splitTextToSize(`• ${it}`, colWidth).length * 3.8 + 0.5, 0);
+      sowHeight = Math.max(26, 9 + Math.max(col1H, col2H) + 3);
+    } else if (sowItems.length === 1) {
+      const singleLines = doc.splitTextToSize(`• ${sowItems[0]}`, notesW - 8);
+      sowHeight = Math.max(22, 9 + singleLines.length * 3.8 + 3);
+    }
+
     doc.setFillColor(248, 250, 252);
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.3);
-    const sowHeight = 35;
-    doc.roundedRect(margin, yPos, pageWidth - margin * 2, sowHeight, 1.5, 1.5, "FD");
+    doc.roundedRect(margin, yPos, notesW, sowHeight, 1.5, 1.5, "FD");
 
-    let sowY = yPos + 4.5;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(COLORS.black);
-    doc.text("Scope of Work (Turnkey EPC Delivery):", margin + 4, sowY);
-    sowY += 4;
+    doc.text("Scope of Work (Turnkey EPC Delivery):", margin + 4, yPos + 5.2);
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
+    doc.setFontSize(7.6);
     doc.setTextColor(COLORS.text);
-    const sowLines = [
-      "• Comprehensive Site Survey, 3D Shadow Modeling & System Engineering Design",
-      "• Procurement & Supply of Tier-1 High-Efficiency Solar PV Modules & Grid-Tied Inverter",
-      "• Module Mounting Structure (Hot-Dip Galvanized / Anodized Aluminum) & Civil Anchoring",
-      "• ACDB & DCDB Protection Switchgear with Type-II Surge Protection (SPD) & MCB/MCCBs",
-      "• Chemical Earthing System (Dual Rods/Electrodes) & Lightning Arrestor Protection",
-      "• System Integration, Pre-Commissioning & Grid Synchronisation",
-      "• MSEDCL Net Metering Liaisoning & Discom Documentation Support"
-    ];
-    sowLines.forEach(line => {
-      doc.text(line, margin + 4, sowY);
-      sowY += 3.3;
-    });
+
+    if (sowItems.length > 1) {
+      let c1Y = yPos + 9.8;
+      col1.forEach(item => {
+        const lines = doc.splitTextToSize(`• ${item}`, colWidth);
+        doc.text(lines, margin + 4, c1Y);
+        c1Y += lines.length * 3.8 + 0.5;
+      });
+
+      let c2Y = yPos + 9.8;
+      col2.forEach(item => {
+        const lines = doc.splitTextToSize(`• ${item}`, colWidth);
+        doc.text(lines, margin + colWidth + 8, c2Y);
+        c2Y += lines.length * 3.8 + 0.5;
+      });
+    } else if (sowItems.length === 1) {
+      const lines = doc.splitTextToSize(`• ${sowItems[0]}`, notesW - 8);
+      doc.text(lines, margin + 4, yPos + 9.8);
+    }
 
     yPos += sowHeight + 4;
 
     // --- 3 Prominently Highlighted Project Notes ---
-    const notesW = pageWidth - margin * 2;
     const pillH = 6.8;
     const pillGap = 2;
 
@@ -840,8 +921,10 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.setTextColor(COLORS.textLight);
     doc.text("* GST: 70% goods @ 5% + 30% services @ 18% = 8.9% effective rate.", margin, yPos);
     yPos += 3.8;
-    doc.text("* Quotation validity: 15 days. Full contract value is payable to Datlion Cnergy Pvt. Ltd. regardless of central subsidy disbursement.", margin, yPos);
-    yPos += 6;
+    const validityNote = "* Quotation validity: 15 days. Full contract value is payable to Datlion Cnergy Pvt. Ltd. regardless of central subsidy disbursement.";
+    const splitValidityNote = doc.splitTextToSize(validityNote, pageWidth - margin * 2);
+    doc.text(splitValidityNote, margin, yPos);
+    yPos += splitValidityNote.length * 3.6 + 3;
   } else {
     doc.addPage();
     yPos = 30;
@@ -983,8 +1066,10 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.setFont("helvetica", "italic");
   doc.setFontSize(7.5);
   doc.setTextColor(COLORS.textLight);
-  doc.text("* Note: Financial payback and bill savings projections are modeled on prevailing MSEDCL tariffs and MERC net metering regulations; subject to customer consumption patterns and grid availability.", margin, yPos);
-  yPos += 8;
+  const paybackNote = "* Note: Financial payback and bill savings projections are modeled on prevailing MSEDCL tariffs and MERC net metering regulations; subject to customer consumption patterns and grid availability.";
+  const splitPaybackNote = doc.splitTextToSize(paybackNote, pageWidth - margin * 2);
+  doc.text(splitPaybackNote, margin, yPos);
+  yPos += splitPaybackNote.length * 3.6 + 4;
 
   // ================= SECTION 3 (or dynamic): Bank Partner Loan Proposal =================
   if (!hideFinancing && !hideCost && option.financing) {
@@ -1201,8 +1286,10 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.setFont("helvetica", "italic");
     doc.setFontSize(7.5);
     doc.setTextColor(COLORS.textLight);
-    doc.text("* Note: Loan approval, interest rates, and final terms are governed exclusively by the lending bank. Financing delays or rejections do not alter payment milestone obligations to Datlion Cnergy Pvt. Ltd.", margin + 2, yPos);
-    yPos += 6;
+    const loanNote = "* Note: Loan approval, interest rates, and final terms are governed exclusively by the lending bank. Financing delays or rejections do not alter payment milestone obligations to Datlion Cnergy Pvt. Ltd.";
+    const splitLoanNote = doc.splitTextToSize(loanNote, pageWidth - margin * 2 - 4);
+    doc.text(splitLoanNote, margin + 2, yPos);
+    yPos += splitLoanNote.length * 3.6 + 3;
   }
 
   // ================= SECTION: Terms & Conditions, Warranty and Details =================
@@ -1249,11 +1336,13 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   });
 
   yPos = doc.lastAutoTable.finalY + 4;
-  doc.setFontSize(8.5);
+  doc.setFontSize(8);
   doc.setFont("helvetica", "italic");
   doc.setTextColor(COLORS.textLight);
-  doc.text("* Note: Other product warranties not mentioned above will be added later / as per project BOM.", margin, yPos);
-  yPos += 9;
+  const otherWarrantyNote = "* Note: Other product warranties not mentioned above will be added later / as per project BOM.";
+  const splitOtherWarranty = doc.splitTextToSize(otherWarrantyNote, pageWidth - margin * 2);
+  doc.text(splitOtherWarranty, margin, yPos);
+  yPos += splitOtherWarranty.length * 3.6 + 4;
 
   // Terms and Conditions Section Title
   ensureVerticalSpace(20, "Warranty and Details (Contd.)");
@@ -1266,8 +1355,10 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.8);
   doc.setTextColor(COLORS.textLight);
-  doc.text("The following terms and conditions govern this EPC proposal and form the collaborative agreement between Datlion Cnergy Pvt. Ltd. and the Client.", margin, yPos);
-  yPos += 5.5;
+  const termsIntro = "The following terms and conditions govern this EPC proposal and form the collaborative agreement between Datlion Cnergy Pvt. Ltd. and the Client.";
+  const splitTermsIntro = doc.splitTextToSize(termsIntro, pageWidth - margin * 2);
+  doc.text(splitTermsIntro, margin, yPos);
+  yPos += splitTermsIntro.length * 3.6 + 3;
 
   const renderTermsGroup = (categories) => {
     const badgeH = 6.8;

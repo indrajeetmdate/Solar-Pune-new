@@ -6,7 +6,7 @@ import {
   calculateSubsidy,
   recommendCapacity,
 } from "../src/calculator.js";
-import { buildSystemIncludesText, sanitizeSystemIncludes } from "../src/reportGenerator.js";
+import { buildSystemIncludesText, sanitizeSystemIncludes, getScopeOfWorkItems } from "../src/reportGenerator.js";
 
 function makeInput(overrides = {}) {
   return {
@@ -180,6 +180,30 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   const customPdfText = buildSystemIncludesText(customOpt);
   assert.ok(!/contingency/i.test(customPdfText), "Custom text with Contingency must have Contingency stripped");
   assert.equal(customPdfText, "System Includes: Solar Panels, Structure, Inverter, and GST.");
+
+  // 4. Test getScopeOfWorkItems fallback and custom parsing
+  const defaultItems = getScopeOfWorkItems(opt, makeInput());
+  assert.ok(defaultItems.includes("Solar Panels"), "Must include Solar Panels");
+  assert.ok(defaultItems.includes("Mounting Structure (Hot-dip galvanized)"), "Must include Mounting Structure (Hot-dip galvanized)");
+  assert.ok(defaultItems.includes("On-grid Inverter"), "Must include On-grid Inverter");
+  assert.ok(defaultItems.includes("Safety and earthing"), "Must include Safety and earthing");
+  assert.ok(defaultItems.includes("Wiring excluding cable cost"), "Must include Wiring excluding cable cost");
+  assert.ok(defaultItems.includes("Installation & Commissioning"), "Must include Installation & Commissioning");
+  assert.ok(defaultItems.includes("Consultancy"), "Must include Consultancy");
+  assert.ok(defaultItems.includes("GST"), "Must include GST");
+
+  const customSow = getScopeOfWorkItems({
+    systemIncludesText: "Solar Panels, Mounting Structure (Hot-dip galvanized), On-grid Inverter, Safety and earthing, Wiring excluding cable cost, Installation & Commissioning, Consultancy, and GST."
+  });
+  assert.equal(customSow.length, 8, "Must parse exactly 8 items");
+  assert.equal(customSow[0], "Solar Panels");
+  assert.equal(customSow[1], "Mounting Structure (Hot-dip galvanized)");
+  assert.equal(customSow[2], "On-grid Inverter");
+  assert.equal(customSow[3], "Safety and earthing");
+  assert.equal(customSow[4], "Wiring excluding cable cost");
+  assert.equal(customSow[5], "Installation & Commissioning");
+  assert.equal(customSow[6], "Consultancy");
+  assert.equal(customSow[7], "GST");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -457,9 +481,20 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.ok(allTexts.some(t => String(t).includes("GSTIN: 27AALCD8550A1ZP")), "Company GSTIN must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("PROPOSAL REF: DC/2026-27/PROP-101")), "Proposal reference serial number must be rendered");
   assert.equal(lastPdfInstance.savedFilename, "DC-2026-27-PROP-101.pdf", "PDF must be saved as sanitized serial number filename");
+  assert.ok(allTexts.some(t => String(t).includes("Scope of Work (Turnkey EPC Delivery)")), "Scope of Work card heading must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Solar Panels")), "Scope of Work must render Solar Panels");
+  assert.ok(allTexts.some(t => String(t).includes("Mounting Structure")), "Scope of Work must render Mounting Structure");
+  assert.ok(allTexts.some(t => String(t).includes("Inverter")), "Scope of Work must render Inverter");
+  assert.ok(allTexts.some(t => String(t).includes("Safety and earthing")), "Scope of Work must render Safety and earthing");
+  assert.ok(allTexts.some(t => String(t).includes("Wiring excluding cable cost")), "Scope of Work must render Wiring excluding cable cost");
+  assert.ok(allTexts.some(t => String(t).includes("Installation & Commissioning")), "Scope of Work must render Installation & Commissioning");
+  assert.ok(allTexts.some(t => String(t).includes("Consultancy")), "Scope of Work must render Consultancy");
+  assert.ok(allTexts.some(t => String(t).includes("GST")), "Scope of Work must render GST");
   assert.ok(allTexts.some(t => String(t).includes("Note: All of the above are in line with MNRE guidelines")), "MNRE guidelines note must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Note: Cabling/wiring charges will be at actual length of DC and AC cabling required")), "Wiring charges at actual length note must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Note: MSEDCL Net Metering Liaisoning & Discom Documentation Support charges at actuals")), "MSEDCL Liaisoning note must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("Financial payback and bill savings projections are modeled on prevailing MSEDCL tariffs and MERC net metering regulations")), "Payback disclaimer note must be rendered and wrapped");
+  assert.ok(allTexts.some(t => String(t).includes("Loan approval, interest rates, and final terms are governed exclusively by the lending bank")), "Bank loan disclaimer note must be rendered and wrapped");
   assert.ok(allTexts.some(t => String(t).includes("Possible Savings Breakdown (Solar Offset)")), "Possible Savings Breakdown section heading must be rendered");
 
   const savingsTable = mockCalls.find(c => c.body && c.body.some(row => row[0] && row[0].includes("Estimated Savings / Month")));
