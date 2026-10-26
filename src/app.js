@@ -2734,18 +2734,43 @@ function openInternalDialog() {
   const dialog = document.getElementById("passwordDialog");
   if (dialog) {
     document.getElementById("passwordError")?.classList.add("hidden");
-    document.getElementById("internalPassword").value = "";
-    dialog.showModal();
+    const pwdInput = document.getElementById("internalPassword");
+    if (pwdInput) pwdInput.value = "";
+    if (typeof dialog.showModal === "function") {
+      try {
+        if (!dialog.open) {
+          dialog.showModal();
+        }
+      } catch (err) {
+        console.warn("dialog.showModal failed, using open attribute:", err);
+        dialog.setAttribute("open", "");
+      }
+    } else {
+      dialog.setAttribute("open", "");
+    }
+    setTimeout(() => pwdInput?.focus(), 50);
+  }
+}
+
+function closeInternalDialog() {
+  const dialog = document.getElementById("passwordDialog");
+  if (dialog) {
+    if (typeof dialog.close === "function") {
+      try { dialog.close(); } catch (_) { dialog.removeAttribute("open"); }
+    }
+    dialog.removeAttribute("open");
   }
 }
 
 function unlockInternal() {
   const pwd = document.getElementById("internalPassword")?.value;
   if (pwd === "solar2026") {
-    document.getElementById("passwordDialog")?.close();
+    document.getElementById("passwordError")?.classList.add("hidden");
+    closeInternalDialog();
     openInternal();
   } else {
     document.getElementById("passwordError")?.classList.remove("hidden");
+    document.getElementById("internalPassword")?.focus();
   }
 }
 
@@ -2825,6 +2850,10 @@ function switchWorkspaceTab(tabId) {
 }
 
 function switchSidebarCategory(catId) {
+  if (catId === "rates" && !state.internalUnlocked) {
+    openInternalDialog();
+    return;
+  }
   state.activeSidebarCategory = catId;
   document.querySelectorAll(".sidebar-pill-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.cat === catId);
@@ -3056,6 +3085,14 @@ function attachEvents() {
 
   // Dialog buttons
   $("unlockButton")?.addEventListener("click", unlockInternal);
+  $("cancelPasswordButton")?.addEventListener("click", closeInternalDialog);
+  $("passwordDialog")?.addEventListener("click", (e) => {
+    if (e.target === $("passwordDialog")) closeInternalDialog();
+  });
+  $("passwordDialog")?.querySelector("form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    unlockInternal();
+  });
   
   $("internalPassword")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -4276,7 +4313,7 @@ async function saveProposalData() {
   setTimeout(resetButtons, 2500);
 }
 
-export function cloneProposalForCustomer(newCustomerName = null, newMobile = null, newEmail = null, newAddress = null) {
+function cloneProposalForCustomer(newCustomerName = null, newMobile = null, newEmail = null, newAddress = null) {
   let name = newCustomerName;
   if (!name || typeof name !== "string") {
     const currentName = $("customerName")?.value || $("internalCustomerName")?.value || "";
@@ -4329,7 +4366,7 @@ export function cloneProposalForCustomer(newCustomerName = null, newMobile = nul
   return { customerName: name, proposalSerialNo: newSerial };
 }
 
-export function openChangeCustomerModal(suggestedName = null) {
+function openChangeCustomerModal(suggestedName = null) {
   const modal = $("changeCustomerModal");
   if (!modal) return;
   const currentName = suggestedName || $("customerName")?.value || $("internalCustomerName")?.value || "";
@@ -4346,7 +4383,7 @@ export function openChangeCustomerModal(suggestedName = null) {
   setTimeout(() => $("modalCustomerName")?.focus(), 50);
 }
 
-export function closeChangeCustomerModal() {
+function closeChangeCustomerModal() {
   const modal = $("changeCustomerModal");
   if (modal) modal.style.display = "none";
 }
@@ -4874,6 +4911,11 @@ window.exportCurrentProposalJSON = exportCurrentProposalJSON;
 window.importProposalJSONFile = importProposalJSONFile;
 window.searchProposals = searchProposals;
 window.buildProposalSnapshot = buildProposalSnapshot;
+window.openInternalDialog = openInternalDialog;
+window.closeInternalDialog = closeInternalDialog;
+window.unlockInternal = unlockInternal;
+window.lockInternal = lockInternal;
+window.openInternal = openInternal;
 
 export {
   saveProposalData,
@@ -4884,5 +4926,10 @@ export {
   exportCurrentProposalJSON,
   importProposalJSONFile,
   searchProposals,
-  buildProposalSnapshot
+  buildProposalSnapshot,
+  openInternalDialog,
+  closeInternalDialog,
+  unlockInternal,
+  lockInternal,
+  openInternal
 };

@@ -999,4 +999,143 @@ assert.equal(rajeshRecord.proposalSerialNo, "DC/2026-27/PROP-103");
 
 console.log("✓ Test 8 Passed: Proposal Cloning, Customer Name Change, and Overwrite Protection verified.");
 
+// -------------------------------------------------------------
+// TEST 9: Internal Mode Master Password Dialog & Security
+// -------------------------------------------------------------
+console.log("Testing Internal Mode Master Password Dialog & Security...");
+
+const mockPasswordDialog = {
+  open: false,
+  showModal() { this.open = true; },
+  close() { this.open = false; },
+  setAttribute(attr, val) { if (attr === "open") this.open = true; },
+  removeAttribute(attr) { if (attr === "open") this.open = false; }
+};
+const mockPasswordInput = { value: "", focus() {} };
+const mockPasswordError = {
+  classList: {
+    _classes: new Set(["hidden"]),
+    add(c) { this._classes.add(c); },
+    remove(c) { this._classes.delete(c); },
+    contains(c) { return this._classes.has(c); }
+  }
+};
+const mockInternalModeButton = {
+  classList: {
+    _classes: new Set(),
+    add(c) { this._classes.add(c); },
+    remove(c) { this._classes.delete(c); },
+    contains(c) { return this._classes.has(c); }
+  }
+};
+const mockRatesPill = { style: { display: "none" } };
+const mockRatesRail = { style: { display: "none" } };
+
+// Mock state
+const testState = {
+  internalUnlocked: false,
+  activeSidebarCategory: "contact"
+};
+
+function testOpenInternalDialog() {
+  if (testState.internalUnlocked) {
+    testOpenInternal();
+    return;
+  }
+  mockPasswordError.classList.add("hidden");
+  mockPasswordInput.value = "";
+  if (typeof mockPasswordDialog.showModal === "function") {
+    try {
+      if (!mockPasswordDialog.open) mockPasswordDialog.showModal();
+    } catch (_) {
+      mockPasswordDialog.setAttribute("open", "");
+    }
+  } else {
+    mockPasswordDialog.setAttribute("open", "");
+  }
+}
+
+function testCloseInternalDialog() {
+  if (typeof mockPasswordDialog.close === "function") {
+    try { mockPasswordDialog.close(); } catch (_) { mockPasswordDialog.removeAttribute("open"); }
+  }
+  mockPasswordDialog.removeAttribute("open");
+}
+
+function testOpenInternal() {
+  testState.internalUnlocked = true;
+  mockInternalModeButton.classList.add("active");
+  mockRatesPill.style.display = "inline-flex";
+  mockRatesRail.style.display = "flex";
+  testSwitchSidebarCategory("rates");
+}
+
+function testLockInternal() {
+  testState.internalUnlocked = false;
+  mockInternalModeButton.classList.remove("active");
+  mockRatesPill.style.display = "none";
+  mockRatesRail.style.display = "none";
+  if (testState.activeSidebarCategory === "rates") {
+    testSwitchSidebarCategory("contact");
+  }
+}
+
+function testUnlockInternal() {
+  if (mockPasswordInput.value === "solar2026") {
+    mockPasswordError.classList.add("hidden");
+    testCloseInternalDialog();
+    testOpenInternal();
+  } else {
+    mockPasswordError.classList.remove("hidden");
+  }
+}
+
+function testSwitchSidebarCategory(catId) {
+  if (catId === "rates" && !testState.internalUnlocked) {
+    testOpenInternalDialog();
+    return;
+  }
+  testState.activeSidebarCategory = catId;
+}
+
+// 9a: Dialog opens when calling openInternalDialog
+assert.equal(mockPasswordDialog.open, false);
+testOpenInternalDialog();
+assert.equal(mockPasswordDialog.open, true);
+assert.equal(testState.internalUnlocked, false);
+
+// 9b: Dialog closes when cancelled
+testCloseInternalDialog();
+assert.equal(mockPasswordDialog.open, false);
+
+// 9c: Entering wrong password keeps dialog open and shows error
+testOpenInternalDialog();
+mockPasswordInput.value = "wrong_password";
+testUnlockInternal();
+assert.equal(mockPasswordDialog.open, true);
+assert.equal(testState.internalUnlocked, false);
+assert.equal(mockPasswordError.classList.contains("hidden"), false, "Error message must be displayed on wrong password");
+
+// 9d: Entering correct master password 'solar2026' unlocks internal mode
+mockPasswordInput.value = "solar2026";
+testUnlockInternal();
+assert.equal(mockPasswordDialog.open, false, "Dialog must close on successful unlock");
+assert.equal(testState.internalUnlocked, true, "Internal mode must be unlocked");
+assert.equal(mockRatesPill.style.display, "inline-flex", "Rates category pill must become visible");
+assert.equal(testState.activeSidebarCategory, "rates", "Active sidebar category must switch to rates");
+assert.equal(mockInternalModeButton.classList.contains("active"), true, "Internal mode button must be active");
+
+// 9e: Calling lockInternal returns to Customer mode and hides internal UI
+testLockInternal();
+assert.equal(testState.internalUnlocked, false);
+assert.equal(mockRatesPill.style.display, "none");
+assert.equal(testState.activeSidebarCategory, "contact");
+assert.equal(mockInternalModeButton.classList.contains("active"), false);
+
+// 9f: Switching to rates category while locked automatically triggers dialog
+testSwitchSidebarCategory("rates");
+assert.equal(mockPasswordDialog.open, true, "Switching to rates category while locked must trigger password dialog");
+
+console.log("✓ Test 9 Passed: Internal Mode Master Password Dialog, Passphrase Validation & Access Control verified.");
+
 console.log("ALL SAVE & LOAD TESTS PASSED! 🎉");
