@@ -78,8 +78,18 @@ export function sanitizeSystemIncludes(text) {
 }
 
 export function getScopeOfWorkItems(option, input = {}) {
-  // 1. If custom systemIncludesText was explicitly supplied
-  if (option.systemIncludesText && typeof option.systemIncludesText === "string") {
+  let mainInverterPrefix = "On-grid";
+  if (option && option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
+  if (option && option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
+
+  const structType = (input && input.structureType) || "hotDip";
+  let structLabel = "Hot-dip galvanized";
+  if (structType === "galvalume") structLabel = "Galvalume";
+  else if (structType === "gpPurlin") structLabel = "GP purlin";
+  else if (structType === "elevated") structLabel = "Elevated GI structure";
+
+  // 1. If custom systemIncludesText was explicitly supplied and has sufficient items
+  if (option && option.systemIncludesText && typeof option.systemIncludesText === "string") {
     let raw = option.systemIncludesText
       .replace(/^(?:System Includes|Scope of Work):\s*/i, "")
       .replace(/,?\s*(?:and\s+)?contingency\.?/gi, "")
@@ -91,29 +101,43 @@ export function getScopeOfWorkItems(option, input = {}) {
       .map(s => s.replace(/^\s*(?:and|•|-)\s+/i, "").trim())
       .filter(Boolean);
 
-    if (parts.length > 0) {
+    if (parts.length >= 5) {
+      if (!parts.some(it => /\bgst\b/i.test(it))) {
+        parts.push("GST");
+      }
       return parts;
     }
   }
 
   // 2. Next, use costBreakupList if present
-  if (option.costBreakupList && Array.isArray(option.costBreakupList) && option.costBreakupList.length > 0) {
-    const items = option.costBreakupList
+  if (option && option.costBreakupList && Array.isArray(option.costBreakupList) && option.costBreakupList.length > 0) {
+    const rawItems = option.costBreakupList
       .filter(it => !it.isHidden && !it.isHeader && it.label)
       .map(it => it.label.trim())
       .filter(Boolean);
-    if (!items.some(it => /\bgst\b/i.test(it))) {
-      items.push("GST");
-    }
+
+    const items = [];
+    rawItems.forEach(lbl => {
+      if (/electrical\s*safety\s*(?:and|&)\s*wiring/i.test(lbl)) {
+        if (!items.includes("Safety and earthing")) items.push("Safety and earthing");
+        if (!items.includes("Wiring excluding cable cost")) items.push("Wiring excluding cable cost");
+      } else {
+        items.push(lbl);
+      }
+    });
+
+    if (!items.some(it => /solar\s*panels/i.test(it))) items.unshift("Solar Panels");
+    if (!items.some(it => /mounting\s*structure/i.test(it))) items.splice(1, 0, `Mounting Structure (${structLabel})`);
+    if (!items.some(it => /inverter/i.test(it))) items.splice(2, 0, `${mainInverterPrefix} Inverter`);
+    if (!items.some(it => /safety\s*(?:and|&)\s*earthing/i.test(it))) items.push("Safety and earthing");
+    if (!items.some(it => /wiring\s*excluding\s*cable/i.test(it))) items.push("Wiring excluding cable cost");
+    if (!items.some(it => /installation\s*(?:and|&)\s*commissioning/i.test(it))) items.push("Installation & Commissioning");
+    if (!items.some(it => /consultancy/i.test(it))) items.push("Consultancy");
+    if (!items.some(it => /\bgst\b/i.test(it))) items.push("GST");
     return items;
   }
 
-  // 3. Fallback default list
-  let mainInverterPrefix = "On-grid";
-  if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
-  if (option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
-
-  const structLabel = (input && input.structureType === "elevated") ? "Elevated GI structure" : "Hot-dip galvanized";
+  // 3. Canonical default 8-item list
   const items = [
     "Solar Panels",
     `Mounting Structure (${structLabel})`,
@@ -123,7 +147,7 @@ export function getScopeOfWorkItems(option, input = {}) {
     "Installation & Commissioning",
     "Consultancy"
   ];
-  const cBreakup = option.costBreakup || {};
+  const cBreakup = (option && option.costBreakup) || {};
   if (cBreakup.backupInverter > 0) items.push("Backup Off-grid Inverter");
   if (cBreakup.battery > 0) items.push("Battery Storage");
   items.push("GST");
@@ -922,13 +946,89 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.text("* GST: 70% goods @ 5% + 30% services @ 18% = 8.9% effective rate.", margin, yPos);
     yPos += 3.8;
     const validityNote = "* Quotation validity: 15 days. Full contract value is payable to Datlion Cnergy Pvt. Ltd. regardless of central subsidy disbursement.";
-    const splitValidityNote = doc.splitTextToSize(validityNote, pageWidth - margin * 2);
-    doc.text(splitValidityNote, margin, yPos);
-    yPos += splitValidityNote.length * 3.6 + 3;
+    const splitValidityNote = doc.splitTextToSize(validityNote, pageWidth - margin * 2 - 14);
+    splitValidityNote.forEach((line) => {
+      doc.text(line, margin, yPos);
+      yPos += 3.8;
+    });
+    yPos += 2;
   } else {
     doc.addPage();
     yPos = 30;
-    addHeader("Estimated Savings");
+    addHeader("Scope of Work & System Inclusions");
+
+    doc.setTextColor(COLORS.black);
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text(`${sectionNumber}. Scope of Work & System Inclusions`, margin, yPos);
+    yPos += 8;
+    sectionNumber++;
+
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(COLORS.primary);
+    doc.text(`Selected Option: ${formatSysType(option.systemType)} (${option.dcCapacityKw} kWp)`, margin, yPos);
+    yPos += 7;
+
+    // Scope of Work Card (Turnkey EPC Delivery)
+    const sowItems = getScopeOfWorkItems(option, estimates.input || {});
+    const notesW = pageWidth - margin * 2;
+    const colWidth = (notesW - 12) / 2;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.6);
+
+    let sowHeight = 28;
+    let col1 = [];
+    let col2 = [];
+
+    if (sowItems.length > 1) {
+      const mid = Math.ceil(sowItems.length / 2);
+      col1 = sowItems.slice(0, mid);
+      col2 = sowItems.slice(mid);
+      
+      const col1H = col1.reduce((acc, it) => acc + doc.splitTextToSize(`• ${it}`, colWidth).length * 3.8 + 0.5, 0);
+      const col2H = col2.reduce((acc, it) => acc + doc.splitTextToSize(`• ${it}`, colWidth).length * 3.8 + 0.5, 0);
+      sowHeight = Math.max(26, 9 + Math.max(col1H, col2H) + 3);
+    } else if (sowItems.length === 1) {
+      const singleLines = doc.splitTextToSize(`• ${sowItems[0]}`, notesW - 8);
+      sowHeight = Math.max(22, 9 + singleLines.length * 3.8 + 3);
+    }
+
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, yPos, notesW, sowHeight, 1.5, 1.5, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(COLORS.black);
+    doc.text("Scope of Work (Turnkey EPC Delivery):", margin + 4, yPos + 5.2);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.6);
+    doc.setTextColor(COLORS.text);
+
+    if (sowItems.length > 1) {
+      let c1Y = yPos + 9.8;
+      col1.forEach(item => {
+        const lines = doc.splitTextToSize(`• ${item}`, colWidth);
+        doc.text(lines, margin + 4, c1Y);
+        c1Y += lines.length * 3.8 + 0.5;
+      });
+
+      let c2Y = yPos + 9.8;
+      col2.forEach(item => {
+        const lines = doc.splitTextToSize(`• ${item}`, colWidth);
+        doc.text(lines, margin + colWidth + 8, c2Y);
+        c2Y += lines.length * 3.8 + 0.5;
+      });
+    } else if (sowItems.length === 1) {
+      const lines = doc.splitTextToSize(`• ${sowItems[0]}`, notesW - 8);
+      doc.text(lines, margin + 4, yPos + 9.8);
+    }
+
+    yPos += sowHeight + 6;
   }
 
   // ================= POSSIBLE SAVINGS BREAKDOWN (SOLAR OFFSET) =================
@@ -1067,9 +1167,12 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.setFontSize(7.5);
   doc.setTextColor(COLORS.textLight);
   const paybackNote = "* Note: Financial payback and bill savings projections are modeled on prevailing MSEDCL tariffs and MERC net metering regulations; subject to customer consumption patterns and grid availability.";
-  const splitPaybackNote = doc.splitTextToSize(paybackNote, pageWidth - margin * 2);
-  doc.text(splitPaybackNote, margin, yPos);
-  yPos += splitPaybackNote.length * 3.6 + 4;
+  const splitPaybackNote = doc.splitTextToSize(paybackNote, pageWidth - margin * 2 - 14);
+  splitPaybackNote.forEach((line) => {
+    doc.text(line, margin, yPos);
+    yPos += 3.8;
+  });
+  yPos += 2;
 
   // ================= SECTION 3 (or dynamic): Bank Partner Loan Proposal =================
   if (!hideFinancing && !hideCost && option.financing) {
@@ -1287,9 +1390,12 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.setFontSize(7.5);
     doc.setTextColor(COLORS.textLight);
     const loanNote = "* Note: Loan approval, interest rates, and final terms are governed exclusively by the lending bank. Financing delays or rejections do not alter payment milestone obligations to Datlion Cnergy Pvt. Ltd.";
-    const splitLoanNote = doc.splitTextToSize(loanNote, pageWidth - margin * 2 - 4);
-    doc.text(splitLoanNote, margin + 2, yPos);
-    yPos += splitLoanNote.length * 3.6 + 3;
+    const splitLoanNote = doc.splitTextToSize(loanNote, pageWidth - margin * 2 - 14);
+    splitLoanNote.forEach((line) => {
+      doc.text(line, margin + 2, yPos);
+      yPos += 3.8;
+    });
+    yPos += 2;
   }
 
   // ================= SECTION: Terms & Conditions, Warranty and Details =================

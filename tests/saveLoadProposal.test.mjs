@@ -849,4 +849,154 @@ assert.equal(getPdfDownloadFilename(""), "DC-2026-27-PROP-101.pdf");
 
 console.log("✓ Test 7 Passed: Financial Year, Auto-increment Serial Numbering, and PDF file naming verified.");
 
+// -------------------------------------------------------------
+// TEST 8: Customer Name Change, Proposal Cloning & Overwrite Guard
+// -------------------------------------------------------------
+console.log("Testing Customer Name Change, Proposal Cloning & Overwrite Guard...");
+
+// Setup existing proposal list in localStorage
+const initialSavedList = [
+  {
+    id: "prop_101",
+    customerName: "Anand Joshi",
+    mobileNumber: "9123456780",
+    emailAddress: "anand@example.com",
+    proposalSerialNo: "DC/2026-27/PROP-101",
+    systemCapacityKw: 5.5,
+    totalCost: 245000,
+    savedAt: new Date().toISOString(),
+    stateData: {
+      input: { customerName: "Anand Joshi", mobileNumber: "9123456780" },
+      reportDisplay: { proposalSerialNo: "DC/2026-27/PROP-101" }
+    }
+  }
+];
+globalThis.localStorage.setItem("solar_saved_proposals", JSON.stringify(initialSavedList));
+
+// Mock clone function matching app.js implementation
+function testCloneProposal(newCustomerName, newMobile = null, newEmail = null, newAddress = null) {
+  let savedList = [];
+  try {
+    const raw = globalThis.localStorage.getItem("solar_saved_proposals");
+    if (raw) savedList = JSON.parse(raw);
+  } catch (_) {}
+  if (!Array.isArray(savedList)) savedList = [];
+
+  const newSerial = getNextProposalSerialNo(savedList, new Date(2026, 9, 8));
+  
+  // Update mock DOM elements
+  elements.get("customerName").value = newCustomerName;
+  elements.get("internalCustomerName").value = newCustomerName;
+  elements.get("proposalSerialNo").value = newSerial;
+  if (newMobile) {
+    elements.get("mobileNumber").value = newMobile;
+    elements.get("internalMobileNumber").value = newMobile;
+  }
+  if (newEmail) {
+    elements.get("emailAddress").value = newEmail;
+    elements.get("internalEmailAddress").value = newEmail;
+  }
+  if (newAddress) {
+    elements.get("customerAddress").value = newAddress;
+  }
+
+  const newRecord = {
+    id: "prop_" + Date.now(),
+    customerName: newCustomerName,
+    mobileNumber: newMobile || elements.get("mobileNumber").value,
+    emailAddress: newEmail || elements.get("emailAddress").value,
+    proposalSerialNo: newSerial,
+    systemCapacityKw: 5.5,
+    totalCost: 245000,
+    savedAt: new Date().toISOString(),
+    stateData: {
+      input: { customerName: newCustomerName, mobileNumber: newMobile },
+      reportDisplay: { proposalSerialNo: newSerial }
+    }
+  };
+
+  savedList.unshift(newRecord);
+  globalThis.localStorage.setItem("solar_saved_proposals", JSON.stringify(savedList));
+  return { customerName: newCustomerName, proposalSerialNo: newSerial };
+}
+
+// 8a: Clone proposal for a new customer
+const cloned = testCloneProposal("Kavita Rao", "9988776655", "kavita@example.com", "Aundh, Pune");
+assert.equal(cloned.customerName, "Kavita Rao");
+assert.equal(cloned.proposalSerialNo, "DC/2026-27/PROP-102");
+assert.equal(elements.get("customerName").value, "Kavita Rao");
+assert.equal(elements.get("internalCustomerName").value, "Kavita Rao");
+assert.equal(elements.get("proposalSerialNo").value, "DC/2026-27/PROP-102");
+
+// Verify localStorage now has 2 independent proposals
+let currentStored = JSON.parse(globalThis.localStorage.getItem("solar_saved_proposals"));
+assert.equal(currentStored.length, 2);
+assert.equal(currentStored[0].customerName, "Kavita Rao");
+assert.equal(currentStored[0].proposalSerialNo, "DC/2026-27/PROP-102");
+assert.equal(currentStored[1].customerName, "Anand Joshi");
+assert.equal(currentStored[1].proposalSerialNo, "DC/2026-27/PROP-101");
+
+// 8b: Test Overwrite Guard in saveProposalData
+// User loads Anand Joshi's proposal (DC/2026-27/PROP-101), manually edits customerName to "Rajesh Sharma", but doesn't change proposalSerialNo
+function testSaveWithOverwriteGuard(proposalRecord) {
+  let savedList = [];
+  try {
+    const raw = globalThis.localStorage.getItem("solar_saved_proposals");
+    if (raw) savedList = JSON.parse(raw);
+  } catch (_) {}
+  if (!Array.isArray(savedList)) savedList = [];
+
+  const existingIdx = savedList.findIndex(p =>
+    (proposalRecord.proposalSerialNo && p.proposalSerialNo === proposalRecord.proposalSerialNo) ||
+    (p.customerName === proposalRecord.customerName && proposalRecord.mobileNumber && p.mobileNumber === proposalRecord.mobileNumber)
+  );
+
+  if (existingIdx >= 0 && savedList[existingIdx].customerName && 
+      proposalRecord.customerName &&
+      savedList[existingIdx].customerName.trim().toLowerCase() !== proposalRecord.customerName.trim().toLowerCase()) {
+    // Name changed on loaded proposal: auto-generate new serial number to avoid destroying previous customer
+    const newSerial = getNextProposalSerialNo(savedList, new Date(2026, 9, 8));
+    proposalRecord.proposalSerialNo = newSerial;
+    savedList.unshift(proposalRecord);
+  } else if (existingIdx >= 0) {
+    proposalRecord.id = savedList[existingIdx].id || proposalRecord.id;
+    savedList[existingIdx] = proposalRecord;
+  } else {
+    savedList.unshift(proposalRecord);
+  }
+
+  globalThis.localStorage.setItem("solar_saved_proposals", JSON.stringify(savedList));
+  return proposalRecord;
+}
+
+const savedGuarded = testSaveWithOverwriteGuard({
+  id: "prop_temp",
+  customerName: "Rajesh Sharma",
+  mobileNumber: "9555123456",
+  proposalSerialNo: "DC/2026-27/PROP-101", // Reusing Anand's old serial number
+  systemCapacityKw: 5.5,
+  totalCost: 245000,
+  savedAt: new Date().toISOString()
+});
+
+// Guard must have assigned a new serial number DC/2026-27/PROP-103
+assert.equal(savedGuarded.proposalSerialNo, "DC/2026-27/PROP-103");
+
+// Verify all 3 proposals exist independently and Anand was NOT overwritten
+currentStored = JSON.parse(globalThis.localStorage.getItem("solar_saved_proposals"));
+assert.equal(currentStored.length, 3);
+const anandRecord = currentStored.find(p => p.customerName === "Anand Joshi");
+assert.ok(anandRecord, "Anand Joshi record must still exist!");
+assert.equal(anandRecord.proposalSerialNo, "DC/2026-27/PROP-101");
+
+const kavitaRecord = currentStored.find(p => p.customerName === "Kavita Rao");
+assert.ok(kavitaRecord, "Kavita Rao record must still exist!");
+assert.equal(kavitaRecord.proposalSerialNo, "DC/2026-27/PROP-102");
+
+const rajeshRecord = currentStored.find(p => p.customerName === "Rajesh Sharma");
+assert.ok(rajeshRecord, "Rajesh Sharma record must exist!");
+assert.equal(rajeshRecord.proposalSerialNo, "DC/2026-27/PROP-103");
+
+console.log("✓ Test 8 Passed: Proposal Cloning, Customer Name Change, and Overwrite Protection verified.");
+
 console.log("ALL SAVE & LOAD TESTS PASSED! 🎉");

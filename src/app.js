@@ -3016,6 +3016,40 @@ function attachEvents() {
     if ($("loanMonthlyEmi")) $("loanMonthlyEmi").value = e.target.value;
   });
 
+  // Customer & Contact Info two-way sync listeners
+  $("customerName")?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    if ($("internalCustomerName")) $("internalCustomerName").value = val;
+    if ($("proposalToCustomerName")) $("proposalToCustomerName").textContent = val || "Valued Customer";
+  });
+  $("internalCustomerName")?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    if ($("customerName")) $("customerName").value = val;
+    if ($("proposalToCustomerName")) $("proposalToCustomerName").textContent = val || "Valued Customer";
+  });
+  $("mobileNumber")?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    if ($("internalMobileNumber")) $("internalMobileNumber").value = val;
+    if ($("proposalToCustomerPhone")) $("proposalToCustomerPhone").textContent = val || "—";
+  });
+  $("internalMobileNumber")?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    if ($("mobileNumber")) $("mobileNumber").value = val;
+    if ($("proposalToCustomerPhone")) $("proposalToCustomerPhone").textContent = val || "—";
+  });
+  $("emailAddress")?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    if ($("internalEmailAddress")) $("internalEmailAddress").value = val;
+  });
+  $("internalEmailAddress")?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    if ($("emailAddress")) $("emailAddress").value = val;
+  });
+  $("customerAddress")?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    if ($("proposalToCustomerAddress")) $("proposalToCustomerAddress").textContent = val || "Pune, Maharashtra";
+  });
+
   // Mode buttons
   $("easyModeButton")?.addEventListener("click", lockInternal);
   $("internalModeButton")?.addEventListener("click", openInternalDialog);
@@ -3310,6 +3344,53 @@ function attachEvents() {
 
   $("saveProposalButtonInternal")?.addEventListener("click", handleSaveClick);
   $("sidebarSaveProposalBtn")?.addEventListener("click", handleSaveClick);
+
+  // Change Customer / Clone Proposal Modal Triggers
+  $("cloneProposalBtn")?.addEventListener("click", () => openChangeCustomerModal());
+  $("sidebarCloneProposalBtn")?.addEventListener("click", () => openChangeCustomerModal());
+  $("quickChangeCustomerBtn")?.addEventListener("click", () => openChangeCustomerModal());
+
+  $("closeChangeCustomerModal")?.addEventListener("click", closeChangeCustomerModal);
+  $("changeCustomerModal")?.addEventListener("click", (e) => {
+    if (e.target === $("changeCustomerModal")) closeChangeCustomerModal();
+  });
+
+  $("modalSaveAsNewCustomerBtn")?.addEventListener("click", () => {
+    const name = $("modalCustomerName")?.value.trim();
+    if (!name) {
+      alert("Please enter a customer name.");
+      return;
+    }
+    const mobile = $("modalMobileNumber")?.value.trim() || "";
+    const email = $("modalEmailAddress")?.value.trim() || "";
+    const address = $("modalCustomerAddress")?.value.trim() || "";
+    cloneProposalForCustomer(name, mobile, email, address);
+    closeChangeCustomerModal();
+  });
+
+  $("modalUpdateCustomerOnlyBtn")?.addEventListener("click", () => {
+    const name = $("modalCustomerName")?.value.trim();
+    if (!name) {
+      alert("Please enter a customer name.");
+      return;
+    }
+    const mobile = $("modalMobileNumber")?.value.trim() || "";
+    const email = $("modalEmailAddress")?.value.trim() || "";
+    const address = $("modalCustomerAddress")?.value.trim() || "";
+    if ($("customerName")) $("customerName").value = name;
+    if ($("internalCustomerName")) $("internalCustomerName").value = name;
+    if ($("mobileNumber")) $("mobileNumber").value = mobile;
+    if ($("internalMobileNumber")) $("internalMobileNumber").value = mobile;
+    if ($("emailAddress")) $("emailAddress").value = email;
+    if ($("internalEmailAddress")) $("internalEmailAddress").value = email;
+    if ($("customerAddress")) $("customerAddress").value = address;
+    if ($("proposalToCustomerName")) $("proposalToCustomerName").textContent = name;
+    if ($("proposalToCustomerPhone")) $("proposalToCustomerPhone").textContent = mobile || "—";
+    if ($("proposalToCustomerAddress")) $("proposalToCustomerAddress").textContent = address || "Pune, Maharashtra";
+    saveProposalData();
+    render();
+    closeChangeCustomerModal();
+  });
 
   $("openLoadProposalModalButton")?.addEventListener("click", () => {
     const modal = $("loadProposalModal");
@@ -4136,7 +4217,18 @@ async function saveProposalData() {
       (snapshot.proposalSerialNo && p.proposalSerialNo === snapshot.proposalSerialNo) ||
       (p.customerName === snapshot.customerName && snapshot.mobileNumber && p.mobileNumber === snapshot.mobileNumber)
     );
-    if (existingIdx >= 0) {
+    if (existingIdx >= 0 && savedList[existingIdx].customerName && 
+        snapshot.customerName &&
+        savedList[existingIdx].customerName.trim().toLowerCase() !== snapshot.customerName.trim().toLowerCase()) {
+      // Customer name was changed on a previously saved proposal!
+      // Generate a fresh serial number to preserve the original customer proposal without overwriting.
+      snapshot.proposalSerialNo = getNextProposalSerialNo(savedList);
+      if ($("proposalSerialNo")) $("proposalSerialNo").value = snapshot.proposalSerialNo;
+      proposalRecord.proposalSerialNo = snapshot.proposalSerialNo;
+      if (proposalRecord.stateData?.reportDisplay) proposalRecord.stateData.reportDisplay.proposalSerialNo = snapshot.proposalSerialNo;
+      if (proposalRecord.stateData?.formValues) proposalRecord.stateData.formValues.proposalSerialNo = snapshot.proposalSerialNo;
+      savedList.unshift(proposalRecord);
+    } else if (existingIdx >= 0) {
       proposalRecord.id = savedList[existingIdx].id || proposalRecord.id;
       savedList[existingIdx] = proposalRecord;
     } else {
@@ -4182,6 +4274,81 @@ async function saveProposalData() {
     setButtonsText("Saved locally! 💾", "var(--primary-green, #10b981)");
   }
   setTimeout(resetButtons, 2500);
+}
+
+export function cloneProposalForCustomer(newCustomerName = null, newMobile = null, newEmail = null, newAddress = null) {
+  let name = newCustomerName;
+  if (!name || typeof name !== "string") {
+    const currentName = $("customerName")?.value || $("internalCustomerName")?.value || "";
+    const defaultVal = currentName ? `${currentName} (New)` : "New Customer";
+    const entered = (typeof window !== "undefined" && window.prompt) ? window.prompt("Enter new customer name to clone this proposal:", defaultVal) : defaultVal;
+    if (!entered || !entered.trim()) return null;
+    name = entered.trim();
+  }
+
+  // 1. Update customer name across all form fields
+  if ($("customerName")) $("customerName").value = name;
+  if ($("internalCustomerName")) $("internalCustomerName").value = name;
+  if ($("proposalToCustomerName")) $("proposalToCustomerName").textContent = name;
+
+  // 2. Update contact details if provided
+  if (newMobile !== null && newMobile !== undefined) {
+    if ($("mobileNumber")) $("mobileNumber").value = newMobile;
+    if ($("internalMobileNumber")) $("internalMobileNumber").value = newMobile;
+    if ($("proposalToCustomerPhone")) $("proposalToCustomerPhone").textContent = newMobile || "—";
+  }
+  if (newEmail !== null && newEmail !== undefined) {
+    if ($("emailAddress")) $("emailAddress").value = newEmail;
+    if ($("internalEmailAddress")) $("internalEmailAddress").value = newEmail;
+  }
+  if (newAddress !== null && newAddress !== undefined) {
+    if ($("customerAddress")) $("customerAddress").value = newAddress;
+    if ($("proposalToCustomerAddress")) $("proposalToCustomerAddress").textContent = newAddress || "Pune, Maharashtra";
+  }
+
+  // 3. Generate a fresh proposal serial number
+  let savedList = [];
+  try {
+    const raw = localStorage.getItem("solar_saved_proposals");
+    if (raw) savedList = JSON.parse(raw);
+  } catch (_) {}
+  const newSerial = getNextProposalSerialNo(savedList);
+  if ($("proposalSerialNo")) $("proposalSerialNo").value = newSerial;
+
+  // 4. Save proposal immediately as a new entry
+  saveProposalData();
+
+  // 5. Switch to proposal tab and re-render
+  if (typeof switchWorkspaceTab === "function") {
+    switchWorkspaceTab("proposal");
+  }
+  if (typeof render === "function") {
+    render();
+  }
+
+  return { customerName: name, proposalSerialNo: newSerial };
+}
+
+export function openChangeCustomerModal(suggestedName = null) {
+  const modal = $("changeCustomerModal");
+  if (!modal) return;
+  const currentName = suggestedName || $("customerName")?.value || $("internalCustomerName")?.value || "";
+  const currentMobile = $("mobileNumber")?.value || $("internalMobileNumber")?.value || "";
+  const currentEmail = $("emailAddress")?.value || $("internalEmailAddress")?.value || "";
+  const currentAddress = $("customerAddress")?.value || "Pune, Maharashtra";
+
+  if ($("modalCustomerName")) $("modalCustomerName").value = currentName;
+  if ($("modalMobileNumber")) $("modalMobileNumber").value = currentMobile;
+  if ($("modalEmailAddress")) $("modalEmailAddress").value = currentEmail;
+  if ($("modalCustomerAddress")) $("modalCustomerAddress").value = currentAddress;
+
+  modal.style.display = "flex";
+  setTimeout(() => $("modalCustomerName")?.focus(), 50);
+}
+
+export function closeChangeCustomerModal() {
+  const modal = $("changeCustomerModal");
+  if (modal) modal.style.display = "none";
 }
 
 function exportCurrentProposalJSON() {
@@ -4288,6 +4455,7 @@ async function searchProposals(query) {
           </div>
           <div style="display: flex; gap: 6px; align-items: center;">
             <button class="primary-button load-local-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button">Load</button>
+            <button class="secondary-button clone-local-btn" data-idx="${idx}" style="padding: 6px 10px; font-size: 12px; min-height: 32px; background: #ecfdf5; border: 1px solid #86efac; color: #166534;" type="button" title="Load and clone for a new customer">Clone 👥</button>
             <button class="ghost-button delete-local-btn" data-idx="${idx}" style="padding: 6px 8px; font-size: 13px; min-height: 32px; color: #ef4444;" type="button" title="Delete proposal">🗑️</button>
           </div>
         </div>
@@ -4319,7 +4487,10 @@ async function searchProposals(query) {
               <span style="font-size: 12px; color: var(--text-muted);">${p.mobile_number || ""} ${p.email_address ? "| " + p.email_address : ""}</span><br>
               <span style="font-size: 11px; color: var(--text-muted);">${new Date(p.created_at).toLocaleString()}${costVal ? " • ₹" + Math.round(costVal).toLocaleString("en-IN") : ""}</span>
             </div>
-            <button class="primary-button load-server-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button">Load</button>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <button class="primary-button load-server-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button">Load</button>
+              <button class="secondary-button clone-server-btn" data-idx="${idx}" style="padding: 6px 10px; font-size: 12px; min-height: 32px; background: #ecfdf5; border: 1px solid #86efac; color: #166534;" type="button" title="Load and clone for a new customer">Clone 👥</button>
+            </div>
           </div>
         `;
         }).join("");
@@ -4349,6 +4520,19 @@ async function searchProposals(query) {
       const p = window._currentLocalProposals?.[idx];
       if (p) {
         window.loadProposalState(p.stateData || p);
+      }
+    });
+  });
+
+  // Wire local Clone buttons
+  listEl.querySelectorAll(".clone-local-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      const p = window._currentLocalProposals?.[idx];
+      if (p) {
+        window.loadProposalState(p.stateData || p);
+        if ($("loadProposalModal")) $("loadProposalModal").style.display = "none";
+        openChangeCustomerModal((p.customerName || "Customer") + " (New)");
       }
     });
   });
@@ -4388,6 +4572,19 @@ async function searchProposals(query) {
       const p = window._currentServerProposals?.[idx];
       if (p) {
         window.loadProposalState(p.state_data || p);
+      }
+    });
+  });
+
+  // Wire server Clone buttons
+  listEl.querySelectorAll(".clone-server-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      const p = window._currentServerProposals?.[idx];
+      if (p) {
+        window.loadProposalState(p.state_data || p);
+        if ($("loadProposalModal")) $("loadProposalModal").style.display = "none";
+        openChangeCustomerModal((p.customer_name || "Customer") + " (New)");
       }
     });
   });
@@ -4669,6 +4866,9 @@ window.getFinancialYear = getFinancialYear;
 window.getNextProposalSerialNo = getNextProposalSerialNo;
 window.initProposalSerialNo = initProposalSerialNo;
 window.saveProposalData = saveProposalData;
+window.cloneProposalForCustomer = cloneProposalForCustomer;
+window.openChangeCustomerModal = openChangeCustomerModal;
+window.closeChangeCustomerModal = closeChangeCustomerModal;
 window.captureFormValues = captureFormValues;
 window.exportCurrentProposalJSON = exportCurrentProposalJSON;
 window.importProposalJSONFile = importProposalJSONFile;
@@ -4677,6 +4877,9 @@ window.buildProposalSnapshot = buildProposalSnapshot;
 
 export {
   saveProposalData,
+  cloneProposalForCustomer,
+  openChangeCustomerModal,
+  closeChangeCustomerModal,
   captureFormValues,
   exportCurrentProposalJSON,
   importProposalJSONFile,
