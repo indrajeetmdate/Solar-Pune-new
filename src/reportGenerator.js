@@ -243,7 +243,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   const proposalSerialNo = hideFlags.proposalSerialNo || 
                            option.proposalSerialNo || 
                            (typeof document !== "undefined" && document.getElementById("proposalSerialNo")?.value) || 
-                           "DC/2026-27/PROP-101";
+                           "DC/2026-27/PROP-1140";
   const customerAddress = hideFlags.customerAddress || input.customerAddress || "Pune, Maharashtra";
   const proposalDate = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 
@@ -1731,7 +1731,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     .replaceAll("/", "-")
     .replace(/[^a-zA-Z0-9_-]/g, "");
 
-  const filename = `${cleanSerial || "DC-2026-27-PROP-101"}.pdf`;
+  const filename = `${cleanSerial || "DC-2026-27-PROP-1140"}.pdf`;
 
   doc.save(filename);
   } catch (error) {

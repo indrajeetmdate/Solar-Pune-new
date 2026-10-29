@@ -500,8 +500,8 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   // Verify Corporate From & To cards, Ref Serial No, Scope of Work & Possible Savings table
   assert.ok(allTexts.some(t => String(t).includes("DATLION CNERGY PRIVATE LIMITED")), "DATLION CNERGY PRIVATE LIMITED must be rendered in From card");
   assert.ok(allTexts.some(t => String(t).includes("GSTIN: 27AALCD8550A1ZP")), "Company GSTIN must be rendered");
-  assert.ok(allTexts.some(t => String(t).includes("PROPOSAL REF: DC/2026-27/PROP-101")), "Proposal reference serial number must be rendered");
-  assert.equal(lastPdfInstance.savedFilename, "DC-2026-27-PROP-101.pdf", "PDF must be saved as sanitized serial number filename");
+  assert.ok(allTexts.some(t => String(t).includes("PROPOSAL REF: DC/2026-27/PROP-1140")), "Proposal reference serial number must be rendered");
+  assert.equal(lastPdfInstance.savedFilename, "DC-2026-27-PROP-1140.pdf", "PDF must be saved as sanitized serial number filename");
   assert.ok(allTexts.some(t => String(t).includes("Scope of Work (Turnkey EPC Delivery)")), "Scope of Work card heading must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Solar Panels")), "Scope of Work must render Solar Panels");
   assert.ok(allTexts.some(t => String(t).includes("Mounting Structure")), "Scope of Work must render Mounting Structure");

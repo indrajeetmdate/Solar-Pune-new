@@ -773,7 +773,7 @@ function getNextProposalSerialNo(existingProposals = null, date = new Date()) {
   }
 
   const prefixRegex = new RegExp(`^DC[/-]${fy}[/-]PROP-(\\d+)$`, "i");
-  let maxNum = 100;
+  let maxNum = 1139; // Starting anchor: new proposals start at 1140
 
   allProposals.forEach(p => {
     if (!p) return;
@@ -790,12 +790,24 @@ function getNextProposalSerialNo(existingProposals = null, date = new Date()) {
     ];
     candidates.forEach(cand => {
       if (typeof cand === "string") {
-        const m = cand.trim().match(prefixRegex);
-        if (m && m[1]) {
-          const num = parseInt(m[1], 10);
-          if (!isNaN(num) && num > maxNum) {
-            maxNum = num;
+        const trimmed = cand.trim();
+        const otherFyMatch = trimmed.match(/^DC[/-](\d{4}-\d{2})[/-]/i);
+        if (otherFyMatch && otherFyMatch[1] !== fy) {
+          // Explicitly belongs to a different financial year
+          return;
+        }
+        let num = null;
+        const mFy = trimmed.match(prefixRegex);
+        if (mFy && mFy[1]) {
+          num = parseInt(mFy[1], 10);
+        } else {
+          const mGeneric = trimmed.match(/PROP-(\d+)/i) || trimmed.match(/^(\d{3,})$/);
+          if (mGeneric && mGeneric[1]) {
+            num = parseInt(mGeneric[1], 10);
           }
+        }
+        if (num !== null && !isNaN(num) && num > maxNum) {
+          maxNum = num;
         }
       }
     });
@@ -811,41 +823,48 @@ assert.equal(getFinancialYear(new Date(2027, 2, 31)), "2026-27"); // March 31, 2
 assert.equal(getFinancialYear(new Date(2027, 3, 1)), "2027-28"); // April 1, 2027
 assert.equal(getFinancialYear(new Date(2025, 11, 25)), "2025-26"); // Dec 25, 2025
 
-// 7b: Starting number is 101 when no existing proposals
+// 7b: Starting number is 1140 when no existing proposals
 const fyDate = new Date(2026, 9, 8);
-assert.equal(getNextProposalSerialNo([], fyDate), "DC/2026-27/PROP-101");
+assert.equal(getNextProposalSerialNo([], fyDate), "DC/2026-27/PROP-1140");
 
-// 7c: Auto-increment by +1
+// 7c: Backwards historical proposals: historical numbers counting backwards (1139, 1138) lead cleanly to next proposal 1140
+const historicalBackwardsList = [
+  { proposalSerialNo: "DC/2026-27/PROP-1138" },
+  { proposalSerialNo: "DC/2026-27/PROP-1139" }
+];
+assert.equal(getNextProposalSerialNo(historicalBackwardsList, fyDate), "DC/2026-27/PROP-1140");
+
+// 7d: Auto-increment above 1140
 const testList = [
-  { proposalSerialNo: "DC/2026-27/PROP-101" },
-  { proposalSerialNo: "DC/2026-27/PROP-102" }
+  { proposalSerialNo: "DC/2026-27/PROP-1140" },
+  { proposalSerialNo: "DC/2026-27/PROP-1141" }
 ];
-assert.equal(getNextProposalSerialNo(testList, fyDate), "DC/2026-27/PROP-103");
+assert.equal(getNextProposalSerialNo(testList, fyDate), "DC/2026-27/PROP-1142");
 
-// 7d: Gap handling (jumps above highest existing number)
-testList.push({ proposalSerialNo: "DC/2026-27/PROP-108" });
-assert.equal(getNextProposalSerialNo(testList, fyDate), "DC/2026-27/PROP-109");
+// 7e: Gap handling (jumps above highest existing number)
+testList.push({ proposalSerialNo: "DC/2026-27/PROP-1148" });
+assert.equal(getNextProposalSerialNo(testList, fyDate), "DC/2026-27/PROP-1149");
 
-// 7e: Annual FY Reset - proposals from prior FY do not increase current FY sequence
+// 7f: Annual FY Reset - proposals from prior FY do not increase current FY sequence
 const priorYearList = [
-  { proposalSerialNo: "DC/2025-26/PROP-150" },
-  { proposalSerialNo: "DC/2025-26/PROP-199" }
+  { proposalSerialNo: "DC/2025-26/PROP-1200" },
+  { proposalSerialNo: "DC/2025-26/PROP-1250" }
 ];
-assert.equal(getNextProposalSerialNo(priorYearList, fyDate), "DC/2026-27/PROP-101");
+assert.equal(getNextProposalSerialNo(priorYearList, fyDate), "DC/2026-27/PROP-1140");
 
-// 7f: Sanitized PDF file naming (/ replaced with -)
+// 7g: Sanitized PDF file naming (/ replaced with -)
 function getPdfDownloadFilename(serialNo) {
   const cleanSerial = String(serialNo || "")
     .trim()
     .replaceAll("/", "-")
     .replace(/[^a-zA-Z0-9_-]/g, "");
-  return `${cleanSerial || "DC-2026-27-PROP-101"}.pdf`;
+  return `${cleanSerial || "DC-2026-27-PROP-1140"}.pdf`;
 }
 
-assert.equal(getPdfDownloadFilename("DC/2026-27/PROP-101"), "DC-2026-27-PROP-101.pdf");
-assert.equal(getPdfDownloadFilename("DC/2026-27/PROP-102"), "DC-2026-27-PROP-102.pdf");
-assert.equal(getPdfDownloadFilename("DC/2027-28/PROP-101"), "DC-2027-28-PROP-101.pdf");
-assert.equal(getPdfDownloadFilename(""), "DC-2026-27-PROP-101.pdf");
+assert.equal(getPdfDownloadFilename("DC/2026-27/PROP-1140"), "DC-2026-27-PROP-1140.pdf");
+assert.equal(getPdfDownloadFilename("DC/2026-27/PROP-1141"), "DC-2026-27-PROP-1141.pdf");
+assert.equal(getPdfDownloadFilename("DC/2027-28/PROP-1140"), "DC-2027-28-PROP-1140.pdf");
+assert.equal(getPdfDownloadFilename(""), "DC-2026-27-PROP-1140.pdf");
 
 console.log("✓ Test 7 Passed: Financial Year, Auto-increment Serial Numbering, and PDF file naming verified.");
 
@@ -857,17 +876,17 @@ console.log("Testing Customer Name Change, Proposal Cloning & Overwrite Guard...
 // Setup existing proposal list in localStorage
 const initialSavedList = [
   {
-    id: "prop_101",
+    id: "prop_1140",
     customerName: "Anand Joshi",
     mobileNumber: "9123456780",
     emailAddress: "anand@example.com",
-    proposalSerialNo: "DC/2026-27/PROP-101",
+    proposalSerialNo: "DC/2026-27/PROP-1140",
     systemCapacityKw: 5.5,
     totalCost: 245000,
     savedAt: new Date().toISOString(),
     stateData: {
       input: { customerName: "Anand Joshi", mobileNumber: "9123456780" },
-      reportDisplay: { proposalSerialNo: "DC/2026-27/PROP-101" }
+      reportDisplay: { proposalSerialNo: "DC/2026-27/PROP-1140" }
     }
   }
 ];
@@ -923,21 +942,21 @@ function testCloneProposal(newCustomerName, newMobile = null, newEmail = null, n
 // 8a: Clone proposal for a new customer
 const cloned = testCloneProposal("Kavita Rao", "9988776655", "kavita@example.com", "Aundh, Pune");
 assert.equal(cloned.customerName, "Kavita Rao");
-assert.equal(cloned.proposalSerialNo, "DC/2026-27/PROP-102");
+assert.equal(cloned.proposalSerialNo, "DC/2026-27/PROP-1141");
 assert.equal(elements.get("customerName").value, "Kavita Rao");
 assert.equal(elements.get("internalCustomerName").value, "Kavita Rao");
-assert.equal(elements.get("proposalSerialNo").value, "DC/2026-27/PROP-102");
+assert.equal(elements.get("proposalSerialNo").value, "DC/2026-27/PROP-1141");
 
 // Verify localStorage now has 2 independent proposals
 let currentStored = JSON.parse(globalThis.localStorage.getItem("solar_saved_proposals"));
 assert.equal(currentStored.length, 2);
 assert.equal(currentStored[0].customerName, "Kavita Rao");
-assert.equal(currentStored[0].proposalSerialNo, "DC/2026-27/PROP-102");
+assert.equal(currentStored[0].proposalSerialNo, "DC/2026-27/PROP-1141");
 assert.equal(currentStored[1].customerName, "Anand Joshi");
-assert.equal(currentStored[1].proposalSerialNo, "DC/2026-27/PROP-101");
+assert.equal(currentStored[1].proposalSerialNo, "DC/2026-27/PROP-1140");
 
 // 8b: Update existing proposal in place (same proposal number is updated, no duplicate entries created)
-function testSaveProposalData(proposalRecord) {
+function testSaveProposalData(proposalRecord, isNew = false) {
   let savedList = [];
   try {
     const raw = globalThis.localStorage.getItem("solar_saved_proposals");
@@ -945,12 +964,17 @@ function testSaveProposalData(proposalRecord) {
   } catch (_) {}
   if (!Array.isArray(savedList)) savedList = [];
 
+  // Duplicate guard for new proposals
+  if (isNew && savedList.some(p => p.proposalSerialNo === proposalRecord.proposalSerialNo)) {
+    proposalRecord.proposalSerialNo = getNextProposalSerialNo(savedList, new Date(2026, 9, 8));
+  }
+
   const serialNo = proposalRecord.proposalSerialNo;
   const recordId = proposalRecord.id;
 
   const existingIdx = savedList.findIndex(p =>
-    (serialNo && p.proposalSerialNo === serialNo) ||
-    (recordId && p.id === recordId)
+    (!isNew && serialNo && p.proposalSerialNo === serialNo) ||
+    (!isNew && recordId && p.id === recordId)
   );
 
   if (existingIdx >= 0) {
@@ -966,24 +990,24 @@ function testSaveProposalData(proposalRecord) {
   return proposalRecord;
 }
 
-// User edits Anand Joshi's proposal (DC/2026-27/PROP-101), changes capacity and customer name to "Anand R. Joshi", and saves again
+// User edits Anand Joshi's proposal (DC/2026-27/PROP-1140), changes capacity and customer name to "Anand R. Joshi", and saves again
 const updatedAnand = testSaveProposalData({
-  id: "prop_101",
+  id: "prop_1140",
   customerName: "Anand R. Joshi",
   mobileNumber: "9822012345",
-  proposalSerialNo: "DC/2026-27/PROP-101",
+  proposalSerialNo: "DC/2026-27/PROP-1140",
   systemCapacityKw: 6.0,
   totalCost: 260000,
   savedAt: new Date().toISOString()
-});
+}, false);
 
 // The same proposal number must be preserved
-assert.equal(updatedAnand.proposalSerialNo, "DC/2026-27/PROP-101");
+assert.equal(updatedAnand.proposalSerialNo, "DC/2026-27/PROP-1140");
 
 // Verify that it did NOT create a new entry (length is still 2)
 currentStored = JSON.parse(globalThis.localStorage.getItem("solar_saved_proposals"));
 assert.equal(currentStored.length, 2, "Re-saving existing proposal must update in place without creating new entries");
-const anandRecord = currentStored.find(p => p.proposalSerialNo === "DC/2026-27/PROP-101");
+const anandRecord = currentStored.find(p => p.proposalSerialNo === "DC/2026-27/PROP-1140");
 assert.ok(anandRecord, "Anand record must exist with same proposal number");
 assert.equal(anandRecord.customerName, "Anand R. Joshi");
 assert.equal(anandRecord.systemCapacityKw, 6.0);
@@ -1006,40 +1030,55 @@ function testCreateNewProposal() {
 }
 
 const freshSerial = testCreateNewProposal();
-assert.equal(freshSerial, "DC/2026-27/PROP-103", "New proposal must generate the next sequential serial number");
+assert.equal(freshSerial, "DC/2026-27/PROP-1142", "New proposal must generate the next sequential serial number");
 assert.equal(elements.get("customerName").value, "");
 
 // Save this new proposal
 const savedNewProposal = testSaveProposalData({
-  id: "prop_103",
+  id: "prop_1142",
   customerName: "Rajesh Sharma",
   mobileNumber: "9555123456",
   proposalSerialNo: freshSerial,
   systemCapacityKw: 5.5,
   totalCost: 245000,
   savedAt: new Date().toISOString()
-});
+}, true);
 
-assert.equal(savedNewProposal.proposalSerialNo, "DC/2026-27/PROP-103");
+assert.equal(savedNewProposal.proposalSerialNo, "DC/2026-27/PROP-1142");
 currentStored = JSON.parse(globalThis.localStorage.getItem("solar_saved_proposals"));
 assert.equal(currentStored.length, 3, "New proposal must add entry #3");
 
-// 8d: Re-saving the new proposal (PROP-103) updates it in place (count remains 3)
+// 8d: Re-saving the new proposal (PROP-1142) updates it in place (count remains 3)
 const resavedProposal = testSaveProposalData({
-  id: "prop_103",
+  id: "prop_1142",
   customerName: "Rajesh Sharma",
   mobileNumber: "9555123456",
-  proposalSerialNo: "DC/2026-27/PROP-103",
+  proposalSerialNo: "DC/2026-27/PROP-1142",
   systemCapacityKw: 8.0,
   totalCost: 350000,
   savedAt: new Date().toISOString()
-});
+}, false);
 
 currentStored = JSON.parse(globalThis.localStorage.getItem("solar_saved_proposals"));
-assert.equal(currentStored.length, 3, "Re-saving PROP-103 must update in place without adding entry #4");
-const p103 = currentStored.find(p => p.proposalSerialNo === "DC/2026-27/PROP-103");
-assert.equal(p103.systemCapacityKw, 8.0);
-assert.equal(p103.totalCost, 350000);
+assert.equal(currentStored.length, 3, "Re-saving PROP-1142 must update in place without adding entry #4");
+const p1142 = currentStored.find(p => p.proposalSerialNo === "DC/2026-27/PROP-1142");
+assert.equal(p1142.systemCapacityKw, 8.0);
+assert.equal(p1142.totalCost, 350000);
+
+// 8e: Duplicate Prevention check: If attempting to save a new proposal with existing serial (e.g. 1140), auto-advances to avoid collision
+const duplicateAttempt = testSaveProposalData({
+  id: "prop_fresh_duplicate",
+  customerName: "Duplicate Test Customer",
+  mobileNumber: "9999988888",
+  proposalSerialNo: "DC/2026-27/PROP-1140", // Existing taken number!
+  systemCapacityKw: 3.0,
+  totalCost: 150000,
+  savedAt: new Date().toISOString()
+}, true);
+
+assert.equal(duplicateAttempt.proposalSerialNo, "DC/2026-27/PROP-1143", "Duplicate proposal number must auto-advance to avoid collision");
+currentStored = JSON.parse(globalThis.localStorage.getItem("solar_saved_proposals"));
+assert.equal(currentStored.length, 4, "Entry with advanced serial number saved cleanly");
 
 console.log("✓ Test 8 Passed: Proposal In-Place Updating, Cloning, and New Proposal Number Generation verified.");
 

@@ -152,11 +152,11 @@ export function getFinancialYear(date = new Date()) {
 
 /**
  * Computes the next auto-incrementing proposal serial number in format:
- * DC/{Financial_Year}/PROP-{Number} (starting at 101, resets to 101 each FY).
+ * DC/{Financial_Year}/PROP-{Number} (starting at 1140, counts up sequentially).
  * Scans provided proposals array, local storage, and server proposals.
  * @param {Array} [existingProposals=null] Optional array of existing proposals to scan
  * @param {Date|string|number} [date=new Date()]
- * @returns {string} e.g. 'DC/2026-27/PROP-101'
+ * @returns {string} e.g. 'DC/2026-27/PROP-1140'
  */
 export function getNextProposalSerialNo(existingProposals = null, date = new Date()) {
   const fy = getFinancialYear(date);
@@ -191,7 +191,8 @@ export function getNextProposalSerialNo(existingProposals = null, date = new Dat
   // Regex to match DC/{fy}/PROP-{number} or DC-{fy}-PROP-{number}
   const prefixRegex = new RegExp(`^DC[/-]${fy}[/-]PROP-(\\d+)$`, "i");
 
-  let maxNum = 100; // Counter starts at 101 when no existing proposals for this FY
+  // Starting anchor: 1139 so the first newly generated proposal is 1140
+  let maxNum = 1139;
 
   allProposals.forEach(p => {
     if (!p) return;
@@ -208,12 +209,24 @@ export function getNextProposalSerialNo(existingProposals = null, date = new Dat
     ];
     candidates.forEach(cand => {
       if (typeof cand === "string") {
-        const m = cand.trim().match(prefixRegex);
-        if (m && m[1]) {
-          const num = parseInt(m[1], 10);
-          if (!isNaN(num) && num > maxNum) {
-            maxNum = num;
+        const trimmed = cand.trim();
+        const otherFyMatch = trimmed.match(/^DC[/-](\d{4}-\d{2})[/-]/i);
+        if (otherFyMatch && otherFyMatch[1] !== fy) {
+          // Explicitly belongs to a different financial year
+          return;
+        }
+        let num = null;
+        const mFy = trimmed.match(prefixRegex);
+        if (mFy && mFy[1]) {
+          num = parseInt(mFy[1], 10);
+        } else {
+          const mGeneric = trimmed.match(/PROP-(\d+)/i) || trimmed.match(/^(\d{3,})$/);
+          if (mGeneric && mGeneric[1]) {
+            num = parseInt(mGeneric[1], 10);
           }
+        }
+        if (num !== null && !isNaN(num) && num > maxNum) {
+          maxNum = num;
         }
       }
     });
@@ -3069,17 +3082,53 @@ function updateProposalStatusBadge(status, serial) {
   }
 }
 
+/**
+ * Auto-recognises the latest proposal serial saved on the server database
+ * and ensures the next available sequential number is loaded on the app.
+ */
+export async function autoSyncLatestProposalSerial() {
+  if (typeof fetch === "undefined") return null;
+  try {
+    const res = await fetch("/api/load-proposals?latest=true");
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json && json.success) {
+      if (Array.isArray(json.data) && typeof window !== "undefined") {
+        window._currentServerProposals = json.data;
+      }
+      // If the app is currently on a "New Proposal" (not viewing an existing saved proposal)
+      if (!state.currentProposalId && !state.currentServerId) {
+        const nextSerial = json.nextProposalSerialNo || getNextProposalSerialNo(json.data);
+        if (nextSerial) {
+          state.currentProposalSerialNo = nextSerial;
+          if ($("proposalSerialNo")) $("proposalSerialNo").value = nextSerial;
+          if ($("sidebarProposalSerialNo")) $("sidebarProposalSerialNo").value = nextSerial;
+          updateProposalStatusBadge("new", nextSerial);
+          render();
+          return nextSerial;
+        }
+      }
+    }
+  } catch (err) {
+    console.debug("Could not auto-sync latest proposal serial from server:", err);
+  }
+  return null;
+}
+
 export function initProposalSerialNo() {
   const el = $("proposalSerialNo");
   const sidebarEl = $("sidebarProposalSerialNo");
   let serial = el?.value || sidebarEl?.value;
-  if (!serial || serial === "DC/2026-27/PROP-1001" || serial === "DC/2026-27/PROP-101") {
+  if (!serial || serial === "DC/2026-27/PROP-1001" || serial === "DC/2026-27/PROP-101" || serial === "DC/2026-27/PROP-1140") {
     serial = getNextProposalSerialNo();
   }
   if (el) el.value = serial;
   if (sidebarEl) sidebarEl.value = serial;
   state.currentProposalSerialNo = serial;
   updateProposalStatusBadge("new", serial);
+
+  // Auto-recognise latest proposal from the database in the background
+  autoSyncLatestProposalSerial();
 }
 
 function createNewProposal() {
@@ -3089,7 +3138,7 @@ function createNewProposal() {
     if (raw) savedList = JSON.parse(raw);
   } catch (_) {}
   if (!Array.isArray(savedList)) savedList = [];
-  if (Array.isArray(window._currentServerProposals)) {
+  if (typeof window !== "undefined" && Array.isArray(window._currentServerProposals)) {
     savedList.push(...window._currentServerProposals);
   }
 
@@ -3121,6 +3170,9 @@ function createNewProposal() {
 
   if ($("loadProposalModal")) $("loadProposalModal").style.display = "none";
   setTimeout(() => $("customerName")?.focus(), 50);
+
+  // Background check database for newly added proposals by other sessions
+  autoSyncLatestProposalSerial();
 
   return nextSerial;
 }
@@ -4489,6 +4541,7 @@ async function saveProposalData() {
   };
 
   // 1. Cache to local storage immediately: UPDATE IN PLACE BY SERIAL NUMBER OR ID (Never duplicate)
+  const isNewProposal = !state.currentProposalId && !state.currentServerId;
   try {
     let savedList = [];
     try {
@@ -4497,9 +4550,23 @@ async function saveProposalData() {
     } catch (_) {}
     if (!Array.isArray(savedList)) savedList = [];
 
+    // If saving as a brand new proposal, check if serialNo is already taken in localStorage
+    if (isNewProposal) {
+      const duplicateSerial = savedList.some(p => p.proposalSerialNo === serialNo);
+      if (duplicateSerial) {
+        serialNo = getNextProposalSerialNo(savedList);
+        proposalRecord.proposalSerialNo = serialNo;
+        state.currentProposalSerialNo = serialNo;
+        if ($("proposalSerialNo")) $("proposalSerialNo").value = serialNo;
+        if ($("sidebarProposalSerialNo")) $("sidebarProposalSerialNo").value = serialNo;
+        if (proposalRecord.stateData?.reportDisplay) proposalRecord.stateData.reportDisplay.proposalSerialNo = serialNo;
+        if (proposalRecord.stateData?.formValues) proposalRecord.stateData.formValues.proposalSerialNo = serialNo;
+      }
+    }
+
     const existingIdx = savedList.findIndex(p =>
-      (serialNo && p.proposalSerialNo === serialNo) ||
-      (recordId && p.id === recordId)
+      (!isNewProposal && recordId && p.id === recordId) ||
+      (!isNewProposal && serialNo && p.proposalSerialNo === serialNo)
     );
 
     if (existingIdx >= 0) {
@@ -4529,6 +4596,7 @@ async function saveProposalData() {
       body: JSON.stringify({
         id: state.currentServerId || null,
         proposalId: state.currentProposalId || recordId,
+        isNewProposal: isNewProposal,
         customerName: snapshot.customerName,
         mobileNumber: snapshot.mobileNumber,
         emailAddress: snapshot.emailAddress,
@@ -4545,6 +4613,27 @@ async function saveProposalData() {
         serverSaved = true;
         if (data.id) {
           state.currentServerId = data.id;
+        }
+        // If server auto-advanced serialNo to avoid duplicate in database
+        if (data.proposalSerialNo && data.proposalSerialNo !== serialNo) {
+          serialNo = data.proposalSerialNo;
+          state.currentProposalSerialNo = serialNo;
+          if ($("proposalSerialNo")) $("proposalSerialNo").value = serialNo;
+          if ($("sidebarProposalSerialNo")) $("sidebarProposalSerialNo").value = serialNo;
+          proposalRecord.proposalSerialNo = serialNo;
+          if (proposalRecord.stateData?.reportDisplay) proposalRecord.stateData.reportDisplay.proposalSerialNo = serialNo;
+          if (proposalRecord.stateData?.formValues) proposalRecord.stateData.formValues.proposalSerialNo = serialNo;
+
+          // Sync updated serial number back to localStorage record
+          try {
+            const currentSaved = JSON.parse(localStorage.getItem("solar_saved_proposals") || "[]");
+            const idx = currentSaved.findIndex(p => p.id === proposalRecord.id);
+            if (idx >= 0) {
+              currentSaved[idx].proposalSerialNo = serialNo;
+              localStorage.setItem("solar_saved_proposals", JSON.stringify(currentSaved));
+            }
+          } catch (_) {}
+          updateProposalStatusBadge("saved", serialNo);
         }
         console.log("Proposal saved to server:", data.id || serialNo);
       }
@@ -5185,6 +5274,7 @@ window.loadProposalState = function(data) {
 window.getFinancialYear = getFinancialYear;
 window.getNextProposalSerialNo = getNextProposalSerialNo;
 window.initProposalSerialNo = initProposalSerialNo;
+window.autoSyncLatestProposalSerial = autoSyncLatestProposalSerial;
 window.createNewProposal = createNewProposal;
 window.saveProposalData = saveProposalData;
 window.cloneProposalForCustomer = cloneProposalForCustomer;
@@ -5202,6 +5292,7 @@ window.lockInternal = lockInternal;
 window.openInternal = openInternal;
 
 export {
+  autoSyncLatestProposalSerial,
   saveProposalData,
   createNewProposal,
   cloneProposalForCustomer,
