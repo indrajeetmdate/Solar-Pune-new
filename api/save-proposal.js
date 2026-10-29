@@ -55,15 +55,64 @@ export default async function handler(req, res) {
       state_data: stateData
     };
 
-    // Check if a proposal with this unique proposal_serial_no already exists
+    // Check if a proposal already exists (Update in place, do NOT create duplicate entries):
+    // 1. Check by ID if provided (from previous save or loaded proposal)
     let existing = null;
-    if (proposalSerialNo) {
-      const { data: found } = await supabase
-        .from('proposals')
-        .select('id')
-        .eq('proposal_serial_no', proposalSerialNo)
-        .maybeSingle();
-      existing = found;
+    if (req.body.id) {
+      try {
+        const { data: foundById } = await supabase
+          .from('proposals')
+          .select('id')
+          .eq('id', req.body.id)
+          .maybeSingle();
+        if (foundById && foundById.id) existing = foundById;
+      } catch (_) {}
+    }
+
+    // 2. Check by proposal_serial_no column if not found by ID
+    if (!existing && proposalSerialNo) {
+      try {
+        const { data: foundBySerial, error: serialErr } = await supabase
+          .from('proposals')
+          .select('id')
+          .eq('proposal_serial_no', proposalSerialNo)
+          .maybeSingle();
+        if (!serialErr && foundBySerial && foundBySerial.id) {
+          existing = foundBySerial;
+        }
+      } catch (_) {}
+    }
+
+    // 3. Fallback: Check inside state_data JSON (in case column migration hasn't run)
+    if (!existing && proposalSerialNo) {
+      try {
+        const { data: foundInJson } = await supabase
+          .from('proposals')
+          .select('id')
+          .filter('state_data->reportDisplay->>proposalSerialNo', 'eq', proposalSerialNo)
+          .limit(1)
+          .maybeSingle();
+        if (foundInJson && foundInJson.id) {
+          existing = foundInJson;
+        }
+      } catch (_) {}
+    }
+
+    // 4. Fallback: Check by customer_name and mobile_number if available
+    if (!existing && customerName && mobileNumber) {
+      try {
+        const { data: foundByContact } = await supabase
+          .from('proposals')
+          .select('id')
+          .eq('customer_name', customerName)
+          .eq('mobile_number', mobileNumber)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (foundByContact && foundByContact.id) {
+          existing = foundByContact;
+        }
+      } catch (_) {}
     }
 
     let result;

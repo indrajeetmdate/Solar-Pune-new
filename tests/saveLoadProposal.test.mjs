@@ -936,9 +936,8 @@ assert.equal(currentStored[0].proposalSerialNo, "DC/2026-27/PROP-102");
 assert.equal(currentStored[1].customerName, "Anand Joshi");
 assert.equal(currentStored[1].proposalSerialNo, "DC/2026-27/PROP-101");
 
-// 8b: Test Overwrite Guard in saveProposalData
-// User loads Anand Joshi's proposal (DC/2026-27/PROP-101), manually edits customerName to "Rajesh Sharma", but doesn't change proposalSerialNo
-function testSaveWithOverwriteGuard(proposalRecord) {
+// 8b: Update existing proposal in place (same proposal number is updated, no duplicate entries created)
+function testSaveProposalData(proposalRecord) {
   let savedList = [];
   try {
     const raw = globalThis.localStorage.getItem("solar_saved_proposals");
@@ -946,22 +945,20 @@ function testSaveWithOverwriteGuard(proposalRecord) {
   } catch (_) {}
   if (!Array.isArray(savedList)) savedList = [];
 
+  const serialNo = proposalRecord.proposalSerialNo;
+  const recordId = proposalRecord.id;
+
   const existingIdx = savedList.findIndex(p =>
-    (proposalRecord.proposalSerialNo && p.proposalSerialNo === proposalRecord.proposalSerialNo) ||
-    (p.customerName === proposalRecord.customerName && proposalRecord.mobileNumber && p.mobileNumber === proposalRecord.mobileNumber)
+    (serialNo && p.proposalSerialNo === serialNo) ||
+    (recordId && p.id === recordId)
   );
 
-  if (existingIdx >= 0 && savedList[existingIdx].customerName && 
-      proposalRecord.customerName &&
-      savedList[existingIdx].customerName.trim().toLowerCase() !== proposalRecord.customerName.trim().toLowerCase()) {
-    // Name changed on loaded proposal: auto-generate new serial number to avoid destroying previous customer
-    const newSerial = getNextProposalSerialNo(savedList, new Date(2026, 9, 8));
-    proposalRecord.proposalSerialNo = newSerial;
-    savedList.unshift(proposalRecord);
-  } else if (existingIdx >= 0) {
-    proposalRecord.id = savedList[existingIdx].id || proposalRecord.id;
+  if (existingIdx >= 0) {
+    // UPDATE IN PLACE
+    proposalRecord.id = savedList[existingIdx].id || recordId;
     savedList[existingIdx] = proposalRecord;
   } else {
+    // New proposal
     savedList.unshift(proposalRecord);
   }
 
@@ -969,35 +966,82 @@ function testSaveWithOverwriteGuard(proposalRecord) {
   return proposalRecord;
 }
 
-const savedGuarded = testSaveWithOverwriteGuard({
-  id: "prop_temp",
+// User edits Anand Joshi's proposal (DC/2026-27/PROP-101), changes capacity and customer name to "Anand R. Joshi", and saves again
+const updatedAnand = testSaveProposalData({
+  id: "prop_101",
+  customerName: "Anand R. Joshi",
+  mobileNumber: "9822012345",
+  proposalSerialNo: "DC/2026-27/PROP-101",
+  systemCapacityKw: 6.0,
+  totalCost: 260000,
+  savedAt: new Date().toISOString()
+});
+
+// The same proposal number must be preserved
+assert.equal(updatedAnand.proposalSerialNo, "DC/2026-27/PROP-101");
+
+// Verify that it did NOT create a new entry (length is still 2)
+currentStored = JSON.parse(globalThis.localStorage.getItem("solar_saved_proposals"));
+assert.equal(currentStored.length, 2, "Re-saving existing proposal must update in place without creating new entries");
+const anandRecord = currentStored.find(p => p.proposalSerialNo === "DC/2026-27/PROP-101");
+assert.ok(anandRecord, "Anand record must exist with same proposal number");
+assert.equal(anandRecord.customerName, "Anand R. Joshi");
+assert.equal(anandRecord.systemCapacityKw, 6.0);
+assert.equal(anandRecord.totalCost, 260000);
+
+// 8c: New proposal creation generates a new proposal number
+function testCreateNewProposal() {
+  let savedList = [];
+  try {
+    const raw = globalThis.localStorage.getItem("solar_saved_proposals");
+    if (raw) savedList = JSON.parse(raw);
+  } catch (_) {}
+  if (!Array.isArray(savedList)) savedList = [];
+
+  const nextSerial = getNextProposalSerialNo(savedList, new Date(2026, 9, 8));
+  elements.get("proposalSerialNo").value = nextSerial;
+  elements.get("customerName").value = "";
+  elements.get("mobileNumber").value = "";
+  return nextSerial;
+}
+
+const freshSerial = testCreateNewProposal();
+assert.equal(freshSerial, "DC/2026-27/PROP-103", "New proposal must generate the next sequential serial number");
+assert.equal(elements.get("customerName").value, "");
+
+// Save this new proposal
+const savedNewProposal = testSaveProposalData({
+  id: "prop_103",
   customerName: "Rajesh Sharma",
   mobileNumber: "9555123456",
-  proposalSerialNo: "DC/2026-27/PROP-101", // Reusing Anand's old serial number
+  proposalSerialNo: freshSerial,
   systemCapacityKw: 5.5,
   totalCost: 245000,
   savedAt: new Date().toISOString()
 });
 
-// Guard must have assigned a new serial number DC/2026-27/PROP-103
-assert.equal(savedGuarded.proposalSerialNo, "DC/2026-27/PROP-103");
-
-// Verify all 3 proposals exist independently and Anand was NOT overwritten
+assert.equal(savedNewProposal.proposalSerialNo, "DC/2026-27/PROP-103");
 currentStored = JSON.parse(globalThis.localStorage.getItem("solar_saved_proposals"));
-assert.equal(currentStored.length, 3);
-const anandRecord = currentStored.find(p => p.customerName === "Anand Joshi");
-assert.ok(anandRecord, "Anand Joshi record must still exist!");
-assert.equal(anandRecord.proposalSerialNo, "DC/2026-27/PROP-101");
+assert.equal(currentStored.length, 3, "New proposal must add entry #3");
 
-const kavitaRecord = currentStored.find(p => p.customerName === "Kavita Rao");
-assert.ok(kavitaRecord, "Kavita Rao record must still exist!");
-assert.equal(kavitaRecord.proposalSerialNo, "DC/2026-27/PROP-102");
+// 8d: Re-saving the new proposal (PROP-103) updates it in place (count remains 3)
+const resavedProposal = testSaveProposalData({
+  id: "prop_103",
+  customerName: "Rajesh Sharma",
+  mobileNumber: "9555123456",
+  proposalSerialNo: "DC/2026-27/PROP-103",
+  systemCapacityKw: 8.0,
+  totalCost: 350000,
+  savedAt: new Date().toISOString()
+});
 
-const rajeshRecord = currentStored.find(p => p.customerName === "Rajesh Sharma");
-assert.ok(rajeshRecord, "Rajesh Sharma record must exist!");
-assert.equal(rajeshRecord.proposalSerialNo, "DC/2026-27/PROP-103");
+currentStored = JSON.parse(globalThis.localStorage.getItem("solar_saved_proposals"));
+assert.equal(currentStored.length, 3, "Re-saving PROP-103 must update in place without adding entry #4");
+const p103 = currentStored.find(p => p.proposalSerialNo === "DC/2026-27/PROP-103");
+assert.equal(p103.systemCapacityKw, 8.0);
+assert.equal(p103.totalCost, 350000);
 
-console.log("✓ Test 8 Passed: Proposal Cloning, Customer Name Change, and Overwrite Protection verified.");
+console.log("✓ Test 8 Passed: Proposal In-Place Updating, Cloning, and New Proposal Number Generation verified.");
 
 // -------------------------------------------------------------
 // TEST 9: Internal Mode Master Password Dialog & Security

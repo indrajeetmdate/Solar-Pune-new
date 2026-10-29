@@ -17,6 +17,9 @@ const state = {
   meteringMode: "single",
   meters: [],
   allocationStrategy: "proportional",
+  currentProposalId: null,
+  currentServerId: null,
+  currentProposalSerialNo: null
 };
 
 const ASSUMPTION_IDS = [
@@ -2910,12 +2913,79 @@ function resetForm() {
   render();
 }
 
+function updateProposalStatusBadge(status, serial) {
+  const badge = $("proposalStatusBadge");
+  if (!badge) return;
+  const numText = serial ? serial.replace(/^DC\/\d{4}-\d{2}\/PROP-/, "PROP-") : "";
+  if (status === "saved") {
+    badge.textContent = `✓ Saved ${numText ? "(" + numText + ")" : ""}`;
+    badge.style.background = "#dcfce7";
+    badge.style.color = "#166534";
+  } else if (status === "modified") {
+    badge.textContent = `● Unsaved ${numText ? "(" + numText + ")" : ""}`;
+    badge.style.background = "#fef3c7";
+    badge.style.color = "#92400e";
+  } else {
+    badge.textContent = `New Proposal ${numText ? "(" + numText + ")" : ""}`;
+    badge.style.background = "#e0f2fe";
+    badge.style.color = "#0284c7";
+  }
+}
+
 export function initProposalSerialNo() {
   const el = $("proposalSerialNo");
-  if (!el) return;
-  if (!el.value || el.value === "DC/2026-27/PROP-1001" || el.value === "DC/2026-27/PROP-101") {
-    el.value = getNextProposalSerialNo();
+  const sidebarEl = $("sidebarProposalSerialNo");
+  let serial = el?.value || sidebarEl?.value;
+  if (!serial || serial === "DC/2026-27/PROP-1001" || serial === "DC/2026-27/PROP-101") {
+    serial = getNextProposalSerialNo();
   }
+  if (el) el.value = serial;
+  if (sidebarEl) sidebarEl.value = serial;
+  state.currentProposalSerialNo = serial;
+  updateProposalStatusBadge("new", serial);
+}
+
+function createNewProposal() {
+  let savedList = [];
+  try {
+    const raw = localStorage.getItem("solar_saved_proposals");
+    if (raw) savedList = JSON.parse(raw);
+  } catch (_) {}
+  if (!Array.isArray(savedList)) savedList = [];
+  if (Array.isArray(window._currentServerProposals)) {
+    savedList.push(...window._currentServerProposals);
+  }
+
+  const nextSerial = getNextProposalSerialNo(savedList);
+
+  state.currentProposalId = null;
+  state.currentServerId = null;
+  state.currentProposalSerialNo = nextSerial;
+  state.extractedBill = null;
+
+  if ($("proposalSerialNo")) $("proposalSerialNo").value = nextSerial;
+  if ($("sidebarProposalSerialNo")) $("sidebarProposalSerialNo").value = nextSerial;
+
+  if ($("customerName")) $("customerName").value = "";
+  if ($("internalCustomerName")) $("internalCustomerName").value = "";
+  if ($("mobileNumber")) $("mobileNumber").value = "";
+  if ($("internalMobileNumber")) $("internalMobileNumber").value = "";
+  if ($("emailAddress")) $("emailAddress").value = "";
+  if ($("internalEmailAddress")) $("internalEmailAddress").value = "";
+  if ($("customerAddress")) $("customerAddress").value = "Pune, Maharashtra";
+
+  if ($("proposalToCustomerName")) $("proposalToCustomerName").textContent = "Valued Customer";
+  if ($("proposalToCustomerPhone")) $("proposalToCustomerPhone").textContent = "—";
+  if ($("proposalToCustomerAddress")) $("proposalToCustomerAddress").textContent = "Pune, Maharashtra";
+
+  updateProposalStatusBadge("new", nextSerial);
+  switchSidebarCategory("contact");
+  render();
+
+  if ($("loadProposalModal")) $("loadProposalModal").style.display = "none";
+  setTimeout(() => $("customerName")?.focus(), 50);
+
+  return nextSerial;
 }
 
 function updatePresetDropdown() {
@@ -3050,33 +3120,40 @@ function attachEvents() {
     const val = e.target.value;
     if ($("internalCustomerName")) $("internalCustomerName").value = val;
     if ($("proposalToCustomerName")) $("proposalToCustomerName").textContent = val || "Valued Customer";
+    updateProposalStatusBadge("modified", state.currentProposalSerialNo);
   });
   $("internalCustomerName")?.addEventListener("input", (e) => {
     const val = e.target.value;
     if ($("customerName")) $("customerName").value = val;
     if ($("proposalToCustomerName")) $("proposalToCustomerName").textContent = val || "Valued Customer";
+    updateProposalStatusBadge("modified", state.currentProposalSerialNo);
   });
   $("mobileNumber")?.addEventListener("input", (e) => {
     const val = e.target.value;
     if ($("internalMobileNumber")) $("internalMobileNumber").value = val;
     if ($("proposalToCustomerPhone")) $("proposalToCustomerPhone").textContent = val || "—";
+    updateProposalStatusBadge("modified", state.currentProposalSerialNo);
   });
   $("internalMobileNumber")?.addEventListener("input", (e) => {
     const val = e.target.value;
     if ($("mobileNumber")) $("mobileNumber").value = val;
     if ($("proposalToCustomerPhone")) $("proposalToCustomerPhone").textContent = val || "—";
+    updateProposalStatusBadge("modified", state.currentProposalSerialNo);
   });
   $("emailAddress")?.addEventListener("input", (e) => {
     const val = e.target.value;
     if ($("internalEmailAddress")) $("internalEmailAddress").value = val;
+    updateProposalStatusBadge("modified", state.currentProposalSerialNo);
   });
   $("internalEmailAddress")?.addEventListener("input", (e) => {
     const val = e.target.value;
     if ($("emailAddress")) $("emailAddress").value = val;
+    updateProposalStatusBadge("modified", state.currentProposalSerialNo);
   });
   $("customerAddress")?.addEventListener("input", (e) => {
     const val = e.target.value;
     if ($("proposalToCustomerAddress")) $("proposalToCustomerAddress").textContent = val || "Pune, Maharashtra";
+    updateProposalStatusBadge("modified", state.currentProposalSerialNo);
   });
 
   // Mode buttons
@@ -3381,6 +3458,27 @@ function attachEvents() {
 
   $("saveProposalButtonInternal")?.addEventListener("click", handleSaveClick);
   $("sidebarSaveProposalBtn")?.addEventListener("click", handleSaveClick);
+
+  // New Proposal buttons
+  const handleNewProposal = () => createNewProposal();
+  $("newProposalBtn")?.addEventListener("click", handleNewProposal);
+  $("sidebarNewProposalBtn")?.addEventListener("click", handleNewProposal);
+  $("proposalTabNewProposalBtn")?.addEventListener("click", handleNewProposal);
+  $("modalNewProposalBtn")?.addEventListener("click", handleNewProposal);
+
+  // Proposal Serial Number two-way sync
+  $("sidebarProposalSerialNo")?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    if ($("proposalSerialNo")) $("proposalSerialNo").value = val;
+    state.currentProposalSerialNo = val;
+    updateProposalStatusBadge("modified", val);
+  });
+  $("proposalSerialNo")?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    if ($("sidebarProposalSerialNo")) $("sidebarProposalSerialNo").value = val;
+    state.currentProposalSerialNo = val;
+    updateProposalStatusBadge("modified", val);
+  });
 
   // Change Customer / Clone Proposal Modal Triggers
   $("cloneProposalBtn")?.addEventListener("click", () => openChangeCustomerModal());
@@ -4227,22 +4325,34 @@ async function saveProposalData() {
   setButtonsText("Saving...", null);
 
   const snapshot = buildProposalSnapshot();
+  let serialNo = ($("proposalSerialNo")?.value || $("sidebarProposalSerialNo")?.value || state.currentProposalSerialNo || "").trim();
+  if (!serialNo) {
+    serialNo = getNextProposalSerialNo();
+  }
+  if ($("proposalSerialNo")) $("proposalSerialNo").value = serialNo;
+  if ($("sidebarProposalSerialNo")) $("sidebarProposalSerialNo").value = serialNo;
+  state.currentProposalSerialNo = serialNo;
+  snapshot.proposalSerialNo = serialNo;
+  if (snapshot.stateData?.reportDisplay) snapshot.stateData.reportDisplay.proposalSerialNo = serialNo;
+  if (snapshot.stateData?.formValues) snapshot.stateData.formValues.proposalSerialNo = serialNo;
+
+  const recordId = state.currentProposalId || ("prop_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7));
+  state.currentProposalId = recordId;
+
   const proposalRecord = {
-    id: "prop_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
+    id: recordId,
     customerName: snapshot.customerName,
     mobileNumber: snapshot.mobileNumber,
     emailAddress: snapshot.emailAddress,
-    proposalSerialNo: snapshot.proposalSerialNo,
+    proposalSerialNo: serialNo,
     systemCapacityKw: snapshot.systemCapacityKw,
     totalCost: snapshot.totalCost,
     savedAt: new Date().toISOString(),
     stateData: snapshot.stateData
   };
 
-  // 1. Cache to local storage immediately for multi-proposal history & offline recovery
+  // 1. Cache to local storage immediately: UPDATE IN PLACE BY SERIAL NUMBER OR ID (Never duplicate)
   try {
-    localStorage.setItem("solar_proposal_last_saved", JSON.stringify(proposalRecord));
-
     let savedList = [];
     try {
       const raw = localStorage.getItem("solar_saved_proposals");
@@ -4251,44 +4361,42 @@ async function saveProposalData() {
     if (!Array.isArray(savedList)) savedList = [];
 
     const existingIdx = savedList.findIndex(p =>
-      (snapshot.proposalSerialNo && p.proposalSerialNo === snapshot.proposalSerialNo) ||
-      (p.customerName === snapshot.customerName && snapshot.mobileNumber && p.mobileNumber === snapshot.mobileNumber)
+      (serialNo && p.proposalSerialNo === serialNo) ||
+      (recordId && p.id === recordId)
     );
-    if (existingIdx >= 0 && savedList[existingIdx].customerName && 
-        snapshot.customerName &&
-        savedList[existingIdx].customerName.trim().toLowerCase() !== snapshot.customerName.trim().toLowerCase()) {
-      // Customer name was changed on a previously saved proposal!
-      // Generate a fresh serial number to preserve the original customer proposal without overwriting.
-      snapshot.proposalSerialNo = getNextProposalSerialNo(savedList);
-      if ($("proposalSerialNo")) $("proposalSerialNo").value = snapshot.proposalSerialNo;
-      proposalRecord.proposalSerialNo = snapshot.proposalSerialNo;
-      if (proposalRecord.stateData?.reportDisplay) proposalRecord.stateData.reportDisplay.proposalSerialNo = snapshot.proposalSerialNo;
-      if (proposalRecord.stateData?.formValues) proposalRecord.stateData.formValues.proposalSerialNo = snapshot.proposalSerialNo;
-      savedList.unshift(proposalRecord);
-    } else if (existingIdx >= 0) {
-      proposalRecord.id = savedList[existingIdx].id || proposalRecord.id;
+
+    if (existingIdx >= 0) {
+      // UPDATE EXISTING ENTRY IN PLACE WITH THE SAME PROPOSAL NUMBER
+      proposalRecord.id = savedList[existingIdx].id || recordId;
+      state.currentProposalId = proposalRecord.id;
       savedList[existingIdx] = proposalRecord;
     } else {
+      // New proposal: prepend
       savedList.unshift(proposalRecord);
     }
+
     if (savedList.length > 50) savedList = savedList.slice(0, 50);
     localStorage.setItem("solar_saved_proposals", JSON.stringify(savedList));
+    localStorage.setItem("solar_proposal_last_saved", JSON.stringify(proposalRecord));
+    updateProposalStatusBadge("saved", serialNo);
   } catch (err) {
     console.warn("Could not save to localStorage", err);
   }
 
-  // 2. Persist to backend server / database (safe and non-blocking)
+  // 2. Persist to backend server / database (update in place by id or proposalSerialNo)
   let serverSaved = false;
   try {
     const res = await fetch("/api/save-proposal", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        id: state.currentServerId || null,
+        proposalId: state.currentProposalId || recordId,
         customerName: snapshot.customerName,
         mobileNumber: snapshot.mobileNumber,
         emailAddress: snapshot.emailAddress,
-        proposalSerialNo: snapshot.proposalSerialNo,
-        proposal_serial_no: snapshot.proposalSerialNo,
+        proposalSerialNo: serialNo,
+        proposal_serial_no: serialNo,
         systemCapacityKw: snapshot.systemCapacityKw,
         totalCost: snapshot.totalCost,
         stateData: snapshot.stateData
@@ -4298,7 +4406,10 @@ async function saveProposalData() {
       const data = await res.json();
       if (data && data.success) {
         serverSaved = true;
-        console.log("Proposal saved to server:", data.id);
+        if (data.id) {
+          state.currentServerId = data.id;
+        }
+        console.log("Proposal saved to server:", data.id || serialNo);
       }
     }
   } catch (e) {
@@ -4350,7 +4461,12 @@ function cloneProposalForCustomer(newCustomerName = null, newMobile = null, newE
     if (raw) savedList = JSON.parse(raw);
   } catch (_) {}
   const newSerial = getNextProposalSerialNo(savedList);
+  state.currentProposalId = null;
+  state.currentServerId = null;
+  state.currentProposalSerialNo = newSerial;
   if ($("proposalSerialNo")) $("proposalSerialNo").value = newSerial;
+  if ($("sidebarProposalSerialNo")) $("sidebarProposalSerialNo").value = newSerial;
+  updateProposalStatusBadge("new", newSerial);
 
   // 4. Save proposal immediately as a new entry
   saveProposalData();
@@ -4469,11 +4585,24 @@ async function searchProposals(query) {
     return name.includes(q) || mob.includes(q) || serial.includes(q) || email.includes(q);
   });
 
-  window._currentLocalProposals = filteredLocal;
+  // Deduplicate local proposals by proposalSerialNo / id (keep latest version)
+  const seenLocal = new Set();
+  const uniqueLocal = [];
+  for (const p of filteredLocal) {
+    const s = p.proposalSerialNo || p.stateData?.reportDisplay?.proposalSerialNo || p.id;
+    if (s && !seenLocal.has(s)) {
+      seenLocal.add(s);
+      uniqueLocal.push(p);
+    } else if (!s) {
+      uniqueLocal.push(p);
+    }
+  }
+
+  window._currentLocalProposals = uniqueLocal;
 
   let localHtml = "";
-  if (filteredLocal.length > 0) {
-    localHtml = filteredLocal.map((p, idx) => {
+  if (uniqueLocal.length > 0) {
+    localHtml = uniqueLocal.map((p, idx) => {
       const serialNo = p.proposalSerialNo || p.stateData?.reportDisplay?.proposalSerialNo || "Draft";
       const capKw = p.systemCapacityKw || p.stateData?.state?.estimates?.recommended?.dcCapacityKw || p.stateData?.formValues?.capacityOverride || "";
       const costVal = p.totalCost || p.stateData?.state?.estimates?.recommended?.netCost || 0;
@@ -4507,8 +4636,20 @@ async function searchProposals(query) {
     if (res.ok) {
       const json = await res.json();
       if (json && json.success && Array.isArray(json.data) && json.data.length > 0) {
-        window._currentServerProposals = json.data;
-        serverHtml = json.data.map((p, idx) => {
+        // Deduplicate server proposals by proposal_serial_no (keep latest version)
+        const seenServer = new Set();
+        const uniqueServer = [];
+        for (const p of json.data) {
+          const s = p.proposal_serial_no || p.state_data?.reportDisplay?.proposalSerialNo || p.id;
+          if (s && !seenServer.has(s)) {
+            seenServer.add(s);
+            uniqueServer.push(p);
+          } else if (!s) {
+            uniqueServer.push(p);
+          }
+        }
+        window._currentServerProposals = uniqueServer;
+        serverHtml = uniqueServer.map((p, idx) => {
           const serialNo = p.proposal_serial_no || p.state_data?.reportDisplay?.proposalSerialNo || p.state_data?.input?.proposalSerialNo || "";
           const capKw = p.system_capacity_kw || p.state_data?.state?.estimates?.recommended?.dcCapacityKw || p.state_data?.formValues?.capacityOverride || "";
           const costVal = p.total_cost || p.state_data?.state?.estimates?.recommended?.netCost || "";
@@ -4808,9 +4949,14 @@ window.loadProposalState = function(data) {
                          data.proposalSerialNo || 
                          data.proposal_serial_no || 
                          sData.input?.proposalSerialNo;
-  if (restoredSerial && $("proposalSerialNo")) {
-    $("proposalSerialNo").value = restoredSerial;
+  if (restoredSerial) {
+    if ($("proposalSerialNo")) $("proposalSerialNo").value = restoredSerial;
+    if ($("sidebarProposalSerialNo")) $("sidebarProposalSerialNo").value = restoredSerial;
+    state.currentProposalSerialNo = restoredSerial;
   }
+  state.currentProposalId = data.id || null;
+  state.currentServerId = (data.id && typeof data.id === "string" && !data.id.startsWith("prop_")) ? data.id : (data.server_id || null);
+  updateProposalStatusBadge("saved", restoredSerial || state.currentProposalSerialNo);
 
   // Synchronize twin fields (customer vs internal)
   const custName = $("customerName")?.value || $("internalCustomerName")?.value || sData.customerName || "";
@@ -4902,6 +5048,7 @@ window.loadProposalState = function(data) {
 window.getFinancialYear = getFinancialYear;
 window.getNextProposalSerialNo = getNextProposalSerialNo;
 window.initProposalSerialNo = initProposalSerialNo;
+window.createNewProposal = createNewProposal;
 window.saveProposalData = saveProposalData;
 window.cloneProposalForCustomer = cloneProposalForCustomer;
 window.openChangeCustomerModal = openChangeCustomerModal;
@@ -4919,6 +5066,7 @@ window.openInternal = openInternal;
 
 export {
   saveProposalData,
+  createNewProposal,
   cloneProposalForCustomer,
   openChangeCustomerModal,
   closeChangeCustomerModal,
