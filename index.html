@@ -654,12 +654,18 @@
                   <button type="button" class="cad-icon-btn" id="cadViewSideBtn" data-view="side" title="Side Elevation View (🏛️)">🏛️</button>
                 </div>
 
-                <!-- Viewport Navigation (Zoom & Pan) -->
+                <!-- Viewport Navigation (Zoom & Total Grid Pan) -->
                 <div class="cad-btn-group" title="Canvas Viewport Navigation" style="display: inline-flex; align-items: center; gap: 2px;">
                   <button type="button" class="cad-icon-btn" id="cadViewZoomOutBtn" title="Zoom Out Canvas Viewport [Wheel Down / -]">🔍−</button>
                   <button type="button" class="cad-icon-btn" id="cadViewResetBtn" title="Reset Viewport & Fit [0 / Space]">⛶</button>
                   <button type="button" class="cad-icon-btn" id="cadViewZoomInBtn" title="Zoom In Canvas Viewport [Wheel Up / +]">🔍+</button>
                   <span id="cadViewZoomLevel" style="font-size: 10.5px; color: #94a3b8; min-width: 36px; text-align: center; font-weight: 700;">100%</span>
+                  <div class="cad-grid-nav-group" style="display: inline-flex; align-items: center; gap: 2px; margin-left: 2px; border-left: 1px solid #334155; padding-left: 4px;">
+                    <button type="button" class="cad-icon-btn" id="cadGridPanLeftBtn" title="Pan Total Grid Left [◀]">◀</button>
+                    <button type="button" class="cad-icon-btn" id="cadGridPanRightBtn" title="Pan Total Grid Right [▶]">▶</button>
+                    <button type="button" class="cad-icon-btn" id="cadGridPanUpBtn" title="Pan Total Grid Up [▲]">▲</button>
+                    <button type="button" class="cad-icon-btn" id="cadGridPanDownBtn" title="Pan Total Grid Down [▼]">▼</button>
+                  </div>
                 </div>
 
                 <div id="cadElevationBldgHeightGroup" class="cad-input-group" style="display: none; align-items: center; gap: 4px; padding: 0 6px; background: rgba(30, 41, 59, 0.7); border: 1px solid #334155; border-radius: 4px; height: 28px;" title="Adjust Building Height (Front & Side Elevation)">
@@ -729,11 +735,41 @@
                   <button type="button" class="cad-icon-btn" id="cadToggleSunDrawerBtn" title="Sun Path & Shadow Simulation">☀️</button>
                   <button type="button" class="cad-icon-btn" id="cadToggleRoofDrawerBtn" title="Roof & Walkway Dimensions">📏</button>
                   <button type="button" class="cad-icon-btn" id="cadToggleImageDrawerBtn" title="Import Aerial / Roof Image">🖼️</button>
+                  <button type="button" class="cad-icon-btn" id="cadToggleGridPanBtn" title="Total Grid Pan & Coordinate Sliders [🎛️]">🎛️</button>
                   <button type="button" class="cad-icon-btn active" id="cadToggleLayersBtn" title="Layers & Components Panel [L]">📚</button>
                 </div>
               </div>
 
               <!-- COLLAPSIBLE DETAIL DRAWERS -->
+              <!-- 0. Total Grid Pan & Coordinates Drawer (Mobile & Desktop) -->
+              <div class="cad-drawer" id="cadGridDrawer" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap; background: #0b1329;">
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <span style="font-size: 11px; font-weight: 700; color: #38bdf8;">🌐 Total Grid:</span>
+                </div>
+                <div class="cad-input-group" title="Pan Total Grid Horizontally (Slide or Enter px)">
+                  <label for="cadGridPanXInput">Grid X:</label>
+                  <button type="button" class="cad-btn-mini" id="cadGridStepLeftBtn" title="Pan Grid Left">◀</button>
+                  <input type="range" id="cadGridPanXSlider" min="-1200" max="1200" step="5" value="0" style="width: 80px;" title="Slide Total Grid X">
+                  <button type="button" class="cad-btn-mini" id="cadGridStepRightBtn" title="Pan Grid Right">▶</button>
+                  <input type="number" id="cadGridPanXInput" value="0" step="5" style="width: 48px; text-align: center;">
+                  <span>px</span>
+                </div>
+                <div class="cad-input-group" title="Pan Total Grid Vertically (Slide or Enter px)">
+                  <label for="cadGridPanYInput">Grid Y:</label>
+                  <button type="button" class="cad-btn-mini" id="cadGridStepUpBtn" title="Pan Grid Up">▲</button>
+                  <input type="range" id="cadGridPanYSlider" min="-1200" max="1200" step="5" value="0" style="width: 80px;" title="Slide Total Grid Y">
+                  <button type="button" class="cad-btn-mini" id="cadGridStepDownBtn" title="Pan Grid Down">▼</button>
+                  <input type="number" id="cadGridPanYInput" value="0" step="5" style="width: 48px; text-align: center;">
+                  <span>px</span>
+                </div>
+                <div class="cad-btn-group" style="display: inline-flex; align-items: center; gap: 3px;">
+                  <button type="button" class="cad-btn-mini" id="cadGridPanStep10Btn" title="10px step">10px</button>
+                  <button type="button" class="cad-btn-mini active" id="cadGridPanStep50Btn" title="50px step">50px</button>
+                  <button type="button" class="cad-btn-mini" id="cadGridPanStep100Btn" title="100px step">100px</button>
+                  <button type="button" class="cad-btn-mini" id="cadGridPanResetBtn" title="Reset Total Grid to Center" style="color: #38bdf8; font-weight: 700;">⛶ Fit / Center</button>
+                </div>
+                <button type="button" class="cad-drawer-close" data-close="cadGridDrawer" title="Close">✕</button>
+              </div>
               <!-- 1. North Drawer -->
               <div class="cad-drawer" id="cadNorthDrawer" style="display: none;">
                 <span style="font-size: 11px; font-weight: 700; color: #f87171;">🧭 North Alignment:</span>
@@ -853,15 +889,21 @@
                   <span>ft</span>
                 </div>
 
-                <div class="cad-input-group" id="inspectorDistXGroup" style="display: none;">
+                <div class="cad-input-group" id="inspectorDistXGroup" style="display: none; align-items: center; gap: 3px;" title="Object Horizontal Coordinate (ft from roof origin)">
                   <label for="inspectorDistX">X:</label>
-                  <input type="number" id="inspectorDistX" value="-15" step="1" style="width: 48px;">
+                  <button type="button" class="cad-btn-mini" id="inspectorNudgeLeftBtn" title="Nudge Object Left (◀)">◀</button>
+                  <input type="number" id="inspectorDistX" value="0" step="0.5" style="width: 46px; text-align: center;">
+                  <button type="button" class="cad-btn-mini" id="inspectorNudgeRightBtn" title="Nudge Object Right (▶)">▶</button>
+                  <input type="range" id="inspectorDistXSlider" min="-30" max="60" step="0.5" value="0" style="width: 58px;" title="Slide Object X Coordinate">
                   <span>ft</span>
                 </div>
 
-                <div class="cad-input-group" id="inspectorDistYGroup" style="display: none;">
+                <div class="cad-input-group" id="inspectorDistYGroup" style="display: none; align-items: center; gap: 3px;" title="Object Vertical Coordinate (ft from roof origin)">
                   <label for="inspectorDistY">Y:</label>
-                  <input type="number" id="inspectorDistY" value="5" step="1" style="width: 48px;">
+                  <button type="button" class="cad-btn-mini" id="inspectorNudgeUpBtn" title="Nudge Object Up (▲)">▲</button>
+                  <input type="number" id="inspectorDistY" value="0" step="0.5" style="width: 46px; text-align: center;">
+                  <button type="button" class="cad-btn-mini" id="inspectorNudgeDownBtn" title="Nudge Object Down (▼)">▼</button>
+                  <input type="range" id="inspectorDistYSlider" min="-30" max="60" step="0.5" value="0" style="width: 58px;" title="Slide Object Y Coordinate">
                   <span>ft</span>
                 </div>
 
@@ -899,8 +941,25 @@
                 <!-- CANVAS DRAFTING BOARD -->
                 <div class="cad-canvas-board">
                   <canvas id="panelDiagramCanvas"></canvas>
+                  <!-- Mobile On-Screen Floating Touch Navigation Widget -->
+                  <div class="cad-floating-touch-nav" id="cadMobileGridNav" title="Touch Navigation Controls">
+                    <div class="cad-touch-nav-dpad">
+                      <button type="button" class="cad-touch-btn" id="cadTouchPanUpBtn" title="Pan Grid Up (▲)">▲</button>
+                      <div class="cad-touch-dpad-row">
+                        <button type="button" class="cad-touch-btn" id="cadTouchPanLeftBtn" title="Pan Grid Left (◀)">◀</button>
+                        <button type="button" class="cad-touch-btn cad-touch-btn-center" id="cadTouchResetBtn" title="Fit / Center Grid (⛶)">⛶</button>
+                        <button type="button" class="cad-touch-btn" id="cadTouchPanRightBtn" title="Pan Grid Right (▶)">▶</button>
+                      </div>
+                      <button type="button" class="cad-touch-btn" id="cadTouchPanDownBtn" title="Pan Grid Down (▼)">▼</button>
+                    </div>
+                    <div class="cad-touch-zoom-group">
+                      <button type="button" class="cad-touch-btn" id="cadTouchZoomInBtn" title="Zoom In Canvas (🔍+)">+</button>
+                      <button type="button" class="cad-touch-btn" id="cadTouchZoomOutBtn" title="Zoom Out Canvas (🔍−)">−</button>
+                      <button type="button" class="cad-touch-btn" id="cadTouchGridSlidersToggleBtn" title="Open Grid Sliders (🎛️)">🎛️</button>
+                    </div>
+                  </div>
                   <div class="cad-hint-bar">
-                    <span>💡 <strong>Controls:</strong> Drag to move | Shift-click or marquee drag for multi-select | [R] Rotate | ✋ Hand tool or Space/Middle-drag to pan | Mouse wheel to zoom</span>
+                    <span>💡 <strong>Controls:</strong> Drag to move | ◀▶▲▼ or sliders to pan grid & objects | [R] Rotate | ✋ Hand tool or Space-drag to pan | Wheel to zoom</span>
                     <span id="cadIslandsCount">1 Array Island</span>
                   </div>
                 </div>

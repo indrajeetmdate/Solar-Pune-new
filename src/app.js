@@ -1879,6 +1879,7 @@ function setupCadEventListeners(cad) {
     { btnId: "cadToggleSunDrawerBtn", drawerId: "cadSunToolbar" },
     { btnId: "cadToggleRoofDrawerBtn", drawerId: "cadRoofDrawer" },
     { btnId: "cadToggleImageDrawerBtn", drawerId: "cadImageDrawer" },
+    { btnId: "cadToggleGridPanBtn", drawerId: "cadGridDrawer" },
   ];
 
   drawerConfigs.forEach(({ btnId, drawerId }) => {
@@ -1955,8 +1956,10 @@ function setupCadEventListeners(cad) {
     const diaInput = $("inspectorDiameter");
     const distXGroup = $("inspectorDistXGroup");
     const distXInput = $("inspectorDistX");
+    const distXSlider = $("inspectorDistXSlider");
     const distYGroup = $("inspectorDistYGroup");
     const distYInput = $("inspectorDistY");
+    const distYSlider = $("inspectorDistYSlider");
     const heightGroup = $("inspectorHeightGroup");
     const heightInput = $("inspectorHeight");
     const areaVal = $("inspectorAreaValue");
@@ -1975,8 +1978,12 @@ function setupCadEventListeners(cad) {
       if (lenGroup) lenGroup.style.display = "none";
       if (brGroup) brGroup.style.display = "none";
       if (diaGroup) diaGroup.style.display = "none";
-      if (distXGroup) distXGroup.style.display = "none";
-      if (distYGroup) distYGroup.style.display = "none";
+      if (distXGroup) distXGroup.style.display = "flex";
+      if (distXInput) { distXInput.value = ""; distXInput.placeholder = "±"; }
+      if (distXSlider) distXSlider.style.display = "none";
+      if (distYGroup) distYGroup.style.display = "flex";
+      if (distYInput) { distYInput.value = ""; distYInput.placeholder = "±"; }
+      if (distYSlider) distYSlider.style.display = "none";
       if (heightGroup) heightGroup.style.display = "none";
       if (opacityInput) {
         const firstOp = multi[0]?.item?.opacity ?? 1.0;
@@ -2016,8 +2023,14 @@ function setupCadEventListeners(cad) {
       if (brGroup) brGroup.style.display = "flex";
       if (brInput) brInput.value = cad.roofBreadthFt;
       if (diaGroup) diaGroup.style.display = "none";
-      if (distXGroup) distXGroup.style.display = "none";
-      if (distYGroup) distYGroup.style.display = "none";
+      if (distXGroup) distXGroup.style.display = "flex";
+      const rxFt = Number((cad.roofX / cad.scalePxPerFt).toFixed(1));
+      if (distXInput) { distXInput.value = rxFt; distXInput.placeholder = "ft"; }
+      if (distXSlider) { distXSlider.style.display = "inline-block"; distXSlider.min = -50; distXSlider.max = 200; distXSlider.value = rxFt; }
+      if (distYGroup) distYGroup.style.display = "flex";
+      const ryFt = Number((cad.roofY / cad.scalePxPerFt).toFixed(1));
+      if (distYInput) { distYInput.value = ryFt; distYInput.placeholder = "ft"; }
+      if (distYSlider) { distYSlider.style.display = "inline-block"; distYSlider.min = -50; distYSlider.max = 200; distYSlider.value = ryFt; }
       if (heightGroup) heightGroup.style.display = "none";
       if (areaVal) areaVal.textContent = `${Math.round(cad.roofLengthFt * cad.roofBreadthFt)} sq ft`;
       if (delBtn) delBtn.style.display = "none";
@@ -2037,9 +2050,29 @@ function setupCadEventListeners(cad) {
     if (opacityVal) opacityVal.textContent = `${Math.round(itemOpacity * 100)}%`;
     if (zOrderGroup) zOrderGroup.style.display = "flex";
 
-    // By default hide obstacle-only fields
-    if (distXGroup) distXGroup.style.display = "none";
-    if (distYGroup) distYGroup.style.display = "none";
+    // Setup X / Y Coordinate Groups for Items
+    if (sel.type !== "image") {
+      if (distXGroup) distXGroup.style.display = "flex";
+      if (distYGroup) distYGroup.style.display = "flex";
+      const pos = cad.getSelectedItemPosition();
+      if (distXInput) { distXInput.value = pos.xRelFt; distXInput.placeholder = "ft"; }
+      if (distYInput) { distYInput.value = pos.yRelFt; distYInput.placeholder = "ft"; }
+      if (distXSlider) {
+        distXSlider.style.display = "inline-block";
+        distXSlider.min = -50;
+        distXSlider.max = Math.max(cad.roofLengthFt + 50, 100);
+        distXSlider.value = pos.xRelFt;
+      }
+      if (distYSlider) {
+        distYSlider.style.display = "inline-block";
+        distYSlider.min = -50;
+        distYSlider.max = Math.max(cad.roofBreadthFt + 50, 100);
+        distYSlider.value = pos.yRelFt;
+      }
+    } else {
+      if (distXGroup) distXGroup.style.display = "none";
+      if (distYGroup) distYGroup.style.display = "none";
+    }
     if (heightGroup) heightGroup.style.display = "none";
 
     if (sel.type === "cutout") {
@@ -2181,17 +2214,54 @@ function setupCadEventListeners(cad) {
     cad.updateSelectedItem({ diameterFt: Number(e.target.value) });
   });
 
-  $("inspectorDistX")?.addEventListener("input", (e) => {
-    if (cad.selectedItem && cad.selectedItem.type === "obstacle") {
-      cad.updateSelectedItem({ distanceFromRoofX: Number(e.target.value) });
+  const updateItemDistX = (val) => {
+    const num = Number(val);
+    if (isNaN(num)) return;
+    if (!cad.selectedItem || cad.selectedItem.type === "roof") {
+      cad.roofX = num * cad.scalePxPerFt;
+      cad.render();
+    } else if (cad.selectedItem.type === "obstacle") {
+      cad.updateSelectedItem({ distanceFromRoofX: num });
+    } else if (cad.selectedItem.item) {
+      cad.selectedItem.item.x = cad.roofX + num * cad.scalePxPerFt;
+      cad.render();
+      cad.notifyChanges();
     }
-  });
+    const input = $("inspectorDistX");
+    const slider = $("inspectorDistXSlider");
+    if (input && Number(input.value) !== num) input.value = num;
+    if (slider && Number(slider.value) !== num) slider.value = num;
+  };
 
-  $("inspectorDistY")?.addEventListener("input", (e) => {
-    if (cad.selectedItem && cad.selectedItem.type === "obstacle") {
-      cad.updateSelectedItem({ distanceFromRoofY: Number(e.target.value) });
+  const updateItemDistY = (val) => {
+    const num = Number(val);
+    if (isNaN(num)) return;
+    if (!cad.selectedItem || cad.selectedItem.type === "roof") {
+      cad.roofY = num * cad.scalePxPerFt;
+      cad.render();
+    } else if (cad.selectedItem.type === "obstacle") {
+      cad.updateSelectedItem({ distanceFromRoofY: num });
+    } else if (cad.selectedItem.item) {
+      cad.selectedItem.item.y = cad.roofY + num * cad.scalePxPerFt;
+      cad.render();
+      cad.notifyChanges();
     }
-  });
+    const input = $("inspectorDistY");
+    const slider = $("inspectorDistYSlider");
+    if (input && Number(input.value) !== num) input.value = num;
+    if (slider && Number(slider.value) !== num) slider.value = num;
+  };
+
+  $("inspectorDistX")?.addEventListener("input", (e) => updateItemDistX(e.target.value));
+  $("inspectorDistXSlider")?.addEventListener("input", (e) => updateItemDistX(e.target.value));
+  $("inspectorDistY")?.addEventListener("input", (e) => updateItemDistY(e.target.value));
+  $("inspectorDistYSlider")?.addEventListener("input", (e) => updateItemDistY(e.target.value));
+
+  // Object Nudge Buttons (0.5 ft step)
+  $("inspectorNudgeLeftBtn")?.addEventListener("click", () => cad.nudgeSelectedItem(-0.5, 0));
+  $("inspectorNudgeRightBtn")?.addEventListener("click", () => cad.nudgeSelectedItem(0.5, 0));
+  $("inspectorNudgeUpBtn")?.addEventListener("click", () => cad.nudgeSelectedItem(0, -0.5));
+  $("inspectorNudgeDownBtn")?.addEventListener("click", () => cad.nudgeSelectedItem(0, 0.5));
 
   $("inspectorHeight")?.addEventListener("input", (e) => {
     if (cad.selectedItem && cad.selectedItem.type === "obstacle") {
@@ -2262,14 +2332,81 @@ function setupCadEventListeners(cad) {
     updateActiveViewButtons(view);
   };
 
-  // Viewport Zoom & Pan Controls
+  // Viewport Zoom & Total Grid Pan Controls
   $("cadViewZoomInBtn")?.addEventListener("click", () => cad.zoomIn());
   $("cadViewZoomOutBtn")?.addEventListener("click", () => cad.zoomOut());
   $("cadViewResetBtn")?.addEventListener("click", () => cad.resetView());
 
+  let currentGridStep = 50;
+
+  // Directional Total Grid Pan Buttons (Top Bar)
+  $("cadGridPanLeftBtn")?.addEventListener("click", () => cad.panView(-currentGridStep, 0));
+  $("cadGridPanRightBtn")?.addEventListener("click", () => cad.panView(currentGridStep, 0));
+  $("cadGridPanUpBtn")?.addEventListener("click", () => cad.panView(0, -currentGridStep));
+  $("cadGridPanDownBtn")?.addEventListener("click", () => cad.panView(0, currentGridStep));
+
+  // Directional Total Grid Buttons in Grid Drawer
+  $("cadGridStepLeftBtn")?.addEventListener("click", () => cad.panView(-currentGridStep, 0));
+  $("cadGridStepRightBtn")?.addEventListener("click", () => cad.panView(currentGridStep, 0));
+  $("cadGridStepUpBtn")?.addEventListener("click", () => cad.panView(0, -currentGridStep));
+  $("cadGridStepDownBtn")?.addEventListener("click", () => cad.panView(0, currentGridStep));
+
+  // Step size options
+  const setGridStep = (step, activeBtnId) => {
+    currentGridStep = step;
+    ["cadGridPanStep10Btn", "cadGridPanStep50Btn", "cadGridPanStep100Btn"].forEach((id) => {
+      const b = $(id);
+      if (b) b.classList.toggle("active", id === activeBtnId);
+    });
+  };
+  $("cadGridPanStep10Btn")?.addEventListener("click", () => setGridStep(10, "cadGridPanStep10Btn"));
+  $("cadGridPanStep50Btn")?.addEventListener("click", () => setGridStep(50, "cadGridPanStep50Btn"));
+  $("cadGridPanStep100Btn")?.addEventListener("click", () => setGridStep(100, "cadGridPanStep100Btn"));
+  $("cadGridPanResetBtn")?.addEventListener("click", () => cad.resetView());
+
+  // Total Grid Slide Bars & Direct Input Entry
+  const onGridXPanChange = (val) => {
+    const num = Number(val);
+    if (!isNaN(num)) cad.setGridPan(num, undefined);
+  };
+  const onGridYPanChange = (val) => {
+    const num = Number(val);
+    if (!isNaN(num)) cad.setGridPan(undefined, num);
+  };
+
+  $("cadGridPanXSlider")?.addEventListener("input", (e) => onGridXPanChange(e.target.value));
+  $("cadGridPanXInput")?.addEventListener("input", (e) => onGridXPanChange(e.target.value));
+  $("cadGridPanYSlider")?.addEventListener("input", (e) => onGridYPanChange(e.target.value));
+  $("cadGridPanYInput")?.addEventListener("input", (e) => onGridYPanChange(e.target.value));
+
+  // On-Screen Floating Touch Navigation
+  $("cadTouchPanUpBtn")?.addEventListener("click", () => cad.panView(0, -currentGridStep));
+  $("cadTouchPanDownBtn")?.addEventListener("click", () => cad.panView(0, currentGridStep));
+  $("cadTouchPanLeftBtn")?.addEventListener("click", () => cad.panView(-currentGridStep, 0));
+  $("cadTouchPanRightBtn")?.addEventListener("click", () => cad.panView(currentGridStep, 0));
+  $("cadTouchResetBtn")?.addEventListener("click", () => cad.resetView());
+  $("cadTouchZoomInBtn")?.addEventListener("click", () => cad.zoomIn());
+  $("cadTouchZoomOutBtn")?.addEventListener("click", () => cad.zoomOut());
+  $("cadTouchGridSlidersToggleBtn")?.addEventListener("click", () => {
+    $("cadToggleGridPanBtn")?.click();
+  });
+
   cad.onViewportChange = (vp) => {
     const el = $("cadViewZoomLevel");
     if (el) el.textContent = `${vp.zoomPercent}%`;
+
+    const panXSlider = $("cadGridPanXSlider");
+    const panXInput = $("cadGridPanXInput");
+    const panYSlider = $("cadGridPanYSlider");
+    const panYInput = $("cadGridPanYInput");
+
+    const rX = Math.round(vp.viewX);
+    const rY = Math.round(vp.viewY);
+
+    if (panXSlider && document.activeElement !== panXSlider) panXSlider.value = rX;
+    if (panXInput && document.activeElement !== panXInput) panXInput.value = rX;
+    if (panYSlider && document.activeElement !== panYSlider) panYSlider.value = rY;
+    if (panYInput && document.activeElement !== panYInput) panYInput.value = rY;
   };
 
   // True North Alignment Controls

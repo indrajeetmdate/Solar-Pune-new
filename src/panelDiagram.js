@@ -318,6 +318,21 @@ export class RooftopCAD {
     this.notifyViewportChange();
   }
 
+  setGridPan(viewX, viewY) {
+    if (viewX !== undefined && !isNaN(Number(viewX))) {
+      this.viewX = Number(viewX);
+    }
+    if (viewY !== undefined && !isNaN(Number(viewY))) {
+      this.viewY = Number(viewY);
+    }
+    this.render();
+    this.notifyViewportChange();
+  }
+
+  nudgeGridPan(dxPx = 0, dyPx = 0) {
+    this.panView(dxPx, dyPx);
+  }
+
   zoomViewAt(factor, screenX, screenY) {
     const oldZoom = this.viewZoom || 1.0;
     const newZoom = Math.max(0.2, Math.min(5.0, oldZoom * factor));
@@ -1034,6 +1049,15 @@ export class RooftopCAD {
 
     if (props.label !== undefined) it.label = props.label;
 
+    if (props.distanceFromRoofX !== undefined || props.xRelFt !== undefined) {
+      const val = props.distanceFromRoofX !== undefined ? props.distanceFromRoofX : props.xRelFt;
+      this.setSelectedItemPosition(val, undefined);
+    }
+    if (props.distanceFromRoofY !== undefined || props.yRelFt !== undefined) {
+      const val = props.distanceFromRoofY !== undefined ? props.distanceFromRoofY : props.yRelFt;
+      this.setSelectedItemPosition(undefined, val);
+    }
+
     if (props.opacity !== undefined) {
       const op = Math.max(0.05, Math.min(1.0, Number(props.opacity)));
       // If multiple items selected, update opacity across all selected items
@@ -1103,6 +1127,98 @@ export class RooftopCAD {
         it.breadthFt = bFt;
         it.h = bFt * this.scalePxPerFt;
       }
+    }
+
+    if (this.onSelectionChange) {
+      this.onSelectionChange(this.selectedItem, this.selectedItems);
+    }
+    this.notifyChanges();
+    this.render();
+  }
+
+  getSelectedItemPosition() {
+    if (!this.selectedItem || !this.selectedItem.item) {
+      return { xRelFt: 0, yRelFt: 0 };
+    }
+    const { type, item: it } = this.selectedItem;
+    if (type === "obstacle") {
+      return {
+        xRelFt: Number((it.distanceFromRoofX ?? 0).toFixed(1)),
+        yRelFt: Number((it.distanceFromRoofY ?? 0).toFixed(1)),
+      };
+    }
+    if (type === "panel" || type === "cutout" || type === "pathway") {
+      return {
+        xRelFt: Number(((it.x - this.roofX) / this.scalePxPerFt).toFixed(1)),
+        yRelFt: Number(((it.y - this.roofY) / this.scalePxPerFt).toFixed(1)),
+      };
+    }
+    if (type === "roof") {
+      return {
+        xRelFt: Number((this.roofX / this.scalePxPerFt).toFixed(1)),
+        yRelFt: Number((this.roofY / this.scalePxPerFt).toFixed(1)),
+      };
+    }
+    return { xRelFt: 0, yRelFt: 0 };
+  }
+
+  setSelectedItemPosition(xRelFt, yRelFt) {
+    if (!this.selectedItem || !this.selectedItem.item) return;
+    const { type, item: it } = this.selectedItem;
+    const x = xRelFt !== undefined ? Number(xRelFt) : NaN;
+    const y = yRelFt !== undefined ? Number(yRelFt) : NaN;
+
+    if (type === "obstacle") {
+      if (!isNaN(x)) it.distanceFromRoofX = Number(x.toFixed(1));
+      if (!isNaN(y)) it.distanceFromRoofY = Number(y.toFixed(1));
+      this.autoFitRoof();
+    } else if (type === "panel" || type === "cutout" || type === "pathway") {
+      if (!isNaN(x)) it.x = this.roofX + x * this.scalePxPerFt;
+      if (!isNaN(y)) it.y = this.roofY + y * this.scalePxPerFt;
+    } else if (type === "roof") {
+      if (!isNaN(x)) this.roofX = x * this.scalePxPerFt;
+      if (!isNaN(y)) this.roofY = y * this.scalePxPerFt;
+    }
+
+    if (this.onSelectionChange) {
+      this.onSelectionChange(this.selectedItem, this.selectedItems);
+    }
+    this.notifyChanges();
+    this.render();
+  }
+
+  nudgeSelectedItem(dxFt = 0, dyFt = 0) {
+    if (this.selectedItems && this.selectedItems.length > 1) {
+      this.selectedItems.forEach((s) => {
+        if (!s || !s.item) return;
+        if (s.type === "obstacle") {
+          s.item.distanceFromRoofX = Number(((s.item.distanceFromRoofX || 0) + dxFt).toFixed(1));
+          s.item.distanceFromRoofY = Number(((s.item.distanceFromRoofY || 0) + dyFt).toFixed(1));
+        } else if (s.type === "panel" || s.type === "cutout" || s.type === "pathway") {
+          s.item.x += dxFt * this.scalePxPerFt;
+          s.item.y += dyFt * this.scalePxPerFt;
+        }
+      });
+      if (this.onSelectionChange) {
+        this.onSelectionChange(this.selectedItem, this.selectedItems);
+      }
+      this.notifyChanges();
+      this.render();
+      return;
+    }
+
+    if (!this.selectedItem || !this.selectedItem.item) return;
+    const { type, item: it } = this.selectedItem;
+    if (type === "obstacle") {
+      it.distanceFromRoofX = Number(((it.distanceFromRoofX || 0) + dxFt).toFixed(1));
+      it.distanceFromRoofY = Number(((it.distanceFromRoofY || 0) + dyFt).toFixed(1));
+      this.autoFitRoof();
+    } else if (type === "panel" || type === "cutout" || type === "pathway") {
+      it.x += dxFt * this.scalePxPerFt;
+      it.y += dyFt * this.scalePxPerFt;
+    } else if (type === "roof") {
+      this.roofX += dxFt * this.scalePxPerFt;
+      this.roofY += dyFt * this.scalePxPerFt;
     }
 
     if (this.onSelectionChange) {
@@ -1820,6 +1936,116 @@ export class RooftopCAD {
       { passive: false }
     );
 
+    // Touch Navigation & Gestures for Phones / Touchscreens
+    let touchStartDist = 0;
+    let touchStartPan = null;
+    let touchStartMid = null;
+
+    const getTouchPos = (touch) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+      const logicalW = this.canvas.width / dpr;
+      const logicalH = this.canvas.height / dpr;
+      const scaleX = rect.width > 0 ? logicalW / rect.width : 1;
+      const scaleY = rect.height > 0 ? logicalH / rect.height : 1;
+      return {
+        x: (touch.clientX - rect.left) * scaleX,
+        y: (touch.clientY - rect.top) * scaleY,
+      };
+    };
+
+    this.canvas.addEventListener(
+      "touchstart",
+      (e) => {
+        if (!e.touches || e.touches.length === 0) return;
+        if (typeof e.preventDefault === "function") e.preventDefault();
+
+        if (e.touches.length === 1) {
+          touchStartDist = 0;
+          touchStartPan = null;
+          touchStartMid = null;
+          const pos = getTouchPos(e.touches[0]);
+          this.handlePointerDown(pos.x, pos.y, e);
+        } else if (e.touches.length >= 2) {
+          this.isDragging = false;
+          this.dragMode = null;
+          const t1 = getTouchPos(e.touches[0]);
+          const t2 = getTouchPos(e.touches[1]);
+          touchStartDist = Math.hypot(t2.x - t1.x, t2.y - t1.y);
+          touchStartMid = { x: (t1.x + t2.x) / 2, y: (t1.y + t2.y) / 2 };
+          touchStartPan = { x: this.viewX, y: this.viewY };
+        }
+      },
+      { passive: false }
+    );
+
+    this.canvas.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!e.touches || e.touches.length === 0) return;
+        if (typeof e.preventDefault === "function") e.preventDefault();
+
+        if (e.touches.length === 1 && touchStartDist === 0) {
+          const pos = getTouchPos(e.touches[0]);
+          this.handlePointerMove(pos.x, pos.y, e);
+        } else if (e.touches.length >= 2) {
+          const t1 = getTouchPos(e.touches[0]);
+          const t2 = getTouchPos(e.touches[1]);
+          const currentDist = Math.hypot(t2.x - t1.x, t2.y - t1.y);
+          const currentMid = { x: (t1.x + t2.x) / 2, y: (t1.y + t2.y) / 2 };
+
+          if (touchStartDist > 0 && currentDist > 0) {
+            const pinchFactor = currentDist / touchStartDist;
+            if (Math.abs(pinchFactor - 1.0) > 0.01) {
+              this.zoomViewAt(pinchFactor, currentMid.x, currentMid.y);
+              touchStartDist = currentDist;
+            }
+          }
+
+          if (touchStartMid && touchStartPan) {
+            const dx = currentMid.x - touchStartMid.x;
+            const dy = currentMid.y - touchStartMid.y;
+            this.viewX = touchStartPan.x + dx;
+            this.viewY = touchStartPan.y + dy;
+            this.render();
+            this.notifyViewportChange();
+          }
+        }
+      },
+      { passive: false }
+    );
+
+    this.canvas.addEventListener(
+      "touchend",
+      (e) => {
+        if (typeof e.preventDefault === "function") e.preventDefault();
+        if (!e.touches || e.touches.length === 0) {
+          touchStartDist = 0;
+          touchStartPan = null;
+          touchStartMid = null;
+          if (e.changedTouches && e.changedTouches.length > 0) {
+            const pos = getTouchPos(e.changedTouches[0]);
+            this.handlePointerUp(pos.x, pos.y, e);
+          } else {
+            this.handlePointerUp(0, 0, e);
+          }
+        } else if (e.touches.length === 1) {
+          touchStartDist = 0;
+          touchStartPan = null;
+          touchStartMid = null;
+        }
+      },
+      { passive: false }
+    );
+
+    this.canvas.addEventListener("touchcancel", () => {
+      touchStartDist = 0;
+      touchStartPan = null;
+      touchStartMid = null;
+      this.isDragging = false;
+      this.dragMode = null;
+    });
+
     // Deselect any active component when clicking anywhere outside the CAD canvas and toolbars
     if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
       document.addEventListener("pointerdown", (e) => {
@@ -1833,8 +2059,11 @@ export class RooftopCAD {
             !e.target.closest(".cad-top-bar") &&
             !e.target.closest(".cad-drawer") &&
             !e.target.closest("#cadInspectorToolbar") &&
+            !e.target.closest("#cadMobileGridNav") &&
+            !e.target.closest(".cad-floating-touch-nav") &&
             !e.target.closest(".cad-btn") &&
-            !e.target.closest(".cad-btn-mini")
+            !e.target.closest(".cad-btn-mini") &&
+            !e.target.closest(".cad-touch-btn")
           ))
         ) {
           if (this.selectedItem || (this.selectedItems && this.selectedItems.length > 0)) {

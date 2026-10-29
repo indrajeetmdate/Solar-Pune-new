@@ -953,5 +953,96 @@ console.log("Running RooftopCAD tests...");
   console.log("✓ Test 16 Passed: Large Roof Auto-Placement Coordinates (Fix for 5-Panel Skip Bug)");
 }
 
+// Test 17: Mobile & Desktop Total Grid Pan Controls & Object Coordinate Positioning
+{
+  const canvas = new MockCanvas();
+  let latestVp = null;
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 30,
+    roofBreadthFt: 20,
+    requiredPanels: 8,
+    onViewportChange: (vp) => { latestVp = vp; },
+  });
+
+  // 1. Total Grid Pan & Direct Viewport Offset Entry
+  cad.setGridPan(120, -85);
+  assert.equal(cad.viewX, 120, "viewX must update to 120");
+  assert.equal(cad.viewY, -85, "viewY must update to -85");
+  assert.equal(latestVp.viewX, 120);
+  assert.equal(latestVp.viewY, -85);
+
+  // 2. Nudge Total Grid Pan with Directional Step Buttons
+  cad.nudgeGridPan(-50, 40);
+  assert.equal(cad.viewX, 70, "120 - 50 = 70");
+  assert.equal(cad.viewY, -45, "-85 + 40 = -45");
+  assert.equal(latestVp.viewX, 70);
+  assert.equal(latestVp.viewY, -45);
+
+  // 3. Object Coordinate Manipulation: Solar Panel
+  const panel = cad.placePanel("portrait");
+  assert.ok(panel, "Panel must be placed");
+  cad.selectItem("panel", panel);
+
+  // Move panel to exactly (10.5 ft, 6.0 ft) relative to roof
+  cad.setSelectedItemPosition(10.5, 6.0);
+  const pos = cad.getSelectedItemPosition();
+  assert.equal(pos.xRelFt, 10.5, "Panel relative X must be 10.5 ft");
+  assert.equal(pos.yRelFt, 6.0, "Panel relative Y must be 6.0 ft");
+  assert.equal(panel.x, cad.roofX + 10.5 * cad.scalePxPerFt);
+  assert.equal(panel.y, cad.roofY + 6.0 * cad.scalePxPerFt);
+
+  // Nudge panel by (+1.0 ft, -0.5 ft)
+  cad.nudgeSelectedItem(1.0, -0.5);
+  const posNudged = cad.getSelectedItemPosition();
+  assert.equal(posNudged.xRelFt, 11.5, "10.5 + 1.0 = 11.5 ft");
+  assert.equal(posNudged.yRelFt, 5.5, "6.0 - 0.5 = 5.5 ft");
+
+  // 4. Object Coordinate Manipulation: Cutout Obstacle
+  const cutout = cad.addCutout(cad.roofX + 20, cad.roofY + 20, 50, 50, "rectangle", "Skylight");
+  cad.selectItem("cutout", cutout);
+  cad.setSelectedItemPosition(14.0, 8.0);
+  const cutPos = cad.getSelectedItemPosition();
+  assert.equal(cutPos.xRelFt, 14.0);
+  assert.equal(cutPos.yRelFt, 8.0);
+
+  cad.nudgeSelectedItem(-2.0, 1.5);
+  const cutNudged = cad.getSelectedItemPosition();
+  assert.equal(cutNudged.xRelFt, 12.0);
+  assert.equal(cutNudged.yRelFt, 9.5);
+
+  // 5. Object Coordinate Manipulation: External Obstacle (distanceFromRoofX / Y)
+  const obs = cad.addExternalObstacle("tree", { distanceFromRoofX: -15, distanceFromRoofY: 5 });
+  cad.selectItem("obstacle", obs);
+  assert.equal(obs.distanceFromRoofX, -15);
+  assert.equal(obs.distanceFromRoofY, 5);
+
+  cad.setSelectedItemPosition(-18.5, 7.5);
+  assert.equal(obs.distanceFromRoofX, -18.5);
+  assert.equal(obs.distanceFromRoofY, 7.5);
+
+  cad.nudgeSelectedItem(3.0, -2.0);
+  assert.equal(obs.distanceFromRoofX, -15.5);
+  assert.equal(obs.distanceFromRoofY, 5.5);
+
+  // 6. Multi-Selection Coordinate Nudging
+  cad.selectedItems = [
+    { type: "panel", item: panel },
+    { type: "cutout", item: cutout },
+  ];
+  const prevPanelX = panel.x;
+  const prevCutoutX = cutout.x;
+  cad.nudgeSelectedItem(2.0, 3.0);
+  assert.equal(panel.x, prevPanelX + 2.0 * cad.scalePxPerFt);
+  assert.equal(cutout.x, prevCutoutX + 2.0 * cad.scalePxPerFt);
+
+  // 7. Touch Event Listeners Verification
+  assert.ok(typeof canvas.listeners.touchstart === "function", "touchstart listener must be registered");
+  assert.ok(typeof canvas.listeners.touchmove === "function", "touchmove listener must be registered");
+  assert.ok(typeof canvas.listeners.touchend === "function", "touchend listener must be registered");
+  assert.ok(typeof canvas.listeners.touchcancel === "function", "touchcancel listener must be registered");
+
+  console.log("✓ Test 17 Passed: Total Grid Pan Controls, Sliders & Multi-Item Coordinate Positioning");
+}
+
 console.log("All RooftopCAD tests passed successfully!");
 
