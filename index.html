@@ -20,8 +20,8 @@
         </div>
       </div>
       <div class="header-actions" aria-label="Mode selector">
-        <button class="mode-button active" id="easyModeButton" type="button">Customer</button>
-        <button class="mode-button" id="internalModeButton" type="button">Internal</button>
+        <button class="mode-button active" id="easyModeButton" type="button" onclick="window.lockInternal && window.lockInternal()">Customer</button>
+        <button class="mode-button" id="internalModeButton" type="button" onclick="window.openInternalDialog && window.openInternalDialog()">Internal</button>
       </div>
     </header>
 

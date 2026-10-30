@@ -3086,7 +3086,7 @@ function updateProposalStatusBadge(status, serial) {
  * Auto-recognises the latest proposal serial saved on the server database
  * and ensures the next available sequential number is loaded on the app.
  */
-export async function autoSyncLatestProposalSerial() {
+async function autoSyncLatestProposalSerial() {
   if (typeof fetch === "undefined") return null;
   try {
     const res = await fetch("/api/load-proposals?latest=true");
