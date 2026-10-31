@@ -416,7 +416,7 @@ function getBatteryCapacityKwh(systemType, dcCapacityKw, input, performance) {
   return round(modulesNeeded * batteryModuleKwh, 2);
 }
 
-function calculateLifetimeSavings(annualSavings, config) {
+export function calculateLifetimeSavings(annualSavings, config) {
   let total = 0;
   const degradation = clamp(config.performance.degradationRate || 0, 0, 10) / 100;
   const escalation = clamp(config.tariff.tariffEscalation || 0, 0, 20) / 100;

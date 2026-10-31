@@ -1590,7 +1590,9 @@ export class RooftopCAD {
   // Load custom image
   loadCustomImage(fileOrUrl) {
     if (!fileOrUrl) return;
-    const img = new Image();
+    const ImgClass = typeof Image !== "undefined" ? Image : (typeof window !== "undefined" ? window.Image : (typeof globalThis !== "undefined" ? globalThis.Image : null));
+    if (!ImgClass) return;
+    const img = new ImgClass();
     img.crossOrigin = "Anonymous";
 
     const onLoaded = () => {
@@ -1604,7 +1606,7 @@ export class RooftopCAD {
       const scaleY = this.roofH / this.image.origHeight;
       this.image.scale = Math.max(scaleX, scaleY);
       this.image.isLoaded = true;
-      this.image.locked = true; // Automatically lock inside green roof area upon upload
+      this.image.locked = false; // Unlocked by default so aerial image is immediately panable
       this.render();
       this.notifyChanges();
       this.notifyLayersChange();
@@ -2153,6 +2155,11 @@ export class RooftopCAD {
     });
   }
 
+  resizeCanvas() {
+    this.autoFitRoof();
+    this.render();
+  }
+
   handlePointerDown(x, y, e) {
     this.dragStart = { x, y };
     const logicalW = this.canvas.parentElement ? Math.max(300, this.canvas.parentElement.clientWidth) : 800;
@@ -2221,8 +2228,9 @@ export class RooftopCAD {
     const isImagePanTool = this.activeTool === "image_pan";
     const isCanvasPanTool = this.activeTool === "pan";
 
-    // Direct Image Panning via Hand/Pan Tool when image is loaded & unlocked
-    if (isImagePanTool && this.image.isLoaded && !this.image.locked) {
+    // Direct Image Panning via Hand/Pan Tool when image is loaded
+    if (isImagePanTool && this.image.isLoaded) {
+      this.image.locked = false;
       this.dragMode = "pan_image";
       this.dragStart = { x, y };
       this.dragOffset = { x: this.image.x || 0, y: this.image.y || 0 };
@@ -4778,6 +4786,9 @@ export function initRooftopCAD(canvas, options = {}) {
   }
   return activeCADInstance;
 }
+
+// Alias for image importing
+RooftopCAD.prototype.importRoofImage = RooftopCAD.prototype.loadCustomImage;
 
 // Backwards-compatible adapter for existing app.js calls
 // NOTE: All panels remain LATENT initially (panels = [])

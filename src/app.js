@@ -1,5 +1,5 @@
 import { DEFAULT_CONFIG, TARIFF_PROFILES, PANEL_LABELS, STRUCTURE_LABELS, SYSTEM_LABELS, getPanelSpecificationText } from "./config.js";
-import { calculateEstimate, calculateSolarFinancing, getPanelConfigurations, calculateSingleMeterSubsidy, distributeCapacityAcrossMeters } from "./calculator.js";
+import { calculateEstimate, calculateSolarFinancing, getPanelConfigurations, calculateSingleMeterSubsidy, distributeCapacityAcrossMeters, calculateLifetimeSavings } from "./calculator.js";
 import { parseMsebBillFile, parseMultipleMsebBillFiles } from "./billParser.js";
 import { isSupportedBillFile } from "./ocrExtractor.js";
 import { drawPanelArray, initRooftopCAD, getActiveRooftopCAD } from "./panelDiagram.js";
@@ -133,6 +133,8 @@ function plainValue(value, suffix = "") {
   if (value === null || value === undefined || value === "") return "-";
   return `${value}${suffix}`;
 }
+
+const round = (val, decimals = 2) => Number(Math.round(Number(val + "e" + decimals)) + "e-" + decimals);
 
 /**
  * Calculates Indian Financial Year string (e.g., '2026-27') from a date.
@@ -1209,6 +1211,9 @@ function setMeteringMode(mode) {
 }
 
 function render() {
+  const resultsPanel = document.getElementById("resultsPanel") || document.querySelector(".results-panel");
+  if (resultsPanel) resultsPanel.classList.remove("blurred-overlay");
+
   const input = readInput();
   const config = readConfig();
   const estimate = calculateEstimate(input, config);
@@ -2986,6 +2991,7 @@ function openInternalDialog() {
     document.getElementById("passwordError")?.classList.add("hidden");
     const pwdInput = document.getElementById("internalPassword");
     if (pwdInput) pwdInput.value = "";
+    dialog.style.display = "flex";
     if (typeof dialog.showModal === "function") {
       try {
         if (!dialog.open) {
@@ -3009,6 +3015,7 @@ function closeInternalDialog() {
       try { dialog.close(); } catch (_) { dialog.removeAttribute("open"); }
     }
     dialog.removeAttribute("open");
+    dialog.style.display = "none";
   }
 }
 
@@ -3023,6 +3030,13 @@ function unlockInternal() {
     document.getElementById("internalPassword")?.focus();
   }
 }
+
+// Expose internal mode methods to window early
+window.openInternalDialog = openInternalDialog;
+window.closeInternalDialog = closeInternalDialog;
+window.unlockInternal = unlockInternal;
+window.lockInternal = lockInternal;
+window.openInternal = openInternal;
 
 function openInternal() {
   state.internalUnlocked = true;
@@ -3082,9 +3096,9 @@ function switchWorkspaceTab(tabId) {
     pane.style.display = isActive ? "block" : "none";
   });
   const wsHeader = document.querySelector(".workspace-header");
-  if (wsHeader) {
+  if (wsHeader && typeof wsHeader.getBoundingClientRect === "function") {
     const rect = wsHeader.getBoundingClientRect();
-    if (rect.top < 55) {
+    if (rect && rect.top < 55 && typeof wsHeader.scrollIntoView === "function") {
       wsHeader.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }
@@ -3092,8 +3106,14 @@ function switchWorkspaceTab(tabId) {
     const cad = getActiveRooftopCAD();
     if (cad) {
       setTimeout(() => {
-        cad.resizeCanvas();
-        cad.render();
+        if (typeof cad.resizeCanvas === "function") {
+          cad.resizeCanvas();
+        } else if (typeof cad.autoFitRoof === "function") {
+          cad.autoFitRoof();
+        }
+        if (typeof cad.render === "function") {
+          cad.render();
+        }
       }, 50);
     }
   }
@@ -5013,7 +5033,7 @@ async function searchProposals(query) {
             <span style="font-size: 11px; color: #94a3b8;">${dateStr}${costVal ? " • ₹" + Math.round(costVal).toLocaleString("en-IN") : ""}</span>
           </div>
           <div style="display: flex; gap: 6px; align-items: center;">
-            <button class="primary-button load-local-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px; font-weight: 600;" type="button" title="Load this proposal into the calculator workspace">📂 Load</button>
+            <button class="primary-button load-local-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px; font-weight: 600;" type="button" title="Load and edit this proposal in workspace">📂 Load & Edit</button>
             <button class="secondary-button clone-local-btn" data-idx="${idx}" style="padding: 6px 10px; font-size: 12px; min-height: 32px; background: #ecfdf5; border: 1px solid #86efac; color: #166534;" type="button" title="Clone this proposal for a new customer">Clone 👥</button>
             <button class="ghost-button delete-local-btn" data-idx="${idx}" style="padding: 6px 8px; font-size: 13px; min-height: 32px; color: #ef4444;" type="button" title="Delete proposal">🗑️</button>
           </div>
@@ -5063,7 +5083,7 @@ async function searchProposals(query) {
               <span style="font-size: 11px; color: var(--text-muted);">${new Date(p.created_at).toLocaleString()}${costVal ? " • ₹" + Math.round(costVal).toLocaleString("en-IN") : ""}</span>
             </div>
             <div style="display: flex; gap: 6px; align-items: center;">
-              <button class="primary-button load-server-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px; font-weight: 600;" type="button" title="Load this proposal into the calculator workspace">📂 Load</button>
+              <button class="primary-button load-server-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px; font-weight: 600;" type="button" title="Load and edit this proposal in workspace">📂 Load & Edit</button>
               <button class="secondary-button clone-server-btn" data-idx="${idx}" style="padding: 6px 10px; font-size: 12px; min-height: 32px; background: #ecfdf5; border: 1px solid #86efac; color: #166534;" type="button" title="Clone this proposal for a new customer">Clone 👥</button>
               <button class="ghost-button delete-server-btn" data-idx="${idx}" style="padding: 6px 8px; font-size: 13px; min-height: 32px; color: #ef4444;" type="button" title="Delete proposal permanently from cloud database">🗑️</button>
             </div>

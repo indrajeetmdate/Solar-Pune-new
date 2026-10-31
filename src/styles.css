@@ -1338,6 +1338,10 @@ tr:hover td {
   z-index: 2000;
 }
 
+.password-dialog:not([open]) {
+  display: none !important;
+}
+
 .password-dialog[open],
 .password-dialog:modal {
   display: flex !important;
