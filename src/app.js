@@ -1330,166 +1330,6 @@ function render() {
     $("recommendedCapacity").previousElementSibling.innerHTML = `Size <i class="info-tip" data-tip="Recommended solar system capacity in kilowatts peak (kWp). Based on your consumption, roof area, and sanctioned load.">i</i>`;
   }
 
-  // Bill breakdown
-  const bbEl = $("billBreakdownPanel");
-  if (bbEl && option.currentBillBreakdownList) {
-    if (state.internalUnlocked) {
-      let html = `<div style="font-weight: 600; margin-bottom: 8px;">Current Bill Breakdown</div><table style="width: 100%; border-collapse: collapse; font-size: 13px;">`;
-      option.currentBillBreakdownList.forEach((item, index) => {
-        let isOverridden = state.billConfig[option.systemType][index]?.isOverride;
-        let hiddenStyle = item.isHidden ? 'opacity: 0.45; text-decoration: line-through;' : '';
-        let rowBg = index % 2 === 0 ? 'background: var(--bg-alt, #fafafa);' : '';
-        let colorStyle = item.isRed && !item.isHidden ? 'color: #d32f2f;' : '';
-        
-        html += `
-        <tr style="${rowBg}">
-          <td style="padding: 5px 6px 0; ${hiddenStyle} ${colorStyle}">${item.label}</td>
-          <td style="padding: 5px 2px 0; text-align: right; width: 85px;">
-            <input type="number" class="override-bill" data-sys="${option.systemType}" data-idx="${index}" value="${Math.round(item.value)}"
-              style="width: 78px; text-align: right; padding: 3px 4px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid ${isOverridden ? 'var(--primary)' : 'var(--line)'}; border-radius: 4px; ${item.isHidden ? 'opacity: 0.45;' : ''} ${colorStyle}">
-          </td>
-          <td style="padding: 5px 4px 0; text-align: right; font-size: 11px; color: var(--text-muted); width: 72px; ${hiddenStyle}">${money(item.value)}/mo</td>
-          <td style="width: 28px; text-align: center; padding: 0;">
-            <button class="icon-btn action-btn bill-toggle-hide" data-idx="${index}" data-sys="${option.systemType}" title="${item.isHidden ? 'Show' : 'Hide'}" style="cursor:pointer; background:none; border:none; padding:2px; font-size: 14px; margin-top: 3px;">${item.isHidden ? '👁️' : '🚫'}</button>
-          </td>
-        </tr>`;
-      });
-      html += `
-        <tr>
-          <td style="padding: 8px 6px 4px; font-weight: bold;">Estimated Current Bill</td>
-          <td colspan="3" style="padding: 8px 4px 4px; text-align: right; font-weight: bold;">${money(option.currentBillBreakdown.total)}/mo</td>
-        </tr>
-      </table>`;
-      bbEl.innerHTML = html;
-      bbEl.classList.remove("hidden");
-      
-      bbEl.querySelectorAll(".override-bill").forEach(el => {
-        el.addEventListener("change", (e) => {
-          let sys = e.target.dataset.sys;
-          let idx = parseInt(e.target.dataset.idx);
-          let val = parseFloat(e.target.value);
-          if (!isNaN(val)) {
-            state.billConfig[sys][idx].isOverride = true;
-            state.billConfig[sys][idx].overrideValue = val;
-            render();
-          }
-        });
-      });
-      
-      bbEl.querySelectorAll(".bill-toggle-hide").forEach(el => {
-        el.addEventListener("click", (e) => {
-          let btn = e.target.closest("button");
-          if (!btn) return;
-          let sys = btn.dataset.sys;
-          let idx = parseInt(btn.dataset.idx);
-          state.billConfig[sys][idx].isHidden = !state.billConfig[sys][idx].isHidden;
-          render();
-        });
-      });
-    } else {
-      const items = option.currentBillBreakdownList.filter(it => !it.isHidden && it.value !== 0);
-      if (items.length > 0) {
-        bbEl.classList.remove("hidden");
-        let html = `<div style="font-weight: 600; margin-bottom: 8px; font-size: 13px;">Current Bill Breakdown</div>`;
-        html += items.map(item => {
-          let colorStyle = item.isRed ? 'color: #d32f2f; font-weight: 500;' : '';
-          return `<div style="display: flex; justify-content: space-between; margin-bottom: 4px; ${colorStyle}"><div><span>${item.label}</span></div><div>${money(Math.abs(item.value))}/mo</div></div>`;
-        }).join("");
-        html += `<div style="display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); font-weight: bold;"><div>Total Current Bill</div><div>${money(option.currentBillBreakdown.total)}/mo</div></div>`;
-        bbEl.innerHTML = html;
-      } else {
-        bbEl.classList.add("hidden");
-      }
-    }
-  }
-
-  // Savings breakdown: Possible Savings Breakdown (Solar Offset)
-  const sbEl = $("savingsBreakdownPanel");
-  if (sbEl && option.savingsBreakdownList) {
-    if (state.internalUnlocked) {
-      let html = `<div style="font-weight: 600; margin-bottom: 8px; font-size: 13px;">Possible Savings Breakdown (Solar Offset)</div><table style="width: 100%; border-collapse: collapse; font-size: 13px;">`;
-      option.savingsBreakdownList.forEach((item, index) => {
-        let isOverridden = state.savingsConfig[option.systemType][index]?.isOverride;
-        let hiddenStyle = item.isHidden ? 'opacity: 0.45; text-decoration: line-through;' : '';
-        let rowBg = index % 2 === 0 ? 'background: var(--bg-alt, #fafafa);' : '';
-        
-        html += `
-        <tr style="${rowBg}">
-          <td style="padding: 5px 6px 0; ${hiddenStyle}">${item.label}</td>
-          <td style="padding: 5px 2px 0; text-align: right; width: 85px;">
-            <input type="number" class="override-savings" data-sys="${option.systemType}" data-idx="${index}" value="${Math.round(item.value)}"
-              style="width: 78px; text-align: right; padding: 3px 4px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid ${isOverridden ? 'var(--primary)' : 'var(--line)'}; border-radius: 4px; ${item.isHidden ? 'opacity: 0.45;' : ''}">
-          </td>
-          <td style="padding: 5px 4px 0; text-align: right; font-size: 11px; color: var(--text-muted); width: 72px; ${hiddenStyle}">${money(item.value)}/mo</td>
-          <td style="width: 28px; text-align: center; padding: 0;">
-            <button class="icon-btn action-btn savings-toggle-hide" data-idx="${index}" data-sys="${option.systemType}" title="${item.isHidden ? 'Show' : 'Hide'}" style="cursor:pointer; background:none; border:none; padding:2px; font-size: 14px; margin-top: 3px;">${item.isHidden ? '🙈' : '👁️'}</button>
-          </td>
-        </tr>`;
-      });
-      html += `
-        <tr>
-          <td style="padding: 8px 6px 4px; font-weight: bold;">Total Savings / Month</td>
-          <td colspan="3" style="padding: 8px 4px 4px; text-align: right; font-weight: bold; color: var(--brand-green);">${money(option.monthlySavings)}/mo</td>
-        </tr>
-      </table>`;
-      sbEl.innerHTML = html;
-      sbEl.classList.remove("hidden");
-      
-      sbEl.querySelectorAll(".override-savings").forEach(el => {
-        el.addEventListener("change", (e) => {
-          let sys = e.target.dataset.sys;
-          let idx = parseInt(e.target.dataset.idx);
-          let val = parseFloat(e.target.value);
-          if (isNaN(val)) {
-            state.savingsConfig[sys][idx].isOverride = false;
-          } else {
-            state.savingsConfig[sys][idx].isOverride = true;
-            state.savingsConfig[sys][idx].overrideValue = val;
-          }
-          render();
-        });
-      });
-      
-      sbEl.querySelectorAll(".savings-toggle-hide").forEach(el => {
-        el.addEventListener("click", (e) => {
-          let btn = e.target.closest("button");
-          if (!btn) return;
-          let sys = btn.dataset.sys;
-          let idx = parseInt(btn.dataset.idx);
-          state.savingsConfig[sys][idx].isHidden = !state.savingsConfig[sys][idx].isHidden;
-          render();
-        });
-      });
-    } else {
-      const tipMap = {
-        "Energy Charges Offset": "Direct slab-wise energy charge reduction from solar generation.",
-        "Electricity Duty Offset": "Avoided state electricity duty on self-generated solar units.",
-        "Wheeling & Fuel Adjustment (FAC) Offset": "Avoided DISCOM wheeling and fuel adjustment charges.",
-        "ToD Daytime Solar Generation Credit": "Solar generates during daytime peak hours (09:00–17:00), earning ToD tariff rebates from MSEDCL.",
-        "Peak penalty avoided": "Battery discharges during expensive peak hours (5PM-10PM), avoiding the highest tariff rates.",
-        "PF improvement": "Smart inverters improve your Power Factor, earning a discount from MSEDCL on your bill.",
-        "Prompt pay discount": "1% discount for paying your reduced bill on time. Solar makes this easier with lower bills.",
-        "Banking loss": "MSEDCL charges a grid-support fee on excess solar units exported to the grid.",
-      };
-      const items = option.savingsBreakdownList.filter(it => !it.isHidden && it.value > 0);
-      if (items.length > 0) {
-        sbEl.classList.remove("hidden");
-        let html = `<div style="font-weight: 600; margin-bottom: 8px; font-size: 13px;">Possible Savings Breakdown (Solar Offset)</div>`;
-        html += items
-          .map(item => {
-            const tip = tipMap[item.label] || "";
-            const icon = tip ? ` <i class="info-tip" data-tip="${tip}">i</i>` : "";
-            return `<div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><div><span style="font-weight: 600;">${item.label}</span>${icon}</div><div>+${money(item.value)}/mo</div></div>`;
-          })
-          .join("");
-        html += `<div style="display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); font-weight: bold;"><div>Total Savings / Month</div><div style="color: var(--brand-green);">${money(option.monthlySavings)}/mo</div></div>`;
-        sbEl.innerHTML = html;
-      } else {
-        sbEl.classList.add("hidden");
-      }
-    }
-  }
-
   // Panel layout
   const pl = estimate.panelLayout;
   if ($("panelCount")) $("panelCount").textContent = `${pl.numPanels} panels`;
@@ -1570,36 +1410,121 @@ function render() {
   const postSolarBillContainer = $("msebPostSolarBillContainer");
   if (currentBillContainer && postSolarBillContainer) {
     const units = input.monthlyUnits || 0;
-    const currentBill = option.currentBillBreakdown || {};
-    const fixedCharge = currentBill.fixedCharge !== undefined ? currentBill.fixedCharge : 130;
-    const energyCharge = currentBill.energyCharge || 0;
-    const wheelingFac = currentBill.wheelingFac !== undefined ? currentBill.wheelingFac : Math.round(units * 1.60);
-    const duty = currentBill.duty || 0;
-    const totalCurrentBill = currentBill.total || input.monthlyBill || (fixedCharge + energyCharge + wheelingFac + duty);
+    const cb = option.currentBillBreakdown || {};
+    const fixedCharge = cb.fixedCharge !== undefined ? cb.fixedCharge : 130;
+    const energyCharge = cb.energyCharge || 0;
+    const wheelingCharge = cb.wheelingCharge !== undefined ? cb.wheelingCharge : (cb.wheelingFac || 0);
+    const facCharge = cb.facCharge || 0;
+    const duty = cb.duty || 0;
+    const totalCurrentBill = cb.total || input.monthlyBill || (fixedCharge + energyCharge + wheelingCharge + facCharge + duty);
 
     const genUnits = option.monthlyGeneration || 0;
     const bankedUnits = Math.max(0, genUnits - units);
-    const sb = option.savingsBreakdown || {};
-    const energyOffset = sb.energyChargeOffset || 0;
-    const dutyOffset = sb.dutyOffset || 0;
-    const wheelingOffset = sb.wheelingFacOffset || 0;
-    const postSolarFixed = fixedCharge; // Fixed charge remains as minimum connection charge
-    const postSolarEnergy = Math.max(0, energyCharge - energyOffset);
-    const postSolarWheeling = Math.max(0, wheelingFac - wheelingOffset);
-    const postSolarDuty = Math.max(0, duty - dutyOffset);
-    const postSolarPayable = Math.max(0, totalCurrentBill - (option.monthlySavings || 0));
-    const monthlySavings = option.monthlySavings || 0;
-    const annualSavings = option.annualSavings || (monthlySavings * 12);
+    const ps = option.postSolarBillBreakdown || {};
+    const postSolarFixed = ps.fixedCharge !== undefined ? ps.fixedCharge : fixedCharge;
+    const postSolarEnergy = ps.energyCharge !== undefined ? ps.energyCharge : 0;
+    const postSolarWheeling = ps.wheelingCharge !== undefined ? ps.wheelingCharge : 0;
+    const postSolarFac = ps.facCharge !== undefined ? ps.facCharge : 0;
+    const postSolarDuty = ps.duty !== undefined ? ps.duty : 0;
+    const postSolarPayable = ps.netPayable !== undefined ? ps.netPayable : (postSolarFixed + postSolarEnergy + postSolarWheeling + postSolarFac + postSolarDuty);
+    const monthlySavings = ps.monthlySavings !== undefined ? ps.monthlySavings : Math.max(0, totalCurrentBill - postSolarPayable);
+    const annualSavings = ps.annualSavings !== undefined ? ps.annualSavings : (monthlySavings * 12);
 
-    currentBillContainer.innerHTML = `
+    let leftHtml = "";
+    if (state.internalUnlocked && option.currentBillBreakdownList && option.currentBillBreakdownList.length > 0) {
+      leftHtml += `
+      <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+        <thead>
+          <tr style="border-bottom: 2px solid #cbd5e1; background: #f8fafc;">
+            <th style="padding: 5px 6px; text-align: left; color: #475569;">Component</th>
+            <th style="padding: 5px 4px; text-align: right; color: #475569; width: 85px;">Override</th>
+            <th style="padding: 5px 6px; text-align: right; color: #475569; width: 75px;">Amount</th>
+            <th style="width: 28px; text-align: center;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
+            <td colspan="2" style="padding: 5px 6px; color: #475569;">एकूण वीज वापर (Units Consumed)</td>
+            <td colspan="2" style="padding: 5px 6px; text-align: right; font-weight: 600;">${units} kWh</td>
+          </tr>`;
+      option.currentBillBreakdownList.forEach((item, index) => {
+        let isOverridden = state.billConfig[option.systemType]?.[index]?.isOverride;
+        let hiddenStyle = item.isHidden ? 'opacity: 0.45; text-decoration: line-through;' : '';
+        let rowBg = index % 2 === 0 ? 'background: #fafafa;' : '';
+        leftHtml += `
+          <tr style="border-bottom: 1px solid #e2e8f0; ${rowBg}">
+            <td style="padding: 5px 6px; ${hiddenStyle}">${item.label}</td>
+            <td style="padding: 5px 2px; text-align: right;">
+              <input type="number" class="override-bill" data-sys="${option.systemType}" data-idx="${index}" value="${Math.round(item.value)}"
+                style="width: 78px; text-align: right; padding: 3px 4px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid ${isOverridden ? 'var(--primary)' : 'var(--line)'}; border-radius: 4px; ${item.isHidden ? 'opacity: 0.45;' : ''}">
+            </td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600; ${hiddenStyle}">₹${Math.round(item.value).toLocaleString("en-IN")}</td>
+            <td style="width: 28px; text-align: center; padding: 0;">
+              <button class="icon-btn action-btn bill-toggle-hide" data-idx="${index}" data-sys="${option.systemType}" title="${item.isHidden ? 'Show' : 'Hide'}" style="cursor:pointer; background:none; border:none; padding:2px; font-size: 14px;">${item.isHidden ? '👁️' : '🚫'}</button>
+            </td>
+          </tr>`;
+      });
+      leftHtml += `
+          <tr style="border-bottom: 2px solid #cbd5e1; background: #f1f5f9;">
+            <td colspan="2" style="padding: 6px 6px; font-weight: 700; color: #1e293b;">चालू वीज देयक (Current Monthly Bill)</td>
+            <td colspan="2" style="padding: 6px 6px; text-align: right; font-weight: 700; color: #1e293b;">₹${totalCurrentBill.toLocaleString("en-IN")}</td>
+          </tr>
+          <tr style="background: #fee2e2;">
+            <td colspan="2" style="padding: 7px 6px; font-weight: 800; color: #991b1b;">देयकाची निव्वळ रक्कम (Net Bill Payable)</td>
+            <td colspan="2" style="padding: 7px 6px; text-align: right; font-weight: 800; font-size: 13px; color: #dc2626;">₹${totalCurrentBill.toLocaleString("en-IN")}</td>
+          </tr>
+        </tbody>
+      </table>`;
+      currentBillContainer.innerHTML = leftHtml;
+
+      currentBillContainer.querySelectorAll(".override-bill").forEach(el => {
+        el.addEventListener("change", (e) => {
+          let sys = e.target.dataset.sys;
+          let idx = parseInt(e.target.dataset.idx);
+          let val = parseFloat(e.target.value);
+          if (!isNaN(val)) {
+            state.billConfig[sys][idx].isOverride = true;
+            state.billConfig[sys][idx].overrideValue = val;
+            render();
+          }
+        });
+      });
+
+      currentBillContainer.querySelectorAll(".bill-toggle-hide").forEach(el => {
+        el.addEventListener("click", (e) => {
+          let btn = e.target.closest("button");
+          if (!btn) return;
+          let sys = btn.dataset.sys;
+          let idx = parseInt(btn.dataset.idx);
+          state.billConfig[sys][idx].isHidden = !state.billConfig[sys][idx].isHidden;
+          render();
+        });
+      });
+    } else {
+      leftHtml += `
       <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
         <tbody>
           <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
             <td style="padding: 5px 6px; color: #475569;">एकूण वीज वापर (Monthly Units Consumed)</td>
             <td style="padding: 5px 6px; text-align: right; font-weight: 600;">${units} kWh</td>
-          </tr>
+          </tr>`;
+      if (cb.items && Array.isArray(cb.items) && cb.items.length > 0) {
+        cb.items.forEach((item, idx) => {
+          let label = item.label || "Charge";
+          if (/demand/i.test(label) && !/fixed/i.test(label)) {
+            label = label.replace(/demand\s*charges/i, "स्थिर आकार (Fixed Charges)").replace(/demand/i, "Fixed");
+          }
+          let rowBg = idx % 2 === 0 ? '' : 'background: #f8fafc;';
+          leftHtml += `
+          <tr style="border-bottom: 1px solid #e2e8f0; ${rowBg}">
+            <td style="padding: 5px 6px; color: #334155;">${label}</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600;">₹${Math.round(item.amount).toLocaleString("en-IN")}</td>
+          </tr>`;
+        });
+      } else {
+        leftHtml += `
           <tr style="border-bottom: 1px solid #e2e8f0;">
-            <td style="padding: 5px 6px; color: #334155;">स्थिर आकार (Fixed / Demand Charges)</td>
+            <td style="padding: 5px 6px; color: #334155;">स्थिर आकार (Fixed Charges)</td>
             <td style="padding: 5px 6px; text-align: right; font-weight: 600;">₹${fixedCharge.toLocaleString("en-IN")}</td>
           </tr>
           <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
@@ -1608,11 +1533,11 @@ function render() {
           </tr>
           <tr style="border-bottom: 1px solid #e2e8f0;">
             <td style="padding: 5px 6px; color: #334155;">वहन आकार (Wheeling Charges @ 1.60/U)</td>
-            <td style="padding: 5px 6px; text-align: right; font-weight: 600;">₹${wheelingFac.toLocaleString("en-IN")}</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600;">₹${wheelingCharge.toLocaleString("en-IN")}</td>
           </tr>
           <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
             <td style="padding: 5px 6px; color: #334155;">इंधन समायोजन (Fuel Adjustment - FAC)</td>
-            <td style="padding: 5px 6px; text-align: right; font-weight: 600;">₹0</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600;">₹${facCharge.toLocaleString("en-IN")}</td>
           </tr>
           <tr style="border-bottom: 1px solid #e2e8f0;">
             <td style="padding: 5px 6px; color: #334155;">वीज शुल्क (Electricity Duty 16%)</td>
@@ -1621,7 +1546,9 @@ function render() {
           <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
             <td style="padding: 5px 6px; color: #334155;">इतर आकार / कर (Other Charges / Tax)</td>
             <td style="padding: 5px 6px; text-align: right; font-weight: 600;">₹0</td>
-          </tr>
+          </tr>`;
+      }
+      leftHtml += `
           <tr style="border-bottom: 2px solid #cbd5e1; background: #f1f5f9;">
             <td style="padding: 6px 6px; font-weight: 700; color: #1e293b;">चालू वीज देयक (Current Monthly Bill)</td>
             <td style="padding: 6px 6px; text-align: right; font-weight: 700; color: #1e293b;">₹${totalCurrentBill.toLocaleString("en-IN")}</td>
@@ -1632,6 +1559,8 @@ function render() {
           </tr>
         </tbody>
       </table>`;
+      currentBillContainer.innerHTML = leftHtml;
+    }
 
     postSolarBillContainer.innerHTML = `
       <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
@@ -1645,24 +1574,28 @@ function render() {
             <td style="padding: 5px 6px; text-align: right; font-weight: 600; color: #0d9488;">${bankedUnits} kWh</td>
           </tr>
           <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
-            <td style="padding: 5px 6px; color: #334155;">स्थिर आकार (Fixed / Demand Charges)</td>
+            <td style="padding: 5px 6px; color: #334155;">स्थिर आकार (Fixed Charges)</td>
             <td style="padding: 5px 6px; text-align: right; font-weight: 600;">₹${postSolarFixed.toLocaleString("en-IN")}</td>
           </tr>
           <tr style="border-bottom: 1px solid #e2e8f0;">
-            <td style="padding: 5px 6px; color: #334155;">वीज आकार (Energy Charges Offset)</td>
+            <td style="padding: 5px 6px; color: #334155;">वीज आकार (Energy Charges)</td>
             <td style="padding: 5px 6px; text-align: right; font-weight: 600; color: #16a34a;">₹${postSolarEnergy.toLocaleString("en-IN")}</td>
           </tr>
           <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
-            <td style="padding: 5px 6px; color: #334155;">वहन आकार (Wheeling Offset)</td>
+            <td style="padding: 5px 6px; color: #334155;">वहन आकार (Wheeling Charges)</td>
             <td style="padding: 5px 6px; text-align: right; font-weight: 600; color: #16a34a;">₹${postSolarWheeling.toLocaleString("en-IN")}</td>
           </tr>
           <tr style="border-bottom: 1px solid #e2e8f0;">
-            <td style="padding: 5px 6px; color: #334155;">इंधन समायोजन (FAC Offset)</td>
-            <td style="padding: 5px 6px; text-align: right; font-weight: 600; color: #16a34a;">₹0</td>
+            <td style="padding: 5px 6px; color: #334155;">इंधन समायोजन (Fuel Adjustment - FAC)</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600; color: #16a34a;">₹${postSolarFac.toLocaleString("en-IN")}</td>
           </tr>
           <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
-            <td style="padding: 5px 6px; color: #334155;">वीज शुल्क (Electricity Duty Offset)</td>
+            <td style="padding: 5px 6px; color: #334155;">वीज शुल्क (Electricity Duty)</td>
             <td style="padding: 5px 6px; text-align: right; font-weight: 600; color: #16a34a;">₹${postSolarDuty.toLocaleString("en-IN")}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 5px 6px; color: #334155;">इतर आकार / कर (Other Charges / Tax)</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600; color: #16a34a;">₹0</td>
           </tr>
           <tr style="border-bottom: 2px solid #86efac; background: #f0fdf4;">
             <td style="padding: 6px 6px; font-weight: 700; color: #166534;">देयकाची निव्वळ रक्कम (Net Bill Payable)</td>
@@ -4227,107 +4160,17 @@ function applySavingsConfig(estimate, input) {
   if (!state.savingsConfig) state.savingsConfig = {};
   
   estimate.options.forEach(option => {
-    let sysType = option.systemType;
-    let sb = option.savingsBreakdown;
-    const hasBattery = (option.batteryCapacityKwh > 0) || (option.costBreakup && option.costBreakup.battery > 0);
-    
-    let defaultItems = [
-      { id: 'energyChargeOffset', label: 'Energy Charges Offset', value: sb.energyChargeOffset !== undefined ? sb.energyChargeOffset : sb.baseSavings },
-      { id: 'dutyOffset', label: 'Electricity Duty Offset', value: sb.dutyOffset || 0 },
-    ];
-    if (sb.wheelingFacOffset > 0) {
-      defaultItems.push({ id: 'wheelingFacOffset', label: 'Wheeling & Fuel Adjustment (FAC) Offset', value: sb.wheelingFacOffset });
-    }
-    if (sb.todDaytimeRebate > 0) {
-      defaultItems.push({ id: 'todDaytimeRebate', label: 'ToD Daytime Solar Generation Credit', value: sb.todDaytimeRebate });
-    }
-    // Only include Peak penalty avoided for systems with a battery
-    if (hasBattery && sb.todPeakAvoided > 0) {
-      defaultItems.push({ id: 'todPeakAvoided', label: 'Peak penalty avoided', value: sb.todPeakAvoided });
-    }
-    if (sb.pfIncentive > 0) {
-      defaultItems.push({ id: 'pfIncentive', label: 'PF improvement', value: sb.pfIncentive });
-    }
-    if (sb.promptPayDiscount > 0) {
-      defaultItems.push({ id: 'promptPayDiscount', label: 'Prompt pay discount', value: sb.promptPayDiscount });
-    }
-    
-    // Purge any legacy baseSavings/slab offset or bankingLoss from saved or active config
-    if (state.savingsConfig[sysType]) {
-      const hasLegacy = state.savingsConfig[sysType].some(x => x.id === 'baseSavings' || (x.label && x.label.toLowerCase().includes('slab')));
-      if (hasLegacy) {
-        delete state.savingsConfig[sysType];
-      } else {
-        state.savingsConfig[sysType] = state.savingsConfig[sysType].filter(item => {
-          if (item.id === 'bankingLoss' || (item.label && item.label.toLowerCase().includes('banking'))) return false;
-          if (!hasBattery && (item.id === 'todPeakAvoided' || (item.label && item.label.toLowerCase().includes('peak penalty')))) return false;
-          return true;
-        });
-      }
-    }
+    const effBill = input.monthlyBill > 0 ? input.monthlyBill : (option.currentBillBreakdown?.total || 0);
+    const postPayable = option.postSolarBillBreakdown?.netPayable ?? (option.currentBillBreakdown?.fixedCharge || 0);
+    const monthlySavings = Math.max(0, effBill - postPayable);
 
-    if (!state.savingsConfig[sysType] || state.savingsConfig[sysType].length === 0) {
-      state.savingsConfig[sysType] = defaultItems.map(di => ({
-        id: di.id,
-        label: di.label,
-        isHidden: false,
-        isOverride: false,
-        overrideValue: di.value
-      }));
-    } else {
-      defaultItems.forEach(di => {
-        if (!state.savingsConfig[sysType].some(x => x.id === di.id)) {
-          state.savingsConfig[sysType].push({
-            id: di.id,
-            label: di.label,
-            isHidden: false,
-            isOverride: false,
-            overrideValue: di.value
-          });
-        }
-      });
+    option.monthlySavings = monthlySavings;
+    option.annualSavings = monthlySavings * 12;
+    option.lifetimeSavings = calculateLifetimeSavings(option.annualSavings, readConfig());
+    if (option.postSolarBillBreakdown) {
+      option.postSolarBillBreakdown.monthlySavings = monthlySavings;
+      option.postSolarBillBreakdown.annualSavings = option.annualSavings;
     }
-    
-    let configList = state.savingsConfig[sysType];
-    let finalSavingsItems = [];
-    let totalMonthlySavings = 0;
-    
-    configList.forEach(c => {
-      if (c.id === 'bankingLoss' || (c.label && c.label.toLowerCase().includes('banking'))) return;
-      if (!hasBattery && (c.id === 'todPeakAvoided' || (c.label && c.label.toLowerCase().includes('peak penalty')))) return;
-
-      let item = { ...c };
-      let di = defaultItems.find(x => x.id === c.id);
-      let computedValue = di ? di.value : 0;
-      item.value = c.isOverride ? c.overrideValue : computedValue;
-      if (di) item.label = di.label;
-      
-      // Negative value components should not be included in estimated savings
-      if (item.value < 0) return;
-
-      if (!c.isHidden && item.value > 0) {
-        totalMonthlySavings += item.value;
-      }
-      finalSavingsItems.push(item);
-    });
-    
-    option.savingsBreakdownList = finalSavingsItems;
-    
-    // Update calculated totals based on visible savings components, matching effective monthly bill
-    const effBill = input.monthlyBill > 0 ? input.monthlyBill : (option.currentBillBreakdown?.total || totalMonthlySavings);
-    const hasAnyOverride = configList.some(c => c.isOverride);
-    if (!hasAnyOverride) {
-      if (option.offsetUnits >= (input.monthlyUnits || 0) && input.monthlyUnits > 0) {
-        totalMonthlySavings = effBill;
-      } else if (effBill > 0) {
-        totalMonthlySavings = Math.min(totalMonthlySavings, effBill);
-      }
-    }
-
-    option.monthlySavings = totalMonthlySavings;
-    option.annualSavings = totalMonthlySavings * 12;
-    // Basic recalculation of lifetime assuming default escalation, or just simple multiple
-    option.lifetimeSavings = option.annualSavings * 25; 
   });
 }
 
@@ -4341,17 +4184,26 @@ function applyBillConfig(estimate, input) {
     
     let defaultItems = [];
     if (cb.items && cb.items.length > 0) {
-      defaultItems = cb.items.map((item, idx) => ({
-        id: `ocr_item_${idx}`,
-        label: item.label,
-        value: item.amount,
-        isRed: !item.label.toLowerCase().includes("fixed") && !item.label.toLowerCase().includes("demand")
-      }));
+      defaultItems = cb.items.map((item, idx) => {
+        let label = (item.label || "Charge").trim();
+        if (/demand/i.test(label) && !/fixed/i.test(label)) {
+          label = label.replace(/demand\s*charges/i, "Fixed Charges").replace(/demand/i, "Fixed");
+        }
+        return {
+          id: `ocr_item_${idx}`,
+          label,
+          value: item.amount,
+          isRed: !/fixed|demand|स्थिर/i.test(label)
+        };
+      });
     } else {
       defaultItems.push({ id: 'fixedCharge', label: 'Fixed Charges', value: cb.fixedCharge, isRed: false });
       defaultItems.push({ id: 'energyCharge', label: 'Energy Charges', value: cb.energyCharge, isRed: true });
-      if (cb.wheelingFac > 0) {
-        defaultItems.push({ id: 'wheelingFac', label: 'Wheeling & Fuel Adj. (FAC)', value: cb.wheelingFac, isRed: true });
+      if (cb.wheelingCharge > 0 || cb.wheelingFac > 0) {
+        defaultItems.push({ id: 'wheelingCharge', label: 'Wheeling Charges', value: cb.wheelingCharge || cb.wheelingFac, isRed: true });
+      }
+      if (cb.facCharge > 0) {
+        defaultItems.push({ id: 'facCharge', label: 'Fuel Adjustment (FAC)', value: cb.facCharge, isRed: true });
       }
       defaultItems.push({ id: 'duty', label: 'Electricity Duty', value: cb.duty, isRed: true });
       if (cb.todPenalty > 0) {

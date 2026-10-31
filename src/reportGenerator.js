@@ -1058,45 +1058,59 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.5);
   doc.setTextColor(COLORS.primary);
-  doc.text("MSEDCL Electricity Bill Comparison (Current Bill vs. With Rooftop Solar):", margin, yPos);
+  doc.text("MSEDCL Electricity Bill Comparison & Projected Savings:", margin, yPos);
   yPos += 4.5;
 
   const tableColWidth = (pageWidth - margin * 2 - 5) / 2;
   const startComparisonY = yPos;
 
   const units = input.monthlyUnits || 0;
-  const currentBill = option.currentBillBreakdown || {};
-  const fixedCharge = currentBill.fixedCharge !== undefined ? currentBill.fixedCharge : 130;
-  const energyCharge = currentBill.energyCharge || 0;
-  const wheelingFac = currentBill.wheelingFac !== undefined ? currentBill.wheelingFac : Math.round(units * 1.60);
-  const duty = currentBill.duty || 0;
-  const totalCurrentBill = currentBill.total || input.monthlyBill || (fixedCharge + energyCharge + wheelingFac + duty);
+  const cb = option.currentBillBreakdown || {};
+  const fixedCharge = cb.fixedCharge !== undefined ? cb.fixedCharge : 130;
+  const energyCharge = cb.energyCharge || 0;
+  const wheelingCharge = cb.wheelingCharge !== undefined ? cb.wheelingCharge : (cb.wheelingFac || 0);
+  const facCharge = cb.facCharge || 0;
+  const duty = cb.duty || 0;
+  const totalCurrentBill = cb.total || input.monthlyBill || (fixedCharge + energyCharge + wheelingCharge + facCharge + duty);
 
   const genUnits = option.monthlyGeneration || 0;
   const bankedUnits = Math.max(0, genUnits - units);
-  const sb = option.savingsBreakdown || {};
-  const energyOffset = sb.energyChargeOffset || 0;
-  const dutyOffset = sb.dutyOffset || 0;
-  const wheelingOffset = sb.wheelingFacOffset || 0;
-  const postSolarFixed = fixedCharge;
-  const postSolarEnergy = Math.max(0, energyCharge - energyOffset);
-  const postSolarWheeling = Math.max(0, wheelingFac - wheelingOffset);
-  const postSolarDuty = Math.max(0, duty - dutyOffset);
-  const postSolarPayable = Math.max(0, totalCurrentBill - (option.monthlySavings || 0));
-  const monthlySavings = option.monthlySavings || 0;
-  const annualSavings = option.annualSavings || (monthlySavings * 12);
+  const ps = option.postSolarBillBreakdown || {};
+  const postSolarFixed = ps.fixedCharge !== undefined ? ps.fixedCharge : fixedCharge;
+  const postSolarEnergy = ps.energyCharge !== undefined ? ps.energyCharge : Math.max(0, energyCharge - (option.savingsBreakdown?.energyChargeOffset || 0));
+  const postSolarWheeling = ps.wheelingCharge !== undefined ? ps.wheelingCharge : Math.max(0, wheelingCharge - (option.savingsBreakdown?.wheelingFacOffset || 0));
+  const postSolarFac = ps.facCharge !== undefined ? ps.facCharge : 0;
+  const postSolarDuty = ps.duty !== undefined ? ps.duty : Math.max(0, duty - (option.savingsBreakdown?.dutyOffset || 0));
+  const postSolarPayable = ps.netPayable !== undefined ? ps.netPayable : (postSolarFixed + postSolarEnergy + postSolarWheeling + postSolarFac + postSolarDuty);
+  const monthlySavings = ps.monthlySavings !== undefined ? ps.monthlySavings : Math.max(0, totalCurrentBill - postSolarPayable);
+  const annualSavings = ps.annualSavings !== undefined ? ps.annualSavings : (monthlySavings * 12);
 
   const currentBillRows = [
     ["Units Consumed", `${units} kWh`],
-    ["Demand Charges (Fixed)", formatCurrency(fixedCharge)],
-    ["Energy Charges", formatCurrency(energyCharge)],
-    ["Wheeling Charges (@ 1.60/U)", formatCurrency(wheelingFac)],
-    ["Fuel Adjustment (FAC)", formatCurrency(0)],
-    ["Electricity Duty (16%)", formatCurrency(duty)],
-    ["Other Charges / Tax", formatCurrency(0)],
-    ["Total Current Bill", formatCurrency(totalCurrentBill)],
-    ["Net Bill Payable", formatCurrency(totalCurrentBill)],
   ];
+
+  if (cb.items && Array.isArray(cb.items) && cb.items.length > 0) {
+    cb.items.forEach(item => {
+      let label = item.label || "Charge";
+      if (/demand/i.test(label) && !/fixed/i.test(label)) {
+        label = label.replace(/demand\s*charges/i, "Fixed Charges").replace(/demand/i, "Fixed");
+      }
+      currentBillRows.push([label, formatCurrency(item.amount)]);
+    });
+  } else {
+    currentBillRows.push(
+      ["Fixed Charges", formatCurrency(fixedCharge)],
+      ["Energy Charges", formatCurrency(energyCharge)],
+      ["Wheeling Charges (@ 1.60/U)", formatCurrency(wheelingCharge)],
+      ["Fuel Adjustment (FAC)", formatCurrency(facCharge)],
+      ["Electricity Duty (16%)", formatCurrency(duty)],
+      ["Other Charges / Tax", formatCurrency(0)]
+    );
+  }
+  currentBillRows.push(
+    ["Total Current Bill", formatCurrency(totalCurrentBill)],
+    ["Net Bill Payable", formatCurrency(totalCurrentBill)]
+  );
 
   doc.autoTable({
     startY: startComparisonY,
@@ -1127,10 +1141,10 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   const postSolarRows = [
     ["Solar Generation", `${genUnits} kWh`],
     ["Banked Solar Units", `${bankedUnits} kWh`],
-    ["Demand Charges (Fixed)", formatCurrency(postSolarFixed)],
-    ["Energy Charges (Net 0 Units)", formatCurrency(postSolarEnergy)],
+    ["Fixed Charges", formatCurrency(postSolarFixed)],
+    ["Energy Charges", formatCurrency(postSolarEnergy)],
     ["Wheeling Charges", formatCurrency(postSolarWheeling)],
-    ["Fuel Adjustment (FAC)", formatCurrency(0)],
+    ["Fuel Adjustment (FAC)", formatCurrency(postSolarFac)],
     ["Electricity Duty", formatCurrency(postSolarDuty)],
     ["Net Bill Payable", formatCurrency(postSolarPayable)],
     ["Net Monthly Savings", `${formatCurrency(monthlySavings)}/mo`],
@@ -1168,108 +1182,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   });
   const rightTableFinalY = doc.lastAutoTable.finalY;
 
-  yPos = Math.max(leftTableFinalY, rightTableFinalY) + 5;
-
-  ensureVerticalSpace(38, "Estimated Savings (Contd.)");
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(COLORS.black);
-  doc.text("Solar Offset Component Breakdown:", margin, yPos);
-  yPos += 4;
-
-  const tipMap = {
-    "Energy Charges Offset": "Direct slab-wise energy charge reduction from solar generation",
-    "Electricity Duty Offset": "Avoided state electricity duty on self-generated solar units",
-    "Wheeling & Fuel Adjustment (FAC) Offset": "Avoided DISCOM wheeling & fuel adjustment charges",
-    "ToD Daytime Solar Generation Credit": "Time-of-day solar generation incentive credited by DISCOM",
-    "Peak penalty avoided": "Using battery during peak hours (5PM-10PM) avoids expensive peak tariffs.",
-    "PF improvement": "Smart inverters maintain a high Power Factor, earning a discount from MSEDCL.",
-    "Prompt pay discount": "1% bill discount for prompt payment differential."
-  };
-
-  const savingsTableBody = [];
-  if (option.savingsBreakdownList && option.savingsBreakdownList.length > 0) {
-    option.savingsBreakdownList.forEach(item => {
-      if (item.value > 0 && !item.isHidden) {
-        if (item.label === "Energy Charges Offset" && !saveEnergyCharges) return;
-        if (item.label === "Electricity Duty Offset" && !saveElectricityDuty) return;
-        if (item.label === "Wheeling & Fuel Adjustment (FAC) Offset" && !saveWheelingFac) return;
-        if (item.label === "ToD Daytime Solar Generation Credit" && !saveTodRebate) return;
-
-        savingsTableBody.push([
-          item.label,
-          formatCurrency(item.value),
-          formatCurrency(item.value * 12),
-          tipMap[item.label] || "Solar net metering bill reduction benefit"
-        ]);
-      }
-    });
-  } else {
-    const sb = option.savingsBreakdown || {};
-    if (saveEnergyCharges && sb.energyChargeOffset > 0) {
-      savingsTableBody.push(["Energy Charges Offset", formatCurrency(sb.energyChargeOffset), formatCurrency(sb.energyChargeOffset * 12), tipMap["Energy Charges Offset"]]);
-    }
-    if (saveElectricityDuty && sb.dutyOffset > 0) {
-      savingsTableBody.push(["Electricity Duty Offset", formatCurrency(sb.dutyOffset), formatCurrency(sb.dutyOffset * 12), tipMap["Electricity Duty Offset"]]);
-    }
-    if (saveWheelingFac && sb.wheelingFacOffset > 0) {
-      savingsTableBody.push(["Wheeling & Fuel Adjustment (FAC) Offset", formatCurrency(sb.wheelingFacOffset), formatCurrency(sb.wheelingFacOffset * 12), tipMap["Wheeling & Fuel Adjustment (FAC) Offset"]]);
-    }
-    if (saveTodRebate && sb.todDaytimeRebate > 0) {
-      savingsTableBody.push(["ToD Daytime Solar Generation Credit", formatCurrency(sb.todDaytimeRebate), formatCurrency(sb.todDaytimeRebate * 12), tipMap["ToD Daytime Solar Generation Credit"]]);
-    }
-    if (sb.todPeakAvoided > 0) {
-      savingsTableBody.push(["Peak penalty avoided", formatCurrency(sb.todPeakAvoided), formatCurrency(sb.todPeakAvoided * 12), tipMap["Peak penalty avoided"]]);
-    }
-    if (sb.pfIncentive > 0) {
-      savingsTableBody.push(["PF improvement", formatCurrency(sb.pfIncentive), formatCurrency(sb.pfIncentive * 12), tipMap["PF improvement"]]);
-    }
-    if (sb.promptPayDiscount > 0) {
-      savingsTableBody.push(["Prompt pay discount", formatCurrency(sb.promptPayDiscount), formatCurrency(sb.promptPayDiscount * 12), tipMap["Prompt pay discount"]]);
-    }
-  }
-
-  savingsTableBody.push(["-------------------", "-------------------", "-------------------", ""]);
-  savingsTableBody.push([
-    "Estimated Savings / Month (Save/mo)",
-    formatCurrency(option.monthlySavings),
-    formatCurrency(option.annualSavings),
-    "Direct monthly electricity bill reduction"
-  ]);
-  savingsTableBody.push([
-    "Total Projected Annual Savings",
-    formatCurrency(option.annualSavings),
-    formatCurrency(option.annualSavings),
-    "First year projected cumulative financial savings"
-  ]);
-
-  doc.autoTable({
-    startY: yPos,
-    head: [["Offsettable Bill Component", "Monthly Savings", "Annual Savings", "Solar Benefit Description"]],
-    body: savingsTableBody,
-    theme: "plain",
-    headStyles: { fillColor: COLORS.primary, fontSize: 8.5, textColor: COLORS.white },
-    bodyStyles: { fontSize: 8, cellPadding: 2.2 },
-    columnStyles: {
-      0: { fontStyle: "normal", width: 62 },
-      1: { halign: "right", width: 28 },
-      2: { halign: "right", width: 28 },
-      3: { fontStyle: "italic", fontSize: 7.5, textColor: COLORS.textLight, width: 62 },
-    },
-    didParseCell: function (data) {
-      if (data.row.raw[0].includes("Estimated Savings / Month") || data.row.raw[0].includes("Save/mo")) {
-        data.cell.styles.fillColor = COLORS.bgLight;
-        data.cell.styles.fontStyle = "bold";
-        data.cell.styles.textColor = COLORS.primary;
-      } else if (data.row.raw[0].includes("Total Projected Annual Savings")) {
-        data.cell.styles.fontStyle = "bold";
-      }
-    },
-    margin: { left: margin },
-  });
-
-  yPos = doc.lastAutoTable.finalY + 7;
+  yPos = Math.max(leftTableFinalY, rightTableFinalY) + 7;
 
   // Conditionally include payback
   if (!hidePayback) {

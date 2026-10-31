@@ -1027,8 +1027,6 @@
                 <strong class="metric-value" id="payback">0 years</strong>
               </div>
             </div>
-            <div id="billBreakdownPanel" class="breakup-list hidden" style="margin: 10px 0 0; font-size: 12px; padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
-            <div id="savingsBreakdownPanel" class="breakup-list hidden" style="margin: 10px 0 0; font-size: 12px; padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
 
             <!-- Authentic MSEDCL Electricity Bill Comparison (Side-by-Side: Current Bill vs With Solar) -->
             <div class="detail-card" style="margin: 12px 0 0;" id="msebBillComparisonSection">
@@ -1268,23 +1266,12 @@
               </div>
             </fieldset>
 
-            <fieldset style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-top: 10px; background: #f8fafc;">
+            <fieldset style="display: none;">
               <legend style="font-size: 11.5px; font-weight: 600; padding: 0 6px; color: #64748b;">Solar Bill Savings Customization (Shown on PDF)</legend>
-              <p class="muted small" style="margin: 0 0 8px;">Select which offsettable bill components are included in the PDF savings table:</p>
-              <div style="display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px;">
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input type="checkbox" id="saveEnergyCharges" checked> Energy Charges (Unit Offset)
-                </label>
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input type="checkbox" id="saveElectricityDuty" checked> Electricity Duty Saved
-                </label>
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input type="checkbox" id="saveWheelingFac" checked> Wheeling & Fuel Adj. (FAC)
-                </label>
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input type="checkbox" id="saveTodRebate" checked> ToD Daytime Solar Export Incentive
-                </label>
-              </div>
+              <input type="checkbox" id="saveEnergyCharges" checked>
+              <input type="checkbox" id="saveElectricityDuty" checked>
+              <input type="checkbox" id="saveWheelingFac" checked>
+              <input type="checkbox" id="saveTodRebate" checked>
             </fieldset>
 
             <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">

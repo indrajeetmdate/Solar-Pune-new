@@ -315,11 +315,28 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   });
   const largeEst = calculateEstimate(largeSystemInput, DEFAULT_CONFIG);
   const largeOpt = largeEst.recommended;
-  // When solar generation covers 100% or more of consumption, Save/mo and EMI must match the monthly bill
+  // When solar generation covers 100% or more of consumption:
+  // Post-solar net payable retains the minimum connection fixed charge (₹130)
+  // Net monthly savings = Total Current Bill (₹4000) - Post-Solar Payable (₹130) = ₹3870
   assert.equal(
     largeOpt.monthlySavings,
-    4000,
-    "100% solar offset Save/mo must match the Monthly bill (₹4000)"
+    3870,
+    "100% solar offset Save/mo must equal Monthly bill minus retained Fixed Charges (₹4000 - ₹130 = ₹3870)"
+  );
+  assert.equal(
+    largeOpt.postSolarBillBreakdown.netPayable,
+    130,
+    "Post-solar net payable must equal retained Fixed Charges (₹130)"
+  );
+  assert.equal(
+    largeOpt.postSolarBillBreakdown.fixedCharge,
+    130,
+    "Post-solar fixed charge must match current bill fixed charge"
+  );
+  assert.equal(
+    largeOpt.postSolarBillBreakdown.netPayable + largeOpt.monthlySavings,
+    largeOpt.currentBillBreakdown.total,
+    "Post-solar payable + Net monthly savings must exactly equal Current Bill total (₹4000)"
   );
   assert.equal(
     largeOpt.savingsBreakdown.energyChargeOffset,
@@ -339,13 +356,11 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   const totalItemizedSavings =
     largeOpt.savingsBreakdown.energyChargeOffset +
     largeOpt.savingsBreakdown.dutyOffset +
-    largeOpt.savingsBreakdown.wheelingFacOffset +
-    largeOpt.savingsBreakdown.todDaytimeRebate +
-    largeOpt.savingsBreakdown.promptPayDiscount;
+    largeOpt.savingsBreakdown.wheelingFacOffset;
   assert.equal(
     totalItemizedSavings,
-    4000,
-    "Itemized savings components must cleanly sum to the monthly bill (₹4000)"
+    3870,
+    "Itemized savings components must cleanly sum to net monthly savings (₹3870)"
   );
 }
 
@@ -516,23 +531,16 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.ok(allTexts.some(t => String(t).includes("Note: MSEDCL Net Metering Liaisoning & Discom Documentation Support charges at actuals")), "MSEDCL Liaisoning note must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Financial payback and bill savings projections are modeled on prevailing MSEDCL tariffs and MERC net metering regulations")), "Payback disclaimer note must be rendered and wrapped");
   assert.ok(allTexts.some(t => String(t).includes("Loan approval, interest rates, and final terms are governed exclusively by the lending bank")), "Bank loan disclaimer note must be rendered and wrapped");
-  assert.ok(allTexts.some(t => String(t).includes("Possible Savings Breakdown (Solar Offset)")), "Possible Savings Breakdown section heading must be rendered");
+  assert.ok(allTexts.some(t => String(t).includes("MSEDCL Electricity Bill Comparison & Projected Savings")), "MSEDCL comparison section heading must be rendered");
 
-  const savingsTable = mockCalls.find(c => c.body && c.body.some(row => row[0] && row[0].includes("Estimated Savings / Month")));
-  assert.ok(savingsTable, "Possible savings table must be generated in PDF");
-  assert.equal(savingsTable.head[0][0], "Offsettable Bill Component");
-  assert.equal(savingsTable.head[0][1], "Monthly Savings");
-  assert.equal(savingsTable.head[0][2], "Annual Savings");
-
-  assert.ok(savingsTable.body.some(row => row[0] === "Energy Charges Offset"), "Savings table must include Energy Charges Offset");
-  assert.ok(savingsTable.body.some(row => row[0] === "Electricity Duty Offset"), "Savings table must include Electricity Duty Offset");
-  assert.ok(savingsTable.body.some(row => row[0] === "ToD Daytime Solar Generation Credit"), "Savings table must include ToD Daytime Solar Generation Credit");
-  assert.ok(savingsTable.body.some(row => row[0] === "Prompt pay discount"), "Savings table must include Prompt pay discount");
+  // Verify older 4-column savings table is omitted
+  const olderSavingsTable = mockCalls.find(c => c.head && c.head[0] && c.head[0][0] === "Offsettable Bill Component");
+  assert.ok(!olderSavingsTable, "Older 4-column Offsettable Bill Component table must be omitted from PDF");
 
   // Verify Authentic MSEDCL Electricity Bill Comparison Side-by-Side Tables
   const msebCurrentTable = mockCalls.find(c => c.head && c.head[0] && c.head[0][0].includes("Current MSEDCL Bill (Before Solar)"));
   assert.ok(msebCurrentTable, "Current MSEDCL Bill (Before Solar) table must be generated in PDF");
-  assert.ok(msebCurrentTable.body.some(r => r[0] === "Demand Charges (Fixed)"), "Current MSEDCL bill table must include Demand Charges (Fixed)");
+  assert.ok(msebCurrentTable.body.some(r => r[0] === "Fixed Charges"), "Current MSEDCL bill table must include Fixed Charges");
   assert.ok(msebCurrentTable.body.some(r => r[0] === "Energy Charges"), "Current MSEDCL bill table must include Energy Charges");
   assert.ok(msebCurrentTable.body.some(r => r[0].includes("Wheeling Charges")), "Current MSEDCL bill table must include Wheeling Charges");
   assert.ok(msebCurrentTable.body.some(r => r[0].includes("Electricity Duty")), "Current MSEDCL bill table must include Electricity Duty");
@@ -541,7 +549,7 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   const msebPostSolarTable = mockCalls.find(c => c.head && c.head[0] && c.head[0][0].includes("With Rooftop Solar (After Solar)"));
   assert.ok(msebPostSolarTable, "With Rooftop Solar (After Solar) table must be generated in PDF");
   assert.ok(msebPostSolarTable.body.some(r => r[0] === "Solar Generation"), "Post-solar MSEDCL table must include Solar Generation");
-  assert.ok(msebPostSolarTable.body.some(r => r[0] === "Demand Charges (Fixed)"), "Post-solar MSEDCL table must retain Fixed Demand Charges");
+  assert.ok(msebPostSolarTable.body.some(r => r[0] === "Fixed Charges"), "Post-solar MSEDCL table must retain Fixed Charges");
   assert.ok(msebPostSolarTable.body.some(r => r[0].includes("Energy Charges")), "Post-solar MSEDCL table must include Energy Charges offset");
   assert.ok(msebPostSolarTable.body.some(r => r[0] === "Net Bill Payable"), "Post-solar MSEDCL table must include Net Bill Payable");
   assert.ok(msebPostSolarTable.body.some(r => r[0] === "Net Monthly Savings"), "Post-solar MSEDCL table must include Net Monthly Savings");

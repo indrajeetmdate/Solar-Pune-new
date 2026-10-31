@@ -100,7 +100,7 @@ await generateProposalPDF(estBifacial, estBifacial.recommended, { hidePayback: f
 const leftTable = mockCalls.find(c => c.head && c.head[0] && c.head[0][0].includes("Current MSEDCL Bill (Before Solar)"));
 assert.ok(leftTable, "Current MSEDCL Bill (Before Solar) table must be generated in PDF");
 assert.ok(leftTable.body.some(r => r[0] === "Units Consumed"), "Must include Units Consumed");
-assert.ok(leftTable.body.some(r => r[0] === "Demand Charges (Fixed)"), "Must include Demand Charges");
+assert.ok(leftTable.body.some(r => r[0] === "Fixed Charges"), "Must include Fixed Charges");
 assert.ok(leftTable.body.some(r => r[0] === "Energy Charges"), "Must include Energy Charges");
 assert.ok(leftTable.body.some(r => r[0].includes("Wheeling Charges")), "Must include Wheeling Charges");
 assert.ok(leftTable.body.some(r => r[0].includes("Electricity Duty")), "Must include Electricity Duty");
@@ -111,7 +111,7 @@ const rightTable = mockCalls.find(c => c.head && c.head[0] && c.head[0][0].inclu
 assert.ok(rightTable, "With Rooftop Solar (After Solar) table must be generated in PDF");
 assert.ok(rightTable.body.some(r => r[0] === "Solar Generation"), "Must include Solar Generation");
 assert.ok(rightTable.body.some(r => r[0] === "Banked Solar Units"), "Must include Banked Solar Units");
-assert.ok(rightTable.body.some(r => r[0] === "Demand Charges (Fixed)"), "Must include Demand Charges (Fixed)");
+assert.ok(rightTable.body.some(r => r[0] === "Fixed Charges"), "Must include Fixed Charges");
 assert.ok(rightTable.body.some(r => r[0].includes("Energy Charges")), "Must include Energy Charges");
 assert.ok(rightTable.body.some(r => r[0] === "Net Bill Payable"), "Must include Net Bill Payable");
 assert.ok(rightTable.body.some(r => r[0] === "Net Monthly Savings"), "Must include Net Monthly Savings");

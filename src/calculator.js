@@ -518,97 +518,98 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const hasBattery = batteryCapacityKwh > 0;
   const todSavings = calculateTodSavings(offsetUnits, avgRate, { ...input, hasBattery });
   const pfIncentive = calculatePfIncentive(input.currentPf, input.improvedPf, modelCurrentBill.energyCharge, input);
-  // FIX M3: Prompt pay differential — customer gets this discount with or without solar.
-  // Only the difference is attributable to solar.
   const promptPayPreSolar = calculatePromptPayDiscount(modelCurrentBill.energyCharge, modelCurrentBill.fixedCharge);
   const promptPayPostSolar = calculatePromptPayDiscount(postSolarBill.energyCharge, postSolarBill.fixedCharge);
   const promptPay = Math.max(promptPayPreSolar - promptPayPostSolar, 0);
-
-  const effectiveMonthlyBill = round(
-    input.monthlyBill > 0 ? input.monthlyBill : modelCurrentBill.total,
-    0
-  );
-
-  let monthlySavings;
-  if (input.monthlyUnits > 0 && offsetUnits >= input.monthlyUnits) {
-    // 100% solar offset: Solar generation covers total electricity consumption, matching monthly electricity bill
-    monthlySavings = effectiveMonthlyBill;
-  } else if (input.monthlyUnits > 0) {
-    const rawSavings = round(
-      baseSavings +
-      todSavings.daytimeRebate +
-      (hasBattery ? todSavings.peakPenaltyAvoided : 0) +
-      pfIncentive +
-      promptPay,
-      0
-    );
-    const ratioSavings = round((offsetUnits / input.monthlyUnits) * effectiveMonthlyBill, 0);
-    monthlySavings = Math.min(rawSavings, ratioSavings, effectiveMonthlyBill);
-  } else {
-    monthlySavings = effectiveMonthlyBill;
-  }
-  const annualSavings = monthlySavings * 12;
 
   // Current Bill Breakdown: prioritize OCR extracted charges, then manual bill reconciliation, then model bill
   let currentBillBreakdown;
   const todPenalty = round(hasBattery ? todSavings.peakPenaltyAvoided : 0, 0);
 
   if (input.charges && Array.isArray(input.charges) && input.charges.length > 0) {
-    const items = input.charges.map(c => ({
-      label: c.label,
-      amount: round(Number(c.amount) || 0, 0),
-    }));
+    const items = input.charges.map(c => {
+      let label = (c.label || "Charge").trim();
+      if (/demand/i.test(label) && !/fixed/i.test(label)) {
+        label = label.replace(/demand\s*charges/i, "Fixed Charges").replace(/demand/i, "Fixed");
+      }
+      return {
+        label,
+        amount: round(Number(c.amount) || 0, 0),
+      };
+    });
     const totalCharges = round(items.reduce((s, c) => s + c.amount, 0), 0);
-    const fixedItem = items.find(c => c.label.toLowerCase().includes("fixed") || c.label.toLowerCase().includes("demand"));
-    const fixedVal = fixedItem ? fixedItem.amount : (config.tariff.fixedCharge || 0);
-    const dutyItem = items.find(c => c.label.toLowerCase().includes("duty") || c.label.toLowerCase().includes("tax"));
+    const fixedItem = items.find(c => /fixed|demand|स्थिर/i.test(c.label));
+    const fixedVal = fixedItem ? fixedItem.amount : round(config.tariff.fixedCharge || 130, 0);
+    const dutyItem = items.find(c => /duty|tax|शुल्क|कर/i.test(c.label));
     const dutyVal = dutyItem ? dutyItem.amount : 0;
-    const energyItems = items.filter(c => c !== fixedItem && c !== dutyItem);
+    const wheelingItem = items.find(c => /wheeling|वहन/i.test(c.label));
+    const wheelingVal = wheelingItem ? wheelingItem.amount : 0;
+    const facItem = items.find(c => /fac|fuel|इंधन/i.test(c.label));
+    const facVal = facItem ? facItem.amount : 0;
+    const energyItems = items.filter(c => c !== fixedItem && c !== dutyItem && c !== wheelingItem && c !== facItem);
     const energyVal = energyItems.reduce((s, c) => s + c.amount, 0);
+
+    const totalBill = input.monthlyBill > 0 ? round(input.monthlyBill, 0) : totalCharges;
 
     currentBillBreakdown = {
       items,
       fixedCharge: fixedVal,
       energyCharge: energyVal,
-      wheelingFac: 0,
+      wheelingCharge: wheelingVal,
+      facCharge: facVal,
+      wheelingFac: wheelingVal + facVal,
       duty: dutyVal,
       todPenalty,
-      total: input.monthlyBill > 0 ? input.monthlyBill : totalCharges,
+      total: totalBill,
     };
   } else if (input.monthlyBill > 0) {
-    const fixedCharge = round(config.tariff.fixedCharge || 0, 0);
-    const dutyRateVal = (config.tariff.electricityDuty || 0) / 100;
-    const actualVariableBill = Math.max(input.monthlyBill - fixedCharge, 0);
-    const preDutyVariable = dutyRateVal > 0 ? actualVariableBill / (1 + dutyRateVal) : actualVariableBill;
-    const slabEnergy = round(modelCurrentBill.energyCharge, 0);
-    
-    let energyChargeVal;
-    let wheelingFac;
+    const fixedCharge = round(config.tariff.fixedCharge || 130, 0);
+    const totalBill = round(input.monthlyBill, 0);
+    const dutyRateVal = (config.tariff.electricityDuty || 16) / 100;
+    const actualVariableBill = Math.max(totalBill - fixedCharge, 0);
+    const preDutyVariable = dutyRateVal > 0 ? round(actualVariableBill / (1 + dutyRateVal), 0) : actualVariableBill;
+    const slabEnergy = round(modelCurrentBill.energyCharge || 0, 0);
+
+    let energyCharge = 0;
+    let wheelingCharge = 0;
     if (preDutyVariable >= slabEnergy) {
-      energyChargeVal = slabEnergy;
-      wheelingFac = round(preDutyVariable - slabEnergy, 0);
+      energyCharge = slabEnergy;
+      wheelingCharge = round(preDutyVariable - slabEnergy, 0);
     } else {
-      energyChargeVal = round(preDutyVariable, 0);
-      wheelingFac = 0;
+      energyCharge = round(preDutyVariable, 0);
+      wheelingCharge = 0;
     }
-    const duty = Math.max(input.monthlyBill - fixedCharge - energyChargeVal - wheelingFac, 0);
+    const facCharge = 0;
+    // Exactly balance duty so: fixedCharge + energyCharge + wheelingCharge + facCharge + duty === totalBill
+    const duty = Math.max(0, totalBill - fixedCharge - energyCharge - wheelingCharge - facCharge);
 
     currentBillBreakdown = {
       fixedCharge,
-      energyCharge: energyChargeVal,
-      wheelingFac,
+      energyCharge,
+      wheelingCharge,
+      facCharge,
+      wheelingFac: wheelingCharge + facCharge,
       duty,
       todPenalty,
-      total: input.monthlyBill,
+      total: totalBill,
     };
   } else {
+    const fixedCharge = round(modelCurrentBill.fixedCharge || 130, 0);
+    const energyCharge = round(modelCurrentBill.energyCharge || 0, 0);
+    const wheelingCharge = round((input.monthlyUnits || 0) * (config.tariff.wheelingCharge || 1.60), 0);
+    const facCharge = 0;
+    const duty = round(modelCurrentBill.duty || 0, 0);
+    const total = fixedCharge + energyCharge + wheelingCharge + facCharge + duty;
+
     currentBillBreakdown = {
-      fixedCharge: round(modelCurrentBill.fixedCharge, 0),
-      energyCharge: round(modelCurrentBill.energyCharge, 0),
-      wheelingFac: 0,
-      duty: round(modelCurrentBill.duty, 0),
+      fixedCharge,
+      energyCharge,
+      wheelingCharge,
+      facCharge,
+      wheelingFac: wheelingCharge + facCharge,
+      duty,
       todPenalty,
-      total: round(modelCurrentBill.total + todPenalty, 0),
+      total,
     };
   }
 
@@ -658,6 +659,34 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const subsidyResult = calculateSubsidy(systemType, panelType, dcCapacityKw, input, config.policy);
   const subsidy = subsidyResult.total;
   const netCost = Math.max(totalPreSubsidy - subsidy, 0);
+
+  // Solar Offset & MSEDCL Post-Solar Bill Calculation:
+  const offsetFraction = (input.monthlyUnits > 0 && offsetUnits > 0)
+    ? Math.min(1, offsetUnits / input.monthlyUnits)
+    : (input.monthlyUnits > 0 ? 0 : 1);
+
+  const postSolarFixed = currentBillBreakdown.fixedCharge; // Fixed connection charges remain
+  let postSolarEnergy = 0;
+  let postSolarWheeling = 0;
+  let postSolarFac = 0;
+  let postSolarDuty = 0;
+
+  if (offsetFraction >= 1) {
+    postSolarEnergy = 0;
+    postSolarWheeling = 0;
+    postSolarFac = 0;
+    postSolarDuty = 0;
+  } else {
+    postSolarEnergy = round((currentBillBreakdown.energyCharge || 0) * (1 - offsetFraction), 0);
+    postSolarWheeling = round((currentBillBreakdown.wheelingCharge || 0) * (1 - offsetFraction), 0);
+    postSolarFac = round((currentBillBreakdown.facCharge || 0) * (1 - offsetFraction), 0);
+    postSolarDuty = round((currentBillBreakdown.duty || 0) * (1 - offsetFraction), 0);
+  }
+
+  const postSolarPayable = postSolarFixed + postSolarEnergy + postSolarWheeling + postSolarFac + postSolarDuty;
+  const monthlySavings = Math.max(0, currentBillBreakdown.total - postSolarPayable);
+  const annualSavings = monthlySavings * 12;
+
   const paybackYears = annualSavings > 0 ? netCost / annualSavings : Infinity;
   const roiPercent = netCost > 0 ? (annualSavings / netCost) * 100 : 0;
 
@@ -681,53 +710,26 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       })
     : null;
 
-  // Possible savings breakdown aligned with currentBillBreakdown
-  const offsetFraction = (input.monthlyUnits > 0 && offsetUnits > 0)
-    ? Math.min(1, offsetUnits / input.monthlyUnits)
-    : 1;
+  const energyChargeOffset = (currentBillBreakdown.energyCharge || 0) - postSolarEnergy;
+  const wheelingChargeOffset = (currentBillBreakdown.wheelingCharge || 0) - postSolarWheeling;
+  const facChargeOffset = (currentBillBreakdown.facCharge || 0) - postSolarFac;
+  const dutyOffset = (currentBillBreakdown.duty || 0) - postSolarDuty;
+  const wheelingFacOffset = wheelingChargeOffset + facChargeOffset;
+  const alignedBaseSavings = energyChargeOffset + wheelingFacOffset + dutyOffset;
 
-  let energyChargeOffset = round((currentBillBreakdown.energyCharge || 0) * offsetFraction, 0);
-  let dutyOffset = round((currentBillBreakdown.duty || 0) * offsetFraction, 0);
-  let wheelingFacOffset = round((currentBillBreakdown.wheelingFac || 0) * offsetFraction, 0);
-
-  if (offsetFraction >= 1) {
-    energyChargeOffset = currentBillBreakdown.energyCharge || 0;
-    dutyOffset = currentBillBreakdown.duty || 0;
-    wheelingFacOffset = currentBillBreakdown.wheelingFac || 0;
-  }
-
-  const directBillOffset = energyChargeOffset + dutyOffset + wheelingFacOffset;
-  const remainingSavings = Math.max(0, monthlySavings - directBillOffset);
-
-  const rawTodRebate = todSavings.daytimeRebate || 0;
-  const rawPeakAvoided = hasBattery ? (todSavings.peakPenaltyAvoided || 0) : 0;
-  const rawPfIncentive = pfIncentive || 0;
-  const rawPromptPay = promptPay || 0;
-  const totalIncentives = rawTodRebate + rawPeakAvoided + rawPfIncentive + rawPromptPay;
-
-  let finalTodRebate = 0;
-  let finalPeakAvoided = 0;
-  let finalPfIncentive = 0;
-  let finalPromptPay = 0;
-
-  if (totalIncentives > 0 && remainingSavings > 0) {
-    if (totalIncentives <= remainingSavings) {
-      finalTodRebate = rawTodRebate;
-      finalPeakAvoided = rawPeakAvoided;
-      finalPfIncentive = rawPfIncentive;
-      finalPromptPay = remainingSavings - (finalTodRebate + finalPeakAvoided + finalPfIncentive);
-    } else {
-      const factor = remainingSavings / totalIncentives;
-      finalTodRebate = round(rawTodRebate * factor, 0);
-      finalPeakAvoided = round(rawPeakAvoided * factor, 0);
-      finalPfIncentive = round(rawPfIncentive * factor, 0);
-      finalPromptPay = Math.max(0, remainingSavings - (finalTodRebate + finalPeakAvoided + finalPfIncentive));
-    }
-  } else if (remainingSavings > 0 && totalIncentives === 0) {
-    energyChargeOffset += remainingSavings;
-  }
-
-  const alignedBaseSavings = energyChargeOffset + dutyOffset + wheelingFacOffset;
+  const postSolarBillBreakdown = {
+    solarGeneration: monthlyGeneration,
+    bankedUnits: Math.max(0, monthlyGeneration - (input.monthlyUnits || 0)),
+    fixedCharge: postSolarFixed,
+    energyCharge: postSolarEnergy,
+    wheelingCharge: postSolarWheeling,
+    facCharge: postSolarFac,
+    wheelingFac: postSolarWheeling + postSolarFac,
+    duty: postSolarDuty,
+    netPayable: postSolarPayable,
+    monthlySavings,
+    annualSavings,
+  };
 
   return {
     systemType,
@@ -751,16 +753,17 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
     roiPercent: round(roiPercent, 1),
     sizing,
     currentBillBreakdown,
+    postSolarBillBreakdown,
     savingsBreakdown: {
       energyChargeOffset,
       dutyOffset,
       wheelingFacOffset,
       baseSavings: alignedBaseSavings,
       bankingLoss: round(banking.deductedUnits * avgRate, 0),
-      todDaytimeRebate: finalTodRebate,
-      todPeakAvoided: finalPeakAvoided,
-      pfIncentive: finalPfIncentive,
-      promptPayDiscount: finalPromptPay,
+      todDaytimeRebate: round(todSavings.daytimeRebate || 0, 0),
+      todPeakAvoided: round(hasBattery ? (todSavings.peakPenaltyAvoided || 0) : 0, 0),
+      pfIncentive: round(pfIncentive || 0, 0),
+      promptPayDiscount: round(promptPay || 0, 0),
       netMonthlySavings: monthlySavings,
     },
     costBreakup: {
@@ -785,7 +788,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       netCost,
       totalPreSubsidy,
       subsidy,
-      monthlyBill: effectiveMonthlyBill,
+      monthlyBill: currentBillBreakdown.total,
       monthlySavings,
       lifetimeSavings: calculateLifetimeSavings(annualSavings, config),
       paymentMode: input?.paymentMode || config.financing?.defaultPaymentMode || "upfront",
