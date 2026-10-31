@@ -1221,4 +1221,213 @@ assert.equal(mockPasswordDialog.open, true, "Switching to rates category while l
 
 console.log("✓ Test 9 Passed: Internal Mode Master Password Dialog, Passphrase Validation & Access Control verified.");
 
+// -------------------------------------------------------------
+// TEST 10: In-Place Editing and Deletion of Older Saved Proposals
+// -------------------------------------------------------------
+console.log("Testing In-Place Editing and Deletion of Older Saved Data...");
+
+// Set up mock DOM elements for proposal badge and delete button
+const mockStatusBadge = createElement("proposalStatusBadge", "span", "");
+const mockDeleteBtn = createElement("deleteCurrentProposalBtn", "button", "Delete 🗑️");
+mockDeleteBtn.style.display = "none";
+
+const workspaceState = {
+  currentProposalId: null,
+  currentServerId: null,
+  currentProposalSerialNo: null
+};
+
+function testUpdateProposalStatusBadge(status, serial) {
+  const isEditing = !!(workspaceState.currentProposalId || workspaceState.currentServerId);
+  mockDeleteBtn.style.display = isEditing ? "inline-block" : "none";
+  const numText = serial ? serial.replace(/^DC\/\d{4}-\d{2}\/PROP-/, "PROP-") : "";
+  if (status === "saved") {
+    mockStatusBadge.textContent = `✓ Saved ${numText ? "(" + numText + ")" : ""}`;
+  } else if (status === "editing" || status === "loaded") {
+    mockStatusBadge.textContent = `✏️ Editing ${numText ? "(" + numText + ")" : ""}`;
+  } else if (status === "new") {
+    mockStatusBadge.textContent = `★ New (${numText || "Draft"})`;
+  }
+}
+
+function testResetWorkspaceToNewProposal() {
+  const nextSerial = "DC/2026-27/PROP-1150";
+  workspaceState.currentProposalId = null;
+  workspaceState.currentServerId = null;
+  workspaceState.currentProposalSerialNo = nextSerial;
+  elements.get("customerName").value = "";
+  elements.get("mobileNumber").value = "";
+  testUpdateProposalStatusBadge("new", nextSerial);
+  return nextSerial;
+}
+
+function testLoadProposalState(data) {
+  const sData = data.stateData || data.state_data || data;
+  const restoredSerial = sData.reportDisplay?.proposalSerialNo ||
+                         sData.formValues?.proposalSerialNo ||
+                         data.proposalSerialNo ||
+                         data.proposal_serial_no || "DC/2026-27/PROP-1001";
+  workspaceState.currentProposalSerialNo = restoredSerial;
+  workspaceState.currentProposalId = data.id || sData.id || null;
+  workspaceState.currentServerId = data.server_id || sData.server_id || ((data.id && typeof data.id === "string" && !data.id.startsWith("prop_")) ? data.id : null);
+  
+  const custName = data.customer_name || data.customerName || sData.customerName || "";
+  elements.get("customerName").value = custName;
+  elements.get("proposalSerialNo").value = restoredSerial;
+  
+  testUpdateProposalStatusBadge("editing", restoredSerial);
+}
+
+async function testDeleteProposal(proposalOrId) {
+  let id = null;
+  let serialNo = null;
+
+  if (typeof proposalOrId === "string") {
+    id = proposalOrId;
+  } else if (proposalOrId && typeof proposalOrId === "object") {
+    id = proposalOrId.id || proposalOrId.server_id || null;
+    serialNo = proposalOrId.proposal_serial_no || proposalOrId.proposalSerialNo || null;
+  }
+
+  // 1. Remove from localStorage
+  try {
+    const raw = globalThis.localStorage.getItem("solar_saved_proposals");
+    if (raw) {
+      let list = JSON.parse(raw);
+      if (Array.isArray(list)) {
+        list = list.filter(item => {
+          if (id && item.id === id) return false;
+          if (serialNo && item.proposalSerialNo === serialNo) return false;
+          return true;
+        });
+        globalThis.localStorage.setItem("solar_saved_proposals", JSON.stringify(list));
+      }
+    }
+    const lastRaw = globalThis.localStorage.getItem("solar_proposal_last_saved");
+    if (lastRaw) {
+      const lastSaved = JSON.parse(lastRaw);
+      if ((id && lastSaved.id === id) || (serialNo && lastSaved.proposalSerialNo === serialNo)) {
+        globalThis.localStorage.removeItem("solar_proposal_last_saved");
+      }
+    }
+  } catch (err) {}
+
+  // 2. Mock Server delete
+  let serverDeleted = false;
+  if (globalThis.fetch) {
+    try {
+      const res = await globalThis.fetch("/api/delete-proposal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, proposalSerialNo: serialNo })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.success) serverDeleted = true;
+      }
+    } catch (_) {}
+  }
+
+  // 3. Reset workspace if active
+  const isActive = (workspaceState.currentProposalId && workspaceState.currentProposalId === id) ||
+                   (workspaceState.currentServerId && workspaceState.currentServerId === id) ||
+                   (serialNo && workspaceState.currentProposalSerialNo === serialNo);
+  if (isActive) {
+    testResetWorkspaceToNewProposal();
+  }
+
+  return { success: true, serverDeleted };
+}
+
+// 10a: Seed proposals into storage
+const older1 = {
+  id: "prop_older_1",
+  customerName: "Vikram Patil",
+  mobileNumber: "9822012345",
+  proposalSerialNo: "DC/2026-27/PROP-1140",
+  systemCapacityKw: 5.0,
+  totalCost: 220000,
+  savedAt: new Date().toISOString()
+};
+const older2 = {
+  id: "prop_older_2",
+  customerName: "Meera Joshi",
+  mobileNumber: "9822054321",
+  proposalSerialNo: "DC/2026-27/PROP-1141",
+  systemCapacityKw: 6.5,
+  totalCost: 290000,
+  savedAt: new Date().toISOString()
+};
+globalThis.localStorage.setItem("solar_saved_proposals", JSON.stringify([older1, older2]));
+globalThis.localStorage.setItem("solar_proposal_last_saved", JSON.stringify(older1));
+
+// 10b: Loading an older proposal sets edit mode, displays Delete button, and unpacks ID
+testLoadProposalState(older1);
+assert.equal(workspaceState.currentProposalId, "prop_older_1", "Must preserve proposal ID when loading older proposal");
+assert.equal(workspaceState.currentProposalSerialNo, "DC/2026-27/PROP-1140");
+assert.equal(elements.get("customerName").value, "Vikram Patil");
+assert.equal(mockDeleteBtn.style.display, "inline-block", "Delete button must be visible when an older proposal is loaded");
+assert.ok(mockStatusBadge.textContent.includes("Editing"), "Badge must display Editing status");
+
+// 10c: In-Place Editing: Updating customer name and re-saving does NOT create duplicate
+elements.get("customerName").value = "Vikram Patil (Updated)";
+const isNew = !workspaceState.currentProposalId && !workspaceState.currentServerId;
+assert.equal(isNew, false, "Must recognize that we are editing an existing proposal");
+
+const updatedOlder1 = testSaveProposalData({
+  id: workspaceState.currentProposalId,
+  customerName: "Vikram Patil (Updated)",
+  mobileNumber: "9822012345",
+  proposalSerialNo: workspaceState.currentProposalSerialNo,
+  systemCapacityKw: 7.5,
+  totalCost: 330000,
+  savedAt: new Date().toISOString()
+}, isNew);
+
+let currentStoredList = JSON.parse(globalThis.localStorage.getItem("solar_saved_proposals"));
+assert.equal(currentStoredList.length, 2, "In-place edit must update existing entry without increasing array count");
+const foundEdited = currentStoredList.find(p => p.id === "prop_older_1");
+assert.equal(foundEdited.customerName, "Vikram Patil (Updated)");
+assert.equal(foundEdited.proposalSerialNo, "DC/2026-27/PROP-1140", "Serial number must remain unchanged when editing in place");
+assert.equal(foundEdited.systemCapacityKw, 7.5);
+
+// 10d: Deleting a non-active older proposal removes it from storage without disrupting active proposal
+await testDeleteProposal("prop_older_2");
+currentStoredList = JSON.parse(globalThis.localStorage.getItem("solar_saved_proposals"));
+assert.equal(currentStoredList.length, 1, "Deleted proposal older2 must be removed from storage");
+assert.equal(currentStoredList[0].id, "prop_older_1");
+assert.equal(workspaceState.currentProposalId, "prop_older_1", "Active proposal must stay loaded when another proposal is deleted");
+
+// 10e: Deleting the currently active proposal removes it and cleanly resets the workspace
+await testDeleteProposal({ id: "prop_older_1", proposalSerialNo: "DC/2026-27/PROP-1140" });
+currentStoredList = JSON.parse(globalThis.localStorage.getItem("solar_saved_proposals"));
+assert.equal(currentStoredList.length, 0, "Active proposal must be removed from storage");
+assert.equal(globalThis.localStorage.getItem("solar_proposal_last_saved"), null, "Last saved proposal key must be cleared");
+assert.equal(workspaceState.currentProposalId, null, "Workspace active ID must be reset to null");
+assert.equal(mockDeleteBtn.style.display, "none", "Delete button must be hidden after active proposal is deleted");
+assert.ok(mockStatusBadge.textContent.includes("New"), "Badge must reflect fresh new proposal");
+
+// 10f: Server deletion call via API
+globalThis.fetch = async (url, opts) => {
+  if (url === "/api/delete-proposal") {
+    const body = JSON.parse(opts.body);
+    assert.equal(body.id, "uuid-server-999");
+    assert.equal(body.proposalSerialNo, "DC/2026-27/PROP-1099");
+    return {
+      ok: true,
+      json: async () => ({ success: true, message: "Proposal deleted" })
+    };
+  }
+  return { ok: false };
+};
+
+const serverDelResult = await testDeleteProposal({
+  id: "uuid-server-999",
+  proposal_serial_no: "DC/2026-27/PROP-1099"
+});
+assert.equal(serverDelResult.success, true);
+assert.equal(serverDelResult.serverDeleted, true, "Cloud database delete call must succeed");
+
+console.log("✓ Test 10 Passed: In-Place Editing, Single & Server Proposal Deletion, and Workspace Reset verified.");
+
 console.log("ALL SAVE & LOAD TESTS PASSED! 🎉");

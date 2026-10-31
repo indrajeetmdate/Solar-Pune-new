@@ -3065,14 +3065,22 @@ function resetForm() {
 
 function updateProposalStatusBadge(status, serial) {
   const badge = $("proposalStatusBadge");
+  const delBtn = $("deleteCurrentProposalBtn");
+  const isEditing = !!(state.currentProposalId || state.currentServerId);
+  if (delBtn) delBtn.style.display = isEditing ? "inline-block" : "none";
+
   if (!badge) return;
   const numText = serial ? serial.replace(/^DC\/\d{4}-\d{2}\/PROP-/, "PROP-") : "";
   if (status === "saved") {
     badge.textContent = `✓ Saved ${numText ? "(" + numText + ")" : ""}`;
     badge.style.background = "#dcfce7";
     badge.style.color = "#166534";
+  } else if (status === "editing" || status === "loaded") {
+    badge.textContent = `✏️ Editing ${numText ? "(" + numText + ")" : ""}`;
+    badge.style.background = "#e0e7ff";
+    badge.style.color = "#3730a3";
   } else if (status === "modified") {
-    badge.textContent = `● Unsaved ${numText ? "(" + numText + ")" : ""}`;
+    badge.textContent = `${isEditing ? "✏️ Modified" : "● Unsaved"} ${numText ? "(" + numText + ")" : ""}`;
     badge.style.background = "#fef3c7";
     badge.style.color = "#92400e";
   } else {
@@ -3648,6 +3656,25 @@ function attachEvents() {
   $("saveProposalButtonInternal")?.addEventListener("click", handleSaveClick);
   $("sidebarSaveProposalBtn")?.addEventListener("click", handleSaveClick);
 
+  // Delete current proposal button
+  $("deleteCurrentProposalBtn")?.addEventListener("click", async () => {
+    const serial = state.currentProposalSerialNo || $("proposalSerialNo")?.value || "";
+    const cust = $("customerName")?.value || "Customer";
+    if (!state.currentProposalId && !state.currentServerId) {
+      alert("No saved proposal is currently loaded to delete.");
+      return;
+    }
+    if (confirm(`Are you sure you want to permanently delete proposal ${serial ? `"${serial}"` : ""} for "${cust}"? This cannot be undone.`)) {
+      await deleteProposal({
+        id: state.currentProposalId,
+        server_id: state.currentServerId,
+        proposalSerialNo: serial,
+        customerName: cust
+      });
+      alert(`Proposal ${serial ? `"${serial}"` : ""} deleted successfully.`);
+    }
+  });
+
   // New Proposal buttons
   const handleNewProposal = () => createNewProposal();
   $("newProposalBtn")?.addEventListener("click", handleNewProposal);
@@ -3716,13 +3743,15 @@ function attachEvents() {
     closeChangeCustomerModal();
   });
 
-  $("openLoadProposalModalButton")?.addEventListener("click", () => {
+  const handleOpenLoadModal = () => {
     const modal = $("loadProposalModal");
     if (modal) {
       modal.style.display = "flex";
       searchProposals("");
     }
-  });
+  };
+  $("openLoadProposalModalButton")?.addEventListener("click", handleOpenLoadModal);
+  $("proposalTabOpenLoadModalBtn")?.addEventListener("click", handleOpenLoadModal);
 
   $("closeLoadProposalModal")?.addEventListener("click", () => {
     const modal = $("loadProposalModal");
@@ -4525,6 +4554,8 @@ async function saveProposalData() {
   if (snapshot.stateData?.reportDisplay) snapshot.stateData.reportDisplay.proposalSerialNo = serialNo;
   if (snapshot.stateData?.formValues) snapshot.stateData.formValues.proposalSerialNo = serialNo;
 
+  // Check if we are creating a brand new proposal or editing an older saved proposal
+  const isNewProposal = !state.currentProposalId && !state.currentServerId;
   const recordId = state.currentProposalId || ("prop_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7));
   state.currentProposalId = recordId;
 
@@ -4541,7 +4572,6 @@ async function saveProposalData() {
   };
 
   // 1. Cache to local storage immediately: UPDATE IN PLACE BY SERIAL NUMBER OR ID (Never duplicate)
-  const isNewProposal = !state.currentProposalId && !state.currentServerId;
   try {
     let savedList = [];
     try {
@@ -4643,9 +4673,9 @@ async function saveProposalData() {
   }
 
   if (serverSaved) {
-    setButtonsText("Saved! ✅", "var(--primary-green, #10b981)");
+    setButtonsText(isNewProposal ? "Saved! ✅" : "Updated! ✅", "var(--primary-green, #10b981)");
   } else {
-    setButtonsText("Saved locally! 💾", "var(--primary-green, #10b981)");
+    setButtonsText(isNewProposal ? "Saved locally! 💾" : "Updated locally! 💾", "var(--primary-green, #10b981)");
   }
   setTimeout(resetButtons, 2500);
 }
@@ -4706,6 +4736,79 @@ function cloneProposalForCustomer(newCustomerName = null, newMobile = null, newE
   }
 
   return { customerName: name, proposalSerialNo: newSerial };
+}
+
+/**
+ * Permanently deletes a proposal from both localStorage and server cloud database.
+ * If the proposal is currently open in the workspace, resets workspace to a fresh new proposal.
+ * @param {string|object} proposalOrId Proposal object or string ID
+ * @returns {Promise<{success: boolean, serverDeleted: boolean}>}
+ */
+async function deleteProposal(proposalOrId) {
+  let id = null;
+  let serialNo = null;
+  let customerName = "";
+
+  if (typeof proposalOrId === "string") {
+    id = proposalOrId;
+  } else if (proposalOrId && typeof proposalOrId === "object") {
+    id = proposalOrId.id || proposalOrId.server_id || null;
+    serialNo = proposalOrId.proposal_serial_no || proposalOrId.proposalSerialNo || proposalOrId.state_data?.reportDisplay?.proposalSerialNo || proposalOrId.stateData?.reportDisplay?.proposalSerialNo || null;
+    customerName = proposalOrId.customer_name || proposalOrId.customerName || proposalOrId.state_data?.input?.customerName || proposalOrId.stateData?.input?.customerName || "";
+  }
+
+  // 1. Remove from localStorage
+  try {
+    const raw = localStorage.getItem("solar_saved_proposals");
+    if (raw) {
+      let list = JSON.parse(raw);
+      if (Array.isArray(list)) {
+        list = list.filter(item => {
+          if (id && item.id === id) return false;
+          if (serialNo && item.proposalSerialNo === serialNo) return false;
+          return true;
+        });
+        localStorage.setItem("solar_saved_proposals", JSON.stringify(list));
+      }
+    }
+    const lastRaw = localStorage.getItem("solar_proposal_last_saved");
+    if (lastRaw) {
+      const lastSaved = JSON.parse(lastRaw);
+      if ((id && lastSaved.id === id) || (serialNo && lastSaved.proposalSerialNo === serialNo)) {
+        localStorage.removeItem("solar_proposal_last_saved");
+      }
+    }
+  } catch (err) {
+    console.warn("Could not delete from localStorage:", err);
+  }
+
+  // 2. Remove from Server Database
+  let serverDeleted = false;
+  if (typeof fetch !== "undefined") {
+    try {
+      const res = await fetch("/api/delete-proposal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, proposalSerialNo: serialNo })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.success) serverDeleted = true;
+      }
+    } catch (err) {
+      console.warn("Server proposal deletion skipped or error:", err);
+    }
+  }
+
+  // 3. If currently viewing the deleted proposal in the workspace, reset to a fresh proposal
+  const isActive = (state.currentProposalId && state.currentProposalId === id) ||
+                   (state.currentServerId && state.currentServerId === id) ||
+                   (serialNo && state.currentProposalSerialNo === serialNo);
+  if (isActive) {
+    createNewProposal();
+  }
+
+  return { success: true, serverDeleted };
 }
 
 function openChangeCustomerModal(suggestedName = null) {
@@ -4846,7 +4949,7 @@ async function searchProposals(query) {
             <span style="font-size: 11px; color: #94a3b8;">${dateStr}${costVal ? " • ₹" + Math.round(costVal).toLocaleString("en-IN") : ""}</span>
           </div>
           <div style="display: flex; gap: 6px; align-items: center;">
-            <button class="primary-button load-local-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button">Load</button>
+            <button class="primary-button load-local-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button" title="Load to edit this proposal in place">✏️ Edit</button>
             <button class="secondary-button clone-local-btn" data-idx="${idx}" style="padding: 6px 10px; font-size: 12px; min-height: 32px; background: #ecfdf5; border: 1px solid #86efac; color: #166534;" type="button" title="Load and clone for a new customer">Clone 👥</button>
             <button class="ghost-button delete-local-btn" data-idx="${idx}" style="padding: 6px 8px; font-size: 13px; min-height: 32px; color: #ef4444;" type="button" title="Delete proposal">🗑️</button>
           </div>
@@ -4892,8 +4995,9 @@ async function searchProposals(query) {
               <span style="font-size: 11px; color: var(--text-muted);">${new Date(p.created_at).toLocaleString()}${costVal ? " • ₹" + Math.round(costVal).toLocaleString("en-IN") : ""}</span>
             </div>
             <div style="display: flex; gap: 6px; align-items: center;">
-              <button class="primary-button load-server-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button">Load</button>
+              <button class="primary-button load-server-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button" title="Load to edit this proposal in place">✏️ Edit</button>
               <button class="secondary-button clone-server-btn" data-idx="${idx}" style="padding: 6px 10px; font-size: 12px; min-height: 32px; background: #ecfdf5; border: 1px solid #86efac; color: #166534;" type="button" title="Load and clone for a new customer">Clone 👥</button>
+              <button class="ghost-button delete-server-btn" data-idx="${idx}" style="padding: 6px 8px; font-size: 13px; min-height: 32px; color: #ef4444;" type="button" title="Delete proposal permanently from cloud database">🗑️</button>
             </div>
           </div>
         `;
@@ -4917,13 +5021,13 @@ async function searchProposals(query) {
 
   listEl.innerHTML = localHtml + (serverHtml ? `<div style="margin: 10px 0 4px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Cloud / Server Proposals</div>` + serverHtml : "");
 
-  // Wire local Load buttons
+  // Wire local Edit / Load buttons
   listEl.querySelectorAll(".load-local-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const idx = parseInt(btn.dataset.idx, 10);
       const p = window._currentLocalProposals?.[idx];
       if (p) {
-        window.loadProposalState(p.stateData || p);
+        window.loadProposalState(p);
       }
     });
   });
@@ -4934,7 +5038,7 @@ async function searchProposals(query) {
       const idx = parseInt(btn.dataset.idx, 10);
       const p = window._currentLocalProposals?.[idx];
       if (p) {
-        window.loadProposalState(p.stateData || p);
+        window.loadProposalState(p);
         if ($("loadProposalModal")) $("loadProposalModal").style.display = "none";
         openChangeCustomerModal((p.customerName || "Customer") + " (New)");
       }
@@ -4943,39 +5047,25 @@ async function searchProposals(query) {
 
   // Wire local Delete buttons
   listEl.querySelectorAll(".delete-local-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       const idx = parseInt(btn.dataset.idx, 10);
       const p = window._currentLocalProposals?.[idx];
-      if (p && confirm(`Delete saved proposal for "${p.customerName || 'Customer'}"?`)) {
-        try {
-          const raw = localStorage.getItem("solar_saved_proposals");
-          let list = raw ? JSON.parse(raw) : [];
-          if (Array.isArray(list)) {
-            list = list.filter(item => (p.id ? item.id !== p.id : item.proposalSerialNo !== p.proposalSerialNo));
-            localStorage.setItem("solar_saved_proposals", JSON.stringify(list));
-          }
-          const lastRaw = localStorage.getItem("solar_proposal_last_saved");
-          if (lastRaw) {
-            const lastSaved = JSON.parse(lastRaw);
-            if ((p.id && lastSaved.id === p.id) || (p.proposalSerialNo && lastSaved.proposalSerialNo === p.proposalSerialNo)) {
-              localStorage.removeItem("solar_proposal_last_saved");
-            }
-          }
-        } catch (e) {
-          console.error("Failed to delete proposal", e);
-        }
-        searchProposals(query);
+      const name = p?.customerName || p?.stateData?.input?.customerName || "Customer";
+      const serial = p?.proposalSerialNo || p?.stateData?.reportDisplay?.proposalSerialNo || "";
+      if (p && confirm(`Delete saved proposal ${serial ? `"${serial}" ` : ""}for "${name}"?`)) {
+        await deleteProposal(p);
+        await searchProposals(query);
       }
     });
   });
 
-  // Wire server Load buttons
+  // Wire server Edit / Load buttons
   listEl.querySelectorAll(".load-server-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const idx = parseInt(btn.dataset.idx, 10);
       const p = window._currentServerProposals?.[idx];
       if (p) {
-        window.loadProposalState(p.state_data || p);
+        window.loadProposalState(p);
       }
     });
   });
@@ -4986,9 +5076,23 @@ async function searchProposals(query) {
       const idx = parseInt(btn.dataset.idx, 10);
       const p = window._currentServerProposals?.[idx];
       if (p) {
-        window.loadProposalState(p.state_data || p);
+        window.loadProposalState(p);
         if ($("loadProposalModal")) $("loadProposalModal").style.display = "none";
         openChangeCustomerModal((p.customer_name || "Customer") + " (New)");
+      }
+    });
+  });
+
+  // Wire server Delete buttons
+  listEl.querySelectorAll(".delete-server-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      const p = window._currentServerProposals?.[idx];
+      const name = p?.customer_name || p?.state_data?.input?.customerName || "Customer";
+      const serial = p?.proposal_serial_no || p?.state_data?.reportDisplay?.proposalSerialNo || "";
+      if (p && confirm(`Delete saved proposal ${serial ? `"${serial}" ` : ""}for "${name}" permanently from cloud database?`)) {
+        await deleteProposal(p);
+        await searchProposals(query);
       }
     });
   });
@@ -5180,22 +5284,29 @@ window.loadProposalState = function(data) {
     if ($("sidebarProposalSerialNo")) $("sidebarProposalSerialNo").value = restoredSerial;
     state.currentProposalSerialNo = restoredSerial;
   }
-  state.currentProposalId = data.id || null;
-  state.currentServerId = (data.id && typeof data.id === "string" && !data.id.startsWith("prop_")) ? data.id : (data.server_id || null);
-  updateProposalStatusBadge("saved", restoredSerial || state.currentProposalSerialNo);
+  state.currentProposalId = data.id || sData.id || null;
+  state.currentServerId = data.server_id || sData.server_id || ((data.id && typeof data.id === "string" && !data.id.startsWith("prop_")) ? data.id : null);
+  updateProposalStatusBadge("editing", restoredSerial || state.currentProposalSerialNo);
 
   // Synchronize twin fields (customer vs internal)
-  const custName = $("customerName")?.value || $("internalCustomerName")?.value || sData.customerName || "";
+  const custName = data.customer_name || data.customerName || $("customerName")?.value || $("internalCustomerName")?.value || sData.customerName || "";
   if ($("customerName")) $("customerName").value = custName;
   if ($("internalCustomerName")) $("internalCustomerName").value = custName;
 
-  const mob = $("mobileNumber")?.value || $("internalMobileNumber")?.value || sData.mobileNumber || "";
+  const mob = data.mobile_number || data.mobileNumber || $("mobileNumber")?.value || $("internalMobileNumber")?.value || sData.mobileNumber || "";
   if ($("mobileNumber")) $("mobileNumber").value = mob;
   if ($("internalMobileNumber")) $("internalMobileNumber").value = mob;
 
-  const email = $("emailAddress")?.value || $("internalEmailAddress")?.value || sData.emailAddress || "";
+  const email = data.email_address || data.emailAddress || $("emailAddress")?.value || $("internalEmailAddress")?.value || sData.emailAddress || "";
   if ($("emailAddress")) $("emailAddress").value = email;
   if ($("internalEmailAddress")) $("internalEmailAddress").value = email;
+
+  const addr = data.customer_address || data.customerAddress || $("customerAddress")?.value || sData.customerAddress || "";
+  if ($("customerAddress")) $("customerAddress").value = addr;
+
+  if ($("proposalToCustomerName") && custName) $("proposalToCustomerName").textContent = custName;
+  if ($("proposalToCustomerPhone") && mob) $("proposalToCustomerPhone").textContent = mob;
+  if ($("proposalToCustomerAddress") && addr) $("proposalToCustomerAddress").textContent = addr;
 
   const pMode = $("paymentMode")?.value || $("internalPaymentMode")?.value || "upfront";
   if ($("paymentMode")) $("paymentMode").value = pMode;
@@ -5285,6 +5396,7 @@ window.exportCurrentProposalJSON = exportCurrentProposalJSON;
 window.importProposalJSONFile = importProposalJSONFile;
 window.searchProposals = searchProposals;
 window.buildProposalSnapshot = buildProposalSnapshot;
+window.deleteProposal = deleteProposal;
 window.openInternalDialog = openInternalDialog;
 window.closeInternalDialog = closeInternalDialog;
 window.unlockInternal = unlockInternal;
@@ -5294,6 +5406,7 @@ window.openInternal = openInternal;
 export {
   autoSyncLatestProposalSerial,
   saveProposalData,
+  deleteProposal,
   createNewProposal,
   cloneProposalForCustomer,
   openChangeCustomerModal,

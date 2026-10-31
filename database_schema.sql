@@ -30,6 +30,9 @@ CREATE POLICY "Allow public insert" ON proposals
 CREATE POLICY "Allow public update" ON proposals
   FOR UPDATE USING (true) WITH CHECK (true);
 
+CREATE POLICY "Allow public delete" ON proposals
+  FOR DELETE USING (true);
+
 -- 3. Indexes for fast search and filtering
 CREATE INDEX IF NOT EXISTS idx_proposals_serial_no ON proposals(proposal_serial_no);
 CREATE INDEX IF NOT EXISTS idx_proposals_customer_name ON proposals(customer_name);
@@ -131,7 +134,7 @@ BEGIN
 END $$;
 
 -- ========================================================
--- 2. ENFORCE UNIQUE CONSTRAINT TO AVOID DUPLICATES
+-- 2. ENFORCE UNIQUE CONSTRAINT & DELETE POLICY
 -- ========================================================
 DO $$
 BEGIN
@@ -139,6 +142,12 @@ BEGIN
         SELECT 1 FROM pg_constraint WHERE conname = 'proposals_proposal_serial_no_key'
     ) THEN
         ALTER TABLE proposals ADD CONSTRAINT proposals_proposal_serial_no_key UNIQUE (proposal_serial_no);
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE tablename = 'proposals' AND policyname = 'Allow public delete'
+    ) THEN
+        CREATE POLICY "Allow public delete" ON proposals FOR DELETE USING (true);
     END IF;
 END $$;
 
