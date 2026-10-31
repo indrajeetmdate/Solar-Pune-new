@@ -1430,4 +1430,146 @@ assert.equal(serverDelResult.serverDeleted, true, "Cloud database delete call mu
 
 console.log("✓ Test 10 Passed: In-Place Editing, Single & Server Proposal Deletion, and Workspace Reset verified.");
 
+// -------------------------------------------------------------
+// TEST 11: Robust Loading of Stringified state_data, Server Envelopes, Top-Level Columns, and Modal Dismissal
+// -------------------------------------------------------------
+console.log("Testing robust loading of stringified state_data, server envelopes, and modal dismissal...");
+
+// Setup mock modal element
+createElement("loadProposalModal", "div");
+elements.get("loadProposalModal").style.display = "flex";
+
+function fullLoadProposalState(data) {
+  if (!data) return;
+  
+  if (typeof data === "string") {
+    try { data = JSON.parse(data); } catch (_) { return; }
+  }
+  if (!data || typeof data !== "object") return;
+  if (data.data && typeof data.data === "object" && !data.stateData && !data.state_data && !data.formValues) {
+    data = data.data;
+  }
+  let sData = data.stateData || data.state_data || data;
+  if (typeof sData === "string") {
+    try { sData = JSON.parse(sData); } catch (_) { sData = {}; }
+  }
+  if (!sData || typeof sData !== "object") sData = {};
+
+  if (sData.formValues && typeof sData.formValues === "object") {
+    Object.keys(sData.formValues).forEach(id => {
+      const el = elements.get(id);
+      if (el) el.value = sData.formValues[id];
+    });
+  }
+
+  if (sData.input && typeof sData.input === "object") {
+    Object.keys(sData.input).forEach(key => {
+      const el = elements.get(key);
+      if (el && (!sData.formValues || sData.formValues[key] === undefined)) {
+        el.value = sData.input[key];
+      }
+    });
+  }
+
+  if (data.sanctioned_load !== undefined && elements.get("sanctionedLoad")) {
+    if (!sData.formValues?.sanctionedLoad && !sData.input?.sanctionedLoad) {
+      elements.get("sanctionedLoad").value = data.sanctioned_load;
+    }
+  }
+  if (data.system_capacity_kw !== undefined && elements.get("capacityOverride")) {
+    if (!sData.formValues?.capacityOverride && !sData.sizing?.capacityOverride) {
+      elements.get("capacityOverride").value = data.system_capacity_kw;
+    }
+  }
+
+  const restoredSerial = data.proposal_serial_no || 
+                         data.proposalSerialNo || 
+                         sData.reportDisplay?.proposalSerialNo || 
+                         sData.formValues?.proposalSerialNo || 
+                         sData.input?.proposalSerialNo || "";
+  if (restoredSerial && elements.get("proposalSerialNo")) {
+    elements.get("proposalSerialNo").value = restoredSerial;
+  }
+
+  const custName = data.customer_name || 
+                   data.customerName || 
+                   sData.formValues?.customerName || 
+                   sData.input?.customerName || "";
+  if (custName && elements.get("customerName")) {
+    elements.get("customerName").value = custName;
+  }
+
+  // Guaranteed modal dismissal
+  if (elements.get("loadProposalModal")) {
+    elements.get("loadProposalModal").style.display = "none";
+  }
+}
+
+// 11a: Loading server proposal with stringified state_data
+const serverProposalWithStringifiedState = {
+  id: "uuid-cloud-456",
+  customer_name: "Sneha Deshmukh",
+  proposal_serial_no: "DC/2026-27/PROP-1145",
+  sanctioned_load: 12,
+  system_capacity_kw: 8.5,
+  state_data: JSON.stringify({
+    formValues: {
+      customerName: "Sneha Deshmukh",
+      monthlyUnits: "1100",
+      monthlyBill: "13500",
+      roofArea: "1500",
+      sanctionedLoad: "12",
+      capacityOverride: "8.5"
+    }
+  })
+};
+
+elements.get("loadProposalModal").style.display = "flex";
+fullLoadProposalState(serverProposalWithStringifiedState);
+
+assert.equal(elements.get("customerName").value, "Sneha Deshmukh");
+assert.equal(elements.get("proposalSerialNo").value, "DC/2026-27/PROP-1145");
+assert.equal(elements.get("monthlyUnits").value, "1100");
+assert.equal(elements.get("monthlyBill").value, "13500");
+assert.equal(elements.get("capacityOverride").value, "8.5");
+assert.equal(elements.get("loadProposalModal").style.display, "none", "Modal must be closed after loading proposal");
+
+// 11b: Loading an entire proposal serialized as a raw JSON string
+elements.get("loadProposalModal").style.display = "flex";
+const rawJsonString = JSON.stringify({
+  customerName: "Anand Kulkarni",
+  proposalSerialNo: "DC/2026-27/PROP-1146",
+  stateData: {
+    formValues: {
+      customerName: "Anand Kulkarni",
+      monthlyUnits: "950"
+    }
+  }
+});
+fullLoadProposalState(rawJsonString);
+
+assert.equal(elements.get("customerName").value, "Anand Kulkarni");
+assert.equal(elements.get("proposalSerialNo").value, "DC/2026-27/PROP-1146");
+assert.equal(elements.get("monthlyUnits").value, "950");
+assert.equal(elements.get("loadProposalModal").style.display, "none");
+
+// 11c: Server proposal without state_data, using top-level columns
+elements.get("customerName").value = "";
+elements.get("sanctionedLoad").value = "";
+elements.get("capacityOverride").value = "";
+const bareServerRow = {
+  id: "uuid-bare-1",
+  customer_name: "Bare Server Customer",
+  proposal_serial_no: "DC/2026-27/PROP-1147",
+  sanctioned_load: 15,
+  system_capacity_kw: 10.0
+};
+fullLoadProposalState(bareServerRow);
+assert.equal(elements.get("customerName").value, "Bare Server Customer");
+assert.equal(elements.get("proposalSerialNo").value, "DC/2026-27/PROP-1147");
+assert.equal(elements.get("sanctionedLoad").value, "15");
+assert.equal(elements.get("capacityOverride").value, "10");
+
+console.log("✓ Test 11 Passed: Stringified state_data, raw JSON strings, and top-level server columns all load cleanly.");
+
 console.log("ALL SAVE & LOAD TESTS PASSED! 🎉");

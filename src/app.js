@@ -4992,25 +4992,29 @@ async function searchProposals(query) {
   let localHtml = "";
   if (uniqueLocal.length > 0) {
     localHtml = uniqueLocal.map((p, idx) => {
-      const serialNo = p.proposalSerialNo || p.stateData?.reportDisplay?.proposalSerialNo || "Draft";
-      const capKw = p.systemCapacityKw || p.stateData?.state?.estimates?.recommended?.dcCapacityKw || p.stateData?.formValues?.capacityOverride || "";
-      const costVal = p.totalCost || p.stateData?.state?.estimates?.recommended?.netCost || 0;
+      let sData = p.stateData || p.state_data;
+      if (typeof sData === "string") {
+        try { sData = JSON.parse(sData); } catch (_) { sData = {}; }
+      }
+      const serialNo = p.proposalSerialNo || sData?.reportDisplay?.proposalSerialNo || sData?.input?.proposalSerialNo || "Draft";
+      const capKw = p.systemCapacityKw || sData?.state?.estimates?.recommended?.dcCapacityKw || sData?.formValues?.capacityOverride || "";
+      const costVal = p.totalCost || sData?.state?.estimates?.recommended?.netCost || 0;
       const dateStr = p.savedAt ? new Date(p.savedAt).toLocaleString() : "";
       return `
-        <div style="padding: 10px 14px; border: 1px solid #86efac; background: #f0fdf4; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+        <div class="proposal-card-row" data-idx="${idx}" data-source="local" style="padding: 10px 14px; border: 1px solid #86efac; background: #f0fdf4; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer; transition: background 0.15s, border-color 0.15s;" title="Click card or Load to open proposal">
           <div style="flex: 1; min-width: 0;">
             <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 3px; flex-wrap: wrap;">
               <span style="font-size: 10px; font-weight: 700; background: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 4px;">⚡ Local Save</span>
               ${serialNo ? `<span style="font-size: 11px; font-weight: 600; color: #0284c7; background: #e0f2fe; padding: 1px 6px; border-radius: 4px;">${serialNo}</span>` : ""}
               ${capKw ? `<span style="font-size: 11px; font-weight: 600; color: #166534; background: #dcfce7; padding: 1px 6px; border-radius: 4px;">${capKw} kW</span>` : ""}
             </div>
-            <strong style="color: #0f172a; font-size: 13.5px; display: inline-block;">${p.customerName || "Draft Customer"}</strong>
+            <strong style="color: #0f172a; font-size: 13.5px; display: inline-block;">${p.customerName || sData?.formValues?.customerName || sData?.input?.customerName || "Draft Customer"}</strong>
             <span style="font-size: 12px; color: #64748b; margin-left: 6px;">${p.mobileNumber || ""} ${p.emailAddress ? "| " + p.emailAddress : ""}</span><br>
             <span style="font-size: 11px; color: #94a3b8;">${dateStr}${costVal ? " • ₹" + Math.round(costVal).toLocaleString("en-IN") : ""}</span>
           </div>
           <div style="display: flex; gap: 6px; align-items: center;">
-            <button class="primary-button load-local-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button" title="Load to edit this proposal in place">✏️ Edit</button>
-            <button class="secondary-button clone-local-btn" data-idx="${idx}" style="padding: 6px 10px; font-size: 12px; min-height: 32px; background: #ecfdf5; border: 1px solid #86efac; color: #166534;" type="button" title="Load and clone for a new customer">Clone 👥</button>
+            <button class="primary-button load-local-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px; font-weight: 600;" type="button" title="Load this proposal into the calculator workspace">📂 Load</button>
+            <button class="secondary-button clone-local-btn" data-idx="${idx}" style="padding: 6px 10px; font-size: 12px; min-height: 32px; background: #ecfdf5; border: 1px solid #86efac; color: #166534;" type="button" title="Clone this proposal for a new customer">Clone 👥</button>
             <button class="ghost-button delete-local-btn" data-idx="${idx}" style="padding: 6px 8px; font-size: 13px; min-height: 32px; color: #ef4444;" type="button" title="Delete proposal">🗑️</button>
           </div>
         </div>
@@ -5039,15 +5043,19 @@ async function searchProposals(query) {
         }
         window._currentServerProposals = uniqueServer;
         serverHtml = uniqueServer.map((p, idx) => {
-          const serialNo = p.proposal_serial_no || p.state_data?.reportDisplay?.proposalSerialNo || p.state_data?.input?.proposalSerialNo || "";
-          const capKw = p.system_capacity_kw || p.state_data?.state?.estimates?.recommended?.dcCapacityKw || p.state_data?.formValues?.capacityOverride || "";
-          const costVal = p.total_cost || p.state_data?.state?.estimates?.recommended?.netCost || "";
+          let sData = p.state_data || p.stateData;
+          if (typeof sData === "string") {
+            try { sData = JSON.parse(sData); } catch (_) { sData = {}; }
+          }
+          const serialNo = p.proposal_serial_no || sData?.reportDisplay?.proposalSerialNo || sData?.input?.proposalSerialNo || "";
+          const capKw = p.system_capacity_kw || sData?.state?.estimates?.recommended?.dcCapacityKw || sData?.formValues?.capacityOverride || "";
+          const costVal = p.total_cost || sData?.state?.estimates?.recommended?.netCost || "";
           return `
-          <div style="padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <div class="proposal-card-row" data-idx="${idx}" data-source="server" style="padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer; transition: background 0.15s, border-color 0.15s;" title="Click card or Load to open proposal">
             <div style="flex: 1; min-width: 0;">
               <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 2px; flex-wrap: wrap;">
                 <span style="font-size: 10px; font-weight: 700; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px;">☁️ Server</span>
-                <strong style="color: #0f172a; font-size: 13.5px;">${p.customer_name || "Unknown"}</strong>
+                <strong style="color: #0f172a; font-size: 13.5px;">${p.customer_name || sData?.formValues?.customerName || sData?.input?.customerName || "Unknown"}</strong>
                 ${serialNo ? `<span style="font-size: 11px; font-weight: 600; color: #0284c7; background: #e0f2fe; padding: 1px 6px; border-radius: 4px;">${serialNo}</span>` : ""}
                 ${capKw ? `<span style="font-size: 11px; font-weight: 600; color: #166534; background: #dcfce7; padding: 1px 6px; border-radius: 4px;">${capKw} kW</span>` : ""}
               </div>
@@ -5055,8 +5063,8 @@ async function searchProposals(query) {
               <span style="font-size: 11px; color: var(--text-muted);">${new Date(p.created_at).toLocaleString()}${costVal ? " • ₹" + Math.round(costVal).toLocaleString("en-IN") : ""}</span>
             </div>
             <div style="display: flex; gap: 6px; align-items: center;">
-              <button class="primary-button load-server-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px;" type="button" title="Load to edit this proposal in place">✏️ Edit</button>
-              <button class="secondary-button clone-server-btn" data-idx="${idx}" style="padding: 6px 10px; font-size: 12px; min-height: 32px; background: #ecfdf5; border: 1px solid #86efac; color: #166534;" type="button" title="Load and clone for a new customer">Clone 👥</button>
+              <button class="primary-button load-server-btn" data-idx="${idx}" style="padding: 6px 14px; font-size: 12px; min-height: 32px; font-weight: 600;" type="button" title="Load this proposal into the calculator workspace">📂 Load</button>
+              <button class="secondary-button clone-server-btn" data-idx="${idx}" style="padding: 6px 10px; font-size: 12px; min-height: 32px; background: #ecfdf5; border: 1px solid #86efac; color: #166534;" type="button" title="Clone this proposal for a new customer">Clone 👥</button>
               <button class="ghost-button delete-server-btn" data-idx="${idx}" style="padding: 6px 8px; font-size: 13px; min-height: 32px; color: #ef4444;" type="button" title="Delete proposal permanently from cloud database">🗑️</button>
             </div>
           </div>
@@ -5081,9 +5089,23 @@ async function searchProposals(query) {
 
   listEl.innerHTML = localHtml + (serverHtml ? `<div style="margin: 10px 0 4px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Cloud / Server Proposals</div>` + serverHtml : "");
 
-  // Wire local Edit / Load buttons
+  // Wire clicking anywhere on a proposal card row to load that proposal
+  listEl.querySelectorAll(".proposal-card-row").forEach((card) => {
+    card.addEventListener("click", (e) => {
+      if (e.target.closest("button")) return; // Don't trigger if user clicked a button inside
+      const idx = parseInt(card.dataset.idx, 10);
+      const isServer = card.dataset.source === "server";
+      const p = isServer ? window._currentServerProposals?.[idx] : window._currentLocalProposals?.[idx];
+      if (p) {
+        window.loadProposalState(p);
+      }
+    });
+  });
+
+  // Wire local Load buttons
   listEl.querySelectorAll(".load-local-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
       const idx = parseInt(btn.dataset.idx, 10);
       const p = window._currentLocalProposals?.[idx];
       if (p) {
@@ -5094,7 +5116,8 @@ async function searchProposals(query) {
 
   // Wire local Clone buttons
   listEl.querySelectorAll(".clone-local-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
       const idx = parseInt(btn.dataset.idx, 10);
       const p = window._currentLocalProposals?.[idx];
       if (p) {
@@ -5107,7 +5130,8 @@ async function searchProposals(query) {
 
   // Wire local Delete buttons
   listEl.querySelectorAll(".delete-local-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
       const idx = parseInt(btn.dataset.idx, 10);
       const p = window._currentLocalProposals?.[idx];
       const name = p?.customerName || p?.stateData?.input?.customerName || "Customer";
@@ -5119,9 +5143,10 @@ async function searchProposals(query) {
     });
   });
 
-  // Wire server Edit / Load buttons
+  // Wire server Load buttons
   listEl.querySelectorAll(".load-server-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
       const idx = parseInt(btn.dataset.idx, 10);
       const p = window._currentServerProposals?.[idx];
       if (p) {
@@ -5132,7 +5157,8 @@ async function searchProposals(query) {
 
   // Wire server Clone buttons
   listEl.querySelectorAll(".clone-server-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
       const idx = parseInt(btn.dataset.idx, 10);
       const p = window._currentServerProposals?.[idx];
       if (p) {
@@ -5145,7 +5171,8 @@ async function searchProposals(query) {
 
   // Wire server Delete buttons
   listEl.querySelectorAll(".delete-server-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
       const idx = parseInt(btn.dataset.idx, 10);
       const p = window._currentServerProposals?.[idx];
       const name = p?.customer_name || p?.state_data?.input?.customerName || "Customer";
@@ -5158,294 +5185,426 @@ async function searchProposals(query) {
   });
 }
 
+function showLoadToast(message) {
+  if (typeof document === "undefined" || !document.body) return;
+  let toast = $("solarLoadToast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "solarLoadToast";
+    toast.style.cssText = "position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #f8fafc; padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; box-shadow: 0 10px 25px rgba(0,0,0,0.25); z-index: 9999; display: flex; align-items: center; gap: 8px; transition: opacity 0.3s ease, top 0.3s ease; opacity: 0; pointer-events: none;";
+    document.body.appendChild(toast);
+  }
+  if (!toast) return;
+  toast.innerHTML = `<span style="color: #4ade80;">✓</span> <span>${escapeHtml(message)}</span>`;
+  toast.style.opacity = "1";
+  toast.style.top = "24px";
+  clearTimeout(toast._timeout);
+  toast._timeout = setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.top = "10px";
+  }, 3000);
+}
+
 window.loadProposalState = function(data) {
   if (!data) return;
 
   state.isRestoringProposal = true;
-  const sData = (data.stateData || data.state_data || data);
 
-  // 1. If formValues exists (v2 schema), restore all DOM inputs, selects, textareas, and checkboxes directly
-  if (sData.formValues && typeof sData.formValues === "object") {
-    Object.keys(sData.formValues).forEach((id) => {
-      const el = $(id);
-      if (!el) return;
-      if (el.type === "checkbox") {
-        el.checked = !!sData.formValues[id];
-      } else if (el.type === "radio") {
-        if (el.value === sData.formValues[id]) el.checked = true;
-      } else {
-        el.value = sData.formValues[id] !== undefined && sData.formValues[id] !== null ? sData.formValues[id] : "";
-      }
-    });
-  }
-
-  // 2. Restore state properties (multi-meter, extracted bill, overrides, configs)
-  if (sData.state) {
-    if (sData.state.meters && Array.isArray(sData.state.meters)) {
-      state.meters = JSON.parse(JSON.stringify(sData.state.meters));
-    }
-    if (sData.state.meteringMode) {
-      state.meteringMode = sData.state.meteringMode;
-    }
-    if (sData.state.allocationStrategy) {
-      state.allocationStrategy = sData.state.allocationStrategy;
-    }
-    if (sData.state.extractedBill !== undefined) {
-      state.extractedBill = sData.state.extractedBill ? JSON.parse(JSON.stringify(sData.state.extractedBill)) : null;
-    }
-    if (sData.state.costOverrides) {
-      state.costOverrides = JSON.parse(JSON.stringify(sData.state.costOverrides));
-    }
-    if (sData.state.systemIncludesText) {
-      state.systemIncludesText = JSON.parse(JSON.stringify(sData.state.systemIncludesText));
-    }
-    if (sData.state.breakupConfig) {
-      state.breakupConfig = JSON.parse(JSON.stringify(sData.state.breakupConfig));
-    }
-    if (sData.state.breakupConfigGst) {
-      state.breakupConfigGst = JSON.parse(JSON.stringify(sData.state.breakupConfigGst));
-    }
-    if (sData.state.breakupConfigContingency) {
-      state.breakupConfigContingency = JSON.parse(JSON.stringify(sData.state.breakupConfigContingency));
-    }
-    if (sData.state.breakupConfigMarginPct) {
-      state.breakupConfigMarginPct = JSON.parse(JSON.stringify(sData.state.breakupConfigMarginPct));
-    }
-    if (sData.state.savingsConfig) {
-      state.savingsConfig = JSON.parse(JSON.stringify(sData.state.savingsConfig));
-    }
-    if (sData.state.billConfig) {
-      state.billConfig = JSON.parse(JSON.stringify(sData.state.billConfig));
-    }
-    if (sData.state.selectedSystemIndex !== undefined) {
-      state.selectedSystemIndex = sData.state.selectedSystemIndex;
-    }
-    if (sData.state.ongridBackup !== undefined) {
-      state.ongridBackup = sData.state.ongridBackup;
-    }
-  }
-
-  // 3. Fallback / Explicit sections unpacking (Rates, Loans, Sizing, ReportDisplay)
-  if (sData.rates && typeof sData.rates === "object") {
-    Object.keys(sData.rates).forEach((id) => {
-      const el = $(id);
-      if (el && sData.rates[id] !== undefined) el.value = sData.rates[id];
-    });
-  } else if (sData.config && sData.config.pricing) {
-    const p = sData.config.pricing;
-    if ($("panelDcrRate") && p.panelDcrRatePerWp !== undefined) $("panelDcrRate").value = p.panelDcrRatePerWp;
-    if ($("panelNonDcrRate") && p.panelNonDcrRatePerWp !== undefined) $("panelNonDcrRate").value = p.panelNonDcrRatePerWp;
-    if ($("batteryRate") && p.batteryRatePerWh !== undefined) $("batteryRate").value = p.batteryRatePerWh;
-    if (p.structureRates) {
-      if ($("hotDipStructureRate") && p.structureRates.hotDip !== undefined) $("hotDipStructureRate").value = p.structureRates.hotDip;
-      if ($("galvalumeStructureRate") && p.structureRates.galvalume !== undefined) $("galvalumeStructureRate").value = p.structureRates.galvalume;
-      if ($("gpPurlinStructureRate") && p.structureRates.gpPurlin !== undefined) $("gpPurlinStructureRate").value = p.structureRates.gpPurlin;
-    }
-    if ($("wiringRate") && p.wiringRatePerW !== undefined) $("wiringRate").value = p.wiringRatePerW;
-    if ($("installationRate") && p.installationRatePerW !== undefined) $("installationRate").value = p.installationRatePerW;
-    if ($("consultancyRate") && p.consultancyRatePerW !== undefined) $("consultancyRate").value = p.consultancyRatePerW;
-    if ($("contingencyRate") && p.contingencyRate !== undefined) $("contingencyRate").value = p.contingencyRate;
-    if ($("marginRate") && p.marginRate !== undefined) $("marginRate").value = p.marginRate;
-
-    if (sData.config.performance) {
-      const perf = sData.config.performance;
-      if ($("panelWp") && perf.panelWp !== undefined) $("panelWp").value = perf.panelWp;
-      if ($("dailyGeneration") && perf.dailyGenerationPerKw !== undefined) $("dailyGeneration").value = perf.dailyGenerationPerKw;
-      if ($("shadingLoss") && perf.shadingLoss !== undefined) $("shadingLoss").value = perf.shadingLoss;
-      if ($("orientationLoss") && perf.orientationLoss !== undefined) $("orientationLoss").value = perf.orientationLoss;
-      if ($("systemLoss") && perf.systemLoss !== undefined) $("systemLoss").value = perf.systemLoss;
-      if ($("degradationRate") && perf.degradationRate !== undefined) $("degradationRate").value = perf.degradationRate;
-      if ($("panelEfficiency") && perf.panelEfficiency !== undefined) $("panelEfficiency").value = perf.panelEfficiency;
-      if ($("batteryDod") && perf.batteryDod !== undefined) $("batteryDod").value = perf.batteryDod;
-      if ($("inverterEfficiency") && perf.inverterEfficiency !== undefined) $("inverterEfficiency").value = perf.inverterEfficiency;
-      if ($("selfConsumptionPct") && perf.selfConsumptionPct !== undefined) $("selfConsumptionPct").value = perf.selfConsumptionPct;
-    }
-
-    if (sData.config.tariff) {
-      const tar = sData.config.tariff;
-      if ($("fixedCharge") && tar.fixedCharge !== undefined) $("fixedCharge").value = tar.fixedCharge;
-      if ($("electricityDuty") && tar.electricityDuty !== undefined) $("electricityDuty").value = tar.electricityDuty;
-      if ($("tariffEscalation") && tar.tariffEscalation !== undefined) $("tariffEscalation").value = tar.tariffEscalation;
-      if (Array.isArray(tar.slabs)) {
-        tar.slabs.forEach((s, idx) => {
-          const el = $(`slabRate${idx + 1}`);
-          if (el && s.rate !== undefined) el.value = s.rate;
-        });
+  try {
+    // 0. Parse data if stringified or wrapped in API response envelope
+    if (typeof data === "string") {
+      try {
+        data = JSON.parse(data);
+      } catch (e) {
+        console.warn("loadProposalState: could not parse data JSON string", e);
+        return;
       }
     }
-  }
+    if (!data || typeof data !== "object") return;
 
-  // Legacy input object unpacking
-  if (sData.input && typeof sData.input === "object") {
-    Object.keys(sData.input).forEach((key) => {
-      const el = $(key);
-      if (el && el.type !== "radio" && el.type !== "checkbox") {
-        el.value = sData.input[key] || "";
-      } else if (el && el.type === "checkbox") {
-        el.checked = !!sData.input[key];
-      }
-    });
-    if (sData.input.backupLoadPercent !== undefined && $("backupLoad")) {
-      $("backupLoad").value = sData.input.backupLoadPercent;
+    if (data.data && typeof data.data === "object" && !data.stateData && !data.state_data && !data.formValues) {
+      data = data.data;
     }
-    if (sData.input.loanTenureMonths !== undefined && $("internalLoanTenureMonths")) {
-      $("internalLoanTenureMonths").value = sData.input.loanTenureMonths;
-    }
-  }
 
-  // Loans unpacking
-  if (sData.loans && typeof sData.loans === "object") {
-    Object.keys(sData.loans).forEach((id) => {
-      const el = $(id);
-      if (el && sData.loans[id] !== undefined) el.value = sData.loans[id];
-    });
-  }
-
-  // Sizing & overrides unpacking
-  if (sData.sizing && typeof sData.sizing === "object") {
-    Object.keys(sData.sizing).forEach((key) => {
-      const el = $(key);
-      if (el && el.type !== "checkbox" && el.type !== "radio") {
-        el.value = sData.sizing[key] !== undefined ? sData.sizing[key] : "";
+    let sData = data.stateData || data.state_data || data;
+    if (typeof sData === "string") {
+      try {
+        sData = JSON.parse(sData);
+      } catch (e) {
+        console.warn("loadProposalState: could not parse sData JSON string", e);
+        sData = {};
       }
-    });
-    if (sData.sizing.selectedSystemIndex !== undefined) state.selectedSystemIndex = sData.sizing.selectedSystemIndex;
-    if (sData.sizing.ongridBackup !== undefined) state.ongridBackup = sData.sizing.ongridBackup;
-    if (sData.sizing.costOverrides) state.costOverrides = sData.sizing.costOverrides;
-    if (sData.sizing.systemIncludesText) state.systemIncludesText = sData.sizing.systemIncludesText;
-    if (sData.sizing.breakupConfig) state.breakupConfig = sData.sizing.breakupConfig;
-    if (sData.sizing.breakupConfigGst) state.breakupConfigGst = sData.sizing.breakupConfigGst;
-    if (sData.sizing.breakupConfigContingency) state.breakupConfigContingency = sData.sizing.breakupConfigContingency;
-    if (sData.sizing.breakupConfigMarginPct) state.breakupConfigMarginPct = sData.sizing.breakupConfigMarginPct;
-    if (sData.sizing.savingsConfig) state.savingsConfig = sData.sizing.savingsConfig;
-    if (sData.sizing.billConfig) state.billConfig = sData.sizing.billConfig;
-    if (sData.sizing.panelSpec !== undefined) state.panelSpec = sData.sizing.panelSpec;
-    if (sData.sizing.panelSpecCustom !== undefined) state.panelSpecCustom = sData.sizing.panelSpecCustom;
-    if (sData.sizing.isCustomPanelSpec !== undefined) state.isCustomPanelSpec = sData.sizing.isCustomPanelSpec;
-    if ($("warrantyPanelSpec") && state.panelSpec) {
-      $("warrantyPanelSpec").textContent = state.panelSpec;
     }
-  }
+    if (!sData || typeof sData !== "object") sData = {};
 
-  // Report Display checkboxes & options unpacking
-  if (sData.reportDisplay && typeof sData.reportDisplay === "object") {
-    Object.keys(sData.reportDisplay).forEach((key) => {
-      const el = $(key);
-      if (el && el.type === "checkbox") {
-        el.checked = !!sData.reportDisplay[key];
-      } else if (el) {
-        el.value = sData.reportDisplay[key] || "";
-      }
-    });
-  }
-
-  // Restore proposal serial number if present
-  const restoredSerial = sData.reportDisplay?.proposalSerialNo || 
-                         sData.formValues?.proposalSerialNo || 
-                         data.proposalSerialNo || 
-                         data.proposal_serial_no || 
-                         sData.input?.proposalSerialNo;
-  if (restoredSerial) {
-    if ($("proposalSerialNo")) $("proposalSerialNo").value = restoredSerial;
-    if ($("sidebarProposalSerialNo")) $("sidebarProposalSerialNo").value = restoredSerial;
-    state.currentProposalSerialNo = restoredSerial;
-  }
-  state.currentProposalId = data.id || sData.id || null;
-  state.currentServerId = data.server_id || sData.server_id || ((data.id && typeof data.id === "string" && !data.id.startsWith("prop_")) ? data.id : null);
-  updateProposalStatusBadge("editing", restoredSerial || state.currentProposalSerialNo);
-
-  // Synchronize twin fields (customer vs internal)
-  const custName = data.customer_name || data.customerName || $("customerName")?.value || $("internalCustomerName")?.value || sData.customerName || "";
-  if ($("customerName")) $("customerName").value = custName;
-  if ($("internalCustomerName")) $("internalCustomerName").value = custName;
-
-  const mob = data.mobile_number || data.mobileNumber || $("mobileNumber")?.value || $("internalMobileNumber")?.value || sData.mobileNumber || "";
-  if ($("mobileNumber")) $("mobileNumber").value = mob;
-  if ($("internalMobileNumber")) $("internalMobileNumber").value = mob;
-
-  const email = data.email_address || data.emailAddress || $("emailAddress")?.value || $("internalEmailAddress")?.value || sData.emailAddress || "";
-  if ($("emailAddress")) $("emailAddress").value = email;
-  if ($("internalEmailAddress")) $("internalEmailAddress").value = email;
-
-  const addr = data.customer_address || data.customerAddress || $("customerAddress")?.value || sData.customerAddress || "";
-  if ($("customerAddress")) $("customerAddress").value = addr;
-
-  if ($("proposalToCustomerName") && custName) $("proposalToCustomerName").textContent = custName;
-  if ($("proposalToCustomerPhone") && mob) $("proposalToCustomerPhone").textContent = mob;
-  if ($("proposalToCustomerAddress") && addr) $("proposalToCustomerAddress").textContent = addr;
-
-  const pMode = $("paymentMode")?.value || $("internalPaymentMode")?.value || "upfront";
-  if ($("paymentMode")) $("paymentMode").value = pMode;
-  if ($("internalPaymentMode")) $("internalPaymentMode").value = pMode;
-  $("customerLoanFields")?.classList.toggle("hidden", pMode !== "loan");
-
-  // Synchronize loan values between customer and internal views
-  const lRate = $("loanInterestRate")?.value || $("internalLoanInterestRate")?.value || 9.5;
-  if ($("loanInterestRate")) $("loanInterestRate").value = lRate;
-  if ($("internalLoanInterestRate")) $("internalLoanInterestRate").value = lRate;
-
-  const lAmt = $("loanAmount")?.value || $("internalLoanAmount")?.value || "";
-  if ($("loanAmount")) $("loanAmount").value = lAmt;
-  if ($("internalLoanAmount")) $("internalLoanAmount").value = lAmt;
-
-  const lEmi = $("loanMonthlyEmi")?.value || $("internalLoanMonthlyEmi")?.value || "";
-  if ($("loanMonthlyEmi")) $("loanMonthlyEmi").value = lEmi;
-  if ($("internalLoanMonthlyEmi")) $("internalLoanMonthlyEmi").value = lEmi;
-
-  // 4. Restore Rooftop CAD state
-  if (sData.cad) {
-    state.pendingCadState = sData.cad;
-    const cad = getActiveRooftopCAD();
-    if (cad && typeof cad.loadState === "function") {
-      cad.loadState(sData.cad);
-      state.pendingCadState = null;
-
-      if ($("cadRoofLength") && sData.cad.roofLengthFt !== undefined) $("cadRoofLength").value = sData.cad.roofLengthFt;
-      if ($("cadRoofBreadth") && sData.cad.roofBreadthFt !== undefined) $("cadRoofBreadth").value = sData.cad.roofBreadthFt;
-      if ($("cadPathwayWidth") && sData.cad.defaultPathwayWidthFt !== undefined) $("cadPathwayWidth").value = sData.cad.defaultPathwayWidthFt;
-      if ($("cadBuildingHeightInput") && sData.cad.buildingHeightFt !== undefined) $("cadBuildingHeightInput").value = sData.cad.buildingHeightFt;
-      if ($("cadElevationBldgHeightInput") && sData.cad.buildingHeightFt !== undefined) $("cadElevationBldgHeightInput").value = sData.cad.buildingHeightFt;
-      if ($("cadNorthAngleInput") && sData.cad.northAngleDeg !== undefined) $("cadNorthAngleInput").value = sData.cad.northAngleDeg;
-      if ($("cadSunTimeSlider") && sData.cad.sunSim?.timeHour !== undefined) $("cadSunTimeSlider").value = sData.cad.sunSim.timeHour;
-
-      if (sData.cad.image && sData.cad.image.isLoaded) {
-        const imgControls = $("cadImageControls");
-        if (imgControls) imgControls.style.display = "flex";
-        const lockBtn = $("cadLockImageBtn");
-        if (lockBtn) {
-          lockBtn.textContent = cad.image.locked ? "🔒 Locked" : "🔓 Unlocked";
-          lockBtn.style.color = cad.image.locked ? "#38bdf8" : "#fbbf24";
+    // 1. If formValues exists (v2 schema), restore all DOM inputs, selects, textareas, and checkboxes directly
+    if (sData.formValues && typeof sData.formValues === "object") {
+      Object.keys(sData.formValues).forEach((id) => {
+        const el = $(id);
+        if (!el) return;
+        if (el.type === "checkbox") {
+          el.checked = !!sData.formValues[id];
+        } else if (el.type === "radio") {
+          if (el.value === sData.formValues[id]) el.checked = true;
+        } else {
+          el.value = sData.formValues[id] !== undefined && sData.formValues[id] !== null ? sData.formValues[id] : "";
         }
-        if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale || 1.0;
-        if ($("cadOpacitySlider") && sData.cad.image.opacity !== undefined) $("cadOpacitySlider").value = sData.cad.image.opacity;
-      }
-      cad.render();
-      cad.notifyChanges();
-      cad.notifyLayersChange();
+      });
     }
+
+    // 2. Restore state properties (multi-meter, extracted bill, overrides, configs)
+    if (sData.state && typeof sData.state === "object") {
+      if (sData.state.meters && Array.isArray(sData.state.meters)) {
+        state.meters = JSON.parse(JSON.stringify(sData.state.meters));
+      }
+      if (sData.state.meteringMode) {
+        state.meteringMode = sData.state.meteringMode;
+      }
+      if (sData.state.allocationStrategy) {
+        state.allocationStrategy = sData.state.allocationStrategy;
+      }
+      if (sData.state.extractedBill !== undefined) {
+        state.extractedBill = sData.state.extractedBill ? JSON.parse(JSON.stringify(sData.state.extractedBill)) : null;
+      }
+      if (sData.state.costOverrides) {
+        state.costOverrides = JSON.parse(JSON.stringify(sData.state.costOverrides));
+      }
+      if (sData.state.systemIncludesText) {
+        state.systemIncludesText = JSON.parse(JSON.stringify(sData.state.systemIncludesText));
+      }
+      if (sData.state.breakupConfig) {
+        state.breakupConfig = JSON.parse(JSON.stringify(sData.state.breakupConfig));
+      }
+      if (sData.state.breakupConfigGst) {
+        state.breakupConfigGst = JSON.parse(JSON.stringify(sData.state.breakupConfigGst));
+      }
+      if (sData.state.breakupConfigContingency) {
+        state.breakupConfigContingency = JSON.parse(JSON.stringify(sData.state.breakupConfigContingency));
+      }
+      if (sData.state.breakupConfigMarginPct) {
+        state.breakupConfigMarginPct = JSON.parse(JSON.stringify(sData.state.breakupConfigMarginPct));
+      }
+      if (sData.state.savingsConfig) {
+        state.savingsConfig = JSON.parse(JSON.stringify(sData.state.savingsConfig));
+      }
+      if (sData.state.billConfig) {
+        state.billConfig = JSON.parse(JSON.stringify(sData.state.billConfig));
+      }
+      if (sData.state.selectedSystemIndex !== undefined) {
+        state.selectedSystemIndex = sData.state.selectedSystemIndex;
+      }
+      if (sData.state.ongridBackup !== undefined) {
+        state.ongridBackup = sData.state.ongridBackup;
+      }
+    }
+
+    // 3. Fallback / Explicit sections unpacking (Rates, Loans, Sizing, ReportDisplay)
+    if (sData.rates && typeof sData.rates === "object") {
+      Object.keys(sData.rates).forEach((id) => {
+        const el = $(id);
+        if (el && sData.rates[id] !== undefined) el.value = sData.rates[id];
+      });
+    } else if (sData.config && sData.config.pricing) {
+      const p = sData.config.pricing;
+      if ($("panelDcrRate") && p.panelDcrRatePerWp !== undefined) $("panelDcrRate").value = p.panelDcrRatePerWp;
+      if ($("panelNonDcrRate") && p.panelNonDcrRatePerWp !== undefined) $("panelNonDcrRate").value = p.panelNonDcrRatePerWp;
+      if ($("batteryRate") && p.batteryRatePerWh !== undefined) $("batteryRate").value = p.batteryRatePerWh;
+      if (p.structureRates) {
+        if ($("hotDipStructureRate") && p.structureRates.hotDip !== undefined) $("hotDipStructureRate").value = p.structureRates.hotDip;
+        if ($("galvalumeStructureRate") && p.structureRates.galvalume !== undefined) $("galvalumeStructureRate").value = p.structureRates.galvalume;
+        if ($("gpPurlinStructureRate") && p.structureRates.gpPurlin !== undefined) $("gpPurlinStructureRate").value = p.structureRates.gpPurlin;
+      }
+      if ($("wiringRate") && p.wiringRatePerW !== undefined) $("wiringRate").value = p.wiringRatePerW;
+      if ($("installationRate") && p.installationRatePerW !== undefined) $("installationRate").value = p.installationRatePerW;
+      if ($("consultancyRate") && p.consultancyRatePerW !== undefined) $("consultancyRate").value = p.consultancyRatePerW;
+      if ($("contingencyRate") && p.contingencyRate !== undefined) $("contingencyRate").value = p.contingencyRate;
+      if ($("marginRate") && p.marginRate !== undefined) $("marginRate").value = p.marginRate;
+
+      if (sData.config.performance) {
+        const perf = sData.config.performance;
+        if ($("panelWp") && perf.panelWp !== undefined) $("panelWp").value = perf.panelWp;
+        if ($("dailyGeneration") && perf.dailyGenerationPerKw !== undefined) $("dailyGeneration").value = perf.dailyGenerationPerKw;
+        if ($("shadingLoss") && perf.shadingLoss !== undefined) $("shadingLoss").value = perf.shadingLoss;
+        if ($("orientationLoss") && perf.orientationLoss !== undefined) $("orientationLoss").value = perf.orientationLoss;
+        if ($("systemLoss") && perf.systemLoss !== undefined) $("systemLoss").value = perf.systemLoss;
+        if ($("degradationRate") && perf.degradationRate !== undefined) $("degradationRate").value = perf.degradationRate;
+        if ($("panelEfficiency") && perf.panelEfficiency !== undefined) $("panelEfficiency").value = perf.panelEfficiency;
+        if ($("batteryDod") && perf.batteryDod !== undefined) $("batteryDod").value = perf.batteryDod;
+        if ($("inverterEfficiency") && perf.inverterEfficiency !== undefined) $("inverterEfficiency").value = perf.inverterEfficiency;
+        if ($("selfConsumptionPct") && perf.selfConsumptionPct !== undefined) $("selfConsumptionPct").value = perf.selfConsumptionPct;
+      }
+
+      if (sData.config.tariff) {
+        const tar = sData.config.tariff;
+        if ($("fixedCharge") && tar.fixedCharge !== undefined) $("fixedCharge").value = tar.fixedCharge;
+        if ($("electricityDuty") && tar.electricityDuty !== undefined) $("electricityDuty").value = tar.electricityDuty;
+        if ($("tariffEscalation") && tar.tariffEscalation !== undefined) $("tariffEscalation").value = tar.tariffEscalation;
+        if (Array.isArray(tar.slabs)) {
+          tar.slabs.forEach((s, idx) => {
+            const el = $(`slabRate${idx + 1}`);
+            if (el && s.rate !== undefined) el.value = s.rate;
+          });
+        }
+      }
+    }
+
+    // Input object unpacking (fills any missing form controls)
+    if (sData.input && typeof sData.input === "object") {
+      Object.keys(sData.input).forEach((key) => {
+        const el = $(key);
+        if (!el) return;
+        if (el.type === "checkbox") {
+          if (!sData.formValues || sData.formValues[key] === undefined) {
+            el.checked = !!sData.input[key];
+          }
+        } else if (el.type !== "radio") {
+          if (!sData.formValues || sData.formValues[key] === undefined) {
+            el.value = sData.input[key] !== undefined && sData.input[key] !== null ? sData.input[key] : "";
+          }
+        }
+      });
+      if (sData.input.backupLoadPercent !== undefined && $("backupLoad") && (!sData.formValues || sData.formValues.backupLoad === undefined)) {
+        $("backupLoad").value = sData.input.backupLoadPercent;
+      }
+      if (sData.input.loanTenureMonths !== undefined && $("internalLoanTenureMonths") && (!sData.formValues || sData.formValues.internalLoanTenureMonths === undefined)) {
+        $("internalLoanTenureMonths").value = sData.input.loanTenureMonths;
+      }
+    }
+
+    // Loans unpacking
+    if (sData.loans && typeof sData.loans === "object") {
+      Object.keys(sData.loans).forEach((id) => {
+        const el = $(id);
+        if (el && sData.loans[id] !== undefined && (!sData.formValues || sData.formValues[id] === undefined)) {
+          el.value = sData.loans[id];
+        }
+      });
+    }
+
+    // Sizing & overrides unpacking
+    if (sData.sizing && typeof sData.sizing === "object") {
+      Object.keys(sData.sizing).forEach((key) => {
+        const el = $(key);
+        if (el && el.type !== "checkbox" && el.type !== "radio" && (!sData.formValues || sData.formValues[key] === undefined)) {
+          el.value = sData.sizing[key] !== undefined && sData.sizing[key] !== null ? sData.sizing[key] : "";
+        }
+      });
+      if (sData.sizing.selectedSystemIndex !== undefined) state.selectedSystemIndex = sData.sizing.selectedSystemIndex;
+      if (sData.sizing.ongridBackup !== undefined) state.ongridBackup = sData.sizing.ongridBackup;
+      if (sData.sizing.costOverrides) state.costOverrides = sData.sizing.costOverrides;
+      if (sData.sizing.systemIncludesText) state.systemIncludesText = sData.sizing.systemIncludesText;
+      if (sData.sizing.breakupConfig) state.breakupConfig = sData.sizing.breakupConfig;
+      if (sData.sizing.breakupConfigGst) state.breakupConfigGst = sData.sizing.breakupConfigGst;
+      if (sData.sizing.breakupConfigContingency) state.breakupConfigContingency = sData.sizing.breakupConfigContingency;
+      if (sData.sizing.breakupConfigMarginPct) state.breakupConfigMarginPct = sData.sizing.breakupConfigMarginPct;
+      if (sData.sizing.savingsConfig) state.savingsConfig = sData.sizing.savingsConfig;
+      if (sData.sizing.billConfig) state.billConfig = sData.sizing.billConfig;
+      if (sData.sizing.panelSpec !== undefined) state.panelSpec = sData.sizing.panelSpec;
+      if (sData.sizing.panelSpecCustom !== undefined) state.panelSpecCustom = sData.sizing.panelSpecCustom;
+      if (sData.sizing.isCustomPanelSpec !== undefined) state.isCustomPanelSpec = sData.sizing.isCustomPanelSpec;
+      if ($("warrantyPanelSpec") && state.panelSpec) {
+        $("warrantyPanelSpec").textContent = state.panelSpec;
+      }
+    }
+
+    // Report Display checkboxes & options unpacking
+    if (sData.reportDisplay && typeof sData.reportDisplay === "object") {
+      Object.keys(sData.reportDisplay).forEach((key) => {
+        const el = $(key);
+        if (el && el.type === "checkbox") {
+          el.checked = !!sData.reportDisplay[key];
+        } else if (el && (!sData.formValues || sData.formValues[key] === undefined)) {
+          el.value = sData.reportDisplay[key] || "";
+        }
+      });
+    }
+
+    // Top-level server column fallbacks (sanctioned_load, system_capacity_kw)
+    if (data.sanctioned_load !== undefined && data.sanctioned_load !== null && $("sanctionedLoad")) {
+      if (!sData.formValues?.sanctionedLoad && !sData.input?.sanctionedLoad) {
+        $("sanctionedLoad").value = data.sanctioned_load;
+      }
+    }
+    if (data.system_capacity_kw !== undefined && data.system_capacity_kw !== null && $("capacityOverride")) {
+      if (!sData.formValues?.capacityOverride && !sData.sizing?.capacityOverride) {
+        $("capacityOverride").value = data.system_capacity_kw;
+      }
+    }
+
+    // Restore proposal serial number if present
+    const restoredSerial = data.proposal_serial_no || 
+                           data.proposalSerialNo || 
+                           sData.reportDisplay?.proposalSerialNo || 
+                           sData.formValues?.proposalSerialNo || 
+                           sData.input?.proposalSerialNo || 
+                           sData.proposalSerialNo || "";
+    if (restoredSerial) {
+      if ($("proposalSerialNo")) $("proposalSerialNo").value = restoredSerial;
+      if ($("sidebarProposalSerialNo")) $("sidebarProposalSerialNo").value = restoredSerial;
+      state.currentProposalSerialNo = restoredSerial;
+    }
+    state.currentProposalId = data.id || sData.id || null;
+    state.currentServerId = data.server_id || sData.server_id || ((data.id && typeof data.id === "string" && !data.id.startsWith("prop_")) ? data.id : null);
+    updateProposalStatusBadge("editing", restoredSerial || state.currentProposalSerialNo);
+
+    // Synchronize twin fields (customer vs internal)
+    const custName = data.customer_name || 
+                     data.customerName || 
+                     sData.formValues?.customerName || 
+                     sData.formValues?.internalCustomerName ||
+                     sData.input?.customerName || 
+                     sData.input?.internalCustomerName || 
+                     sData.customerName || "";
+    if (custName) {
+      if ($("customerName")) $("customerName").value = custName;
+      if ($("internalCustomerName")) $("internalCustomerName").value = custName;
+      if ($("proposalToCustomerName")) $("proposalToCustomerName").textContent = custName;
+    }
+
+    const mob = data.mobile_number || 
+                data.mobileNumber || 
+                sData.formValues?.mobileNumber || 
+                sData.formValues?.internalMobileNumber ||
+                sData.input?.mobileNumber || 
+                sData.input?.internalMobileNumber || 
+                sData.mobileNumber || "";
+    if (mob) {
+      if ($("mobileNumber")) $("mobileNumber").value = mob;
+      if ($("internalMobileNumber")) $("internalMobileNumber").value = mob;
+      if ($("proposalToCustomerPhone")) $("proposalToCustomerPhone").textContent = mob;
+    }
+
+    const email = data.email_address || 
+                  data.emailAddress || 
+                  sData.formValues?.emailAddress || 
+                  sData.formValues?.internalEmailAddress ||
+                  sData.input?.emailAddress || 
+                  sData.input?.internalEmailAddress || 
+                  sData.emailAddress || "";
+    if (email) {
+      if ($("emailAddress")) $("emailAddress").value = email;
+      if ($("internalEmailAddress")) $("internalEmailAddress").value = email;
+    }
+
+    const addr = data.customer_address || 
+                 data.customerAddress || 
+                 sData.reportDisplay?.customerAddress || 
+                 sData.formValues?.customerAddress || 
+                 sData.input?.customerAddress || 
+                 sData.customerAddress || "";
+    if (addr) {
+      if ($("customerAddress")) $("customerAddress").value = addr;
+      if ($("proposalToCustomerAddress")) $("proposalToCustomerAddress").textContent = addr;
+    }
+
+    const pMode = sData.formValues?.paymentMode || sData.loans?.paymentMode || $("paymentMode")?.value || $("internalPaymentMode")?.value || "upfront";
+    if ($("paymentMode")) $("paymentMode").value = pMode;
+    if ($("internalPaymentMode")) $("internalPaymentMode").value = pMode;
+    $("customerLoanFields")?.classList.toggle("hidden", pMode !== "loan");
+
+    // Synchronize loan values between customer and internal views
+    const lRate = sData.formValues?.loanInterestRate || sData.loans?.loanInterestRate || $("loanInterestRate")?.value || $("internalLoanInterestRate")?.value || 9.5;
+    if ($("loanInterestRate")) $("loanInterestRate").value = lRate;
+    if ($("internalLoanInterestRate")) $("internalLoanInterestRate").value = lRate;
+
+    const lAmt = sData.formValues?.loanAmount !== undefined ? sData.formValues.loanAmount : (sData.loans?.loanAmount !== undefined ? sData.loans.loanAmount : ($("loanAmount")?.value || ""));
+    if ($("loanAmount")) $("loanAmount").value = lAmt;
+    if ($("internalLoanAmount")) $("internalLoanAmount").value = lAmt;
+
+    const lEmi = sData.formValues?.loanMonthlyEmi !== undefined ? sData.formValues.loanMonthlyEmi : (sData.loans?.loanMonthlyEmi !== undefined ? sData.loans.loanMonthlyEmi : ($("loanMonthlyEmi")?.value || ""));
+    if ($("loanMonthlyEmi")) $("loanMonthlyEmi").value = lEmi;
+    if ($("internalLoanMonthlyEmi")) $("internalLoanMonthlyEmi").value = lEmi;
+
+    // 4. Restore Rooftop CAD state
+    if (sData.cad) {
+      state.pendingCadState = sData.cad;
+      try {
+        const cad = getActiveRooftopCAD();
+        if (cad && typeof cad.loadState === "function") {
+          cad.loadState(sData.cad);
+          state.pendingCadState = null;
+
+          if ($("cadRoofLength") && sData.cad.roofLengthFt !== undefined) $("cadRoofLength").value = sData.cad.roofLengthFt;
+          if ($("cadRoofBreadth") && sData.cad.roofBreadthFt !== undefined) $("cadRoofBreadth").value = sData.cad.roofBreadthFt;
+          if ($("cadPathwayWidth") && sData.cad.defaultPathwayWidthFt !== undefined) $("cadPathwayWidth").value = sData.cad.defaultPathwayWidthFt;
+          if ($("cadBuildingHeightInput") && sData.cad.buildingHeightFt !== undefined) $("cadBuildingHeightInput").value = sData.cad.buildingHeightFt;
+          if ($("cadElevationBldgHeightInput") && sData.cad.buildingHeightFt !== undefined) $("cadElevationBldgHeightInput").value = sData.cad.buildingHeightFt;
+          if ($("cadNorthAngleInput") && sData.cad.northAngleDeg !== undefined) $("cadNorthAngleInput").value = sData.cad.northAngleDeg;
+          if ($("cadSunTimeSlider") && sData.cad.sunSim?.timeHour !== undefined) $("cadSunTimeSlider").value = sData.cad.sunSim.timeHour;
+
+          if (sData.cad.image && sData.cad.image.isLoaded) {
+            const imgControls = $("cadImageControls");
+            if (imgControls) imgControls.style.display = "flex";
+            const lockBtn = $("cadLockImageBtn");
+            if (lockBtn) {
+              lockBtn.textContent = cad.image.locked ? "🔒 Locked" : "🔓 Unlocked";
+              lockBtn.style.color = cad.image.locked ? "#38bdf8" : "#fbbf24";
+            }
+            if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale || 1.0;
+            if ($("cadOpacitySlider") && sData.cad.image.opacity !== undefined) $("cadOpacitySlider").value = sData.cad.image.opacity;
+          }
+          if (typeof cad.render === "function") cad.render();
+          if (typeof cad.notifyChanges === "function") cad.notifyChanges();
+          if (typeof cad.notifyLayersChange === "function") cad.notifyLayersChange();
+        }
+      } catch (cadErr) {
+        console.warn("CAD state restore warning:", cadErr);
+      }
+    }
+
+    // 5. Restore Multi-Meter / Single Meter mode and re-render table
+    try {
+      if (state.meteringMode === "multi") {
+        setMeteringMode("multi");
+      } else {
+        setMeteringMode("single");
+      }
+      renderMultiMeterTable();
+    } catch (mmErr) {
+      console.warn("Multi-meter render warning:", mmErr);
+    }
+
+    // 6. Re-render Extracted Bill OCR card if present
+    if (state.extractedBill && state.extractedBill.fields) {
+      try {
+        renderExtractedBill(state.extractedBill);
+      } catch (ocrErr) {
+        console.warn("Extracted bill render warning:", ocrErr);
+      }
+    }
+
+    // Remove blur overlay when a proposal is loaded
+    const resultsPanel = document.querySelector(".results-panel");
+    if (resultsPanel) resultsPanel.classList.remove("blurred-overlay");
+
+    // Close modal immediately
+    if ($("loadProposalModal")) $("loadProposalModal").style.display = "none";
+
+    // Re-render calculations & workspace
+    try {
+      render();
+    } catch (renderErr) {
+      console.error("Render error during proposal load:", renderErr);
+    }
+
+    // Switch workspace to proposal tab and sidebar to project category
+    if (typeof switchWorkspaceTab === "function") {
+      switchWorkspaceTab("proposal");
+    }
+    if (typeof switchSidebarCategory === "function") {
+      switchSidebarCategory("project");
+    }
+
+    // Notify user with load toast
+    const displayName = custName || "Customer";
+    const displaySerial = restoredSerial || state.currentProposalSerialNo || "";
+    showLoadToast(`Proposal ${displaySerial ? displaySerial + " " : ""}loaded for ${displayName}`);
+  } catch (err) {
+    console.error("Fatal error loading proposal state:", err);
+  } finally {
+    state.isRestoringProposal = false;
+    if ($("loadProposalModal")) $("loadProposalModal").style.display = "none";
   }
-
-  // 5. Restore Multi-Meter / Single Meter mode and re-render table
-  if (state.meteringMode === "multi") {
-    setMeteringMode("multi");
-  } else {
-    setMeteringMode("single");
-  }
-  renderMultiMeterTable();
-
-  // 6. Re-render Extracted Bill OCR card if present
-  if (state.extractedBill) {
-    renderExtractedBill(state.extractedBill);
-  }
-
-  // Remove blur overlay when a proposal is loaded
-  const resultsPanel = document.querySelector(".results-panel");
-  if (resultsPanel) resultsPanel.classList.remove("blurred-overlay");
-
-  if ($("loadProposalModal")) $("loadProposalModal").style.display = "none";
-
-  render();
-  state.isRestoringProposal = false;
 };
 
 window.getFinancialYear = getFinancialYear;
