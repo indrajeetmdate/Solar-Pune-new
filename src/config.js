@@ -229,8 +229,14 @@ export const SYSTEM_LABELS = {
 };
 
 export const PANEL_LABELS = {
-  dcr: "DCR",
-  nonDcr: "Non-DCR",
+  dcr: "DCR Mono PERC",
+  nonDcr: "Non-DCR Mono PERC",
+  mono_bifacial: "Mono Bifacial",
+  dcr_bifacial: "DCR Mono Bifacial",
+  nondcr_bifacial: "Non-DCR Mono Bifacial",
+  topcon_bifacial: "TOPCon Bifacial",
+  dcr_topcon: "DCR TOPCon",
+  poly: "Polycrystalline",
 };
 
 export const STRUCTURE_LABELS = {
@@ -238,3 +244,34 @@ export const STRUCTURE_LABELS = {
   galvalume: "Galvalume",
   gpPurlin: "GP purlin",
 };
+
+export function getPanelSpecificationText(panelType, customSpec, panelWp = 550) {
+  if (customSpec && typeof customSpec === "string" && customSpec.trim()) {
+    return customSpec.trim();
+  }
+  const wp = panelWp || 550;
+  const p = (panelType || "").toLowerCase();
+  if (p === "dcr_bifacial") {
+    return `Tier-1 DCR Mono Bifacial Glass-to-Glass (${wp} Wp)`;
+  }
+  if (p === "mono_bifacial" || p === "nondcr_bifacial") {
+    return `Tier-1 Mono Bifacial (Non-DCR, ${wp} Wp)`;
+  }
+  if (p === "dcr_topcon") {
+    return `Tier-1 DCR N-Type TOPCon Bifacial (${wp} Wp)`;
+  }
+  if (p === "topcon_bifacial") {
+    return `Tier-1 N-Type TOPCon Bifacial (Non-DCR, ${wp} Wp)`;
+  }
+  if (p === "poly") {
+    return `Tier-1 Multi-Crystalline / Polycrystalline (${wp < 400 ? wp : 335} Wp)`;
+  }
+  if (p === "nondcr" || p === "non_dcr") {
+    return `Tier-1 Non-DCR Mono PERC (${wp} Wp)`;
+  }
+  if (p === "dcr") {
+    return `Tier-1 DCR Mono PERC / TOPCon (${wp} Wp)`;
+  }
+  return `Tier-1 Mono PERC / TOPCon (DCR / Non-DCR as per proposal)`;
+}
+

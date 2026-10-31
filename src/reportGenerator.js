@@ -1,3 +1,5 @@
+import { getPanelSpecificationText } from "./config.js";
+
 // Helper to load image and get base64 data
 const loadImage = (url, maxDim = 400) => {
   return new Promise((resolve) => {
@@ -554,8 +556,10 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.text("Panel Configuration", margin, yPos);
     yPos += 5.5;
 
+    const panelSpec = option.panelSpec || input.panelSpec || getPanelSpecificationText(option.panelType, input.panelSpecCustom, panelLayout.panelWp);
+
     const panelData = [
-      ["Panel Specification", `${panelLayout.panelDimensions} (${panelLayout.panelWp} Wp each)`],
+      ["Panel Specification", `${panelLayout.panelDimensions} (${panelLayout.panelWp} Wp each) · ${panelSpec}`],
       ["Number of Panels", `${panelLayout.numPanels} panels`],
       ["Total Area Required", `${panelLayout.totalAreaSqft} sq ft (${panelLayout.totalAreaSqm} sq m)`],
       ["Available Installation Area", `${panelLayout.availableAreaSqft} sq ft`],
@@ -1032,7 +1036,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   }
 
   // ================= POSSIBLE SAVINGS BREAKDOWN (SOLAR OFFSET) =================
-  ensureVerticalSpace(65, "Estimated Savings");
+  ensureVerticalSpace(90, "Estimated Savings");
   const saveEnergyCharges = hideFlags.saveEnergyCharges !== false;
   const saveElectricityDuty = hideFlags.saveElectricityDuty !== false;
   const saveWheelingFac = hideFlags.saveWheelingFac !== false;
@@ -1048,7 +1052,131 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.setFont("helvetica", "italic");
   doc.setTextColor(COLORS.textLight);
   doc.text("Electricity bill components offset & reduced through rooftop solar generation:", margin, yPos);
-  yPos += 6;
+  yPos += 5.5;
+
+  // Authentic MSEDCL Electricity Bill Comparison (Side-by-Side: Current Bill vs With Solar)
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.5);
+  doc.setTextColor(COLORS.primary);
+  doc.text("MSEDCL Electricity Bill Comparison (Current Bill vs. With Rooftop Solar):", margin, yPos);
+  yPos += 4.5;
+
+  const tableColWidth = (pageWidth - margin * 2 - 5) / 2;
+  const startComparisonY = yPos;
+
+  const units = input.monthlyUnits || 0;
+  const currentBill = option.currentBillBreakdown || {};
+  const fixedCharge = currentBill.fixedCharge !== undefined ? currentBill.fixedCharge : 130;
+  const energyCharge = currentBill.energyCharge || 0;
+  const wheelingFac = currentBill.wheelingFac !== undefined ? currentBill.wheelingFac : Math.round(units * 1.60);
+  const duty = currentBill.duty || 0;
+  const totalCurrentBill = currentBill.total || input.monthlyBill || (fixedCharge + energyCharge + wheelingFac + duty);
+
+  const genUnits = option.monthlyGeneration || 0;
+  const bankedUnits = Math.max(0, genUnits - units);
+  const sb = option.savingsBreakdown || {};
+  const energyOffset = sb.energyChargeOffset || 0;
+  const dutyOffset = sb.dutyOffset || 0;
+  const wheelingOffset = sb.wheelingFacOffset || 0;
+  const postSolarFixed = fixedCharge;
+  const postSolarEnergy = Math.max(0, energyCharge - energyOffset);
+  const postSolarWheeling = Math.max(0, wheelingFac - wheelingOffset);
+  const postSolarDuty = Math.max(0, duty - dutyOffset);
+  const postSolarPayable = Math.max(0, totalCurrentBill - (option.monthlySavings || 0));
+  const monthlySavings = option.monthlySavings || 0;
+  const annualSavings = option.annualSavings || (monthlySavings * 12);
+
+  const currentBillRows = [
+    ["Units Consumed", `${units} kWh`],
+    ["Demand Charges (Fixed)", formatCurrency(fixedCharge)],
+    ["Energy Charges", formatCurrency(energyCharge)],
+    ["Wheeling Charges (@ 1.60/U)", formatCurrency(wheelingFac)],
+    ["Fuel Adjustment (FAC)", formatCurrency(0)],
+    ["Electricity Duty (16%)", formatCurrency(duty)],
+    ["Other Charges / Tax", formatCurrency(0)],
+    ["Total Current Bill", formatCurrency(totalCurrentBill)],
+    ["Net Bill Payable", formatCurrency(totalCurrentBill)],
+  ];
+
+  doc.autoTable({
+    startY: startComparisonY,
+    tableWidth: tableColWidth,
+    head: [["Current MSEDCL Bill (Before Solar)", "Amount"]],
+    body: currentBillRows,
+    theme: "grid",
+    headStyles: { fillColor: [51, 65, 85], fontSize: 8, textColor: COLORS.white, halign: "left" },
+    bodyStyles: { fontSize: 7, cellPadding: 1.4 },
+    columnStyles: {
+      0: { width: tableColWidth - 25 },
+      1: { halign: "right", fontStyle: "bold", width: 25 },
+    },
+    didParseCell: function (data) {
+      if (data.row.raw[0] === "Net Bill Payable") {
+        data.cell.styles.fillColor = [254, 226, 226];
+        data.cell.styles.textColor = [185, 28, 28];
+        data.cell.styles.fontStyle = "bold";
+      } else if (data.row.raw[0] === "Total Current Bill") {
+        data.cell.styles.fillColor = COLORS.bgLight;
+        data.cell.styles.fontStyle = "bold";
+      }
+    },
+    margin: { left: margin },
+  });
+  const leftTableFinalY = doc.lastAutoTable.finalY;
+
+  const postSolarRows = [
+    ["Solar Generation", `${genUnits} kWh`],
+    ["Banked Solar Units", `${bankedUnits} kWh`],
+    ["Demand Charges (Fixed)", formatCurrency(postSolarFixed)],
+    ["Energy Charges (Net 0 Units)", formatCurrency(postSolarEnergy)],
+    ["Wheeling Charges", formatCurrency(postSolarWheeling)],
+    ["Fuel Adjustment (FAC)", formatCurrency(0)],
+    ["Electricity Duty", formatCurrency(postSolarDuty)],
+    ["Net Bill Payable", formatCurrency(postSolarPayable)],
+    ["Net Monthly Savings", `${formatCurrency(monthlySavings)}/mo`],
+    ["Projected Annual Savings", `${formatCurrency(annualSavings)}/yr`],
+  ];
+
+  doc.autoTable({
+    startY: startComparisonY,
+    tableWidth: tableColWidth,
+    head: [["With Rooftop Solar (After Solar)", "Amount"]],
+    body: postSolarRows,
+    theme: "grid",
+    headStyles: { fillColor: COLORS.primary, fontSize: 8, textColor: COLORS.white, halign: "left" },
+    bodyStyles: { fontSize: 7, cellPadding: 1.4 },
+    columnStyles: {
+      0: { width: tableColWidth - 25 },
+      1: { halign: "right", fontStyle: "bold", width: 25 },
+    },
+    didParseCell: function (data) {
+      if (data.row.raw[0] === "Net Monthly Savings") {
+        data.cell.styles.fillColor = [236, 253, 245];
+        data.cell.styles.textColor = [5, 150, 105];
+        data.cell.styles.fontStyle = "bold";
+      } else if (data.row.raw[0] === "Projected Annual Savings") {
+        data.cell.styles.fillColor = [209, 250, 229];
+        data.cell.styles.textColor = [4, 120, 87];
+        data.cell.styles.fontStyle = "bold";
+      } else if (data.row.raw[0] === "Net Bill Payable") {
+        data.cell.styles.fillColor = [240, 253, 244];
+        data.cell.styles.textColor = [21, 128, 61];
+        data.cell.styles.fontStyle = "bold";
+      }
+    },
+    margin: { left: margin + tableColWidth + 5 },
+  });
+  const rightTableFinalY = doc.lastAutoTable.finalY;
+
+  yPos = Math.max(leftTableFinalY, rightTableFinalY) + 5;
+
+  ensureVerticalSpace(38, "Estimated Savings (Contd.)");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(COLORS.black);
+  doc.text("Solar Offset Component Breakdown:", margin, yPos);
+  yPos += 4;
 
   const tipMap = {
     "Energy Charges Offset": "Direct slab-wise energy charge reduction from solar generation",
@@ -1416,8 +1544,10 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   doc.text("Comprehensive component warranties, manufacturer guarantees, and contractual terms governing this EPC proposal.", margin, yPos);
   yPos += 8;
 
+  const warrantyPanelSpec = option.panelSpec || input.panelSpec || getPanelSpecificationText(option.panelType, input.panelSpecCustom, estimates.panelLayout?.panelWp);
+
   const warrantyData = [
-    ["1", "SOLAR PANEL", "Tier-1 Mono PERC / TOPCon (DCR / Non-DCR as per proposal)", "12 Year Warranty /\n30 Year Performance Warranty"],
+    ["1", "SOLAR PANEL", warrantyPanelSpec, "12 Year Warranty /\n30 Year Performance Warranty"],
     ["2", "DCDB", "HAVELLS 1 IN 1 OUT 600 V", "5 Year"],
     ["3", "EARTHING", "16 SQ MM EARTHING ALU. CONDUCTOR ROD;\n14 SQ MM × 1 MTR COPPER ROD", "—"],
     ["4", "DC CABLE", "4 SQ MM COPPER TIN", "20 Year"],

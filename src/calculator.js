@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG, TARIFF_PROFILES } from "./config.js";
+import { DEFAULT_CONFIG, TARIFF_PROFILES, getPanelSpecificationText } from "./config.js";
 import { calculateSolarFinancing } from "./loanEngine.js";
 
 const round = (value, decimals = 2) => {
@@ -108,7 +108,9 @@ export function distributeCapacityAcrossMeters(totalCapacityKw, meters, strategy
 
 export function calculateSubsidy(systemType, panelType, dcCapacityKw, input = {}, policy = DEFAULT_CONFIG.policy) {
   const isGridConnected = systemType.startsWith("ongrid") || systemType.startsWith("hybrid");
-  if (!isGridConnected || panelType !== "dcr" || dcCapacityKw <= 0) {
+  const pLower = typeof panelType === "string" ? panelType.toLowerCase() : "";
+  const isDcr = pLower && !pLower.includes("nondcr") && !pLower.includes("non_dcr") && (pLower.startsWith("dcr") || pLower.includes("_dcr"));
+  if (!isGridConnected || !isDcr || dcCapacityKw <= 0) {
     if (input.meters && Array.isArray(input.meters) && input.meters.length > 1) {
       return {
         total: 0,
@@ -330,7 +332,9 @@ export function recommendCapacity(input, config = DEFAULT_CONFIG) {
 }
 
 function getPanelRate(panelType, pricing) {
-  return panelType === "dcr" ? pricing.panelDcrRatePerWp : pricing.panelNonDcrRatePerWp;
+  const pLower = typeof panelType === "string" ? panelType.toLowerCase() : "";
+  const isDcr = pLower && !pLower.includes("nondcr") && !pLower.includes("non_dcr") && (pLower.startsWith("dcr") || pLower.includes("_dcr"));
+  return isDcr ? pricing.panelDcrRatePerWp : pricing.panelNonDcrRatePerWp;
 }
 
 function getInverterRate(systemType, capacityKw) {
@@ -728,6 +732,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   return {
     systemType,
     panelType,
+    panelSpec: input.panelSpec || getPanelSpecificationText(panelType, input.panelSpecCustom, config.system?.panelWp),
     dcCapacityKw: round(dcCapacityKw, 2),
     inverterCapacityKw: round(inverterCapacityKw, 2),
     batteryCapacityKwh: round(batteryCapacityKwh, 1),

@@ -334,8 +334,13 @@
               <label class="field" style="grid-column: 1 / -1;">
                 <span>Panel Type <i class="info-tip" data-tip="DCR panels are domestically manufactured and required for PM Surya Ghar subsidy.">i</i></span>
                 <select id="panelType">
-                  <option value="dcr">DCR (Govt Subsidy Eligible)</option>
-                  <option value="nonDcr">Non-DCR (Imported, No Subsidy)</option>
+                  <option value="dcr">DCR Mono PERC / TOPCon (Govt Subsidy Eligible)</option>
+                  <option value="nonDcr">Non-DCR Mono PERC (Imported, No Subsidy)</option>
+                  <option value="dcr_bifacial">DCR Mono Bifacial (Govt Subsidy Eligible)</option>
+                  <option value="mono_bifacial">Mono Bifacial (Non-DCR, No Subsidy)</option>
+                  <option value="dcr_topcon">DCR TOPCon Bifacial (Govt Subsidy Eligible)</option>
+                  <option value="topcon_bifacial">TOPCon Bifacial (Non-DCR, No Subsidy)</option>
+                  <option value="poly">Polycrystalline (Legacy / Low Cost)</option>
                 </select>
               </label>
               <label class="field" id="subsidyCategoryContainer" style="grid-column: 1 / -1;">
@@ -851,6 +856,12 @@
                   <button type="button" class="cad-btn-mini" id="cadRotateImagePlus1Btn" title="Rotate Image 1° CW">↻ 1°</button>
                   <button type="button" class="cad-btn-mini" id="cadRotateImageBtn" title="Rotate Image 90° CW">↻ 90°</button>
                   <button type="button" class="cad-btn-mini" id="cadRotateImageResetBtn" title="Reset Image Rotation to 0°">0°</button>
+                  <span style="font-size: 11px; color: #94a3b8; margin-left: 2px;">Pan:</span>
+                  <button type="button" class="cad-btn-mini" id="cadPanImageLeftBtn" title="Pan Image Left (◀) [Shift: ×5]">◀</button>
+                  <button type="button" class="cad-btn-mini" id="cadPanImageRightBtn" title="Pan Image Right (▶) [Shift: ×5]">▶</button>
+                  <button type="button" class="cad-btn-mini" id="cadPanImageUpBtn" title="Pan Image Up (▲) [Shift: ×5]">▲</button>
+                  <button type="button" class="cad-btn-mini" id="cadPanImageDownBtn" title="Pan Image Down (▼) [Shift: ×5]">▼</button>
+                  <button type="button" class="cad-btn-mini" id="cadPanImageResetBtn" title="Center Image inside Base Roof Margins">⌖ Center</button>
                   <span style="font-size: 11px; color: #94a3b8; margin-left: 2px;">Opacity:</span>
                   <input type="range" id="cadOpacitySlider" min="0.1" max="1.0" step="0.05" value="0.85" style="width: 60px;">
                   <button type="button" class="cad-btn-mini" id="cadFitImageBtn">Fit to Roof</button>
@@ -1018,6 +1029,41 @@
             </div>
             <div id="billBreakdownPanel" class="breakup-list hidden" style="margin: 10px 0 0; font-size: 12px; padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
             <div id="savingsBreakdownPanel" class="breakup-list hidden" style="margin: 10px 0 0; font-size: 12px; padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+
+            <!-- Authentic MSEDCL Electricity Bill Comparison (Side-by-Side: Current Bill vs With Solar) -->
+            <div class="detail-card" style="margin: 12px 0 0;" id="msebBillComparisonSection">
+              <div class="section-heading compact" style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 14.5px; font-weight: 700; color: var(--text);">
+                  ⚡ MSEDCL Electricity Bill Comparison (सध्याचे देयक vs सौर ऊर्जेनंतर)
+                </h3>
+                <span class="badge" style="font-size: 11px; background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-weight: 600;">MERC Net Metering</span>
+              </div>
+              <p class="muted small" style="margin: 0 0 10px;">
+                Authentic MSEDCL (महावितरण) utility billing format comparing your current monthly electricity bill with your projected bill after rooftop solar installation:
+              </p>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 14px;" id="msebComparisonGrid">
+                <!-- Left Table: Current MSEDCL Bill (Before Solar) -->
+                <div style="background: white; border: 1.5px solid #cbd5e1; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                  <div style="background: #f1f5f9; padding: 8px 12px; border-bottom: 2px solid #cbd5e1; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 700; font-size: 13px; color: #1e293b;">📄 सध्याचे वीज देयक (Current Bill)</span>
+                    <span style="font-size: 11px; background: #e2e8f0; color: #475569; padding: 2px 6px; border-radius: 3px; font-weight: 600;">Before Solar</span>
+                  </div>
+                  <div id="msebCurrentBillContainer" style="padding: 10px;">
+                    <!-- dynamic table -->
+                  </div>
+                </div>
+                <!-- Right Table: With Solar (After Solar) -->
+                <div style="background: white; border: 1.5px solid #86efac; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                  <div style="background: #f0fdf4; padding: 8px 12px; border-bottom: 2px solid #86efac; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 700; font-size: 13px; color: #166534;">☀️ सौर ऊर्जेनंतरचे देयक (With Solar)</span>
+                    <span style="font-size: 11px; background: #dcfce7; color: #15803d; padding: 2px 6px; border-radius: 3px; font-weight: 700;">After Solar</span>
+                  </div>
+                  <div id="msebPostSolarBillContainer" style="padding: 10px;">
+                    <!-- dynamic table -->
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Compare Table -->
@@ -1319,6 +1365,24 @@
             </div>
             <p class="muted small" style="margin: 0 0 10px;">Comprehensive equipment warranties and original manufacturer guarantees for all installed components:</p>
 
+            <!-- Manual Panel Selection in Material Specifications -->
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #f8fafc; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 10px;">
+              <label style="font-weight: 600; font-size: 12.5px; color: #1e293b; display: flex; align-items: center; gap: 6px;">
+                <span>⚡ Select Panel Type:</span>
+                <select id="proposalPanelTypeSelect" style="padding: 4px 8px; font-size: 12.5px; border-radius: 4px; border: 1px solid #cbd5e1; background: white; font-weight: 500;">
+                  <option value="dcr">DCR Mono PERC / TOPCon</option>
+                  <option value="nonDcr">Non-DCR Mono PERC</option>
+                  <option value="dcr_bifacial">DCR Mono Bifacial</option>
+                  <option value="mono_bifacial">Mono Bifacial (Non-DCR)</option>
+                  <option value="dcr_topcon">DCR TOPCon Bifacial</option>
+                  <option value="topcon_bifacial">TOPCon Bifacial (Non-DCR)</option>
+                  <option value="poly">Polycrystalline</option>
+                  <option value="custom">Custom Specification...</option>
+                </select>
+              </label>
+              <input type="text" id="proposalPanelSpecCustom" placeholder="Enter custom panel specification (e.g. Waaree 545Wp Bifacial DCR)..." style="display: none; flex: 1; min-width: 220px; padding: 4px 8px; font-size: 12.5px; border-radius: 4px; border: 1px solid #cbd5e1; background: white;">
+            </div>
+
             <!-- 4-Column Warranty Table -->
             <div style="overflow-x: auto; margin-bottom: 8px;">
               <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; background: white; border: 1px solid var(--line);">
@@ -1334,7 +1398,7 @@
                   <tr style="border-bottom: 1px solid var(--line);">
                     <td style="padding: 8px 10px; text-align: center; font-weight: 700;">1</td>
                     <td style="padding: 8px 10px; font-weight: 700;">SOLAR PANEL</td>
-                    <td style="padding: 8px 10px;">Tier-1 Mono PERC / TOPCon (DCR / Non-DCR as per proposal)</td>
+                    <td style="padding: 8px 10px;" id="warrantyPanelSpec">Tier-1 Mono PERC / TOPCon (DCR / Non-DCR as per proposal)</td>
                     <td style="padding: 8px 10px; text-align: center; font-weight: 700; color: #16a34a;">12 Year Warranty /<br>30 Year Performance Warranty</td>
                   </tr>
                   <tr style="border-bottom: 1px solid var(--line); background: var(--bg-alt, #fafafa);">

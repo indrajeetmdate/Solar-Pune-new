@@ -1672,6 +1672,32 @@ export class RooftopCAD {
     this.notifyChanges();
   }
 
+  panImage(dx, dy) {
+    if (!this.image.isLoaded) return;
+    if (this.image.locked) this.setImageLocked(false);
+    this.image.x = Math.round((this.image.x || 0) + Number(dx));
+    this.image.y = Math.round((this.image.y || 0) + Number(dy));
+    this.render();
+    this.notifyChanges();
+  }
+
+  setImagePan(x, y) {
+    if (!this.image.isLoaded) return;
+    if (this.image.locked) this.setImageLocked(false);
+    this.image.x = Math.round(Number(x) || 0);
+    this.image.y = Math.round(Number(y) || 0);
+    this.render();
+    this.notifyChanges();
+  }
+
+  resetImagePan() {
+    if (!this.image.isLoaded) return;
+    this.image.x = 0;
+    this.image.y = 0;
+    this.render();
+    this.notifyChanges();
+  }
+
   resetImageTransform() {
     if (!this.image.element || this.image.locked) return;
     this.image.x = 0;
@@ -2189,18 +2215,22 @@ export class RooftopCAD {
       }
     }
 
-    // 2. Check Viewport Panning (Middle click, Space+drag, or Hand tool)
+    // 2. Check Viewport Panning (Middle click, Space+drag, or Hand tool) vs Aerial Image Panning
     const isMiddleClick = e && e.button === 1;
     const isSpacePan = this.isSpacePressed || (e && e.buttons === 1 && e.spaceKey);
-    const isPanTool = this.activeTool === "image_pan" || this.activeTool === "pan";
+    const isImagePanTool = this.activeTool === "image_pan";
+    const isCanvasPanTool = this.activeTool === "pan";
 
-    if (isMiddleClick || isSpacePan || isPanTool) {
-      if (isPanTool && this.image.isLoaded && !this.image.locked && e && e.altKey) {
-        this.dragMode = "pan_image";
-        this.dragOffset = { x: this.image.x, y: this.image.y };
-        if (this.canvas) this.canvas.style.cursor = "grabbing";
-        return;
-      }
+    // Direct Image Panning via Hand/Pan Tool when image is loaded & unlocked
+    if (isImagePanTool && this.image.isLoaded && !this.image.locked) {
+      this.dragMode = "pan_image";
+      this.dragStart = { x, y };
+      this.dragOffset = { x: this.image.x || 0, y: this.image.y || 0 };
+      if (this.canvas) this.canvas.style.cursor = "grabbing";
+      return;
+    }
+
+    if (isMiddleClick || isSpacePan || isCanvasPanTool || isImagePanTool) {
       this.dragMode = "pan_view";
       this.panStartView = { x: this.viewX, y: this.viewY };
       this.dragStart = { x, y };
@@ -2416,6 +2446,18 @@ export class RooftopCAD {
       }
     }
 
+    // Check if clicked inside base roof margins while aerial image is loaded & unlocked
+    const inRoof = wx >= this.roofX && wx <= this.roofX + this.roofW && wy >= this.roofY && wy <= this.roofY + this.roofH;
+    if (inRoof && this.image.isLoaded && !this.image.locked) {
+      this.selectItem("image", { id: "roof_image", type: "image", label: "Aerial Image" }, false);
+      this.dragMode = "pan_image";
+      this.dragStart = { x, y };
+      this.dragOffset = { x: this.image.x || 0, y: this.image.y || 0 };
+      if (this.canvas) this.canvas.style.cursor = "grabbing";
+      this.render();
+      return;
+    }
+
     // Clicked empty canvas or empty roof space: start rubber-band marquee selection
     if (!e || !e.shiftKey) {
       this.selectItem(null, null);
@@ -2539,9 +2581,11 @@ export class RooftopCAD {
     }
 
     if (this.dragMode === "pan_image") {
-      this.image.x = this.dragOffset.x + (x - this.dragStart.x);
-      this.image.y = this.dragOffset.y + (y - this.dragStart.y);
+      const zoom = this.viewZoom || 1.0;
+      this.image.x = Math.round(this.dragOffset.x + (x - this.dragStart.x) / zoom);
+      this.image.y = Math.round(this.dragOffset.y + (y - this.dragStart.y) / zoom);
       this.render();
+      this.notifyChanges();
       return;
     }
 
@@ -2748,7 +2792,10 @@ export class RooftopCAD {
     }
 
     if (this.dragMode === "pan_image") {
-      if (this.canvas) this.canvas.style.cursor = "grab";
+      this.dragMode = null;
+      this.updateCursor();
+      this.notifyChanges();
+      return;
     }
 
     if (this.dragMode === "marquee_select" && this.selectionMarquee) {

@@ -636,6 +636,35 @@ console.log("Running RooftopCAD tests...");
   assert.equal(cad.selectedItems.length, 0);
   assert.equal(cad.selectedItem, null);
 
+  // 5. Aerial roof image panning inside base roof margins
+  cad.image.isLoaded = true;
+  cad.image.x = 0;
+  cad.image.y = 0;
+  cad.setImageLocked(false);
+  
+  // Method panning
+  cad.panImage(12, -8);
+  assert.equal(cad.image.x, 12, "panImage should update image.x");
+  assert.equal(cad.image.y, -8, "panImage should update image.y");
+  
+  cad.resetImagePan();
+  assert.equal(cad.image.x, 0, "resetImagePan should reset image.x to 0");
+  assert.equal(cad.image.y, 0, "resetImagePan should reset image.y to 0");
+  
+  // Pointer dragging inside base roof rectangle
+  cad.setTool("select");
+  const roofMidX = cad.roofX + cad.roofW / 2;
+  const roofMidY = cad.roofY + cad.roofH / 2;
+  cad.handlePointerDown(roofMidX, roofMidY, {});
+  assert.equal(cad.dragMode, "pan_image", "Clicking inside roof margins with unlocked image should start pan_image");
+  
+  cad.handlePointerMove(roofMidX + 25, roofMidY + 15, {});
+  assert.equal(cad.image.x, 25, "Dragging pointer should pan image.x");
+  assert.equal(cad.image.y, 15, "Dragging pointer should pan image.y");
+  
+  cad.handlePointerUp(roofMidX + 25, roofMidY + 15, {});
+  assert.equal(cad.dragMode, null, "Releasing pointer should end pan_image dragMode");
+
   console.log("✓ Test 10 Passed: Image Locking, Refined Zooming, Multi-Selection & Deselection");
 }
 

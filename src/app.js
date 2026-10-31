@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG, TARIFF_PROFILES, PANEL_LABELS, STRUCTURE_LABELS, SYSTEM_LABELS } from "./config.js";
+import { DEFAULT_CONFIG, TARIFF_PROFILES, PANEL_LABELS, STRUCTURE_LABELS, SYSTEM_LABELS, getPanelSpecificationText } from "./config.js";
 import { calculateEstimate, calculateSolarFinancing, getPanelConfigurations, calculateSingleMeterSubsidy, distributeCapacityAcrossMeters } from "./calculator.js";
 import { parseMsebBillFile, parseMultipleMsebBillFiles } from "./billParser.js";
 import { isSupportedBillFile } from "./ocrExtractor.js";
@@ -19,7 +19,10 @@ const state = {
   allocationStrategy: "proportional",
   currentProposalId: null,
   currentServerId: null,
-  currentProposalSerialNo: null
+  currentProposalSerialNo: null,
+  panelSpec: "",
+  panelSpecCustom: "",
+  isCustomPanelSpec: false
 };
 
 const ASSUMPTION_IDS = [
@@ -274,7 +277,9 @@ function readInput() {
       : null,
     backupNeeded: true,
     customerView: false,
-    panelType: safeStr("panelType"),
+    panelType: safeStr("panelType") || "dcr",
+    panelSpec: state.panelSpec || "",
+    panelSpecCustom: state.panelSpecCustom || "",
     subsidyCategory: safeStr("subsidyCategory"),
     structureType: safeStr("structureType"),
     capacityOverride: numberValue("capacityOverride"),
@@ -1531,6 +1536,150 @@ function render() {
     $("proposalToCustomerUnits").textContent = `${input.monthlyUnits || 450} units`;
   }
 
+  // Update Panel Spec in Material / Warranty Table & Proposal Selector
+  const activePanelWp = estimate.panelLayout?.panelWp || 550;
+  const currentPanelType = $("panelType")?.value || option.panelType || "dcr";
+  const customSpec = state.panelSpecCustom || $("proposalPanelSpecCustom")?.value || "";
+  const calculatedPanelSpec = getPanelSpecificationText(currentPanelType, customSpec, activePanelWp);
+  const effectivePanelSpec = state.panelSpec || calculatedPanelSpec;
+
+  if ($("warrantyPanelSpec")) {
+    $("warrantyPanelSpec").textContent = effectivePanelSpec;
+  }
+  if ($("proposalPanelTypeSelect")) {
+    if (state.isCustomPanelSpec || state.panelSpecCustom) {
+      $("proposalPanelTypeSelect").value = "custom";
+      if ($("proposalPanelSpecCustom")) {
+        $("proposalPanelSpecCustom").style.display = "inline-block";
+        if (customSpec && $("proposalPanelSpecCustom").value !== customSpec) {
+          $("proposalPanelSpecCustom").value = customSpec;
+        }
+      }
+    } else {
+      if (Array.from($("proposalPanelTypeSelect").options).some(o => o.value === currentPanelType)) {
+        $("proposalPanelTypeSelect").value = currentPanelType;
+      }
+      if ($("proposalPanelSpecCustom")) {
+        $("proposalPanelSpecCustom").style.display = "none";
+      }
+    }
+  }
+
+  // MSEDCL Electricity Bill Comparison (Side-by-Side Left: Before Solar vs Right: After Solar)
+  const currentBillContainer = $("msebCurrentBillContainer");
+  const postSolarBillContainer = $("msebPostSolarBillContainer");
+  if (currentBillContainer && postSolarBillContainer) {
+    const units = input.monthlyUnits || 0;
+    const currentBill = option.currentBillBreakdown || {};
+    const fixedCharge = currentBill.fixedCharge !== undefined ? currentBill.fixedCharge : 130;
+    const energyCharge = currentBill.energyCharge || 0;
+    const wheelingFac = currentBill.wheelingFac !== undefined ? currentBill.wheelingFac : Math.round(units * 1.60);
+    const duty = currentBill.duty || 0;
+    const totalCurrentBill = currentBill.total || input.monthlyBill || (fixedCharge + energyCharge + wheelingFac + duty);
+
+    const genUnits = option.monthlyGeneration || 0;
+    const bankedUnits = Math.max(0, genUnits - units);
+    const sb = option.savingsBreakdown || {};
+    const energyOffset = sb.energyChargeOffset || 0;
+    const dutyOffset = sb.dutyOffset || 0;
+    const wheelingOffset = sb.wheelingFacOffset || 0;
+    const postSolarFixed = fixedCharge; // Fixed charge remains as minimum connection charge
+    const postSolarEnergy = Math.max(0, energyCharge - energyOffset);
+    const postSolarWheeling = Math.max(0, wheelingFac - wheelingOffset);
+    const postSolarDuty = Math.max(0, duty - dutyOffset);
+    const postSolarPayable = Math.max(0, totalCurrentBill - (option.monthlySavings || 0));
+    const monthlySavings = option.monthlySavings || 0;
+    const annualSavings = option.annualSavings || (monthlySavings * 12);
+
+    currentBillContainer.innerHTML = `
+      <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+        <tbody>
+          <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
+            <td style="padding: 5px 6px; color: #475569;">एकूण वीज वापर (Monthly Units Consumed)</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600;">${units} kWh</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 5px 6px; color: #334155;">स्थिर आकार (Fixed / Demand Charges)</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600;">₹${fixedCharge.toLocaleString("en-IN")}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
+            <td style="padding: 5px 6px; color: #334155;">वीज आकार (Energy Charges)</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600;">₹${energyCharge.toLocaleString("en-IN")}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 5px 6px; color: #334155;">वहन आकार (Wheeling Charges @ 1.60/U)</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600;">₹${wheelingFac.toLocaleString("en-IN")}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
+            <td style="padding: 5px 6px; color: #334155;">इंधन समायोजन (Fuel Adjustment - FAC)</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600;">₹0</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 5px 6px; color: #334155;">वीज शुल्क (Electricity Duty 16%)</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600;">₹${duty.toLocaleString("en-IN")}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
+            <td style="padding: 5px 6px; color: #334155;">इतर आकार / कर (Other Charges / Tax)</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600;">₹0</td>
+          </tr>
+          <tr style="border-bottom: 2px solid #cbd5e1; background: #f1f5f9;">
+            <td style="padding: 6px 6px; font-weight: 700; color: #1e293b;">चालू वीज देयक (Current Monthly Bill)</td>
+            <td style="padding: 6px 6px; text-align: right; font-weight: 700; color: #1e293b;">₹${totalCurrentBill.toLocaleString("en-IN")}</td>
+          </tr>
+          <tr style="background: #fee2e2;">
+            <td style="padding: 7px 6px; font-weight: 800; color: #991b1b;">देयकाची निव्वळ रक्कम (Net Bill Payable)</td>
+            <td style="padding: 7px 6px; text-align: right; font-weight: 800; font-size: 13px; color: #dc2626;">₹${totalCurrentBill.toLocaleString("en-IN")}</td>
+          </tr>
+        </tbody>
+      </table>`;
+
+    postSolarBillContainer.innerHTML = `
+      <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+        <tbody>
+          <tr style="border-bottom: 1px solid #dcfce7; background: #f0fdf4;">
+            <td style="padding: 5px 6px; color: #166534;">सौर ऊर्जा निर्मिती (Solar Generation)</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 700; color: #16a34a;">${genUnits} kWh</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #dcfce7;">
+            <td style="padding: 5px 6px; color: #166534;">साठवलेले सौर युनिट्स (Banked Solar Units)</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600; color: #0d9488;">${bankedUnits} kWh</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
+            <td style="padding: 5px 6px; color: #334155;">स्थिर आकार (Fixed / Demand Charges)</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600;">₹${postSolarFixed.toLocaleString("en-IN")}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 5px 6px; color: #334155;">वीज आकार (Energy Charges Offset)</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600; color: #16a34a;">₹${postSolarEnergy.toLocaleString("en-IN")}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
+            <td style="padding: 5px 6px; color: #334155;">वहन आकार (Wheeling Offset)</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600; color: #16a34a;">₹${postSolarWheeling.toLocaleString("en-IN")}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 5px 6px; color: #334155;">इंधन समायोजन (FAC Offset)</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600; color: #16a34a;">₹0</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
+            <td style="padding: 5px 6px; color: #334155;">वीज शुल्क (Electricity Duty Offset)</td>
+            <td style="padding: 5px 6px; text-align: right; font-weight: 600; color: #16a34a;">₹${postSolarDuty.toLocaleString("en-IN")}</td>
+          </tr>
+          <tr style="border-bottom: 2px solid #86efac; background: #f0fdf4;">
+            <td style="padding: 6px 6px; font-weight: 700; color: #166534;">देयकाची निव्वळ रक्कम (Net Bill Payable)</td>
+            <td style="padding: 6px 6px; text-align: right; font-weight: 800; font-size: 13px; color: #15803d;">₹${postSolarPayable.toLocaleString("en-IN")}</td>
+          </tr>
+          <tr style="background: #ecfdf5; border-top: 1px dashed #10b981;">
+            <td style="padding: 6px 6px; font-weight: 800; color: #065f46;">निव्वळ मासिक बचत (Net Monthly Savings)</td>
+            <td style="padding: 6px 6px; text-align: right; font-weight: 800; font-size: 13.5px; color: #059669;">₹${monthlySavings.toLocaleString("en-IN")}/mo</td>
+          </tr>
+          <tr style="background: #d1fae5;">
+            <td style="padding: 6px 6px; font-weight: 800; color: #064e3b;">वार्षिक वीज बचत (Projected Annual Savings)</td>
+            <td style="padding: 6px 6px; text-align: right; font-weight: 800; font-size: 13px; color: #047857;">₹${annualSavings.toLocaleString("en-IN")}/yr</td>
+          </tr>
+        </tbody>
+      </table>`;
+  }
+
   // Report Display: toggle visibility of optional sections
   const hidePayback = $("hidePayback")?.checked || $("hideCost")?.checked;
   const hideAreaFit = $("hideAreaFit")?.checked;
@@ -2684,6 +2833,21 @@ function setupCadEventListeners(cad) {
     syncImageRotationUI();
   });
 
+  const handlePanImage = (dx, dy, e) => {
+    const step = (e && e.shiftKey) ? 25 : 5;
+    cad.panImage(dx * step, dy * step);
+    updateLockBtnUI();
+  };
+
+  $("cadPanImageLeftBtn")?.addEventListener("click", (e) => handlePanImage(-1, 0, e));
+  $("cadPanImageRightBtn")?.addEventListener("click", (e) => handlePanImage(1, 0, e));
+  $("cadPanImageUpBtn")?.addEventListener("click", (e) => handlePanImage(0, -1, e));
+  $("cadPanImageDownBtn")?.addEventListener("click", (e) => handlePanImage(0, 1, e));
+  $("cadPanImageResetBtn")?.addEventListener("click", () => {
+    cad.resetImagePan();
+    updateLockBtnUI();
+  });
+
   $("cadOpacitySlider")?.addEventListener("input", (e) => cad.setImageOpacity(e.target.value));
   $("cadFitImageBtn")?.addEventListener("click", () => {
     cad.resetImageTransform();
@@ -3277,6 +3441,47 @@ function attachEvents() {
   // Report Display hide toggles
   ["hidePayback", "hideAreaFit", "hideSubsidy", "hideCost", "hideFinancing", "solarInstalled"].forEach(id => {
     $(id)?.addEventListener("change", render);
+  });
+
+  // Proposal Panel Type selection & custom spec listeners
+  $("proposalPanelTypeSelect")?.addEventListener("change", (e) => {
+    const val = e.target.value;
+    if (val === "custom") {
+      state.isCustomPanelSpec = true;
+      if ($("proposalPanelSpecCustom")) {
+        $("proposalPanelSpecCustom").style.display = "inline-block";
+        $("proposalPanelSpecCustom").focus();
+        state.panelSpecCustom = $("proposalPanelSpecCustom").value || "";
+        state.panelSpec = state.panelSpecCustom || "Custom Tier-1 Solar Panels";
+      }
+    } else {
+      state.isCustomPanelSpec = false;
+      state.panelSpecCustom = "";
+      if ($("proposalPanelSpecCustom")) {
+        $("proposalPanelSpecCustom").style.display = "none";
+      }
+      if ($("panelType")) {
+        $("panelType").value = val;
+      }
+      const activeWp = state.estimates?.panelLayout?.panelWp || 550;
+      state.panelSpec = getPanelSpecificationText(val, "", activeWp);
+    }
+    if ($("warrantyPanelSpec")) {
+      $("warrantyPanelSpec").textContent = state.panelSpec;
+    }
+    render();
+  });
+
+  $("proposalPanelSpecCustom")?.addEventListener("input", (e) => {
+    state.panelSpecCustom = e.target.value;
+    state.panelSpec = e.target.value || "Custom Tier-1 Solar Panels";
+    if ($("warrantyPanelSpec")) {
+      $("warrantyPanelSpec").textContent = state.panelSpec;
+    }
+  });
+
+  $("proposalPanelSpecCustom")?.addEventListener("change", () => {
+    render();
   });
 
   // Payment & Financing sync listeners
@@ -4423,6 +4628,9 @@ function buildProposalSnapshot() {
     savingsMethod: $("savingsMethod")?.value || "marginal",
     goal: $("goal")?.value || "ongrid",
     panelType: $("panelType")?.value || "dcr",
+    panelSpec: state.panelSpec || "",
+    panelSpecCustom: state.panelSpecCustom || "",
+    isCustomPanelSpec: state.isCustomPanelSpec || false,
     subsidyCategory: $("subsidyCategory")?.value || "residential",
     structureType: $("structureType")?.value || "galvalume",
     selectedSystemIndex: state.selectedSystemIndex,
@@ -5259,6 +5467,12 @@ window.loadProposalState = function(data) {
     if (sData.sizing.breakupConfigMarginPct) state.breakupConfigMarginPct = sData.sizing.breakupConfigMarginPct;
     if (sData.sizing.savingsConfig) state.savingsConfig = sData.sizing.savingsConfig;
     if (sData.sizing.billConfig) state.billConfig = sData.sizing.billConfig;
+    if (sData.sizing.panelSpec !== undefined) state.panelSpec = sData.sizing.panelSpec;
+    if (sData.sizing.panelSpecCustom !== undefined) state.panelSpecCustom = sData.sizing.panelSpecCustom;
+    if (sData.sizing.isCustomPanelSpec !== undefined) state.isCustomPanelSpec = sData.sizing.isCustomPanelSpec;
+    if ($("warrantyPanelSpec") && state.panelSpec) {
+      $("warrantyPanelSpec").textContent = state.panelSpec;
+    }
   }
 
   // Report Display checkboxes & options unpacking

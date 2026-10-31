@@ -529,6 +529,24 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.ok(savingsTable.body.some(row => row[0] === "ToD Daytime Solar Generation Credit"), "Savings table must include ToD Daytime Solar Generation Credit");
   assert.ok(savingsTable.body.some(row => row[0] === "Prompt pay discount"), "Savings table must include Prompt pay discount");
 
+  // Verify Authentic MSEDCL Electricity Bill Comparison Side-by-Side Tables
+  const msebCurrentTable = mockCalls.find(c => c.head && c.head[0] && c.head[0][0].includes("Current MSEDCL Bill (Before Solar)"));
+  assert.ok(msebCurrentTable, "Current MSEDCL Bill (Before Solar) table must be generated in PDF");
+  assert.ok(msebCurrentTable.body.some(r => r[0] === "Demand Charges (Fixed)"), "Current MSEDCL bill table must include Demand Charges (Fixed)");
+  assert.ok(msebCurrentTable.body.some(r => r[0] === "Energy Charges"), "Current MSEDCL bill table must include Energy Charges");
+  assert.ok(msebCurrentTable.body.some(r => r[0].includes("Wheeling Charges")), "Current MSEDCL bill table must include Wheeling Charges");
+  assert.ok(msebCurrentTable.body.some(r => r[0].includes("Electricity Duty")), "Current MSEDCL bill table must include Electricity Duty");
+  assert.ok(msebCurrentTable.body.some(r => r[0] === "Net Bill Payable"), "Current MSEDCL bill table must include Net Bill Payable");
+
+  const msebPostSolarTable = mockCalls.find(c => c.head && c.head[0] && c.head[0][0].includes("With Rooftop Solar (After Solar)"));
+  assert.ok(msebPostSolarTable, "With Rooftop Solar (After Solar) table must be generated in PDF");
+  assert.ok(msebPostSolarTable.body.some(r => r[0] === "Solar Generation"), "Post-solar MSEDCL table must include Solar Generation");
+  assert.ok(msebPostSolarTable.body.some(r => r[0] === "Demand Charges (Fixed)"), "Post-solar MSEDCL table must retain Fixed Demand Charges");
+  assert.ok(msebPostSolarTable.body.some(r => r[0].includes("Energy Charges")), "Post-solar MSEDCL table must include Energy Charges offset");
+  assert.ok(msebPostSolarTable.body.some(r => r[0] === "Net Bill Payable"), "Post-solar MSEDCL table must include Net Bill Payable");
+  assert.ok(msebPostSolarTable.body.some(r => r[0] === "Net Monthly Savings"), "Post-solar MSEDCL table must include Net Monthly Savings");
+  assert.ok(msebPostSolarTable.body.some(r => r[0] === "Projected Annual Savings"), "Post-solar MSEDCL table must include Projected Annual Savings");
+
   // Verify updated cost breakdown text labels
   const costTable = mockCalls.find(c => c.body && c.body.some(row => row[0] && row[0].includes("Total System Cost")));
   assert.ok(costTable, "Cost breakdown table must be generated in PDF");
@@ -559,6 +577,19 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.ok(allTexts.some(t => String(t).includes("Loan EMI vs Current Bill Substitution")), "Loan EMI vs Current Bill Substitution bullet must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("Save Upfront Cash & Invest in Business (Opportunity Cost)")), "Save Upfront Cash & Invest in Business bullet must be rendered");
   assert.ok(allTexts.some(t => String(t).includes("electricity bill payments (current bill) will make the solar system 100% free in just")), "Bill-to-EMI substitution text must be rendered");
+}
+
+// Verify Panel Type and Specification helper
+{
+  const { getPanelSpecificationText } = await import("../src/config.js");
+  assert.equal(getPanelSpecificationText("dcr", null, 550), "Tier-1 DCR Mono PERC / TOPCon (550 Wp)");
+  assert.equal(getPanelSpecificationText("nonDcr", null, 550), "Tier-1 Non-DCR Mono PERC (550 Wp)");
+  assert.equal(getPanelSpecificationText("dcr_bifacial", null, 550), "Tier-1 DCR Mono Bifacial Glass-to-Glass (550 Wp)");
+  assert.equal(getPanelSpecificationText("mono_bifacial", null, 550), "Tier-1 Mono Bifacial (Non-DCR, 550 Wp)");
+  assert.equal(getPanelSpecificationText("topcon_bifacial", null, 550), "Tier-1 N-Type TOPCon Bifacial (Non-DCR, 550 Wp)");
+  assert.equal(getPanelSpecificationText("dcr_topcon", null, 550), "Tier-1 DCR N-Type TOPCon Bifacial (550 Wp)");
+  assert.equal(getPanelSpecificationText("poly", null, 335), "Tier-1 Multi-Crystalline / Polycrystalline (335 Wp)");
+  assert.equal(getPanelSpecificationText("dcr", "Waaree 545Wp Bifacial DCR", 550), "Waaree 545Wp Bifacial DCR");
 }
 
 console.log("calculator tests passed");
