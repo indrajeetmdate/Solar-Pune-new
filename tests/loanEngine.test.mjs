@@ -79,4 +79,46 @@ import {
   assert.equal(fin.monthlyEmi, 4000);
 }
 
-console.log("loanEngine tests passed successfully!");
+// Test 7: Dynamic Down Payment Percentage (0%, 10%, 20%, 30%)
+{
+  // 10% Down Payment
+  const fin10 = calculateSolarFinancing({
+    netCost: 200000,
+    monthlyBill: 5000,
+    monthlySavings: 4800,
+    paymentMode: "loan",
+    downPaymentPct: 10,
+    interestRatePct: 7,
+  });
+  assert.equal(fin10.downPayment, 20000);
+  assert.equal(fin10.principal, 180000);
+  assert.equal(fin10.downPaymentPct, 10);
+
+  // 20% Down Payment
+  const fin20 = calculateSolarFinancing({
+    netCost: 200000,
+    monthlyBill: 5000,
+    monthlySavings: 4800,
+    paymentMode: "loan",
+    downPaymentPct: 20,
+    interestRatePct: 7,
+  });
+  assert.equal(fin20.downPayment, 40000);
+  assert.equal(fin20.principal, 160000);
+  assert.equal(fin20.downPaymentPct, 20);
+
+  // 0% Down Payment
+  const fin0 = calculateSolarFinancing({
+    netCost: 200000,
+    monthlyBill: 5000,
+    monthlySavings: 4800,
+    paymentMode: "loan",
+    downPaymentPct: 0,
+    interestRatePct: 7,
+  });
+  assert.equal(fin0.downPayment, 0);
+  assert.equal(fin0.principal, 200000);
+  assert.equal(fin0.downPaymentPct, 0);
+}
+
+console.log("loanEngine tests passed successfully! 🎉");

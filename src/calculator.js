@@ -816,7 +816,13 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       lifetimeSavings: calculateLifetimeSavings(annualSavings, config),
       paymentMode: input?.paymentMode || config.financing?.defaultPaymentMode || "upfront",
       loanAmountOverride: input?.loanAmount,
-      downPaymentPct: (input?.paymentMode === "loan") ? (Number(input?.loanDownPaymentPct) >= 0 ? Number(input?.loanDownPaymentPct) : 10) : 0,
+      downPaymentPct: (input?.paymentMode === "loan")
+        ? ((input?.loanDownPaymentPct !== undefined && input?.loanDownPaymentPct !== null && !isNaN(input?.loanDownPaymentPct) && Number(input?.loanDownPaymentPct) >= 0)
+            ? Number(input?.loanDownPaymentPct)
+            : 10)
+        : ((input?.loanDownPaymentPct !== undefined && input?.loanDownPaymentPct !== null && !isNaN(input?.loanDownPaymentPct) && Number(input?.loanDownPaymentPct) >= 0)
+            ? Number(input?.loanDownPaymentPct)
+            : 0),
       downPaymentOverride: input?.loanDownPayment,
       interestRatePct: input?.loanInterestRate ?? config.financing?.defaultInterestRatePct ?? 7,
       loanMonthlyEmiOverride: input?.loanMonthlyEmi,

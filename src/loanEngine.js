@@ -179,7 +179,7 @@ export function calculateSolarFinancing({
   } else if (downPaymentOverride !== null && downPaymentOverride !== undefined && !isNaN(downPaymentOverride) && Number(downPaymentOverride) >= 0) {
     downPayment = Math.round(Number(downPaymentOverride));
     loanPrincipal = Math.max(0, cleanNetCost - downPayment);
-  } else if (downPaymentPct !== null && downPaymentPct !== undefined && !isNaN(downPaymentPct) && Number(downPaymentPct) > 0) {
+  } else if (downPaymentPct !== null && downPaymentPct !== undefined && !isNaN(downPaymentPct) && Number(downPaymentPct) >= 0) {
     downPayment = Math.round(cleanNetCost * (Number(downPaymentPct) / 100));
     loanPrincipal = Math.max(0, cleanNetCost - downPayment);
   } else {
@@ -246,10 +246,15 @@ export function calculateSolarFinancing({
     ? `${tenureYears} yrs (${tenureMonths} mos)` 
     : `${tenureMonths} mos`;
 
+  const effectiveDownPaymentPct = (downPaymentPct !== null && downPaymentPct !== undefined && !isNaN(downPaymentPct) && Number(downPaymentPct) >= 0)
+    ? Number(downPaymentPct)
+    : (cleanNetCost > 0 ? Math.round((downPayment / cleanNetCost) * 100) : 0);
+
   return {
     paymentMode, // 'upfront' | 'loan'
     principal: loanPrincipal,
     downPayment,
+    downPaymentPct: effectiveDownPaymentPct,
     interestRatePct: cleanRate,
     monthlyEmi,
     targetBillAmount: cleanMonthlyBill,

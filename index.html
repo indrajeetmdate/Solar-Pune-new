@@ -42,25 +42,17 @@
             </div>
           </div>
 
-          <!-- Category Navigation Pills (Preserved for internal mode / test compatibility) -->
+          <!-- Category Navigation Pills (Preserved for internal rates unlock / test compatibility) -->
           <nav class="sidebar-nav-pills" id="sidebarNavPills" aria-label="Input categories" style="display: none;">
-            <button class="sidebar-pill-btn active" data-cat="contact" type="button" title="Customer basics">👤 Contact</button>
-            <button class="sidebar-pill-btn" data-cat="energy" type="button" title="Energy & Bill">⚡ Energy</button>
-            <button class="sidebar-pill-btn" data-cat="roof" type="button" title="Roof & Site">📐 Roof</button>
-            <button class="sidebar-pill-btn" data-cat="sizing" type="button" title="Solar Tech & Sizing">⚙️ Sizing</button>
-            <button class="sidebar-pill-btn" data-cat="financing" type="button" title="Payment & Loan">🏦 Loan</button>
             <button class="sidebar-pill-btn" data-cat="rates" id="ratesPillBtn" type="button" title="Pricing & Tariffs (Internal)" style="display: none;">🔧 Rates</button>
           </nav>
         </div>
 
         <!-- Collapsed Icon Rail (shown when sidebar is collapsed) -->
         <div class="sidebar-rail" id="sidebarRail" style="display: none;">
-          <button class="rail-icon-btn active" data-cat="contact" title="Customer Contact">👤</button>
-          <button class="rail-icon-btn" data-cat="energy" title="Energy & Bill">⚡</button>
-          <button class="rail-icon-btn" data-cat="roof" title="Roof & Site">📐</button>
-          <button class="rail-icon-btn" data-cat="sizing" title="Solar Tech & Sizing">⚙️</button>
-          <button class="rail-icon-btn" data-cat="financing" title="Payment & Loan">🏦</button>
-          <button class="rail-icon-btn" data-cat="rates" id="ratesRailBtn" title="Pricing & Tariffs" style="display: none;">🔧</button>
+          <button class="rail-icon-btn active" id="railRequiredBtn" data-cat="contact" title="1. Required Fields">1️⃣</button>
+          <button class="rail-icon-btn" id="railNotRequiredBtn" title="2. Not Required Fields">2️⃣</button>
+          <button class="rail-icon-btn" data-cat="rates" id="ratesRailBtn" title="Pricing & Tariffs (Internal)" style="display: none;">🔧</button>
           <div style="flex: 1;"></div>
           <button class="rail-icon-btn expand-btn" id="expandSidebarBtn" title="Expand Sidebar">▶</button>
         </div>
@@ -119,8 +111,16 @@
               <p id="billExtractWarnings" class="muted small" style="margin-top: 4px; font-size: 10px;"></p>
             </div>
 
-            <!-- 15 REQUIRED FIELDS (HIGH-DENSITY 2-COLUMN GRID) -->
-            <div class="sidebar-compact-grid">
+            <!-- 1. REQUIRED FIELDS GROUP -->
+            <div class="sidebar-group-card required-group-card" id="requiredFieldsGroup">
+              <div class="sidebar-group-header required-header">
+                <span class="group-badge">1</span>
+                <span class="group-title">1. Required Fields</span>
+                <span class="group-subtitle">Proposal Essentials</span>
+              </div>
+              <div class="sidebar-group-body" style="padding: 6px 8px;">
+                <!-- 15 REQUIRED FIELDS (HIGH-DENSITY 2-COLUMN GRID) -->
+                <div class="sidebar-compact-grid">
               <!-- Row 1: Customer Name & Sanction Load -->
               <label class="field compact">
                 <span>Customer name *</span>
@@ -274,12 +274,19 @@
                 </label>
               </div>
             </div>
+          </div>
+        </div>
 
+        <!-- 2. NOT REQUIRED FIELDS GROUP -->
+        <div class="sidebar-group-card not-required-group-card" id="notRequiredFieldsGroup" style="margin-top: 8px;">
+          <div class="sidebar-group-header not-required-header">
+            <span class="group-badge not-required-badge">2</span>
+            <span class="group-title">2. Not Required Fields</span>
+            <span class="group-subtitle">Capacity Overrides & More</span>
+          </div>
+          <div class="sidebar-group-body" style="padding: 6px 8px;">
             <!-- ADDITIONAL IMPORTANT BUT NOT REQUIRED FIELDS (Just below required fields) -->
-            <div class="sidebar-compact-grid" style="margin-top: 5px; padding: 5px 8px; background: #fafafa; border: 1px solid #e2e8f0; border-radius: 6px;">
-              <div style="grid-column: 1 / -1; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 2px;">
-                Additional Capacity Controls (Optional)
-              </div>
+            <div class="sidebar-compact-grid" style="padding: 5px 8px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 6px;">
               <label class="field compact">
                 <span>Solar capacity (kWp)</span>
                 <input id="capacityOverride" type="number" min="0" step="0.1" placeholder="Auto">
@@ -461,6 +468,8 @@
               </div>
             </details>
           </div>
+        </div>
+      </div>
 
           <!-- CATEGORY 6: RATES & TARIFFS (INTERNAL ONLY) -->
           <div class="cat-section" id="catSectionRates" data-cat="rates" style="display: none;">

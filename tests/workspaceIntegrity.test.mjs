@@ -148,9 +148,50 @@ for (const fId of requiredFieldIds) {
   assert.ok(leftPanel.contains(el), `Field #${fId} must be located inside the left side panel`);
 }
 
+// Check Left Panel grouping: 1. Required Fields and 2. Not Required Fields
+const reqGroup = document.getElementById("requiredFieldsGroup");
+const notReqGroup = document.getElementById("notRequiredFieldsGroup");
+assert.ok(reqGroup, "#requiredFieldsGroup must exist on left side panel");
+assert.ok(notReqGroup, "#notRequiredFieldsGroup must exist on left side panel");
+assert.ok(reqGroup.textContent.includes("1. Required Fields"), "Required fields group must be clearly titled '1. Required Fields'");
+assert.ok(notReqGroup.textContent.includes("2. Not Required Fields"), "Not required fields group must be clearly titled '2. Not Required Fields'");
+assert.ok(reqGroup.contains(document.getElementById("customerName")), "Customer name must be in Required Fields group");
+assert.ok(reqGroup.contains(document.getElementById("paymentMode")), "Payment Mode must be in Required Fields group");
+assert.ok(notReqGroup.contains(document.getElementById("capacityOverride")), "Solar capacity override must be in Not Required Fields group");
+assert.ok(notReqGroup.contains(document.getElementById("inverterOverride")), "Inverter capacity override must be in Not Required Fields group");
+
 // Check loan default values
 assert.equal(document.getElementById("loanInterestRate")?.value, "7", "Bank interest default must be 7%");
 assert.equal(document.getElementById("loanDownPaymentPct")?.value, "10", "Upfront customer payment default must be 10%");
+
+// Test Loan Upfront Payment Percentage changes reflect dynamically in Option B
+const paymentModeSelect = document.getElementById("paymentMode");
+const loanDownPaymentPctInput = document.getElementById("loanDownPaymentPct");
+const loanBreakdownContainer = document.getElementById("financingBreakdownContent");
+
+// Switch to Loan Mode
+paymentModeSelect.value = "loan";
+paymentModeSelect.dispatchEvent(new window.Event("change", { bubbles: true }));
+
+// Test 20% down payment
+loanDownPaymentPctInput.value = "20";
+loanDownPaymentPctInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+const loanHtml20 = loanBreakdownContainer.innerHTML;
+assert.ok(loanHtml20.includes("(20%)"), "Option B table must show (20%) for Upfront Customer Payment");
+assert.ok(loanHtml20.includes("39,065"), "Option B table must reflect calculated 20% down payment amount (Rs 39,065)");
+
+// Test 0% down payment (Zero Down Payment)
+loanDownPaymentPctInput.value = "0";
+loanDownPaymentPctInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+const loanHtml0 = loanBreakdownContainer.innerHTML;
+assert.ok(loanHtml0.includes("(0%)"), "Option B table must show (0%) for Upfront Customer Payment");
+assert.ok(loanHtml0.includes("Rs 0") || loanHtml0.includes("₹0"), "Option B table must show 0 down payment when 0% is selected");
+
+// Reset back to 10%
+loanDownPaymentPctInput.value = "10";
+loanDownPaymentPctInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+paymentModeSelect.value = "upfront";
+paymentModeSelect.dispatchEvent(new window.Event("change", { bubbles: true }));
 
 // Check 2 Additional Important Fields (Solar Capacity and Inverter Capacity)
 const capOverride = document.getElementById("capacityOverride");

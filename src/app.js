@@ -319,7 +319,11 @@ function readInput() {
     loanInterestRate: state.internalUnlocked
       ? (numberValue("internalLoanInterestRate") || numberValue("loanInterestRate") || 7)
       : (numberValue("loanInterestRate") || 7),
-    loanDownPaymentPct: numberValue("loanDownPaymentPct") || 10,
+    loanDownPaymentPct: (() => {
+      const el = $("loanDownPaymentPct");
+      const val = el ? parseFloat(el.value) : NaN;
+      return Number.isFinite(val) ? val : 10;
+    })(),
     loanMonthlyEmi: state.internalUnlocked
       ? (numberValue("internalLoanMonthlyEmi") || numberValue("loanMonthlyEmi"))
       : numberValue("loanMonthlyEmi"),
@@ -789,6 +793,10 @@ function renderFinancing(option, input) {
   if (custPreview) {
     custPreview.textContent = `${fin.tenureFormatted} (at ${money(fin.monthlyEmi)}/mo)`;
   }
+  const custLivePreview = $("customerLoanLivePreview");
+  if (custLivePreview) {
+    custLivePreview.innerHTML = `<span>✨ Upfront: <strong>${money(fin.downPayment)} (${fin.downPaymentPct}%)</strong> | EMI: <strong>${money(fin.monthlyEmi)}/mo</strong> → System free in <strong id="customerLoanTenurePreview">${fin.tenureFormatted}</strong>!</span>`;
+  }
 
   // Value proposition hero box
   let html = `
@@ -815,7 +823,7 @@ function renderFinancing(option, input) {
     </thead>
     <tbody>
       <tr style="border-bottom: 1px solid var(--line);">
-        <td style="padding: 6px 8px;">Upfront Customer Payment</td>
+        <td style="padding: 6px 8px;">Upfront Customer Payment (${fin.downPaymentPct}%)</td>
         <td style="text-align: right; padding: 6px 8px; font-weight: 600;">${money(fin.totalPreSubsidy)}</td>
         <td style="text-align: right; padding: 6px 8px; font-weight: 600; color: var(--brand-green);">${money(fin.downPayment)}</td>
       </tr>
@@ -3206,7 +3214,7 @@ function toggleSidebar(collapsed) {
   if (sidebar) sidebar.classList.toggle("collapsed", shouldCollapse);
   if (rail) rail.style.display = shouldCollapse ? "flex" : "none";
   if (body) body.style.display = shouldCollapse ? "none" : "block";
-  if (headerPills) headerPills.style.display = shouldCollapse ? "none" : "flex";
+  if (headerPills) headerPills.style.display = "none";
   
   const cad = getActiveRooftopCAD();
   if (cad) {
@@ -3491,10 +3499,10 @@ function attachEvents() {
     $("customerLoanFields")?.classList.toggle("hidden", !isLoan);
     if ($("internalPaymentMode")) $("internalPaymentMode").value = e.target.value;
     if (isLoan) {
-      if ($("loanInterestRate") && (!Number($("loanInterestRate").value) || Number($("loanInterestRate").value) <= 0)) {
+      if ($("loanInterestRate") && ($("loanInterestRate").value === "" || isNaN(parseFloat($("loanInterestRate").value)))) {
         $("loanInterestRate").value = "7";
       }
-      if ($("loanDownPaymentPct") && (!Number($("loanDownPaymentPct").value) || Number($("loanDownPaymentPct").value) <= 0)) {
+      if ($("loanDownPaymentPct") && ($("loanDownPaymentPct").value === "" || isNaN(parseFloat($("loanDownPaymentPct").value)))) {
         $("loanDownPaymentPct").value = "10";
       }
     }
@@ -3506,10 +3514,10 @@ function attachEvents() {
       $("paymentMode").value = e.target.value;
       $("customerLoanFields")?.classList.toggle("hidden", !isLoan);
       if (isLoan) {
-        if ($("loanInterestRate") && (!Number($("loanInterestRate").value) || Number($("loanInterestRate").value) <= 0)) {
+        if ($("loanInterestRate") && ($("loanInterestRate").value === "" || isNaN(parseFloat($("loanInterestRate").value)))) {
           $("loanInterestRate").value = "7";
         }
-        if ($("loanDownPaymentPct") && (!Number($("loanDownPaymentPct").value) || Number($("loanDownPaymentPct").value) <= 0)) {
+        if ($("loanDownPaymentPct") && ($("loanDownPaymentPct").value === "" || isNaN(parseFloat($("loanDownPaymentPct").value)))) {
           $("loanDownPaymentPct").value = "10";
         }
       }
@@ -3525,6 +3533,8 @@ function attachEvents() {
     render();
   });
   $("loanDownPaymentPct")?.addEventListener("input", () => {
+    if ($("loanAmount")) $("loanAmount").value = "";
+    if ($("internalLoanAmount")) $("internalLoanAmount").value = "";
     render();
   });
   $("loanAmount")?.addEventListener("input", (e) => {
@@ -4167,6 +4177,19 @@ function attachEvents() {
   $("toggleSidebarBtn")?.addEventListener("click", () => toggleSidebar());
   $("collapseSidebarBtn")?.addEventListener("click", () => toggleSidebar(true));
   $("expandSidebarBtn")?.addEventListener("click", () => toggleSidebar(false));
+  $("railRequiredBtn")?.addEventListener("click", () => {
+    toggleSidebar(false);
+    setTimeout(() => {
+      $("customerName")?.focus();
+    }, 100);
+  });
+  $("railNotRequiredBtn")?.addEventListener("click", () => {
+    toggleSidebar(false);
+    setTimeout(() => {
+      $("notRequiredFieldsGroup")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      $("capacityOverride")?.focus();
+    }, 100);
+  });
 
   window.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
@@ -4534,6 +4557,9 @@ function applyBreakupConfig(estimate, input, config = readConfig()) {
 
     if (option.financing) {
       const effBill = input.monthlyBill > 0 ? input.monthlyBill : (option.currentBillBreakdown?.total || 0);
+      const dpPct = (input.loanDownPaymentPct !== undefined && input.loanDownPaymentPct !== null && !isNaN(input.loanDownPaymentPct) && Number(input.loanDownPaymentPct) >= 0)
+        ? Number(input.loanDownPaymentPct)
+        : 10;
       option.financing = calculateSolarFinancing({
         netCost: option.netCost,
         totalPreSubsidy: option.totalPreSubsidy,
@@ -4543,7 +4569,11 @@ function applyBreakupConfig(estimate, input, config = readConfig()) {
         lifetimeSavings: option.lifetimeSavings,
         paymentMode: input.paymentMode || "upfront",
         loanAmountOverride: input.loanAmount,
-        interestRatePct: input.loanInterestRate ?? 9.5,
+        downPaymentPct: dpPct,
+        downPaymentOverride: input.loanDownPayment,
+        interestRatePct: (input.loanInterestRate !== undefined && input.loanInterestRate !== null && !isNaN(input.loanInterestRate))
+          ? Number(input.loanInterestRate)
+          : (config?.financing?.defaultInterestRatePct ?? 7),
         loanMonthlyEmiOverride: input.loanMonthlyEmi,
         loanTenureMonthsOverride: input.loanTenureMonths,
       });
