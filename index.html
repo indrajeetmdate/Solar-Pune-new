@@ -687,14 +687,87 @@
             </div>
 
             <div class="cad-panel-container">
-              <!-- COMPACT TOP BORDER TOOLBAR (Mouse-icon sized buttons ~30px with tooltips) -->
+              <!-- STREAMLINED TOP BORDER TOOLBAR (Required Actions as Text Buttons) -->
               <div class="cad-top-bar" id="cadTopBar">
-                <!-- View Switcher -->
+                <!-- 1. Upload Image (Required Text Button) -->
+                <label for="cadImageInput" class="cad-text-btn" id="cadUploadImageBtn" title="Upload Aerial Roof / Site Image">
+                  <span>🖼️</span> <span>Upload Image</span>
+                  <input type="file" id="cadImageInput" accept="image/*" style="display: none;">
+                </label>
+
+                <!-- 2. Select Tool (Required Text Button) -->
+                <button type="button" class="cad-text-btn active" id="cadToolSelectBtn" data-tool="select" title="Select / Marquee Drag / Move [V]">
+                  <span>↖️</span> <span>Select Tool</span>
+                </button>
+
+                <!-- 3. Cutout options with shapes (Required Text Button & Subgroup) -->
+                <div class="cad-cutout-group" id="cadCutoutShapePicker" title="Cutout Obstacle Options & Shapes">
+                  <button type="button" class="cad-text-btn" id="cadToolSubtractBtn" data-tool="subtract" title="Cutout Obstacle (Red Zone)">
+                    <span>➖</span> <span>Cutout</span>
+                  </button>
+                  <div class="cad-shape-subgroup">
+                    <button type="button" class="cad-text-btn active" id="cadShapeRectBtn" data-shape="rectangle" title="Rectangle Cutout">▭ Rect</button>
+                    <button type="button" class="cad-text-btn" id="cadShapeCircleBtn" data-shape="circle" title="Round / Circle Water Tank">⚪ Circle</button>
+                    <button type="button" class="cad-text-btn" id="cadShapeLBtn" data-shape="l_shape" title="L-Shape Obstacle">⌐ L-Shape</button>
+                  </div>
+                </div>
+
+                <!-- 4. Walkway (Required Text Button) -->
+                <button type="button" class="cad-text-btn" id="cadToolPathwayBtn" data-tool="pathway" title="Draw Maintenance Walkway (Corridor)">
+                  <span>🚶</span> <span>Walkway</span>
+                </button>
+
+                <!-- 5. Autofill Panel (Required Text Button) -->
+                <button type="button" class="cad-text-btn primary" id="cadAutoPlaceBtn" title="Auto-Fill Remaining Panels from Latent Pool">
+                  <span>⚡</span> <span>Autofill Panels</span>
+                </button>
+
+                <!-- 6. Reset All Panels (Required Text Button) -->
+                <button type="button" class="cad-text-btn danger" id="cadClearPanelsBtn" title="Reset All Panels back to Latent Pool">
+                  <span>↺</span> <span>Reset All Panels</span>
+                </button>
+
+                <!-- 7. Delete Selected (Required Text Button) -->
+                <button type="button" class="cad-text-btn danger" id="cadDeleteSelectedBtn" title="Delete Selected Objects [Del] / Return Panels to Latent Pool">
+                  <span>🗑️</span> <span>Delete Selected</span>
+                </button>
+
+                <!-- More Tools Toggle (Minimizes rarely used tools) -->
+                <button type="button" class="cad-text-btn ghost" id="cadToggleMoreToolsBtn" title="Toggle More CAD Tools & Projection Controls">
+                  <span>⚙️</span> <span>More Tools ▾</span>
+                </button>
+
+                <!-- Right-aligned Toggles & Status -->
+                <div class="cad-btn-group cad-bar-right" style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
+                  <div class="cad-compact-pill" id="cadInventoryPill" title="Latent Pool Inventory">
+                    <span>📦</span>
+                    <strong id="cadInventoryCount">0 / 12 Placed (12 Remaining)</strong>
+                  </div>
+                  <!-- PDF Report Inclusion Quick Toggle -->
+                  <button type="button" class="cad-icon-btn active" id="cadTogglePdfReportBtn" title="Include CAD Layout in PDF Proposal (Currently Included)" data-tooltip="PDF Report: Included">📄</button>
+                  <button type="button" class="cad-text-btn active" id="cadToggleLayersBtn" title="Layers & Components Panel [L]">
+                    <span>📚</span> <span>Layers</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- COLLAPSIBLE MINIMISED / SECONDARY TOOLS DRAWER -->
+              <div class="cad-drawer" id="cadMoreToolsDrawer" style="display: none; align-items: center; gap: 6px; flex-wrap: wrap; background: #0b1329;">
+                <!-- Projection Views -->
                 <div class="cad-btn-group" title="Projection Views">
+                  <span style="font-size: 10px; color: #94a3b8; font-weight: 700;">VIEW:</span>
                   <button type="button" class="cad-icon-btn active" id="cadViewTopBtn" data-view="top" title="Top Down Plan View (📐)">📐</button>
                   <button type="button" class="cad-icon-btn" id="cadViewFrontBtn" data-view="front" title="Front Elevation View (🏢)">🏢</button>
                   <button type="button" class="cad-icon-btn" id="cadViewSideBtn" data-view="side" title="Side Elevation View (🏛️)">🏛️</button>
                 </div>
+
+                <div id="cadElevationBldgHeightGroup" class="cad-input-group" style="display: none; align-items: center; gap: 4px; padding: 0 6px; background: rgba(30, 41, 59, 0.7); border: 1px solid #334155; border-radius: 4px; height: 28px;" title="Adjust Building Height (Front & Side Elevation)">
+                  <label for="cadElevationBldgHeightInput" style="font-size: 11px; font-weight: 700; color: #38bdf8; cursor: pointer;">🏢 Bldg H:</label>
+                  <input type="number" id="cadElevationBldgHeightInput" value="18" min="5" max="150" step="1" style="width: 46px; height: 20px; padding: 1px 3px; font-size: 11px; background: #0f172a; border: 1px solid #475569; color: #f8fafc; border-radius: 3px; text-align: center;">
+                  <span style="font-size: 10.5px; color: #94a3b8;">ft</span>
+                </div>
+
+                <div class="cad-bar-divider"></div>
 
                 <!-- Viewport Navigation (Zoom & Total Grid Pan) -->
                 <div class="cad-btn-group" title="Canvas Viewport Navigation" style="display: inline-flex; align-items: center; gap: 2px;">
@@ -710,48 +783,23 @@
                   </div>
                 </div>
 
-                <div id="cadElevationBldgHeightGroup" class="cad-input-group" style="display: none; align-items: center; gap: 4px; padding: 0 6px; background: rgba(30, 41, 59, 0.7); border: 1px solid #334155; border-radius: 4px; height: 28px;" title="Adjust Building Height (Front & Side Elevation)">
-                  <label for="cadElevationBldgHeightInput" style="font-size: 11px; font-weight: 700; color: #38bdf8; cursor: pointer;">🏢 Bldg H:</label>
-                  <input type="number" id="cadElevationBldgHeightInput" value="18" min="5" max="150" step="1" style="width: 46px; height: 20px; padding: 1px 3px; font-size: 11px; background: #0f172a; border: 1px solid #475569; color: #f8fafc; border-radius: 3px; text-align: center;">
-                  <span style="font-size: 10.5px; color: #94a3b8;">ft</span>
-                </div>
-
                 <div class="cad-bar-divider"></div>
 
-                <!-- Primary Tools -->
-                <div class="cad-btn-group" title="Drawing Tools">
-                  <button type="button" class="cad-icon-btn active" id="cadToolSelectBtn" data-tool="select" title="Select / Marquee Drag / Move (↖️) [V]">↖️</button>
+                <!-- Secondary Drawing Tools -->
+                <div class="cad-btn-group" title="Secondary Drawing Tools">
                   <button type="button" class="cad-icon-btn" id="cadToolRoofBtn" data-tool="roof" title="Draw Base Roof Rectangle (📐)">📐</button>
-                  <div class="cad-shape-picker" id="cadCutoutShapePicker" style="display: inline-flex; gap: 2px;">
-                    <button type="button" class="cad-icon-btn" id="cadToolSubtractBtn" data-tool="subtract" title="Cutout Obstacle (Red Zone)">➖</button>
-                    <button type="button" class="cad-icon-btn active" id="cadShapeRectBtn" data-shape="rectangle" title="Rectangle Cutout">▭</button>
-                    <button type="button" class="cad-icon-btn" id="cadShapeCircleBtn" data-shape="circle" title="Round Obstacle / Water Tank">⚪</button>
-                    <button type="button" class="cad-icon-btn" id="cadShapeLBtn" data-shape="l_shape" title="L-Shape Obstacle">⌐</button>
-                  </div>
-                  <button type="button" class="cad-icon-btn" id="cadToolPathwayBtn" data-tool="pathway" title="Draw Maintenance Walkway (🚶)">🚶</button>
                   <button type="button" class="cad-icon-btn" id="cadToolPanelBtn" data-tool="panel" title="Move & Snap Panels (☀️)">☀️</button>
                   <button type="button" class="cad-icon-btn" id="cadToolPanBtn" data-tool="image_pan" title="Pan Entire Drawing (✋) [Space+Drag or Middle Click]">✋</button>
                 </div>
 
-                <div class="cad-bar-divider"></div>
-
-                <!-- Multi-Select & Bulk Actions -->
-                <div class="cad-btn-group" title="Bulk Selection Actions">
+                <!-- Secondary Placement & Bulk Actions -->
+                <div class="cad-btn-group" title="Placement Extras & Transform">
+                  <button type="button" class="cad-icon-btn" id="cadAddSinglePanelBtn" title="Place 1 Panel from Latent Pool">+1</button>
+                  <button type="button" class="cad-icon-btn" id="cadAddBlockBtn" title="Place 2×2 Block from Latent Pool">⊞</button>
+                  <button type="button" class="cad-icon-btn" id="cadAddHorizPathwayBtn" title="Add Central Maintenance Corridor">🛣️</button>
                   <button type="button" class="cad-icon-btn" id="cadRotateSelectedBtn" title="Rotate Selected 90° [R]">🔄</button>
                   <button type="button" class="cad-icon-btn" id="cadScaleUpSelectedBtn" title="Scale Up Selected [+ / =]">🔍⁺</button>
                   <button type="button" class="cad-icon-btn" id="cadScaleDownSelectedBtn" title="Scale Down Selected [- / _]">🔍⁻</button>
-                  <button type="button" class="cad-icon-btn" id="cadDeleteSelectedBtn" title="Delete Selected [Del] / Return Panels to Latent" style="color: #f87171;">🗑️</button>
-                </div>
-
-                <div class="cad-bar-divider"></div>
-
-                <!-- Latent Panel Pool Placement -->
-                <div class="cad-btn-group" title="Panel Placement from Latent Pool">
-                  <button type="button" class="cad-icon-btn" id="cadAddSinglePanelBtn" title="Place 1 Panel from Latent Pool">+1</button>
-                  <button type="button" class="cad-icon-btn" id="cadAddBlockBtn" title="Place 2×2 Block from Latent Pool">⊞</button>
-                  <button type="button" class="cad-icon-btn" id="cadAutoPlaceBtn" title="Auto-Fill Remaining Panels from Latent Pool" style="color: #38bdf8; border-color: #0284c7;">⚡</button>
-                  <button type="button" class="cad-icon-btn" id="cadAddHorizPathwayBtn" title="Add Central Maintenance Corridor">🛣️</button>
-                  <button type="button" class="cad-icon-btn" id="cadClearPanelsBtn" title="Reset All Panels back to Latent Pool" style="color: #fca5a5;">↺</button>
                 </div>
 
                 <div class="cad-bar-divider"></div>
@@ -765,21 +813,18 @@
                   <button type="button" class="cad-icon-btn" id="cadClearObstaclesBtn" title="Clear External Obstacles" style="color: #f87171;">✕</button>
                 </div>
 
-                <!-- Right-aligned Toggles for Minimizable Detail Drawers -->
-                <div class="cad-btn-group cad-bar-right" style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-                  <div class="cad-compact-pill" id="cadInventoryPill" title="Latent Pool Inventory">
-                    <span>📦</span>
-                    <strong id="cadInventoryCount">0 / 12 Placed (12 Remaining)</strong>
-                  </div>
-                  <!-- PDF Report Inclusion Quick Toggle -->
-                  <button type="button" class="cad-icon-btn active" id="cadTogglePdfReportBtn" title="Include CAD Layout in PDF Proposal (Currently Included)" data-tooltip="PDF Report: Included">📄</button>
+                <div class="cad-bar-divider"></div>
+
+                <!-- Detail Panel Drawer Toggles -->
+                <div class="cad-btn-group" title="Advanced Tool Drawers">
                   <button type="button" class="cad-icon-btn" id="cadToggleNorthDrawerBtn" title="Compass & North Alignment">🧭</button>
                   <button type="button" class="cad-icon-btn" id="cadToggleSunDrawerBtn" title="Sun Path & Shadow Simulation">☀️</button>
                   <button type="button" class="cad-icon-btn" id="cadToggleRoofDrawerBtn" title="Roof & Walkway Dimensions">📏</button>
-                  <button type="button" class="cad-icon-btn" id="cadToggleImageDrawerBtn" title="Import Aerial / Roof Image">🖼️</button>
+                  <button type="button" class="cad-icon-btn" id="cadToggleImageDrawerBtn" title="Image Settings & Transform">🖼️</button>
                   <button type="button" class="cad-icon-btn" id="cadToggleGridPanBtn" title="Total Grid Pan & Coordinate Sliders [🎛️]">🎛️</button>
-                  <button type="button" class="cad-icon-btn active" id="cadToggleLayersBtn" title="Layers & Components Panel [L]">📚</button>
                 </div>
+
+                <button type="button" class="cad-drawer-close" data-close="cadMoreToolsDrawer" title="Close More Tools">✕</button>
               </div>
 
               <!-- COLLAPSIBLE DETAIL DRAWERS -->
@@ -875,9 +920,8 @@
 
               <!-- 4. Image Drawer -->
               <div class="cad-drawer" id="cadImageDrawer" style="display: none;">
-                <label class="cad-btn-mini" style="cursor: pointer; color: var(--primary-green, #16a34a); font-weight: 600;">
-                  🖼️ Upload Image
-                  <input type="file" id="cadImageInput" accept="image/*" style="display: none;">
+                <label for="cadImageInput" class="cad-btn-mini" style="cursor: pointer; color: var(--primary-green, #16a34a); font-weight: 600;">
+                  🖼️ Re-upload Image
                 </label>
                 <div id="cadImageControls" style="display: none; align-items: center; gap: 6px; flex-wrap: wrap;">
                   <button type="button" class="cad-btn-mini" id="cadLockImageBtn" title="Toggle Image Lock (prevents accidental zoom/pan)" style="color: #38bdf8; font-weight: 600;">🔒 Locked</button>
@@ -1012,16 +1056,16 @@
                   </div>
                 </div>
 
-                <!-- SLIM DOCKED RIGHT BORDER LAYERS & COMPONENTS PANEL (Width: ~210px) -->
+                <!-- SLIM DOCKED RIGHT BORDER LAYERS & COMPONENTS PANEL (Compact & Vertically Short) -->
                 <aside class="cad-layers-panel" id="cadLayersPanel">
                   <div class="cad-layers-header">
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                      <span style="font-size: 12px;">📚</span>
-                      <strong style="font-size: 11.5px; color: #f8fafc;">Layers</strong>
-                    </div>
                     <div style="display: flex; align-items: center; gap: 4px;">
+                      <span style="font-size: 11px;">📚</span>
+                      <strong style="font-size: 11px; color: #f8fafc;">Layers</strong>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 3px;">
                       <span class="cad-layers-count" id="cadLayersTotalCount">5</span>
-                      <button type="button" class="cad-btn-mini" id="cadCollapseLayersBtn" title="Collapse Layers Panel" style="padding: 1px 5px; font-size: 10px;">▶</button>
+                      <button type="button" class="cad-btn-mini" id="cadCollapseLayersBtn" title="Collapse Layers Panel" style="padding: 1px 4px; font-size: 9.5px;">▶</button>
                     </div>
                   </div>
                   <div class="cad-layers-body" id="cadLayersList">

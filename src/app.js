@@ -1699,7 +1699,7 @@ function renderLayersPanel(cad, state) {
       (state.panelsCount || 0) +
       (state.imageLoaded ? 1 : 0) +
       1;
-    totalLayersCount.textContent = `${state.order.length} Layers (${activeElements} items)`;
+    totalLayersCount.textContent = `${activeElements} items`;
   }
 
   // Display topmost layer at the top of the stack (standard CAD hierarchy)
@@ -1746,7 +1746,7 @@ function renderLayersPanel(cad, state) {
           })
           .join("");
       } else {
-        itemsHtml = `<div style="font-size: 10.5px; color: #64748b; padding: 4px 6px; font-style: italic;">No panels placed yet (Latent pool ready)</div>`;
+        itemsHtml = `<div style="font-size: 9.5px; color: #64748b; padding: 2px 4px; font-style: italic;">No panels placed yet</div>`;
       }
     } else if (layerName === "cutouts") {
       layerIcon = "➖";
@@ -1777,7 +1777,7 @@ function renderLayersPanel(cad, state) {
           })
           .join("");
       } else {
-        itemsHtml = `<div style="font-size: 10.5px; color: #64748b; padding: 4px 6px; font-style: italic;">No cutouts drawn</div>`;
+        itemsHtml = `<div style="font-size: 9.5px; color: #64748b; padding: 2px 4px; font-style: italic;">No cutouts drawn</div>`;
       }
     } else if (layerName === "pathways") {
       layerIcon = "🚶";
@@ -1807,7 +1807,7 @@ function renderLayersPanel(cad, state) {
           })
           .join("");
       } else {
-        itemsHtml = `<div style="font-size: 10.5px; color: #64748b; padding: 4px 6px; font-style: italic;">No walkways placed</div>`;
+        itemsHtml = `<div style="font-size: 9.5px; color: #64748b; padding: 2px 4px; font-style: italic;">No walkways placed</div>`;
       }
     } else if (layerName === "roof") {
       layerIcon = "📐";
@@ -2016,6 +2016,7 @@ function setupCadEventListeners(cad) {
 
   // Collapsible Minimizable Drawers
   const drawerConfigs = [
+    { btnId: "cadToggleMoreToolsBtn", drawerId: "cadMoreToolsDrawer" },
     { btnId: "cadToggleNorthDrawerBtn", drawerId: "cadNorthDrawer" },
     { btnId: "cadToggleSunDrawerBtn", drawerId: "cadSunToolbar" },
     { btnId: "cadToggleRoofDrawerBtn", drawerId: "cadRoofDrawer" },

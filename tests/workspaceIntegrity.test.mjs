@@ -255,4 +255,57 @@ assert.equal(cad.image.x, 50, "CAD image X pan must be 50");
 assert.equal(cad.image.y, -30, "CAD image Y pan must be -30");
 console.log("✓ CAD Aerial roof image is panable inside base roof margins!");
 
+// Verify Streamlined Rooftop CAD Toolbar Text Buttons & Compact Layers Pane
+console.log("Testing Streamlined Rooftop CAD Toolbar Text Buttons & Compact Layers Pane...");
+const uploadBtn = document.getElementById("cadUploadImageBtn");
+assert.ok(uploadBtn, "Upload image button must exist");
+assert.ok(uploadBtn.textContent.includes("Upload Image"), "Upload button must have text 'Upload Image'");
+
+const selectBtn = document.getElementById("cadToolSelectBtn");
+assert.ok(selectBtn, "Select tool button must exist");
+assert.ok(selectBtn.textContent.includes("Select"), "Select tool button must have text");
+
+const cutoutBtn = document.getElementById("cadToolSubtractBtn");
+assert.ok(cutoutBtn, "Cutout button must exist");
+assert.ok(cutoutBtn.textContent.includes("Cutout"), "Cutout button must have text 'Cutout'");
+
+const shapeRectBtn = document.getElementById("cadShapeRectBtn");
+assert.ok(shapeRectBtn && shapeRectBtn.textContent.includes("Rect"), "Rect shape button must have text 'Rect'");
+
+const shapeCircleBtn = document.getElementById("cadShapeCircleBtn");
+assert.ok(shapeCircleBtn && shapeCircleBtn.textContent.includes("Circle"), "Circle shape button must have text 'Circle'");
+
+const shapeLBtn = document.getElementById("cadShapeLBtn");
+assert.ok(shapeLBtn && shapeLBtn.textContent.includes("L-Shape"), "L-Shape button must have text 'L-Shape'");
+
+const walkwayBtn = document.getElementById("cadToolPathwayBtn");
+assert.ok(walkwayBtn && walkwayBtn.textContent.includes("Walkway"), "Walkway button must have text 'Walkway'");
+
+const autoPlaceBtn = document.getElementById("cadAutoPlaceBtn");
+assert.ok(autoPlaceBtn && autoPlaceBtn.textContent.includes("Autofill"), "Autofill button must have text 'Autofill'");
+
+const resetPanelsBtn = document.getElementById("cadClearPanelsBtn");
+assert.ok(resetPanelsBtn && resetPanelsBtn.textContent.includes("Reset"), "Reset panels button must have text 'Reset'");
+
+const deleteSelectedBtn = document.getElementById("cadDeleteSelectedBtn");
+assert.ok(deleteSelectedBtn && deleteSelectedBtn.textContent.includes("Delete Selected"), "Delete Selected button must have text 'Delete Selected'");
+
+// Test More Tools Drawer toggle
+const moreToolsBtn = document.getElementById("cadToggleMoreToolsBtn");
+const moreToolsDrawer = document.getElementById("cadMoreToolsDrawer");
+assert.ok(moreToolsBtn, "More Tools toggle button must exist");
+assert.ok(moreToolsDrawer, "More Tools drawer must exist");
+assert.equal(moreToolsDrawer.style.display, "none", "More tools drawer should initially be hidden");
+moreToolsBtn.click();
+assert.equal(moreToolsDrawer.style.display, "flex", "More tools drawer should open on click");
+moreToolsBtn.click();
+assert.equal(moreToolsDrawer.style.display, "none", "More tools drawer should close on second click");
+
+// Check Layers Panel
+const layersPanel = document.getElementById("cadLayersPanel");
+assert.ok(layersPanel, "Layers panel must exist");
+const layersHeader = layersPanel.querySelector(".cad-layers-header");
+assert.ok(layersHeader, "Layers header must exist");
+console.log("✓ Streamlined Rooftop CAD Toolbar and Compact Layers Pane verified!");
+
 console.log("\nALL END-TO-END WORKSPACE & AUTO-CALCULATION TESTS PASSED! 🚀🎉");
