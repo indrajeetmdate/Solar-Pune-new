@@ -1356,6 +1356,7 @@
             </fieldset>
 
             <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
+              <button class="primary-button" id="openSampleViewBtn" type="button" style="padding: 10px 18px; font-weight: 700; background: #0284c7; border-color: #0284c7;">📄 View Sample PDF & Edit Text 👁️</button>
               <button class="primary-button" id="downloadProposalButtonInternal" type="button" style="flex: 1; min-width: 200px; padding: 10px 18px;">Download Proposal PDF ↓</button>
               <button class="primary-button hidden" id="downloadProposalButton" type="button">Download Proposal ↓</button>
               <button class="secondary-button" id="saveProposalButtonInternal" type="button" style="padding: 10px 16px; font-weight: 600; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; background: white;">Save Data 💾</button>
@@ -1656,6 +1657,62 @@
         </div>
       </div>
     </div>
+
+    <!-- PDF Sample View & Print Preview Modal -->
+    <div id="pdfSampleViewModal" class="pdf-sample-modal" style="display: none;">
+      <!-- Sticky Top Toolbar -->
+      <div class="pdf-sample-toolbar">
+        <div class="pdf-sample-title-group">
+          <strong style="font-size: 13.5px; color: #f8fafc;">📄 Proposal PDF Sample View (Print Preview)</strong>
+          <span id="sampleViewStatusBadge" class="sample-status-pill locked">🔒 Locked (Read-Only)</span>
+        </div>
+        <div class="pdf-sample-actions">
+          <button type="button" class="sample-btn" id="sampleViewUnlockEditBtn" title="Unlock manual text editing across all sections (password required)">
+            <span>✏️</span> <span>Edit Text</span>
+          </button>
+          <button type="button" class="sample-btn" id="sampleViewResetBtn" title="Reset all text back to auto-calculated defaults">
+            <span>↺</span> <span>Reset Text</span>
+          </button>
+          <button type="button" class="sample-btn primary" id="sampleViewPrintBtn" title="Print document or Save as PDF via browser print">
+            <span>🖨️</span> <span>Print to PDF</span>
+          </button>
+          <button type="button" class="sample-btn" id="sampleViewDownloadPdfBtn" title="Download official PDF file via jsPDF">
+            <span>💾</span> <span>Download jsPDF</span>
+          </button>
+          <button type="button" class="sample-btn close" id="closeSampleViewModalBtn" title="Close Preview">✕ Close</button>
+        </div>
+      </div>
+
+      <!-- Informational Status Banner when Edit Mode is active -->
+      <div id="sampleViewStatusBanner" class="pdf-sample-status-banner" style="display: none;">
+        ✏️ <strong>Edit Mode Active:</strong> Every section heading, paragraph, template string, and table value is now editable. Click directly on any text or number to modify it. Edits will be printed in the PDF.
+      </div>
+
+      <!-- Scrollable Pages Canvas -->
+      <div class="pdf-sample-scroll-area">
+        <div id="pdfSampleViewPages" class="pdf-sample-pages-container">
+          <!-- Dynamically populated by pdfSampleView.js -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Password Confirmation Dialog for Unlocking Edit Mode -->
+    <dialog id="sampleViewPasswordDialog" class="password-dialog">
+      <form method="dialog" class="password-box">
+        <p class="eyebrow" style="color: #0284c7;">Manual Text Confirmation</p>
+        <h2 style="font-size: 16px;">Confirm Manual Edit Mode</h2>
+        <p class="muted small">Please enter confirmation password to enable manual editing across all sections, paragraphs, templated texts, and table values:</p>
+        <label class="field">
+          <span>Confirmation Password</span>
+          <input id="sampleViewPasswordInput" type="password" placeholder="Enter editprop" autocomplete="off">
+        </label>
+        <p id="sampleViewPasswordError" class="error-text hidden" style="color: #ef4444; font-size: 12px; margin: 4px 0; display: none;">Incorrect password. Enter "editprop" to confirm.</p>
+        <div class="dialog-actions">
+          <button class="ghost-button" id="sampleViewCancelUnlockBtn" type="button">Cancel</button>
+          <button class="primary-button" id="sampleViewConfirmUnlockBtn" type="button" style="background: #0284c7; border-color: #0284c7;">Unlock Editing</button>
+        </div>
+      </form>
+    </dialog>
 
     <footer class="app-footer">
       <div class="footer-inner">

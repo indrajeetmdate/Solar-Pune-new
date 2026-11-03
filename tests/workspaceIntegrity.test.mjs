@@ -308,4 +308,86 @@ const layersHeader = layersPanel.querySelector(".cad-layers-header");
 assert.ok(layersHeader, "Layers header must exist");
 console.log("✓ Streamlined Rooftop CAD Toolbar and Compact Layers Pane verified!");
 
+// Verify PDF Sample View & Editable Text with Password "editprop"
+console.log("Testing PDF Sample View & Editable Text with Password 'editprop'...");
+const openSampleBtn = document.getElementById("openSampleViewBtn");
+assert.ok(openSampleBtn, "View Sample PDF & Edit Text button must exist");
+
+const sampleModal = document.getElementById("pdfSampleViewModal");
+const samplePagesContainer = document.getElementById("pdfSampleViewPages");
+assert.ok(sampleModal, "PDF Sample View modal must exist");
+assert.ok(samplePagesContainer, "PDF Sample View pages container must exist");
+
+// Open Sample View
+openSampleBtn.click();
+assert.equal(sampleModal.style.display, "flex", "PDF Sample View modal must be opened");
+
+// Verify that all core pages and sections are rendered
+const sampleContent = samplePagesContainer.textContent;
+assert.ok(sampleContent.includes("Turnkey Solar PV Installation Proposal"), "Must include main proposal title");
+assert.ok(sampleContent.includes("1. System Design Considerations & Capacity Summary"), "Must include Section 1");
+assert.ok(sampleContent.includes("Current MSEDCL Bill (Before Solar)"), "Must include Current Bill Before Solar table");
+assert.ok(sampleContent.includes("With Rooftop Solar (After Solar)"), "Must include After Solar table");
+assert.ok(sampleContent.includes("16 MM EARTHING ALU. CONDUCTOR ROD; 14 MM × 1 MTR COPPER ROD"), "Must include 16 MM & 14 MM earthing spec");
+assert.ok(sampleContent.includes("Terms and Conditions for Warranty"), "Must include Warranty Terms");
+assert.ok(sampleContent.includes("Scope of Work"), "Must include Scope of Work");
+
+// Verify that initially elements are read-only (not contenteditable)
+const firstHeading = samplePagesContainer.querySelector(".pdf-section-title");
+assert.ok(firstHeading, "Section title must exist");
+assert.notEqual(firstHeading.getAttribute("contenteditable"), "true", "Text should initially be locked and not editable");
+
+// Test Unlock with WRONG password
+const unlockBtn = document.getElementById("sampleViewUnlockEditBtn");
+const pwdInput = document.getElementById("sampleViewPasswordInput");
+const confirmPwdBtn = document.getElementById("sampleViewConfirmUnlockBtn");
+const pwdError = document.getElementById("sampleViewPasswordError");
+
+unlockBtn.click();
+pwdInput.value = "wrongpassword";
+confirmPwdBtn.click();
+assert.equal(pwdError.style.display, "block", "Password error must be displayed for invalid password");
+assert.notEqual(firstHeading.getAttribute("contenteditable"), "true", "Elements must not be editable after wrong password");
+
+// Test Unlock with CORRECT password "editprop"
+pwdInput.value = "editprop";
+confirmPwdBtn.click();
+assert.equal(pwdError.style.display, "none", "Password error should be hidden on correct password");
+assert.equal(firstHeading.getAttribute("contenteditable"), "true", "All section headings must now be contenteditable='true'");
+
+// Verify that table cells, paragraphs, and values are also editable
+const sampleCell = samplePagesContainer.querySelector(".pdf-table td");
+assert.ok(sampleCell, "Table cell must exist");
+assert.equal(sampleCell.getAttribute("contenteditable"), "true", "Table cell must be contenteditable='true'");
+
+const sampleParagraph = samplePagesContainer.querySelector(".pdf-paragraph");
+assert.ok(sampleParagraph, "Paragraph must exist");
+assert.equal(sampleParagraph.getAttribute("contenteditable"), "true", "Paragraph must be contenteditable='true'");
+
+// Make manual edit to a text element and verify persistence
+const originalTitle = firstHeading.textContent;
+firstHeading.textContent = "1. Customized Special Solar System Design Plan";
+assert.equal(firstHeading.textContent, "1. Customized Special Solar System Design Plan", "Manual edit must be applied to DOM");
+
+// Lock edits
+unlockBtn.click(); // Clicking again locks text
+assert.notEqual(firstHeading.getAttribute("contenteditable"), "true", "Heading must no longer be editable after locking");
+assert.equal(firstHeading.textContent, "1. Customized Special Solar System Design Plan", "Edited text must be preserved after locking!");
+
+// Test Print invocation
+let printCalled = false;
+window.print = () => { printCalled = true; };
+const printBtn = document.getElementById("sampleViewPrintBtn");
+assert.ok(printBtn, "Print to PDF button must exist");
+printBtn.click();
+assert.ok(printCalled, "Print to PDF must invoke window.print()");
+
+// Close Sample View modal
+const closeBtn = document.getElementById("closeSampleViewModalBtn");
+assert.ok(closeBtn, "Close Sample View button must exist");
+closeBtn.click();
+assert.equal(sampleModal.style.display, "none", "Sample View modal must close");
+
+console.log("✓ PDF Sample View and Edit Mode with password 'editprop' verified successfully!");
+
 console.log("\nALL END-TO-END WORKSPACE & AUTO-CALCULATION TESTS PASSED! 🚀🎉");

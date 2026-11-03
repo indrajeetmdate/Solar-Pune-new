@@ -3,6 +3,7 @@ import { calculateEstimate, calculateSolarFinancing, getPanelConfigurations, cal
 import { parseMsebBillFile, parseMultipleMsebBillFiles } from "./billParser.js";
 import { isSupportedBillFile } from "./ocrExtractor.js";
 import { drawPanelArray, initRooftopCAD, getActiveRooftopCAD } from "./panelDiagram.js";
+import { openPdfSampleView, initPdfSampleView } from "./pdfSampleView.js";
 
 const INTERNAL_PASSPHRASE_KEY = "puneSolarInternalPassphrase";
 
@@ -24,6 +25,11 @@ const state = {
   panelSpecCustom: "",
   isCustomPanelSpec: false
 };
+
+if (typeof window !== "undefined") {
+  window.appState = state;
+  window.openPdfSampleView = openPdfSampleView;
+}
 
 const ASSUMPTION_IDS = [
   "panelType", "structureType", "capacityOverride", "inverterOverride", "batteryOverride", "backupLoad", "backupHours",
@@ -4040,7 +4046,7 @@ function attachEvents() {
     window.exportCurrentProposalJSON();
   });
 
-  $("downloadProposalButtonInternal")?.addEventListener("click", () => {
+  const handleOpenPdfProposal = () => {
     if (state.estimates) {
       // Validate compulsory multi-meter fields before generating PDF
       if (state.meteringMode === "multi" && state.meters.length > 0) {
@@ -4056,9 +4062,7 @@ function attachEvents() {
         }
       }
 
-      const btn = $("downloadProposalButtonInternal");
-      const origText = btn?.textContent;
-      if (btn) { btn.textContent = "Generating PDF..."; btn.disabled = true; }
+      saveProposalData(); // Automatically save data
 
       const est = state.estimates;
       const selectedOption = (state.selectedSystemIndex !== null && state.selectedSystemIndex >= 0 && state.selectedSystemIndex < est.options.length)
@@ -4087,24 +4091,56 @@ function attachEvents() {
         saveTodRebate: $("saveTodRebate")?.checked !== false,
       };
 
-      setTimeout(() => {
-        import(`./reportGenerator.js?v=${Date.now()}`).then((module) => {
-          if (module && module.generateProposalPDF) {
-            module.generateProposalPDF(est, selectedOption, hideFlags);
-          } else if (window.generateProposalPDF) {
-            window.generateProposalPDF(est, selectedOption, hideFlags);
-          }
-        }).catch(err => {
-          console.error("Failed to load PDF generator", err);
-          alert("Failed to generate PDF: " + err.message);
-        }).finally(() => {
-          if (btn) { btn.textContent = origText; btn.disabled = false; }
-        });
-      }, 100);
+      // Open Sample View before printing/downloading
+      openPdfSampleView(est, selectedOption, hideFlags);
     } else {
-      alert("Please calculate an estimate first before downloading the proposal.");
+      alert("Please calculate an estimate first before viewing or downloading the proposal.");
+    }
+  };
+
+  $("downloadProposalButtonInternal")?.addEventListener("click", handleOpenPdfProposal);
+  $("downloadProposalButton")?.addEventListener("click", handleOpenPdfProposal);
+  $("openSampleViewBtn")?.addEventListener("click", handleOpenPdfProposal);
+  $("ribbonDownloadPdfBtn")?.addEventListener("click", handleOpenPdfProposal);
+
+  // Wire Direct jsPDF Download button inside Sample View Modal
+  $("sampleViewDownloadPdfBtn")?.addEventListener("click", () => {
+    if (state.estimates) {
+      const btn = $("sampleViewDownloadPdfBtn");
+      const origText = btn?.innerHTML;
+      if (btn) { btn.innerHTML = "<span>⏳</span> <span>Generating...</span>"; btn.disabled = true; }
+      const est = state.estimates;
+      const selectedOption = (state.selectedSystemIndex !== null && state.selectedSystemIndex >= 0 && state.selectedSystemIndex < est.options.length)
+        ? est.options[state.selectedSystemIndex]
+        : est.recommended;
+      const hideFlags = {
+        showCadDiagram: $("showCadDiagram")?.checked !== false,
+        hidePayback: $("hidePayback")?.checked || false,
+        hideAreaFit: $("hideAreaFit")?.checked || false,
+        hideSubsidy: $("hideSubsidy")?.checked || false,
+        hideCost: $("hideCost")?.checked || false,
+        hideFinancing: ($("paymentMode")?.value !== "loan") || ($("hideFinancing")?.checked || false),
+        solarInstalled: $("solarInstalled")?.checked || false,
+        proposalSerialNo: $("proposalSerialNo")?.value || getNextProposalSerialNo(),
+        customerAddress: $("customerAddress")?.value || "Pune, Maharashtra",
+      };
+      import(`./reportGenerator.js?v=${Date.now()}`).then((module) => {
+        if (module && module.generateProposalPDF) {
+          module.generateProposalPDF(est, selectedOption, hideFlags);
+        } else if (window.generateProposalPDF) {
+          window.generateProposalPDF(est, selectedOption, hideFlags);
+        }
+      }).catch(err => {
+        console.error("Failed to generate PDF", err);
+        alert("Failed to generate PDF: " + err.message);
+      }).finally(() => {
+        if (btn) { btn.innerHTML = origText; btn.disabled = false; }
+      });
     }
   });
+
+  // Initialize PDF Sample View event listeners
+  initPdfSampleView();
 
   document.querySelectorAll(".tab-button").forEach((button) => {
     button.addEventListener("click", () => switchTab(button.dataset.tab));
@@ -4141,9 +4177,6 @@ function attachEvents() {
 
   // Quick Action Buttons
   $("sidebarCalculateBtn")?.addEventListener("click", () => render());
-  $("ribbonDownloadPdfBtn")?.addEventListener("click", () => {
-    $("downloadProposalButtonInternal")?.click();
-  });
 
   // Synchronize CAD Report Toggle Button <-> #showCadDiagram Checkbox
   const cadTogglePdfBtn = $("cadTogglePdfReportBtn");

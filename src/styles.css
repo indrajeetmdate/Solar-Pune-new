@@ -2673,3 +2673,538 @@ tr:hover td {
 }
 
 
+
+/* ==========================================================================
+   PDF Sample View & Print Preview Styles
+   ========================================================================== */
+
+.pdf-sample-modal {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(4px);
+  z-index: 5000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pdf-sample-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #0f172a;
+  border-bottom: 1px solid #1e293b;
+  color: #f8fafc;
+  flex-wrap: wrap;
+  gap: 8px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.pdf-sample-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sample-status-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #94a3b8;
+}
+
+.sample-status-pill.locked {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
+  color: #fca5a5;
+}
+
+.sample-status-pill.active {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: #22c55e;
+  color: #86efac;
+}
+
+.pdf-sample-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sample-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 5px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #f8fafc;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sample-btn:hover {
+  background: #334155;
+  color: #ffffff;
+}
+
+.sample-btn.primary {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.sample-btn.primary:hover {
+  background: #0369a1;
+}
+
+.sample-btn.active {
+  background: #16a34a;
+  border-color: #22c55e;
+  color: #ffffff;
+}
+
+.sample-btn.close {
+  background: transparent;
+  border-color: #475569;
+  color: #94a3b8;
+}
+
+.sample-btn.close:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border-color: #ef4444;
+}
+
+.pdf-sample-status-banner {
+  background: #0284c7;
+  color: #ffffff;
+  padding: 6px 14px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+  border-bottom: 1px solid #0369a1;
+}
+
+.pdf-sample-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 16px;
+  background: #334155;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  scrollbar-width: thin;
+}
+
+.pdf-sample-pages-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  max-width: 210mm;
+}
+
+/* Individual A4 Page Representation */
+.pdf-sample-page {
+  width: 210mm;
+  min-height: 297mm;
+  background: #ffffff;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  padding: 14mm 15mm 16mm;
+  box-sizing: border-box;
+  position: relative;
+  color: #1e293b;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 10pt;
+  line-height: 1.4;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+@media (max-width: 900px) {
+  .pdf-sample-page {
+    width: 100%;
+    min-height: auto;
+    padding: 12px;
+  }
+}
+
+/* Page Components */
+.pdf-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 2px solid #63923e;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.pdf-company-title {
+  font-size: 13.5pt;
+  font-weight: 800;
+  color: #63923e;
+  letter-spacing: 0.5px;
+}
+
+.pdf-company-sub {
+  font-size: 7.5pt;
+  font-weight: 700;
+  color: #92b56b;
+  letter-spacing: 0.5px;
+}
+
+.pdf-header-right {
+  text-align: right;
+}
+
+.pdf-doc-title {
+  font-size: 11pt;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.pdf-doc-meta {
+  font-size: 8.5pt;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.pdf-page-body {
+  flex: 1;
+}
+
+.pdf-page-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #cbd5e1;
+  padding-top: 6px;
+  margin-top: 12px;
+  font-size: 8pt;
+  color: #64748b;
+}
+
+.pdf-section-title {
+  font-size: 12.5pt;
+  font-weight: 800;
+  color: #63923e;
+  margin: 12px 0 6px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 3px;
+}
+
+.pdf-subheading {
+  font-size: 10pt;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 10px 0 4px;
+}
+
+.pdf-paragraph {
+  font-size: 9.5pt;
+  color: #334155;
+  line-height: 1.45;
+  margin: 0 0 8px;
+}
+
+.pdf-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.pdf-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #f8fafc;
+}
+
+.pdf-card-badge {
+  font-size: 8pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.pdf-card-badge.blue { color: #0284c7; }
+.pdf-card-badge.green { color: #16a34a; }
+
+.pdf-card-name {
+  font-size: 11pt;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 3px;
+}
+
+.pdf-card-address {
+  font-size: 8.5pt;
+  color: #475569;
+  line-height: 1.35;
+  margin: 0 0 4px;
+}
+
+.pdf-card-contact {
+  font-size: 8.5pt;
+  color: #334155;
+  line-height: 1.4;
+}
+
+.pdf-highlight-box {
+  padding: 8px 10px;
+  border-radius: 5px;
+  font-size: 9pt;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.pdf-highlight-box.green {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-left: 3px solid #16a34a;
+  color: #166534;
+}
+
+.pdf-highlight-box.yellow {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 3px solid #f59e0b;
+  color: #92400e;
+}
+
+.pdf-highlight-box.blue {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-left: 3px solid #3b82f6;
+  color: #1e40af;
+}
+
+.pdf-pill-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.pdf-pill {
+  font-size: 8.5pt;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.pdf-pill.green {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.pdf-phases-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.pdf-phase-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 8.5pt;
+  color: #334155;
+}
+
+.pdf-terms-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pdf-term-item {
+  background: #f8fafc;
+  border-left: 3px solid #64748b;
+  padding: 5px 8px;
+  font-size: 8.5pt;
+  color: #334155;
+  line-height: 1.35;
+}
+
+.pdf-signature-block {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 18px;
+  padding-top: 10px;
+}
+
+.pdf-sig-line {
+  width: 180px;
+  border-top: 1px solid #475569;
+  margin-bottom: 4px;
+}
+
+.pdf-cad-preview-box {
+  width: 100%;
+  height: 240px;
+  background: #0f172a;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.pdf-cad-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.pdf-cad-placeholder {
+  color: #94a3b8;
+  font-size: 11pt;
+  font-weight: 600;
+}
+
+/* PDF Tables */
+.pdf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5pt;
+  margin-bottom: 6px;
+  border: 1px solid #cbd5e1;
+}
+
+.pdf-table th {
+  background: #f1f5f9;
+  color: #0f172a;
+  font-weight: 700;
+  text-align: left;
+  padding: 4px 6px;
+  border: 1px solid #cbd5e1;
+}
+
+.pdf-table td {
+  padding: 4px 6px;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+.pdf-table tr:nth-child(even) {
+  background: #fafafa;
+}
+
+/* ==========================================================================
+   EDITABLE TEXT STYLING (Active when unlocked with password "editprop")
+   ========================================================================== */
+
+.pdf-sample-modal.editing-unlocked [contenteditable="true"] {
+  cursor: text !important;
+  transition: all 0.15s ease;
+}
+
+.pdf-sample-modal.editing-unlocked [contenteditable="true"]:hover {
+  outline: 1px dashed #0284c7 !important;
+  background-color: rgba(2, 132, 199, 0.05) !important;
+  border-radius: 2px;
+}
+
+.pdf-sample-modal.editing-unlocked [contenteditable="true"]:focus {
+  outline: 2px solid #0284c7 !important;
+  background-color: rgba(2, 132, 199, 0.09) !important;
+  box-shadow: 0 0 6px rgba(2, 132, 199, 0.35) !important;
+  border-radius: 2px;
+}
+
+/* ==========================================================================
+   NATIVE PRINT STYLES (@media print)
+   ========================================================================== */
+
+@media print {
+  /* Hide whole body except the PDF sample modal */
+  body * {
+    visibility: hidden !important;
+  }
+
+  #pdfSampleViewModal,
+  #pdfSampleViewModal *,
+  #pdfSampleViewPages,
+  #pdfSampleViewPages * {
+    visibility: visible !important;
+  }
+
+  #pdfSampleViewModal {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    z-index: 9999999 !important;
+  }
+
+  .pdf-sample-toolbar,
+  .pdf-sample-status-banner,
+  .no-print {
+    display: none !important;
+  }
+
+  .pdf-sample-scroll-area {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    gap: 0 !important;
+  }
+
+  .pdf-sample-page {
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    width: 100% !important;
+    min-height: 297mm !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    padding: 12mm 14mm !important;
+    box-sizing: border-box !important;
+  }
+
+  .pdf-sample-page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  [contenteditable] {
+    outline: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+}
