@@ -119,6 +119,53 @@ assert.ok(monthlyGeneration && monthlyGeneration.includes("units") && !monthlyGe
 assert.ok(monthlySavings && monthlySavings.includes("Rs") && !monthlySavings.includes("Rs 0"), "Monthly savings must be calculated");
 assert.ok(payback && payback.includes("yrs"), "Payback must be calculated");
 
+// Check all 15 Required Fields and 2 Additional Important Fields are present on the Left Side Panel
+const leftPanel = document.getElementById("sidebarPanel");
+assert.ok(leftPanel, "Left sidebar panel must exist");
+const requiredFieldIds = [
+  "customerName",
+  "sanctionedLoad",
+  "consumerCategory",
+  "connectionPhase",
+  "monthlyUnits",
+  "monthlyBill",
+  "goal",
+  "roofArea",
+  "panelType",
+  "subsidyCategory",
+  "paymentMode",
+  "panelMake",
+  "panelRate",
+  "panelWp",
+  "billFixedCharges",
+  "billEnergyCharges",
+  "billElectricityDuty"
+];
+
+for (const fId of requiredFieldIds) {
+  const el = document.getElementById(fId);
+  assert.ok(el, `Required field #${fId} must exist on left side panel`);
+  assert.ok(leftPanel.contains(el), `Field #${fId} must be located inside the left side panel`);
+}
+
+// Check loan default values
+assert.equal(document.getElementById("loanInterestRate")?.value, "7", "Bank interest default must be 7%");
+assert.equal(document.getElementById("loanDownPaymentPct")?.value, "10", "Upfront customer payment default must be 10%");
+
+// Check 2 Additional Important Fields (Solar Capacity and Inverter Capacity)
+const capOverride = document.getElementById("capacityOverride");
+const invOverride = document.getElementById("inverterOverride");
+assert.ok(capOverride && leftPanel.contains(capOverride), "Solar capacity (capacityOverride) field must exist in left panel");
+assert.ok(invOverride && leftPanel.contains(invOverride), "Inverter capacity (inverterOverride) field must exist in left panel");
+
+// Check Product Warranty & Details earthing rod dimension in DOM
+const warrantyTableHtml = document.getElementById("workspaceTabPaneProposal")?.innerHTML || document.body.innerHTML;
+assert.ok(warrantyTableHtml.includes("16 MM EARTHING ALU. CONDUCTOR ROD"), "Earthing rod must specify 16 MM");
+assert.ok(warrantyTableHtml.includes("14 MM × 1 MTR COPPER ROD"), "Earthing rod must specify 14 MM");
+assert.ok(!warrantyTableHtml.includes("16 SQ MM EARTHING"), "Earthing rod must NOT specify 16 SQ MM");
+assert.ok(!warrantyTableHtml.includes("14 SQ MM × 1 MTR"), "Earthing rod must NOT specify 14 SQ MM");
+console.log("✓ All 15 Required fields, 2 additional capacity controls, and 16mm/14mm earthing rod spec verified!");
+
 // Check Workspace Tabs exist and can switch
 const tabs = ["cad", "sizing", "financials", "loan", "proposal", "guide"];
 for (const tabId of tabs) {

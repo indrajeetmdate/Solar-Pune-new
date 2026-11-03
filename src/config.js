@@ -215,7 +215,8 @@ export const DEFAULT_CONFIG = {
     ghsPerFlatCapKw: 3,
   },
   financing: {
-    defaultInterestRatePct: 9.5,
+    defaultInterestRatePct: 7,
+    defaultDownPaymentPct: 10,
     defaultPaymentMode: "upfront", // 'upfront' | 'loan'
   },
 };
@@ -245,33 +246,37 @@ export const STRUCTURE_LABELS = {
   gpPurlin: "GP purlin",
 };
 
-export function getPanelSpecificationText(panelType, customSpec, panelWp = 550) {
+export function getPanelSpecificationText(panelType, customSpec, panelWp = 550, panelMake = "") {
   if (customSpec && typeof customSpec === "string" && customSpec.trim()) {
     return customSpec.trim();
   }
   const wp = panelWp || 550;
   const p = (panelType || "").toLowerCase();
+  const prefix = (panelMake && typeof panelMake === "string" && panelMake.trim())
+    ? panelMake.trim()
+    : "Tier-1";
+
   if (p === "dcr_bifacial") {
-    return `Tier-1 DCR Mono Bifacial Glass-to-Glass (${wp} Wp)`;
+    return `${prefix} DCR Mono Bifacial Glass-to-Glass (${wp} Wp)`;
   }
   if (p === "mono_bifacial" || p === "nondcr_bifacial") {
-    return `Tier-1 Mono Bifacial (Non-DCR, ${wp} Wp)`;
+    return `${prefix} Mono Bifacial (Non-DCR, ${wp} Wp)`;
   }
   if (p === "dcr_topcon") {
-    return `Tier-1 DCR N-Type TOPCon Bifacial (${wp} Wp)`;
+    return `${prefix} DCR N-Type TOPCon Bifacial (${wp} Wp)`;
   }
   if (p === "topcon_bifacial") {
-    return `Tier-1 N-Type TOPCon Bifacial (Non-DCR, ${wp} Wp)`;
+    return `${prefix} N-Type TOPCon Bifacial (Non-DCR, ${wp} Wp)`;
   }
   if (p === "poly") {
-    return `Tier-1 Multi-Crystalline / Polycrystalline (${wp < 400 ? wp : 335} Wp)`;
+    return `${prefix} Multi-Crystalline / Polycrystalline (${wp < 400 ? wp : 335} Wp)`;
   }
   if (p === "nondcr" || p === "non_dcr") {
-    return `Tier-1 Non-DCR Mono PERC (${wp} Wp)`;
+    return `${prefix} Non-DCR Mono PERC (${wp} Wp)`;
   }
   if (p === "dcr") {
-    return `Tier-1 DCR Mono PERC / TOPCon (${wp} Wp)`;
+    return `${prefix} DCR Mono PERC / TOPCon (${wp} Wp)`;
   }
-  return `Tier-1 Mono PERC / TOPCon (DCR / Non-DCR as per proposal)`;
+  return `${prefix} Mono PERC / TOPCon (${wp} Wp)`;
 }
 

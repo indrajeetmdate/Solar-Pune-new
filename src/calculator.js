@@ -332,6 +332,9 @@ export function recommendCapacity(input, config = DEFAULT_CONFIG) {
 }
 
 function getPanelRate(panelType, pricing) {
+  if (pricing && pricing.panelRate !== undefined && pricing.panelRate !== null && !isNaN(pricing.panelRate) && Number(pricing.panelRate) > 0) {
+    return Number(pricing.panelRate);
+  }
   const pLower = typeof panelType === "string" ? panelType.toLowerCase() : "";
   const isDcr = pLower && !pLower.includes("nondcr") && !pLower.includes("non_dcr") && (pLower.startsWith("dcr") || pLower.includes("_dcr"));
   return isDcr ? pricing.panelDcrRatePerWp : pricing.panelNonDcrRatePerWp;
@@ -562,6 +565,26 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       todPenalty,
       total: totalBill,
     };
+  } else if ((input.billFixedCharges !== undefined && input.billFixedCharges !== null && input.billFixedCharges !== "") ||
+             (input.billEnergyCharges !== undefined && input.billEnergyCharges !== null && input.billEnergyCharges !== "") ||
+             (input.billElectricityDuty !== undefined && input.billElectricityDuty !== null && input.billElectricityDuty !== "")) {
+    const fixedCharge = Number(input.billFixedCharges) >= 0 ? round(Number(input.billFixedCharges), 0) : round(config.tariff.fixedCharge || 130, 0);
+    const energyCharge = Number(input.billEnergyCharges) >= 0 ? round(Number(input.billEnergyCharges), 0) : 0;
+    const duty = Number(input.billElectricityDuty) >= 0 ? round(Number(input.billElectricityDuty), 0) : 0;
+    const wheelingCharge = 0;
+    const facCharge = 0;
+    const totalBill = input.monthlyBill > 0 ? round(input.monthlyBill, 0) : (fixedCharge + energyCharge + duty);
+
+    currentBillBreakdown = {
+      fixedCharge,
+      energyCharge,
+      wheelingCharge,
+      facCharge,
+      wheelingFac: 0,
+      duty,
+      todPenalty,
+      total: totalBill,
+    };
   } else if (input.monthlyBill > 0) {
     const fixedCharge = round(config.tariff.fixedCharge || 130, 0);
     const totalBill = round(input.monthlyBill, 0);
@@ -734,7 +757,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   return {
     systemType,
     panelType,
-    panelSpec: input.panelSpec || getPanelSpecificationText(panelType, input.panelSpecCustom, config.system?.panelWp),
+    panelSpec: input.panelSpec || getPanelSpecificationText(panelType, input.panelSpecCustom, config.performance?.panelWp || config.system?.panelWp, input.panelMake),
     dcCapacityKw: round(dcCapacityKw, 2),
     inverterCapacityKw: round(inverterCapacityKw, 2),
     batteryCapacityKwh: round(batteryCapacityKwh, 1),
@@ -793,7 +816,9 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       lifetimeSavings: calculateLifetimeSavings(annualSavings, config),
       paymentMode: input?.paymentMode || config.financing?.defaultPaymentMode || "upfront",
       loanAmountOverride: input?.loanAmount,
-      interestRatePct: input?.loanInterestRate ?? config.financing?.defaultInterestRatePct ?? 9.5,
+      downPaymentPct: (input?.paymentMode === "loan") ? (Number(input?.loanDownPaymentPct) >= 0 ? Number(input?.loanDownPaymentPct) : 10) : 0,
+      downPaymentOverride: input?.loanDownPayment,
+      interestRatePct: input?.loanInterestRate ?? config.financing?.defaultInterestRatePct ?? 7,
       loanMonthlyEmiOverride: input?.loanMonthlyEmi,
       loanTenureMonthsOverride: input?.loanTenureMonths,
     }),

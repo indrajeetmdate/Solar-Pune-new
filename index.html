@@ -42,8 +42,8 @@
             </div>
           </div>
 
-          <!-- Category Navigation Pills -->
-          <nav class="sidebar-nav-pills" id="sidebarNavPills" aria-label="Input categories">
+          <!-- Category Navigation Pills (Preserved for internal mode / test compatibility) -->
+          <nav class="sidebar-nav-pills" id="sidebarNavPills" aria-label="Input categories" style="display: none;">
             <button class="sidebar-pill-btn active" data-cat="contact" type="button" title="Customer basics">👤 Contact</button>
             <button class="sidebar-pill-btn" data-cat="energy" type="button" title="Energy & Bill">⚡ Energy</button>
             <button class="sidebar-pill-btn" data-cat="roof" type="button" title="Roof & Site">📐 Roof</button>
@@ -65,45 +65,75 @@
           <button class="rail-icon-btn expand-btn" id="expandSidebarBtn" title="Expand Sidebar">▶</button>
         </div>
 
-        <!-- Sidebar Body: Categorized Sections -->
+        <!-- Sidebar Body: Single-Screen Newbie Workflow -->
         <div class="sidebar-body" id="sidebarBody">
           
-          <!-- CATEGORY 1: CONTACT -->
+          <!-- PRIMARY SECTION: ALL REQUIRED FIELDS ON ONE SCREEN -->
           <div class="cat-section active" id="catSectionContact" data-cat="contact">
-            <div class="cat-section-header">
-              <span class="cat-section-title">Customer Basics</span>
-              <span class="cat-section-badge">Required *</span>
+            <!-- Header bar with Proposal No & Scan Bill button -->
+            <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 6px;">
+              <div style="flex: 1; display: flex; align-items: center; gap: 4px;">
+                <input id="sidebarProposalSerialNo" type="text" placeholder="Proposal No." style="font-family: monospace; font-size: 11px; font-weight: 700; color: #0369a1; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 6px; height: 26px; width: 100%;">
+                <span id="proposalStatusBadge" style="font-size: 9.5px; font-weight: 700; background: #e0f2fe; color: #0284c7; padding: 2px 4px; border-radius: 4px; white-space: nowrap;">New</span>
+              </div>
+              <label for="billUpload" class="sidebar-bill-upload-btn" title="Upload MSEB electricity bill PDF or image to auto-fill">
+                📎 Scan Bill
+              </label>
+              <input id="billUpload" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.tiff,.tif,.txt,.csv" multiple style="display: none;">
             </div>
-            <div class="field-grid">
-              <label class="field" style="grid-column: 1 / -1;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
-                  <span>Proposal Number</span>
-                  <span id="proposalStatusBadge" style="font-size: 10px; font-weight: 700; background: #e0f2fe; color: #0284c7; padding: 1px 6px; border-radius: 4px;">New Proposal</span>
+            <span id="billUploadStatus" style="font-size: 10.5px; color: var(--muted); display: block; margin-bottom: 4px;"></span>
+
+            <!-- Detected Bill Fields Panel (shown when bill is scanned) -->
+            <div id="billExtractPanel" class="extract-panel hidden" style="margin-bottom: 8px;">
+              <div class="section-heading compact" style="margin-bottom: 6px;">
+                <div>
+                  <p class="eyebrow" style="font-size: 9.5px;">Bill Extraction</p>
+                  <h2 style="font-size: 12px;">Detected Fields</h2>
                 </div>
-                <input id="sidebarProposalSerialNo" type="text" placeholder="e.g. DC/2026-27/PROP-1140" style="font-family: monospace; font-size: 12px; font-weight: 700; color: #0369a1; background: #f8fafc; border-color: #cbd5e1;">
+                <button class="ghost-button" id="applyExtractedBill" type="button" style="padding: 2px 6px; font-size: 10.5px;">Apply</button>
+              </div>
+
+              <div class="extract-grid" style="font-size: 11px; gap: 4px;">
+                <div><span>File</span><strong id="extractedFileName">-</strong></div>
+                <div><span>Name</span><strong id="extractedName">-</strong></div>
+                <div><span>Address</span><strong id="extractedAddress">-</strong></div>
+                <div><span>Month</span><strong id="extractedBillMonth">-</strong></div>
+                <div><span>Sanction</span><strong id="extractedSanctionLoad">-</strong></div>
+                <div><span>Amount</span><strong id="extractedBillAmount">-</strong></div>
+                <div><span>Units</span><strong id="extractedUnits">-</strong></div>
+                <div><span>Avg/Mo</span><strong id="extractedYearlyAvg">-</strong></div>
+              </div>
+
+              <p id="extractedExtra" class="muted small hidden" style="margin-top: 4px; font-size: 10px;"></p>
+
+              <details id="extractedChargesTable" class="hidden" style="margin-top: 4px; cursor: pointer;" open>
+                <summary style="font-weight: 600; font-size: 11px; color: var(--ink);">Current Bill Breakdown</summary>
+                <div style="margin-top: 4px; max-height: 140px; overflow-y: auto;"></div>
+              </details>
+
+              <details id="extractedHistoryTable" class="hidden" style="margin-top: 4px; cursor: pointer;">
+                <summary style="font-weight: 600; font-size: 11px; color: var(--ink);">Billing History</summary>
+                <div style="margin-top: 4px; max-height: 120px; overflow-y: auto;"></div>
+              </details>
+
+              <p id="billExtractWarnings" class="muted small" style="margin-top: 4px; font-size: 10px;"></p>
+            </div>
+
+            <!-- 15 REQUIRED FIELDS (HIGH-DENSITY 2-COLUMN GRID) -->
+            <div class="sidebar-compact-grid">
+              <!-- Row 1: Customer Name & Sanction Load -->
+              <label class="field compact">
+                <span>Customer name *</span>
+                <input id="customerName" type="text" placeholder="e.g. Rahul Sharma" value="Rahul Sharma">
               </label>
-              <label class="field" style="grid-column: 1 / -1;">
-                <span>Customer name</span>
-                <input id="customerName" type="text" placeholder="e.g. Rahul Sharma">
-              </label>
-              <label class="field" style="grid-column: 1 / -1;">
-                <span>Mobile number <span style="color: var(--danger, #ef4444)">*</span></span>
-                <input id="mobileNumber" type="tel" placeholder="10-digit mobile" required>
-              </label>
-              <label class="field" style="grid-column: 1 / -1;">
-                <span>Email address</span>
-                <input id="emailAddress" type="email" placeholder="name@example.com">
-              </label>
-              <label class="field" style="grid-column: 1 / -1;">
-                <span>Site / Installation address</span>
-                <input id="customerAddress" type="text" placeholder="e.g. Plot 14, Hingne Khurd, Pune">
-              </label>
-              <label class="field">
-                <span>Sanctioned load (kW) <i class="info-tip" data-tip="Approved contract load on your electricity bill.">i</i></span>
+              <label class="field compact">
+                <span>Sanction load (kW) *</span>
                 <input id="sanctionedLoad" type="number" min="0" step="0.5" value="5">
               </label>
-              <label class="field">
-                <span>Consumer category</span>
+
+              <!-- Row 2: Customer Category & Phase -->
+              <label class="field compact">
+                <span>Customer category *</span>
                 <select id="consumerCategory">
                   <option value="LT-I" selected>LT-I Residential</option>
                   <option value="LT-I-GHS">LT-I Group Housing</option>
@@ -114,315 +144,322 @@
                   <option value="HT-II">HT-II Commercial</option>
                 </select>
               </label>
-              <label class="field" style="grid-column: 1 / -1;">
-                <span>Phase</span>
+              <label class="field compact">
+                <span>Phase *</span>
                 <select id="connectionPhase">
-                  <option value="1-phase">Single phase</option>
+                  <option value="1-phase" selected>Single phase</option>
                   <option value="3-phase">Three phase</option>
                 </select>
               </label>
-              <label class="field hidden" id="numFlatsField" style="grid-column: 1 / -1;">
-                <span>Number of flats (GHS)</span>
-                <input id="numFlats" type="number" min="1" step="1" placeholder="e.g. 80">
-              </label>
-              <label class="field hidden" id="powerFactorField">
-                <span>Power factor</span>
-                <input id="currentPf" type="number" min="0.5" max="1" step="0.01" placeholder="e.g. 0.85">
-              </label>
-              <label class="field hidden" id="peakUsageField">
-                <span>Peak usage %</span>
-                <input id="peakHourUsagePct" type="number" min="0" max="100" step="5" value="30">
-              </label>
-            </div>
-            
-            <!-- Hidden inputs to maintain 100% backwards compatibility with existing state scripts -->
-            <input id="internalCustomerName" type="hidden">
-            <input id="internalMobileNumber" type="hidden">
-            <input id="internalEmailAddress" type="hidden">
-          </div>
 
-          <!-- CATEGORY 2: ENERGY & BILL -->
-          <div class="cat-section" id="catSectionEnergy" data-cat="energy" style="display: none;">
-            <div class="cat-section-header">
-              <span class="cat-section-title">Energy Consumption & Bill</span>
-            </div>
-
-            <!-- Metering Mode Selector -->
-            <div class="metering-mode-selector" style="margin-bottom: 12px; display: flex; background: var(--surface-soft, #eef3ec); padding: 3px; border-radius: 6px; gap: 4px;">
-              <button type="button" id="meteringModeSingleBtn" class="metering-mode-btn active" style="flex: 1; padding: 6px 10px; font-size: 11.5px; font-weight: 600; border: none; border-radius: 4px; background: #ffffff; color: var(--ink); cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.08);">Single Meter</button>
-              <button type="button" id="meteringModeMultiBtn" class="metering-mode-btn" style="flex: 1; padding: 6px 10px; font-size: 11.5px; font-weight: 600; border: none; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer;">🏢 Multi-Meter (Flats)</button>
-            </div>
-
-            <!-- Upload Zone (Supports single or batch multi-bill upload) -->
-            <label class="upload-zone" for="billUpload" style="margin-bottom: 12px;">
-              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <input id="billUpload" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.tiff,.tif,.txt,.csv" multiple>
-              <span class="upload-title" id="billUploadTitle">Attach electricity bill(s)</span>
-              <span class="upload-formats">PDF, JPG, PNG — Select one or multiple bills for batch OCR</span>
-              <span id="billUploadStatus"></span>
-            </label>
-
-            <!-- Detected Bill Fields Panel (for single bill or individual inspections) -->
-            <div id="billExtractPanel" class="extract-panel hidden" style="margin-bottom: 12px;">
-              <div class="section-heading compact" style="margin-bottom: 8px;">
-                <div>
-                  <p class="eyebrow">Bill Extraction</p>
-                  <h2 style="font-size: 14px;">Detected Fields</h2>
-                </div>
-                <button class="ghost-button" id="applyExtractedBill" type="button" style="padding: 2px 8px; font-size: 11px;">Apply</button>
-              </div>
-
-              <div class="extract-grid">
-                <div><span>File Name</span><strong id="extractedFileName">-</strong></div>
-                <div><span>Name</span><strong id="extractedName">-</strong></div>
-                <div><span>Address</span><strong id="extractedAddress">-</strong></div>
-                <div><span>Bill Month</span><strong id="extractedBillMonth">-</strong></div>
-                <div><span>Sanction Load</span><strong id="extractedSanctionLoad">-</strong></div>
-                <div><span>Bill Amount</span><strong id="extractedBillAmount">-</strong></div>
-                <div><span>Units Consumed</span><strong id="extractedUnits">-</strong></div>
-                <div><span>Avg Units/Mo</span><strong id="extractedYearlyAvg">-</strong></div>
-              </div>
-
-              <p id="extractedExtra" class="muted small hidden" style="margin-top: 8px;"></p>
-
-              <details id="extractedChargesTable" class="hidden" style="margin-top: 8px; cursor: pointer;" open>
-                <summary style="font-weight: 600; font-size: 12px; color: var(--ink);">Current Bill Breakdown</summary>
-                <div style="margin-top: 6px; max-height: 200px; overflow-y: auto;"></div>
-              </details>
-
-              <details id="extractedHistoryTable" class="hidden" style="margin-top: 6px; cursor: pointer;">
-                <summary style="font-weight: 600; font-size: 12px; color: var(--ink);">Billing History</summary>
-                <div style="margin-top: 6px; max-height: 180px; overflow-y: auto;"></div>
-              </details>
-
-              <p id="billExtractWarnings" class="muted small" style="margin-top: 6px;"></p>
-            </div>
-
-            <!-- MULTI-METER MANAGEMENT PANEL -->
-            <div id="multiMeterSection" style="display: none; margin-bottom: 14px;">
-              <!-- Multi-Meter Aggregate KPI Strip -->
-              <div class="multi-meter-kpi-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 10px;">
-                <div class="mm-kpi-card" style="background: var(--surface-soft, #eef3ec); padding: 6px 10px; border-radius: 6px;">
-                  <span style="font-size: 10.5px; color: var(--muted); display: block;">Total Flats / Meters</span>
-                  <strong id="mmTotalMetersCount" style="font-size: 14px; color: var(--ink);">0 Flats</strong>
-                </div>
-                <div class="mm-kpi-card" style="background: var(--surface-soft, #eef3ec); padding: 6px 10px; border-radius: 6px;">
-                  <span style="font-size: 10.5px; color: var(--muted); display: block;">Total Sanctioned Load</span>
-                  <strong id="mmTotalSanctionedLoad" style="font-size: 14px; color: var(--ink);">0 kW</strong>
-                </div>
-                <div class="mm-kpi-card" style="background: var(--surface-soft, #eef3ec); padding: 6px 10px; border-radius: 6px;">
-                  <span style="font-size: 10.5px; color: var(--muted); display: block;">Total Monthly Units</span>
-                  <strong id="mmTotalMonthlyUnits" style="font-size: 14px; color: var(--ink);">0 kWh</strong>
-                </div>
-                <div class="mm-kpi-card" style="background: #e0f2fe; padding: 6px 10px; border-radius: 6px;">
-                  <span style="font-size: 10.5px; color: #0369a1; display: block;">Total Subsidies Eligible</span>
-                  <strong id="mmTotalSubsidies" style="font-size: 14px; color: #0284c7;">₹0</strong>
-                </div>
-              </div>
-
-              <!-- Solar Load Allocation Bar -->
-              <div class="mm-allocation-bar-card" style="background: #f8fafc; border: 1px solid var(--line, #e2e8f0); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px;">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-                  <span style="font-size: 11px; font-weight: 600; color: var(--ink);">Solar Load Allocation</span>
-                  <span id="mmAllocationBalanceBadge" class="badge-balanced" style="font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: #dcfce7; color: #15803d; font-weight: 600;">Balanced ✓</span>
-                </div>
-                <div style="font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; margin-bottom: 6px;">
-                  <span>Allocated: <strong id="mmAllocatedKwSum" style="color: var(--ink);">0.0 kW</strong></span>
-                  <span>System Size: <strong id="mmSystemSizeTarget" style="color: var(--ink);">0.0 kW</strong></span>
-                </div>
-                <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-                  <button type="button" id="mmAutoDistributeBtn" class="ghost-button" style="padding: 3px 8px; font-size: 11px;" title="Auto-distribute capacity proportionally across meters">⚡ Auto-Distribute</button>
-                  <button type="button" id="mmEqualDistributeBtn" class="ghost-button" style="padding: 3px 8px; font-size: 11px;" title="Distribute capacity equally among meters">⊞ Equal Split</button>
-                  <button type="button" id="mmAddMeterBtn" class="primary-button" style="padding: 3px 10px; font-size: 11px; margin-left: auto;">+ Add Flat / Meter</button>
-                </div>
-              </div>
-
-              <!-- Incomplete Data Warning if compulsory fields missing -->
-              <div id="mmCompulsoryWarning" style="display: none; background: #fef2f2; border-left: 3px solid #ef4444; padding: 6px 10px; font-size: 11px; color: #b91c1c; border-radius: 4px; margin-bottom: 10px;">
-                ⚠️ <strong>Compulsory Fields Required:</strong> Each meter must have a <strong>Consumer Number</strong>, <strong>Name/Flat</strong>, and <strong>Sanctioned Load</strong>.
-              </div>
-
-              <!-- Meters List Table -->
-              <div class="mm-table-container" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--line, #e2e8f0); border-radius: 6px; background: #ffffff;">
-                <table class="mm-table" style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
-                  <thead style="background: var(--surface-soft, #f1f5f9); position: sticky; top: 0; z-index: 2;">
-                    <tr style="border-bottom: 1px solid #cbd5e1;">
-                      <th style="padding: 6px 8px;">Flat / Name *</th>
-                      <th style="padding: 6px 6px;">Consumer No. *</th>
-                      <th style="padding: 6px 6px;">Load (kW) *</th>
-                      <th style="padding: 6px 6px;">Units/Mo</th>
-                      <th style="padding: 6px 6px;">Bill (₹)</th>
-                      <th style="padding: 6px 6px; width: 68px;">Alloc. kW</th>
-                      <th style="padding: 6px 6px;">Subsidy (₹)</th>
-                      <th style="padding: 6px 4px; text-align: center;">✕</th>
-                    </tr>
-                  </thead>
-                  <tbody id="mmMetersTableBody">
-                    <!-- Dynamic meter rows rendered by app.js -->
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <!-- SINGLE METER INPUTS (Displayed in Single Meter mode) -->
-            <div class="field-grid" id="singleMeterInputsGrid">
-              <label class="field">
-                <span>Avg units / mo <i class="info-tip" data-tip="Average electricity units (kWh) consumed per month.">i</i></span>
+              <!-- Row 3: Avg Units/Mo & Monthly Bill -->
+              <label class="field compact">
+                <span>Avg units / mo *</span>
                 <input id="monthlyUnits" type="number" min="0" step="1" value="450">
               </label>
-              <label class="field">
-                <span>Monthly bill (₹) <i class="info-tip" data-tip="Total current monthly bill amount including all charges.">i</i></span>
+              <label class="field compact">
+                <span>Monthly bill (₹) *</span>
                 <input id="monthlyBill" type="number" min="0" step="100" value="5200">
               </label>
-              <label class="field" style="grid-column: 1 / -1;">
-                <span>Optimization Goal <i class="info-tip" data-tip="Optimum sizes for average use (max ROI). Summer-proof sizes for peak hot months.">i</i></span>
-                <select id="optimizationStrategy">
-                  <option value="optimum" selected>Optimum (Cost & ROI)</option>
-                  <option value="summer_proof">Summer-Proof (Peak Sizing)</option>
-                </select>
-              </label>
-            </div>
-          </div>
 
-          <!-- CATEGORY 3: ROOF & LOCATION -->
-          <div class="cat-section" id="catSectionRoof" data-cat="roof" style="display: none;">
-            <div class="cat-section-header">
-              <span class="cat-section-title">Roof & Geometry</span>
-              <button class="ghost-button" id="fetchLocationButton" type="button" title="Auto-detect current GPS coordinates" style="padding: 2px 8px; font-size: 11px;">📍 Auto GPS</button>
-            </div>
-            <div class="field-grid">
-              <label class="field" style="grid-column: 1 / -1;">
-                <span>Usable Roof Area (sq ft) <i class="info-tip" data-tip="Shadow-free roof area. You can also measure and sync directly from the Rooftop CAD tab.">i</i></span>
-                <input id="roofArea" type="number" min="0" step="10" value="650">
-              </label>
-              <label class="field" style="grid-column: 1 / -1;">
-                <span>System preference</span>
+              <!-- Row 4: System Preference & Usable Roof Area -->
+              <label class="field compact">
+                <span>System preference *</span>
                 <select id="goal">
-                  <option value="ongrid">On-grid (Max Savings)</option>
+                  <option value="ongrid" selected>On-grid (Max Savings)</option>
                   <option value="hybrid">Hybrid (Grid + Battery)</option>
                   <option value="offgrid">Off-grid (Independent)</option>
                 </select>
               </label>
-              <label class="field" style="grid-column: 1 / -1;">
-                <span>Coordinates (Lat, Lng)</span>
-                <input id="coordinates" type="text" placeholder="e.g. 18.52, 73.85">
+              <label class="field compact">
+                <span>Usable roof area (sq ft) *</span>
+                <input id="roofArea" type="number" min="0" step="10" value="650">
               </label>
-              <label class="field">
-                <span>Tilt Angle (°)</span>
-                <input id="tiltAngle" type="number" min="0" max="90" step="1" placeholder="Auto (Lat)">
-              </label>
-              <label class="field">
-                <span>Orientation</span>
-                <select id="orientationDir">
-                  <option value="South">South (Optimal)</option>
-                  <option value="SouthEast">South-East</option>
-                  <option value="SouthWest">South-West</option>
-                  <option value="East">East</option>
-                  <option value="West">West</option>
-                  <option value="North">North</option>
-                </select>
-              </label>
-            </div>
-          </div>
 
-          <!-- CATEGORY 4: SOLAR HARDWARE & SIZING -->
-          <div class="cat-section" id="catSectionSizing" data-cat="sizing" style="display: none;">
-            <div class="cat-section-header">
-              <span class="cat-section-title">Solar Tech & Hardware</span>
-            </div>
-            <div class="field-grid">
-              <label class="field" style="grid-column: 1 / -1;">
-                <span>Panel Type <i class="info-tip" data-tip="DCR panels are domestically manufactured and required for PM Surya Ghar subsidy.">i</i></span>
+              <!-- Row 5: Panel Type & Subsidy Category -->
+              <label class="field compact">
+                <span>Panel type *</span>
                 <select id="panelType">
-                  <option value="dcr">DCR Mono PERC / TOPCon (Govt Subsidy Eligible)</option>
-                  <option value="nonDcr">Non-DCR Mono PERC (Imported, No Subsidy)</option>
-                  <option value="dcr_bifacial">DCR Mono Bifacial (Govt Subsidy Eligible)</option>
-                  <option value="mono_bifacial">Mono Bifacial (Non-DCR, No Subsidy)</option>
-                  <option value="dcr_topcon">DCR TOPCon Bifacial (Govt Subsidy Eligible)</option>
-                  <option value="topcon_bifacial">TOPCon Bifacial (Non-DCR, No Subsidy)</option>
-                  <option value="poly">Polycrystalline (Legacy / Low Cost)</option>
+                  <option value="dcr" selected>DCR Mono PERC / TOPCon</option>
+                  <option value="nonDcr">Non-DCR Mono PERC</option>
+                  <option value="dcr_bifacial">DCR Mono Bifacial</option>
+                  <option value="mono_bifacial">Mono Bifacial</option>
+                  <option value="dcr_topcon">DCR TOPCon Bifacial</option>
+                  <option value="topcon_bifacial">TOPCon Bifacial</option>
+                  <option value="poly">Polycrystalline</option>
                 </select>
               </label>
-              <label class="field" id="subsidyCategoryContainer" style="grid-column: 1 / -1;">
-                <span>Subsidy Category</span>
+              <label class="field compact" id="subsidyCategoryContainer">
+                <span>Subsidy category *</span>
                 <select id="subsidyCategory">
-                  <option value="individual">Residential households</option>
-                  <option value="ghs">Group Housing Society (GHS/RWA)</option>
+                  <option value="individual" selected>Residential households</option>
+                  <option value="ghs">Group Housing Society</option>
                 </select>
               </label>
-              <label class="field" style="grid-column: 1 / -1;">
-                <span>Mounting Structure</span>
-                <select id="structureType">
-                  <option value="hotDip">Hot-dip galvanized (25+ yrs)</option>
-                  <option value="galvalume">Galvalume (Mid-range)</option>
-                  <option value="gpPurlin">GP purlin (Budget)</option>
-                </select>
-              </label>
-              <label class="field">
-                <span>Capacity Override (kWp)</span>
-                <input id="capacityOverride" type="number" min="0" step="0.1" placeholder="Auto">
-              </label>
-              <label class="field">
-                <span>Inverter Override (kW)</span>
-                <input id="inverterOverride" type="number" min="0" step="0.1" placeholder="Auto">
-              </label>
-              <label class="field" style="grid-column: 1 / -1;">
-                <span>Battery Override (kWh)</span>
-                <input id="batteryOverride" type="number" min="0" step="0.1" placeholder="Auto">
-              </label>
-              <label class="field">
-                <span>Backup load (%)</span>
-                <input id="backupLoad" type="number" min="0" max="100" step="5" value="50">
-              </label>
-              <label class="field">
-                <span>Backup hours</span>
-                <input id="backupHours" type="number" min="0" step="0.5" value="2">
-              </label>
-            </div>
-          </div>
 
-          <!-- CATEGORY 5: PAYMENT & FINANCING -->
-          <div class="cat-section" id="catSectionFinancing" data-cat="financing" style="display: none;">
-            <div class="cat-section-header">
-              <span class="cat-section-title">Payment & Loan Financing</span>
-            </div>
-            <div class="field-grid">
-              <label class="field" style="grid-column: 1 / -1;">
-                <span>Payment Mode</span>
+              <!-- Row 6: Panel Make & Panel Watt Peak -->
+              <label class="field compact">
+                <span>Panel make *</span>
+                <input id="panelMake" type="text" list="panelMakeOptions" placeholder="e.g. Tata Power Solar" value="Tata Power Solar">
+                <datalist id="panelMakeOptions">
+                  <option value="Tata Power Solar">
+                  <option value="Adani Solar">
+                  <option value="Waaree Energies">
+                  <option value="Vikram Solar">
+                  <option value="Goldi Solar">
+                  <option value="Premier Energies">
+                  <option value="RenewSys">
+                  <option value="Rayzon Solar">
+                  <option value="Canadian Solar">
+                  <option value="Trina Solar">
+                  <option value="JA Solar">
+                  <option value="Jinko Solar">
+                  <option value="Longi Solar">
+                </datalist>
+              </label>
+              <label class="field compact">
+                <span>Panel watt peak (Wp) *</span>
+                <input id="panelWp" type="number" min="100" max="800" step="5" value="550">
+              </label>
+
+              <!-- Row 7: Panel Rate & Loan Option -->
+              <label class="field compact">
+                <span>Panel rate (₹/Wp) *</span>
+                <input id="panelRate" type="number" min="0" step="0.1" value="25">
+              </label>
+              <label class="field compact">
+                <span>Loan option *</span>
                 <select id="paymentMode">
-                  <option value="upfront" selected>Upfront Cash Payment</option>
-                  <option value="loan">Bank Partner Loan (Zero Out-of-Pocket EMI)</option>
+                  <option value="upfront" selected>Without Loan</option>
+                  <option value="loan">With Bank Loan</option>
                 </select>
               </label>
             </div>
 
-            <div id="customerLoanFields" class="field-grid" style="margin-top: 8px; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
-              <label class="field" style="grid-column: 1 / -1;">
-                <span>Bank Interest Rate (% p.a.)</span>
-                <input id="loanInterestRate" type="number" min="1" max="25" step="0.1" value="9.5">
+            <!-- INLINE LOAN SUB-FIELDS (Visible only when 'With Bank Loan' is selected) -->
+            <div id="customerLoanFields" class="field-grid compact hidden" style="margin-top: 5px; padding: 5px 8px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; gap: 4px 8px;">
+              <label class="field compact">
+                <span>Bank interest (% p.a.) *</span>
+                <input id="loanInterestRate" type="number" min="1" max="25" step="0.1" value="7">
               </label>
-              <label class="field">
-                <span>Loan Amount (₹)</span>
-                <input id="loanAmount" type="number" min="0" step="5000" placeholder="Auto (Net Cost)">
+              <label class="field compact">
+                <span>Upfront payment (%) *</span>
+                <input id="loanDownPaymentPct" type="number" min="0" max="100" step="1" value="10">
               </label>
-              <label class="field">
-                <span>Target Monthly EMI (₹)</span>
-                <input id="loanMonthlyEmi" type="number" min="0" step="100" placeholder="Auto (Matches Bill)">
-              </label>
-              <div style="grid-column: 1 / -1; font-size: 11.5px; color: var(--primary-green, #16a34a); font-weight: 500; margin-top: 4px;" id="customerLoanLivePreview">
-                <span>✨ Pay what you already pay for electricity → System becomes 100% free in <strong id="customerLoanTenurePreview">~4 years</strong>!</span>
+              <input id="loanAmount" type="hidden">
+              <input id="loanMonthlyEmi" type="hidden">
+              <div style="grid-column: 1 / -1; font-size: 10px; color: #15803d; font-weight: 500;" id="customerLoanLivePreview">
+                <span>✨ Pay electricity bill as EMI → System free in <strong id="customerLoanTenurePreview">~4 years</strong>!</span>
               </div>
             </div>
 
-            <!-- Hidden internal financing mirrors -->
-            <select id="internalPaymentMode" style="display: none;">
-              <option value="upfront">Upfront</option>
-              <option value="loan">Loan</option>
-            </select>
-            <input id="internalLoanInterestRate" type="hidden">
-            <input id="internalLoanAmount" type="hidden">
-            <input id="internalLoanMonthlyEmi" type="hidden">
-            <input id="internalLoanTenureMonths" type="hidden">
+            <!-- CURRENT BILL BREAKDOWN (BEFORE SOLAR) -->
+            <div class="sidebar-bill-breakdown-card" style="margin-top: 5px; padding: 5px 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+              <div style="font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 3px; display: flex; justify-content: space-between;">
+                <span>Current Bill Breakdown (Before Solar) *</span>
+                <span style="font-size: 9.5px; color: #64748b; font-weight: normal;">Auto-synced</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px;">
+                <label class="field compact">
+                  <span style="font-size: 9.5px;">Fixed Chg (₹)</span>
+                  <input id="billFixedCharges" type="number" min="0" step="1" value="130" style="padding: 2px 4px; font-size: 11px;">
+                </label>
+                <label class="field compact">
+                  <span style="font-size: 9.5px;">Energy Chg (₹)</span>
+                  <input id="billEnergyCharges" type="number" min="0" step="1" value="4738" style="padding: 2px 4px; font-size: 11px;">
+                </label>
+                <label class="field compact">
+                  <span style="font-size: 9.5px;">Elec Duty (₹)</span>
+                  <input id="billElectricityDuty" type="number" min="0" step="1" value="332" style="padding: 2px 4px; font-size: 11px;">
+                </label>
+              </div>
+            </div>
+
+            <!-- ADDITIONAL IMPORTANT BUT NOT REQUIRED FIELDS (Just below required fields) -->
+            <div class="sidebar-compact-grid" style="margin-top: 5px; padding: 5px 8px; background: #fafafa; border: 1px solid #e2e8f0; border-radius: 6px;">
+              <div style="grid-column: 1 / -1; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 2px;">
+                Additional Capacity Controls (Optional)
+              </div>
+              <label class="field compact">
+                <span>Solar capacity (kWp)</span>
+                <input id="capacityOverride" type="number" min="0" step="0.1" placeholder="Auto">
+              </label>
+              <label class="field compact">
+                <span>Inverter capacity (kW)</span>
+                <input id="inverterOverride" type="number" min="0" step="0.1" placeholder="Auto">
+              </label>
+            </div>
+
+            <!-- EXPANDABLE DRAWER: MORE DETAILS & ADVANCED OPTIONS (for backward compat & edge cases) -->
+            <details id="advancedOptionsDrawer" style="margin-top: 6px; border: 1px solid #e2e8f0; border-radius: 6px; background: #ffffff;">
+              <summary style="padding: 5px 8px; font-size: 10.5px; font-weight: 600; color: #475569; cursor: pointer; user-select: none;">
+                ⚙️ More Details, Address & Multi-Meter Society
+              </summary>
+              <div style="padding: 6px 8px; border-top: 1px solid #f1f5f9;">
+                <!-- Customer Contact Details -->
+                <div class="sidebar-compact-grid" style="margin-bottom: 6px;">
+                  <label class="field compact">
+                    <span>Mobile number</span>
+                    <input id="mobileNumber" type="tel" placeholder="10-digit mobile">
+                  </label>
+                  <label class="field compact">
+                    <span>Email address</span>
+                    <input id="emailAddress" type="email" placeholder="name@example.com">
+                  </label>
+                  <label class="field compact" style="grid-column: 1 / -1;">
+                    <span>Site / Installation address</span>
+                    <input id="customerAddress" type="text" placeholder="e.g. Plot 14, Hingne Khurd, Pune" value="Pune, Maharashtra">
+                  </label>
+                </div>
+
+                <!-- Structure, Orientation, Battery & Backup -->
+                <div class="sidebar-compact-grid" style="margin-bottom: 6px;">
+                  <label class="field compact">
+                    <span>Mounting structure</span>
+                    <select id="structureType">
+                      <option value="hotDip" selected>Hot-dip galvanized (25+ yrs)</option>
+                      <option value="galvalume">Galvalume (Mid-range)</option>
+                      <option value="gpPurlin">GP purlin (Budget)</option>
+                    </select>
+                  </label>
+                  <label class="field compact">
+                    <span>Optimization Goal</span>
+                    <select id="optimizationStrategy">
+                      <option value="optimum" selected>Optimum (Cost & ROI)</option>
+                      <option value="summer_proof">Summer-Proof (Peak Sizing)</option>
+                    </select>
+                  </label>
+                  <label class="field compact">
+                    <span>Coordinates (Lat, Lng)</span>
+                    <input id="coordinates" type="text" placeholder="e.g. 18.52, 73.85">
+                  </label>
+                  <label class="field compact">
+                    <span>Tilt Angle (°)</span>
+                    <input id="tiltAngle" type="number" min="0" max="90" step="1" placeholder="Auto">
+                  </label>
+                  <label class="field compact">
+                    <span>Orientation</span>
+                    <select id="orientationDir">
+                      <option value="South" selected>South (Optimal)</option>
+                      <option value="SouthEast">South-East</option>
+                      <option value="SouthWest">South-West</option>
+                      <option value="East">East</option>
+                      <option value="West">West</option>
+                      <option value="North">North</option>
+                    </select>
+                  </label>
+                  <label class="field compact">
+                    <span>Battery Override (kWh)</span>
+                    <input id="batteryOverride" type="number" min="0" step="0.1" placeholder="Auto">
+                  </label>
+                  <label class="field compact">
+                    <span>Backup load (%)</span>
+                    <input id="backupLoad" type="number" min="0" max="100" step="5" value="50">
+                  </label>
+                  <label class="field compact">
+                    <span>Backup hours</span>
+                    <input id="backupHours" type="number" min="0" step="0.5" value="2">
+                  </label>
+                  <button class="ghost-button" id="fetchLocationButton" type="button" title="Auto-detect current GPS coordinates" style="padding: 2px 6px; font-size: 10px; grid-column: 1 / -1;">📍 Auto Detect GPS</button>
+                </div>
+
+                <!-- Conditional GHS/Industrial fields -->
+                <div class="sidebar-compact-grid">
+                  <label class="field compact hidden" id="numFlatsField" style="grid-column: 1 / -1;">
+                    <span>Number of flats (GHS)</span>
+                    <input id="numFlats" type="number" min="1" step="1" placeholder="e.g. 80">
+                  </label>
+                  <label class="field compact hidden" id="powerFactorField">
+                    <span>Power factor</span>
+                    <input id="currentPf" type="number" min="0.5" max="1" step="0.01" placeholder="e.g. 0.85">
+                  </label>
+                  <label class="field compact hidden" id="peakUsageField">
+                    <span>Peak usage %</span>
+                    <input id="peakHourUsagePct" type="number" min="0" max="100" step="5" value="30">
+                  </label>
+                </div>
+
+                <!-- Society Multi-Meter Management -->
+                <div style="margin-top: 8px;">
+                  <div class="metering-mode-selector" style="margin-bottom: 6px; display: flex; background: var(--surface-soft, #eef3ec); padding: 2px; border-radius: 4px; gap: 4px;">
+                    <button type="button" id="meteringModeSingleBtn" class="metering-mode-btn active" style="flex: 1; padding: 4px 6px; font-size: 10.5px; font-weight: 600; border: none; border-radius: 3px; background: #ffffff; color: var(--ink); cursor: pointer;">Single Meter</button>
+                    <button type="button" id="meteringModeMultiBtn" class="metering-mode-btn" style="flex: 1; padding: 4px 6px; font-size: 10.5px; font-weight: 600; border: none; border-radius: 3px; background: transparent; color: var(--muted); cursor: pointer;">🏢 Multi-Meter (Flats)</button>
+                  </div>
+
+                  <div id="multiMeterSection" style="display: none; margin-bottom: 8px;">
+                    <div class="multi-meter-kpi-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; margin-bottom: 6px;">
+                      <div class="mm-kpi-card" style="background: var(--surface-soft, #eef3ec); padding: 4px 6px; border-radius: 4px;">
+                        <span style="font-size: 9.5px; color: var(--muted); display: block;">Total Flats / Meters</span>
+                        <strong id="mmTotalMetersCount" style="font-size: 12px; color: var(--ink);">0 Flats</strong>
+                      </div>
+                      <div class="mm-kpi-card" style="background: var(--surface-soft, #eef3ec); padding: 4px 6px; border-radius: 4px;">
+                        <span style="font-size: 9.5px; color: var(--muted); display: block;">Total Sanctioned Load</span>
+                        <strong id="mmTotalSanctionedLoad" style="font-size: 12px; color: var(--ink);">0 kW</strong>
+                      </div>
+                      <div class="mm-kpi-card" style="background: var(--surface-soft, #eef3ec); padding: 4px 6px; border-radius: 4px;">
+                        <span style="font-size: 9.5px; color: var(--muted); display: block;">Total Monthly Units</span>
+                        <strong id="mmTotalMonthlyUnits" style="font-size: 12px; color: var(--ink);">0 kWh</strong>
+                      </div>
+                      <div class="mm-kpi-card" style="background: #e0f2fe; padding: 4px 6px; border-radius: 4px;">
+                        <span style="font-size: 9.5px; color: #0369a1; display: block;">Total Subsidies Eligible</span>
+                        <strong id="mmTotalSubsidies" style="font-size: 12px; color: #0284c7;">₹0</strong>
+                      </div>
+                    </div>
+
+                    <div class="mm-allocation-bar-card" style="background: #f8fafc; border: 1px solid var(--line, #e2e8f0); border-radius: 4px; padding: 6px 8px; margin-bottom: 6px;">
+                      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+                        <span style="font-size: 10px; font-weight: 600; color: var(--ink);">Solar Load Allocation</span>
+                        <span id="mmAllocationBalanceBadge" class="badge-balanced" style="font-size: 9.5px; padding: 1px 4px; border-radius: 3px; background: #dcfce7; color: #15803d; font-weight: 600;">Balanced ✓</span>
+                      </div>
+                      <div style="font-size: 10px; color: var(--muted); display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span>Allocated: <strong id="mmAllocatedKwSum" style="color: var(--ink);">0.0 kW</strong></span>
+                        <span>System Size: <strong id="mmSystemSizeTarget" style="color: var(--ink);">0.0 kW</strong></span>
+                      </div>
+                      <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                        <button type="button" id="mmAutoDistributeBtn" class="ghost-button" style="padding: 2px 6px; font-size: 10px;">⚡ Auto</button>
+                        <button type="button" id="mmEqualDistributeBtn" class="ghost-button" style="padding: 2px 6px; font-size: 10px;">⊞ Equal</button>
+                        <button type="button" id="mmAddMeterBtn" class="primary-button" style="padding: 2px 8px; font-size: 10px; margin-left: auto;">+ Flat</button>
+                      </div>
+                    </div>
+
+                    <div id="mmCompulsoryWarning" style="display: none; background: #fef2f2; border-left: 3px solid #ef4444; padding: 4px 6px; font-size: 10px; color: #b91c1c; border-radius: 3px; margin-bottom: 6px;">
+                      ⚠️ Compulsory fields missing on some flats.
+                    </div>
+
+                    <div class="mm-table-container" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--line, #e2e8f0); border-radius: 4px; background: #ffffff;">
+                      <table class="mm-table" style="width: 100%; border-collapse: collapse; font-size: 10px; text-align: left;">
+                        <thead style="background: var(--surface-soft, #f1f5f9); position: sticky; top: 0; z-index: 2;">
+                          <tr style="border-bottom: 1px solid #cbd5e1;">
+                            <th style="padding: 4px 6px;">Flat / Name *</th>
+                            <th style="padding: 4px 4px;">Consumer No. *</th>
+                            <th style="padding: 4px 4px;">Load (kW) *</th>
+                            <th style="padding: 4px 4px;">Units</th>
+                            <th style="padding: 4px 4px;">Bill</th>
+                            <th style="padding: 4px 4px; width: 56px;">Alloc kW</th>
+                            <th style="padding: 4px 4px;">Subsidy</th>
+                            <th style="padding: 4px 2px; text-align: center;">✕</th>
+                          </tr>
+                        </thead>
+                        <tbody id="mmMetersTableBody"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Hidden inputs for backward compatibility -->
+                <input id="internalCustomerName" type="hidden">
+                <input id="internalMobileNumber" type="hidden">
+                <input id="internalEmailAddress" type="hidden">
+                <select id="internalPaymentMode" style="display: none;">
+                  <option value="upfront">Upfront</option>
+                  <option value="loan">Loan</option>
+                </select>
+                <input id="internalLoanInterestRate" type="hidden">
+                <input id="internalLoanAmount" type="hidden">
+                <input id="internalLoanMonthlyEmi" type="hidden">
+                <input id="internalLoanTenureMonths" type="hidden">
+              </div>
+            </details>
           </div>
 
           <!-- CATEGORY 6: RATES & TARIFFS (INTERNAL ONLY) -->
@@ -1397,7 +1434,7 @@
                   <tr style="border-bottom: 1px solid var(--line);">
                     <td style="padding: 8px 10px; text-align: center; font-weight: 700;">3</td>
                     <td style="padding: 8px 10px; font-weight: 700;">EARTHING</td>
-                    <td style="padding: 8px 10px;">16 SQ MM EARTHING ALU. CONDUCTOR ROD; 14 SQ MM × 1 MTR COPPER ROD</td>
+                    <td style="padding: 8px 10px;">16 MM EARTHING ALU. CONDUCTOR ROD; 14 MM × 1 MTR COPPER ROD</td>
                     <td style="padding: 8px 10px; text-align: center; font-weight: 700; color: var(--text-muted);">—</td>
                   </tr>
                   <tr style="border-bottom: 1px solid var(--line); background: var(--bg-alt, #fafafa);">

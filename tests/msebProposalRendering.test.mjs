@@ -121,4 +121,45 @@ const warrantyTable = mockCalls.find(c => c.body && c.body.some(row => row[1] ==
 assert.ok(warrantyTable, "Warranty table must be generated in PDF");
 assert.equal(warrantyTable.body[0][2], "Tier-1 DCR Mono Bifacial Glass-to-Glass (550 Wp)", "Solar panel specification in warranty table must reflect selected bifacial panel");
 
-console.log("All MSEB Proposal Rendering and Panel Selection tests passed successfully! 🎉");
+// Test 4: Earthing Rod specification verification in Product Warranty & Details
+const earthingRow = warrantyTable.body.find(row => row[1] === "EARTHING");
+assert.ok(earthingRow, "Earthing row must be present in warranty table");
+assert.ok(earthingRow[2].includes("16 MM EARTHING ALU. CONDUCTOR ROD"), "Earthing rod must be 16 MM, not 16 SQ MM");
+assert.ok(earthingRow[2].includes("14 MM × 1 MTR COPPER ROD"), "Earthing rod must be 14 MM, not 14 SQ MM");
+assert.ok(!earthingRow[2].includes("16 SQ MM"), "Earthing rod must NOT specify 16 SQ MM");
+assert.ok(!earthingRow[2].includes("14 SQ MM"), "Earthing rod must NOT specify 14 SQ MM");
+
+// Test 5: Proposal loan calculations omitted when Without Loan (hideFinancing) is selected
+const pdfWithoutLoanCalls = [];
+globalThis.window.jspdf.jsPDF = class MockPDFWithoutLoan {
+  constructor() {
+    this.pages = [1];
+    this.lastAutoTable = { finalY: 50 };
+    this.textCalls = [];
+    this.internal = { pageSize: { getWidth: () => 210, getHeight: () => 297 }, getNumberOfPages: () => this.pages.length };
+  }
+  setFont() {}
+  setFontSize() {}
+  setTextColor() {}
+  text(content, x, y, opts) { this.textCalls.push(content); }
+  line() {}
+  setDrawColor() {}
+  setLineWidth() {}
+  setFillColor() {}
+  rect() {}
+  roundedRect() {}
+  addPage() { this.pages.push(this.pages.length + 1); }
+  getNumberOfPages() { return this.pages.length; }
+  setPage() {}
+  addImage() {}
+  output() { return 'pdf-blob'; }
+  save(filename) {}
+  splitTextToSize(text) { return Array.isArray(text) ? text : [text]; }
+  autoTable(opts) { pdfWithoutLoanCalls.push(opts); }
+};
+
+await generateProposalPDF(estBifacial, estBifacial.recommended, { hideFinancing: true });
+const hasLoanProposalWithoutLoan = pdfWithoutLoanCalls.some(c => c.head && c.head[0] && String(c.head[0][0]).includes("Bank Partner Loan"));
+assert.equal(hasLoanProposalWithoutLoan, false, "When Without Loan is selected, proposal must not show loan calculations");
+
+console.log("All MSEB Proposal Rendering, Panel Selection, and Loan Omission tests passed successfully! 🎉");

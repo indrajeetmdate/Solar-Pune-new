@@ -70,14 +70,20 @@ const ids = [
   "loanMonthlyEmi",
   "internalLoanMonthlyEmi",
   "internalLoanTenureMonths",
+  "loanDownPaymentPct",
   "hideFinancing",
   "panelType",
+  "panelMake",
+  "panelRate",
   "structureType",
   "capacityOverride",
   "inverterOverride",
   "batteryOverride",
   "backupLoad",
   "backupHours",
+  "billFixedCharges",
+  "billEnergyCharges",
+  "billElectricityDuty",
   "panelDcrRate",
   "panelNonDcrRate",
   "batteryRate",
@@ -250,9 +256,9 @@ function readInput() {
   const multiLoad = isMulti ? state.meters.reduce((s, m) => s + (Number(m.sanctionedLoad) || 0), 0) : 0;
 
   return {
-    customerName: state.internalUnlocked ? (safeStr("internalCustomerName") || safeStr("customerName")) : safeStr("customerName"),
-    mobileNumber: state.internalUnlocked ? (safeStr("internalMobileNumber") || safeStr("mobileNumber")) : safeStr("mobileNumber"),
-    emailAddress: state.internalUnlocked ? (safeStr("internalEmailAddress") || safeStr("emailAddress")) : safeStr("emailAddress"),
+    customerName: safeStr("customerName") || safeStr("internalCustomerName"),
+    mobileNumber: safeStr("mobileNumber") || safeStr("internalMobileNumber"),
+    emailAddress: safeStr("emailAddress") || safeStr("internalEmailAddress"),
     customerAddress: safeStr("customerAddress") || "Pune, Maharashtra",
     proposalSerialNo: safeStr("proposalSerialNo") || getNextProposalSerialNo(),
     monthlyUnits: isMulti ? multiUnits : numberValue("monthlyUnits"),
@@ -280,12 +286,18 @@ function readInput() {
     backupNeeded: true,
     customerView: false,
     panelType: safeStr("panelType") || "dcr",
+    panelMake: safeStr("panelMake") || "",
+    panelRate: numberValue("panelRate") || null,
+    panelWp: numberValue("panelWp") || 550,
     panelSpec: state.panelSpec || "",
     panelSpecCustom: state.panelSpecCustom || "",
     subsidyCategory: safeStr("subsidyCategory"),
     structureType: safeStr("structureType"),
     capacityOverride: numberValue("capacityOverride"),
     inverterOverride: numberValue("inverterOverride"),
+    billFixedCharges: $("billFixedCharges") && $("billFixedCharges").value !== "" ? numberValue("billFixedCharges") : null,
+    billEnergyCharges: $("billEnergyCharges") && $("billEnergyCharges").value !== "" ? numberValue("billEnergyCharges") : null,
+    billElectricityDuty: $("billElectricityDuty") && $("billElectricityDuty").value !== "" ? numberValue("billElectricityDuty") : null,
     costOverrides: state.costOverrides || {},
     batteryOverride: numberValue("batteryOverride"),
     backupLoadPercent: numberValue("backupLoad"),
@@ -299,8 +311,9 @@ function readInput() {
       ? (numberValue("internalLoanAmount") || numberValue("loanAmount"))
       : numberValue("loanAmount"),
     loanInterestRate: state.internalUnlocked
-      ? (numberValue("internalLoanInterestRate") || numberValue("loanInterestRate") || 9.5)
-      : (numberValue("loanInterestRate") || 9.5),
+      ? (numberValue("internalLoanInterestRate") || numberValue("loanInterestRate") || 7)
+      : (numberValue("loanInterestRate") || 7),
+    loanDownPaymentPct: numberValue("loanDownPaymentPct") || 10,
     loanMonthlyEmi: state.internalUnlocked
       ? (numberValue("internalLoanMonthlyEmi") || numberValue("loanMonthlyEmi"))
       : numberValue("loanMonthlyEmi"),
@@ -326,6 +339,7 @@ function readConfig() {
 
   return {
     pricing: {
+      panelRate: $("panelRate") && $("panelRate").value !== "" ? numberValue("panelRate") : null,
       panelDcrRatePerWp: $("panelDcrRate") && $("panelDcrRate").value !== "" ? numberValue("panelDcrRate") : DEFAULT_CONFIG.pricing.panelDcrRatePerWp,
       panelNonDcrRatePerWp: $("panelNonDcrRate") && $("panelNonDcrRate").value !== "" ? numberValue("panelNonDcrRate") : DEFAULT_CONFIG.pricing.panelNonDcrRatePerWp,
       batteryRatePerWh: $("batteryRate") && $("batteryRate").value !== "" ? numberValue("batteryRate") : DEFAULT_CONFIG.pricing.batteryRatePerWh,
@@ -1002,6 +1016,16 @@ function applyExtractedBill() {
     if (pfEl) pfEl.value = fields.powerFactor;
   }
 
+  // Auto-fill Current Bill Breakdown if charges were detected
+  if (result.charges && Array.isArray(result.charges)) {
+    const fc = result.charges.find(c => /fixed|स्थिर/i.test(c.label || c.desc));
+    const ec = result.charges.find(c => /energy|वीज आकार/i.test(c.label || c.desc));
+    const dt = result.charges.find(c => /duty|शुल्क/i.test(c.label || c.desc));
+    if (fc && $("billFixedCharges")) $("billFixedCharges").value = Math.round(fc.amount || 0);
+    if (ec && $("billEnergyCharges")) $("billEnergyCharges").value = Math.round(ec.amount || 0);
+    if (dt && $("billElectricityDuty")) $("billElectricityDuty").value = Math.round(dt.amount || 0);
+  }
+
   render();
 }
 
@@ -1618,11 +1642,28 @@ function render() {
       </table>`;
   }
 
+  // Sync sidebar current bill breakdown values if not actively being typed
+  if ($("billFixedCharges") && document.activeElement !== $("billFixedCharges")) {
+    if (!$("billFixedCharges").value || !input.billFixedCharges) {
+      $("billFixedCharges").value = fixedCharge;
+    }
+  }
+  if ($("billEnergyCharges") && document.activeElement !== $("billEnergyCharges")) {
+    if (!$("billEnergyCharges").value || !input.billEnergyCharges) {
+      $("billEnergyCharges").value = energyCharge;
+    }
+  }
+  if ($("billElectricityDuty") && document.activeElement !== $("billElectricityDuty")) {
+    if (!$("billElectricityDuty").value || !input.billElectricityDuty) {
+      $("billElectricityDuty").value = duty;
+    }
+  }
+
   // Report Display: toggle visibility of optional sections
   const hidePayback = $("hidePayback")?.checked || $("hideCost")?.checked;
   const hideAreaFit = $("hideAreaFit")?.checked;
   const hideSubsidy = $("hideSubsidy")?.checked;
-  const hideFinancing = $("hideFinancing")?.checked || $("hideCost")?.checked;
+  const hideFinancing = (input.paymentMode !== "loan") || $("hideFinancing")?.checked || $("hideCost")?.checked;
   
   if ($("costBreakup")?.closest("details")) {
     $("costBreakup").closest("details").style.display = $("hideCost")?.checked ? "none" : "";
@@ -3442,33 +3483,88 @@ function attachEvents() {
     const isLoan = e.target.value === "loan";
     $("customerLoanFields")?.classList.toggle("hidden", !isLoan);
     if ($("internalPaymentMode")) $("internalPaymentMode").value = e.target.value;
+    if (isLoan) {
+      if ($("loanInterestRate") && (!Number($("loanInterestRate").value) || Number($("loanInterestRate").value) <= 0)) {
+        $("loanInterestRate").value = "7";
+      }
+      if ($("loanDownPaymentPct") && (!Number($("loanDownPaymentPct").value) || Number($("loanDownPaymentPct").value) <= 0)) {
+        $("loanDownPaymentPct").value = "10";
+      }
+    }
     render();
   });
   $("internalPaymentMode")?.addEventListener("change", (e) => {
     if ($("paymentMode")) {
+      const isLoan = e.target.value === "loan";
       $("paymentMode").value = e.target.value;
-      $("customerLoanFields")?.classList.toggle("hidden", e.target.value !== "loan");
+      $("customerLoanFields")?.classList.toggle("hidden", !isLoan);
+      if (isLoan) {
+        if ($("loanInterestRate") && (!Number($("loanInterestRate").value) || Number($("loanInterestRate").value) <= 0)) {
+          $("loanInterestRate").value = "7";
+        }
+        if ($("loanDownPaymentPct") && (!Number($("loanDownPaymentPct").value) || Number($("loanDownPaymentPct").value) <= 0)) {
+          $("loanDownPaymentPct").value = "10";
+        }
+      }
     }
     render();
   });
   $("loanInterestRate")?.addEventListener("input", (e) => {
     if ($("internalLoanInterestRate")) $("internalLoanInterestRate").value = e.target.value;
+    render();
   });
   $("internalLoanInterestRate")?.addEventListener("input", (e) => {
     if ($("loanInterestRate")) $("loanInterestRate").value = e.target.value;
+    render();
+  });
+  $("loanDownPaymentPct")?.addEventListener("input", () => {
+    render();
   });
   $("loanAmount")?.addEventListener("input", (e) => {
     if ($("internalLoanAmount")) $("internalLoanAmount").value = e.target.value;
+    render();
   });
   $("internalLoanAmount")?.addEventListener("input", (e) => {
     if ($("loanAmount")) $("loanAmount").value = e.target.value;
+    render();
   });
   $("loanMonthlyEmi")?.addEventListener("input", (e) => {
     if ($("internalLoanMonthlyEmi")) $("internalLoanMonthlyEmi").value = e.target.value;
+    render();
   });
   $("internalLoanMonthlyEmi")?.addEventListener("input", (e) => {
     if ($("loanMonthlyEmi")) $("loanMonthlyEmi").value = e.target.value;
+    render();
   });
+
+  // Panel rate and specification listeners
+  $("panelType")?.addEventListener("change", (e) => {
+    const pType = e.target.value;
+    const isDcr = pType.startsWith("dcr");
+    const currentRate = numberValue("panelRate");
+    if (!currentRate || currentRate === 25 || currentRate === 15) {
+      if ($("panelRate")) $("panelRate").value = isDcr ? "25" : "15";
+    }
+    render();
+  });
+  $("panelMake")?.addEventListener("input", () => render());
+  $("panelRate")?.addEventListener("input", () => render());
+  $("panelWp")?.addEventListener("input", () => render());
+
+  // Current Bill Breakdown listeners with auto-sync to total monthly bill
+  const onBillBreakdownInput = () => {
+    const f = numberValue("billFixedCharges");
+    const e = numberValue("billEnergyCharges");
+    const d = numberValue("billElectricityDuty");
+    const sum = Math.round(f + e + d);
+    if (sum > 0 && $("monthlyBill")) {
+      $("monthlyBill").value = sum;
+    }
+    render();
+  };
+  $("billFixedCharges")?.addEventListener("input", onBillBreakdownInput);
+  $("billEnergyCharges")?.addEventListener("input", onBillBreakdownInput);
+  $("billElectricityDuty")?.addEventListener("input", onBillBreakdownInput);
 
   // Customer & Contact Info two-way sync listeners
   $("customerName")?.addEventListener("input", (e) => {
@@ -3775,7 +3871,7 @@ function attachEvents() {
         hideAreaFit: $("hideAreaFit")?.checked || false,
         hideSubsidy: $("hideSubsidy")?.checked || false,
         hideCost: $("hideCost")?.checked || false,
-        hideFinancing: $("hideFinancing")?.checked || false,
+        hideFinancing: ($("paymentMode")?.value !== "loan") || ($("hideFinancing")?.checked || false),
         solarInstalled: $("solarInstalled")?.checked || false,
         proposalSerialNo: $("proposalSerialNo")?.value || getNextProposalSerialNo(),
         customerAddress: $("customerAddress")?.value || "Pune, Maharashtra",
@@ -3980,7 +4076,7 @@ function attachEvents() {
         hideAreaFit: $("hideAreaFit")?.checked || false,
         hideSubsidy: $("hideSubsidy")?.checked || false,
         hideCost: $("hideCost")?.checked || false,
-        hideFinancing: $("hideFinancing")?.checked || false,
+        hideFinancing: ($("paymentMode")?.value !== "loan") || ($("hideFinancing")?.checked || false),
         solarInstalled: $("solarInstalled")?.checked || false,
         proposalSerialNo: $("proposalSerialNo")?.value || getNextProposalSerialNo(),
         customerAddress: $("customerAddress")?.value || "Pune, Maharashtra",
@@ -4566,9 +4662,9 @@ function buildProposalSnapshot() {
     config,
   };
 
-  const custName = input.customerName || $("internalCustomerName")?.value || $("customerName")?.value || "Draft Customer";
-  const mobile = input.mobileNumber || $("internalMobileNumber")?.value || $("mobileNumber")?.value || "";
-  const email = input.emailAddress || $("internalEmailAddress")?.value || $("emailAddress")?.value || "";
+  const custName = input.customerName || $("customerName")?.value || $("internalCustomerName")?.value || "Draft Customer";
+  const mobile = input.mobileNumber || $("mobileNumber")?.value || $("internalMobileNumber")?.value || "";
+  const email = input.emailAddress || $("emailAddress")?.value || $("internalEmailAddress")?.value || "";
   const serialNo = reportDisplay.proposalSerialNo || $("proposalSerialNo")?.value || getNextProposalSerialNo();
   const sysCap = state.estimates?.recommended?.dcCapacityKw || formValues.capacityOverride || "";
   const totCost = state.estimates?.recommended?.netCost || 0;

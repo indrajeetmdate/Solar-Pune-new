@@ -157,7 +157,9 @@ export function calculateSolarFinancing({
   lifetimeSavings = 0,
   paymentMode = "upfront",
   loanAmountOverride = null,
-  interestRatePct = 9.5,
+  downPaymentPct = null,
+  downPaymentOverride = null,
+  interestRatePct = 7,
   loanMonthlyEmiOverride = null,
   loanTenureMonthsOverride = null,
 } = {}) {
@@ -166,15 +168,24 @@ export function calculateSolarFinancing({
   const cleanSubsidy = Math.round(Math.max(Number(subsidy) || 0, 0));
   const cleanMonthlyBill = Math.round(Math.max(Number(monthlyBill) || 0, 0));
   const cleanMonthlySavings = Math.round(Math.max(Number(monthlySavings) || 0, 0));
-  const cleanRate = Number.isFinite(Number(interestRatePct)) ? Number(interestRatePct) : 9.5;
+  const cleanRate = Number.isFinite(Number(interestRatePct)) ? Number(interestRatePct) : 7;
 
-  // Loan Principal: defaults to net cost (after subsidy) or user override
+  // Loan Principal & Down Payment calculation
   let loanPrincipal = cleanNetCost;
+  let downPayment = 0;
   if (loanAmountOverride !== null && loanAmountOverride !== undefined && !isNaN(loanAmountOverride) && Number(loanAmountOverride) > 0) {
     loanPrincipal = Math.round(Math.max(0, Number(loanAmountOverride)));
+    downPayment = Math.max(0, cleanNetCost - loanPrincipal);
+  } else if (downPaymentOverride !== null && downPaymentOverride !== undefined && !isNaN(downPaymentOverride) && Number(downPaymentOverride) >= 0) {
+    downPayment = Math.round(Number(downPaymentOverride));
+    loanPrincipal = Math.max(0, cleanNetCost - downPayment);
+  } else if (downPaymentPct !== null && downPaymentPct !== undefined && !isNaN(downPaymentPct) && Number(downPaymentPct) > 0) {
+    downPayment = Math.round(cleanNetCost * (Number(downPaymentPct) / 100));
+    loanPrincipal = Math.max(0, cleanNetCost - downPayment);
+  } else {
+    downPayment = 0;
+    loanPrincipal = cleanNetCost;
   }
-
-  const downPayment = Math.max(0, cleanNetCost - loanPrincipal);
 
   let loanResult;
 

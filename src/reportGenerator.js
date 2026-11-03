@@ -1462,7 +1462,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   const warrantyData = [
     ["1", "SOLAR PANEL", warrantyPanelSpec, "12 Year Warranty /\n30 Year Performance Warranty"],
     ["2", "DCDB", "HAVELLS 1 IN 1 OUT 600 V", "5 Year"],
-    ["3", "EARTHING", "16 SQ MM EARTHING ALU. CONDUCTOR ROD;\n14 SQ MM × 1 MTR COPPER ROD", "—"],
+    ["3", "EARTHING", "16 MM EARTHING ALU. CONDUCTOR ROD;\n14 MM × 1 MTR COPPER ROD", "—"],
     ["4", "DC CABLE", "4 SQ MM COPPER TIN", "20 Year"],
     ["5", "CIVIL CHAMBER", "ISI STANDARD", "10 Year"],
     ["6", "ONGRID INVERTER", "Grid-Tied Solar Inverter (IP65)", "10 Year Warranty"],
