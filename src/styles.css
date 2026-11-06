@@ -1359,9 +1359,17 @@ th {
   -webkit-overflow-scrolling: touch;
 }
 
+.table-wrap > table {
+  min-width: 580px;
+}
+
+.table-wrap > table th,
+.table-wrap > table td {
+  white-space: nowrap;
+}
+
 table {
   width: 100%;
-  min-width: 580px;
   border-collapse: collapse;
   background: var(--surface);
 }
@@ -1371,8 +1379,65 @@ td {
   padding: 8px 8px;
   border-bottom: 1px solid var(--line);
   text-align: left;
-  white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+/* MSEDCL Electricity Bill Comparison in App */
+#msebComparisonGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#msebCurrentBillContainer,
+#msebPostSolarBillContainer {
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+#msebCurrentBillContainer table,
+#msebPostSolarBillContainer table {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+  margin: 0 !important;
+  background: #ffffff;
+}
+
+#msebCurrentBillContainer table td,
+#msebCurrentBillContainer table th,
+#msebPostSolarBillContainer table td,
+#msebPostSolarBillContainer table th {
+  padding: 5px 8px !important;
+  font-size: 12px;
+  box-sizing: border-box !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+#msebCurrentBillContainer table td:first-child,
+#msebCurrentBillContainer table th:first-child,
+#msebPostSolarBillContainer table td:first-child,
+#msebPostSolarBillContainer table th:first-child {
+  width: 60% !important;
+  max-width: 60% !important;
+  white-space: normal !important;
+}
+
+#msebCurrentBillContainer table td:last-child,
+#msebCurrentBillContainer table th:last-child,
+#msebPostSolarBillContainer table td:last-child,
+#msebPostSolarBillContainer table th:last-child {
+  width: 40% !important;
+  max-width: 40% !important;
+  text-align: right !important;
+  white-space: nowrap !important;
+  font-variant-numeric: tabular-nums !important;
 }
 
 /* Allow cost breakup table cells to wrap */
@@ -2917,14 +2982,11 @@ tr:hover td {
   overflow: hidden;
 }
 
-@media (max-width: 900px) {
-  .pdf-sample-page {
-    width: 100%;
-    min-height: auto;
-    height: auto;
-    max-height: none;
-    padding: 12px;
-    overflow: visible;
+@media screen and (max-width: 900px) {
+  .pdf-sample-scroll-area {
+    padding: 12px 6px;
+    align-items: flex-start;
+    overflow-x: auto;
   }
 }
 
@@ -3251,13 +3313,20 @@ tr:hover td {
 
 @media print {
   @page {
-    size: A4 portrait;
+    size: 210mm 297mm;
     margin: 0;
+  }
+
+  /* Completely remove ALL other DOM trees from print layout so Chrome never scales down */
+  body > *:not(#pdfSampleViewModal) {
+    display: none !important;
   }
 
   html, body {
     width: 210mm !important;
-    height: 100% !important;
+    min-width: 210mm !important;
+    max-width: 210mm !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
@@ -3266,32 +3335,20 @@ tr:hover td {
     print-color-adjust: exact !important;
   }
 
-  /* Hide everything on the page except the PDF sample modal */
-  body > *:not(#pdfSampleViewModal) {
-    display: none !important;
-  }
-
-  body * {
-    visibility: hidden;
-  }
-
-  #pdfSampleViewModal,
-  #pdfSampleViewModal *,
-  #pdfSampleViewPages,
-  #pdfSampleViewPages * {
-    visibility: visible !important;
-  }
-
   #pdfSampleViewModal {
     position: static !important;
+    inset: auto !important;
     display: block !important;
     width: 210mm !important;
+    min-width: 210mm !important;
+    max-width: 210mm !important;
     height: auto !important;
     background: #ffffff !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
-    z-index: 9999999 !important;
+    box-sizing: border-box !important;
+    z-index: auto !important;
   }
 
   .pdf-sample-toolbar,
@@ -3302,19 +3359,28 @@ tr:hover td {
 
   .pdf-sample-scroll-area {
     display: block !important;
+    position: static !important;
+    width: 210mm !important;
+    min-width: 210mm !important;
+    max-width: 210mm !important;
     background: #ffffff !important;
     padding: 0 !important;
     margin: 0 !important;
     overflow: visible !important;
     gap: 0 !important;
+    box-sizing: border-box !important;
   }
 
   .pdf-sample-pages-container {
     display: block !important;
+    position: static !important;
     width: 210mm !important;
+    min-width: 210mm !important;
+    max-width: 210mm !important;
     margin: 0 !important;
     padding: 0 !important;
     gap: 0 !important;
+    box-sizing: border-box !important;
   }
 
   .pdf-sample-page {

@@ -137,7 +137,13 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
         <div class="pdf-section-title">1. Building Executive Summary &amp; Financial Indicators</div>
         <div class="pdf-section-desc" style="font-size: 7.8pt; color: #475569; margin-bottom: 2mm;">Turnkey solar PV system economics, aggregate capacity, and PM Surya Ghar subsidy benefits for the society.</div>
 
-        <table class="pdf-table" style="margin-bottom: 3mm;">
+        <table class="pdf-table" style="margin-bottom: 3mm; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
+          <colgroup>
+            <col style="width: 32%;">
+            <col style="width: 18%;">
+            <col style="width: 32%;">
+            <col style="width: 18%;">
+          </colgroup>
           <tbody>
             <tr>
               <td style="width: 32%; background: #f8fafc; font-weight: 700;">Total Solar PV Capacity</td>
@@ -200,7 +206,13 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
           ${cadCanvasDataUrl ? `<img src="${cadCanvasDataUrl}" alt="Shared Rooftop CAD Blueprint" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 2px;">` : `<div style="color: #94a3b8; font-size: 9pt;">CAD Aerial Blueprint Diagram</div>`}
         </div>
 
-        <table class="pdf-table" style="margin-bottom: 2.5mm; font-size: 7.2pt;">
+        <table class="pdf-table" style="margin-bottom: 2.5mm; font-size: 7.2pt; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
+          <colgroup>
+            <col style="width: 25%;">
+            <col style="width: 25%;">
+            <col style="width: 25%;">
+            <col style="width: 25%;">
+          </colgroup>
           <tbody>
             <tr>
               <td style="width: 25%; background: #f8fafc; font-weight: 700;">Total Roof Area</td>
@@ -224,7 +236,15 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
         </table>
 
         <div style="font-size: 8pt; font-weight: 700; color: #63923e; margin-bottom: 1.5mm;">Demarcated Resident Panel Allocation Legend</div>
-        <table class="pdf-table" style="font-size: 6.8pt; line-height: 1.2;">
+        <table class="pdf-table" style="font-size: 6.8pt; line-height: 1.2; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
+          <colgroup>
+            <col style="width: 12%;">
+            <col style="width: 32%;">
+            <col style="width: 16%;">
+            <col style="width: 12%;">
+            <col style="width: 14%;">
+            <col style="width: 14%;">
+          </colgroup>
           <thead>
             <tr style="background: #63923e; color: white; text-align: center;">
               <th style="color: white; padding: 1.5mm;">Flat No</th>
@@ -375,7 +395,13 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
             <div class="pdf-section-desc" style="font-size: 7.5pt; color: #475569; margin-bottom: 2mm;">Dedicated turnkey solar PV system share for Flat ${flat.flatNo} at ${bldgName}.</div>
 
             <!-- Parameters -->
-            <table class="pdf-table" style="margin-bottom: 2.5mm; font-size: 7.2pt;">
+            <table class="pdf-table" style="margin-bottom: 2.5mm; font-size: 7.2pt; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
+              <colgroup>
+                <col style="width: 25%;">
+                <col style="width: 25%;">
+                <col style="width: 25%;">
+                <col style="width: 25%;">
+              </colgroup>
               <tbody>
                 <tr>
                   <td style="width: 25%; background: #f8fafc; font-weight: 700;">Resident Name</td>
@@ -405,14 +431,20 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
             </table>
 
             <!-- Bill Comparison -->
-            <div style="font-size: 8pt; font-weight: 700; color: #63923e; margin-bottom: 1mm;">ELECTRICITY BILL COMPARISON: BEFORE VS AFTER SOLAR</div>
-            <table class="pdf-table" style="font-size: 7.2pt; margin-bottom: 2.5mm;">
+            <div style="font-size: 8pt; font-weight: 700; color: #63923e; margin-bottom: 1.5mm;">ELECTRICITY BILL COMPARISON: BEFORE VS AFTER SOLAR</div>
+            <table class="pdf-table" style="font-size: 7.2pt; margin-bottom: 2.5mm; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
+              <colgroup>
+                <col style="width: 31%;">
+                <col style="width: 23%;">
+                <col style="width: 23%;">
+                <col style="width: 23%;">
+              </colgroup>
               <thead>
                 <tr style="background: #63923e; color: white;">
-                  <th style="color: white; padding: 1.5mm;">Bill Parameter</th>
-                  <th style="color: white; padding: 1.5mm; text-align: center;">Without Solar</th>
-                  <th style="color: white; padding: 1.5mm; text-align: center;">With Rooftop Solar</th>
-                  <th style="color: white; padding: 1.5mm; text-align: right;">Monthly Benefit</th>
+                  <th style="color: white; padding: 1.5mm 2mm;">Bill Parameter</th>
+                  <th style="color: white; padding: 1.5mm 2mm; text-align: center;">Without Solar</th>
+                  <th style="color: white; padding: 1.5mm 2mm; text-align: center;">With Rooftop Solar</th>
+                  <th style="color: white; padding: 1.5mm 2mm; text-align: right;">Monthly Benefit</th>
                 </tr>
               </thead>
               <tbody>
@@ -445,7 +477,12 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
 
             <!-- Investment Breakdown -->
             <div style="font-size: 8pt; font-weight: 700; color: #63923e; margin-bottom: 1mm;">INVESTMENT &amp; FIXED-QUANTUM SUBSIDY BREAKDOWN</div>
-            <table class="pdf-table" style="font-size: 7.2pt; margin-bottom: 2.5mm;">
+            <table class="pdf-table" style="font-size: 7.2pt; margin-bottom: 2.5mm; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
+              <colgroup>
+                <col style="width: 35%;">
+                <col style="width: 25%;">
+                <col style="width: 40%;">
+              </colgroup>
               <tbody>
                 <tr>
                   <td style="width: 35%; background: #f8fafc; font-weight: 700;">Turnkey Gross Cost Share</td>
@@ -472,7 +509,12 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
 
             ${flat.loanMode && flat.financing ? `
               <div style="font-size: 8pt; font-weight: 700; color: #0284c7; margin-bottom: 1mm;">Solar Loan Financing Option (Nationalized Bank Tie-up)</div>
-              <table class="pdf-table" style="font-size: 7.2pt; margin-bottom: 2.5mm;">
+              <table class="pdf-table" style="font-size: 7.2pt; margin-bottom: 2.5mm; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
+                <colgroup>
+                  <col style="width: 35%;">
+                  <col style="width: 25%;">
+                  <col style="width: 40%;">
+                </colgroup>
                 <tbody>
                   <tr>
                     <td style="width: 35%; background: #f0f9ff; font-weight: 700;">Customer Down Payment (10%)</td>
@@ -657,26 +699,26 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
           <div style="color: #64748b;">DATE: <span class="editable-field">${proposalDate}</span></div>
         </div>
 
-        <div class="pdf-grid-2" style="margin-bottom: 3mm;">
-          <div class="pdf-card pdf-card-from" style="padding: 2.5mm 3.5mm;">
+        <div class="pdf-grid-2" style="margin-bottom: 3.5mm;">
+          <div class="pdf-card pdf-card-from" style="padding: 3mm 4mm;">
             <div class="pdf-card-badge green" style="color: #63923e; font-size: 7.5pt; font-weight: 700;">PROPOSAL FROM (SOLAR EPC):</div>
-            <div class="pdf-card-name" style="font-size: 8.8pt; font-weight: 700; color: #000000; margin-bottom: 1mm;">DATLION CNERGY PRIVATE LIMITED</div>
-            <p class="pdf-card-address" style="font-size: 7pt; color: #475569; line-height: 1.35; margin-bottom: 1.5mm;">
+            <div class="pdf-card-name" style="font-size: 9pt; font-weight: 700; color: #000000; margin-bottom: 1.2mm;">DATLION CNERGY PRIVATE LIMITED</div>
+            <p class="pdf-card-address" style="font-size: 7.2pt; color: #475569; line-height: 1.35; margin-bottom: 1.5mm;">
               Ground, Shed No. 1, Shashitara Pratishthan BJP Office, Late Narayanrao Kondiba Jagtap Path, Hingne Khurd, Pune, 411051
             </p>
-            <div class="pdf-card-contact" style="font-size: 7pt; line-height: 1.35;">
+            <div class="pdf-card-contact" style="font-size: 7.2pt; line-height: 1.35;">
               <div style="font-weight: 700; color: #000000;">GSTIN: 27AALCD8550A1ZP</div>
               <div style="color: #64748b;">Email: datlioncnergy@gmail.com</div>
               <div style="color: #64748b;">Phone: +91 8956340980 | www.cnergy.co.in</div>
             </div>
           </div>
-          <div class="pdf-card pdf-card-to" style="padding: 2.5mm 3.5mm; background: #f0fdf4; border-color: #bbf7d0;">
+          <div class="pdf-card pdf-card-to" style="padding: 3mm 4mm; background: #f0fdf4; border-color: #bbf7d0;">
             <div class="pdf-card-badge green" style="color: #63923e; font-size: 7.5pt; font-weight: 700;">PREPARED FOR (VALUED CLIENT):</div>
-            <div class="pdf-card-name editable-field" style="font-size: 8.8pt; font-weight: 700; color: #000000; margin-bottom: 1mm;">${customerName}</div>
-            <p class="pdf-card-address editable-field" style="font-size: 7pt; color: #475569; line-height: 1.35; margin-bottom: 1.5mm;">
+            <div class="pdf-card-name editable-field" style="font-size: 9pt; font-weight: 700; color: #000000; margin-bottom: 1.2mm;">${customerName}</div>
+            <p class="pdf-card-address editable-field" style="font-size: 7.2pt; color: #475569; line-height: 1.35; margin-bottom: 1.5mm;">
               Site Address: ${customerAddress}
             </p>
-            <div class="pdf-card-contact" style="font-size: 7pt; line-height: 1.35;">
+            <div class="pdf-card-contact" style="font-size: 7.2pt; line-height: 1.35;">
               <div style="color: #64748b;">Phone: <span class="editable-field">${customerPhone}</span></div>
               <div style="color: #334155;">Sanctioned Load: <span class="editable-field">${input.sanctionedLoad || 5} kW</span> | Category: <span class="editable-field">${input.consumerCategory || "LT-I"}</span></div>
               <div style="color: #334155;">Monthly Usage: <span class="editable-field">${input.monthlyUnits || 450} units</span> | Avg Bill: <span class="editable-field">${formatCurrency(curTotal)}</span></div>
@@ -685,59 +727,59 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
           </div>
         </div>
 
-        <div class="pdf-section-title" style="font-size: 13pt; margin-top: 2mm; margin-bottom: 2mm;">1. System Design Considerations &amp; Capacity Summary</div>
+        <div class="pdf-section-title" style="font-size: 13pt; margin-top: 2.5mm; margin-bottom: 2mm;">1. System Design Considerations &amp; Capacity Summary</div>
         <div style="font-size: 8pt; color: #64748b; margin-bottom: 1.5mm;">Orientation: <span class="editable-field">${input.orientationDir || "South"}</span></div>
         <div style="font-size: 10pt; font-weight: 700; color: #63923e; margin-bottom: 2.5mm;">Selected System: <span class="editable-field">${formatSysType(option.systemType)} (${option.dcCapacityKw || 2.36} kWp)</span></div>
 
         <!-- Table 1: Capacity Requirements -->
-        <div style="font-size: 9pt; font-weight: 700; color: #0f172a; margin-bottom: 1mm;">Capacity Requirements</div>
-        <table class="pdf-table" style="margin-bottom: 2.5mm; font-size: 7.5pt;">
+        <div style="font-size: 9pt; font-weight: 700; color: #0f172a; margin-bottom: 1.2mm;">Capacity Requirements</div>
+        <table class="pdf-table" style="margin-bottom: 3.5mm; font-size: 8pt; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
           <colgroup>
             <col style="width: 45%;">
             <col style="width: 55%;">
           </colgroup>
           <tbody>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Required by Consumption</td><td><span class="editable-field">${option.sizing?.byConsumptionKw || 2.2} kW</span></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Supported by Roof Area</td><td><span class="editable-field">${option.sizing?.byAreaKw || 40.7} kW</span></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Sanctioned Load Limit</td><td><span class="editable-field">${option.sizing?.byLoadKw ? `${option.sizing.byLoadKw} kW` : (input.sanctionedLoad ? `${input.sanctionedLoad} kW` : "N/A")}</span></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Recommended Solar Capacity</td><td><strong><span class="editable-field">${option.dcCapacityKw || 2.36} kWp</span></strong></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Daily Solar Generation</td><td><span class="editable-field">${dailyGenKwh} kWh (${dailyPerKw} kWh/kW)</span></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Monthly Solar Generation</td><td><span class="editable-field">${monthlyGenKwh} kWh (${monthlyPerKw} kWh/kW)</span></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Sanction Status</td><td><span class="editable-field">${sanctionedStatus.label || "Within sanctioned load"}</span></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Required by Consumption</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${option.sizing?.byConsumptionKw || 2.2} kW</span></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Supported by Roof Area</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${option.sizing?.byAreaKw || 40.7} kW</span></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Sanctioned Load Limit</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${option.sizing?.byLoadKw ? `${option.sizing.byLoadKw} kW` : (input.sanctionedLoad ? `${input.sanctionedLoad} kW` : "N/A")}</span></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Recommended Solar Capacity</td><td style="padding: 1.8mm 2.5mm;"><strong><span class="editable-field">${option.dcCapacityKw || 2.36} kWp</span></strong></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Daily Solar Generation</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${dailyGenKwh} kWh (${dailyPerKw} kWh/kW)</span></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Monthly Solar Generation</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${monthlyGenKwh} kWh (${monthlyPerKw} kWh/kW)</span></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Sanction Status</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${sanctionedStatus.label || "Within sanctioned load"}</span></td></tr>
           </tbody>
         </table>
 
         <!-- Table 2: Panel Configuration -->
-        <div style="font-size: 9pt; font-weight: 700; color: #0f172a; margin-bottom: 1mm;">Panel Configuration</div>
-        <table class="pdf-table" style="margin-bottom: 2.5mm; font-size: 7.5pt;">
+        <div style="font-size: 9pt; font-weight: 700; color: #0f172a; margin-bottom: 1.2mm;">Panel Configuration</div>
+        <table class="pdf-table" style="margin-bottom: 3.5mm; font-size: 8pt; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
           <colgroup>
             <col style="width: 45%;">
             <col style="width: 55%;">
           </colgroup>
           <tbody>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Panel Specification</td><td><span class="editable-field">${panelLayout.panelDimensions || "1123 × 2279 mm"} (${panelLayout.panelWp || 550} Wp each) · ${panelSpecText}</span></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Number of Panels</td><td><strong><span class="editable-field">${numPanels} panels</span></strong></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Total Area Required</td><td><span class="editable-field">${panelAreaSqft} sq ft (${Math.round(panelAreaSqft * 0.0929)} sq m)</span></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Available Installation Area</td><td><span class="editable-field">${roofArea} sq ft</span></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Fits in Available Area</td><td><span class="editable-field">Yes - fits in ${roofArea} sq ft</span></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Panel Specification</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${panelLayout.panelDimensions || "1123 × 2279 mm"} (${panelLayout.panelWp || 550} Wp each) · ${panelSpecText}</span></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Number of Panels</td><td style="padding: 1.8mm 2.5mm;"><strong><span class="editable-field">${numPanels} panels</span></strong></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Total Area Required</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${panelAreaSqft} sq ft (${Math.round(panelAreaSqft * 0.0929)} sq m)</span></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Available Installation Area</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${roofArea} sq ft</span></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Fits in Available Area</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">Yes - fits in ${roofArea} sq ft</span></td></tr>
           </tbody>
         </table>
 
         <!-- Table 3: Battery and Inverter Specifications -->
-        <div style="font-size: 9pt; font-weight: 700; color: #0f172a; margin-bottom: 1mm;">Battery and Inverter Specifications</div>
-        <table class="pdf-table" style="margin-bottom: 2.5mm; font-size: 7.5pt;">
+        <div style="font-size: 9pt; font-weight: 700; color: #0f172a; margin-bottom: 1.2mm;">Battery and Inverter Specifications</div>
+        <table class="pdf-table" style="margin-bottom: 3.5mm; font-size: 8pt; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
           <colgroup>
             <col style="width: 45%;">
             <col style="width: 55%;">
           </colgroup>
           <tbody>
-            <tr><td style="background: #eef3ec; font-weight: 700;">${mainInverterPrefix} Inverter Capacity</td><td><strong><span class="editable-field">${option.inverterCapacityKw || option.dcCapacityKw || 2.36} kW</span></strong></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Battery Capacity</td><td><span class="editable-field">${option.batteryCapacityKwh > 0 ? `${option.batteryCapacityKwh} kWh` : "No battery (Grid-tied system)"}</span></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">${mainInverterPrefix} Inverter Capacity</td><td style="padding: 1.8mm 2.5mm;"><strong><span class="editable-field">${option.inverterCapacityKw || option.dcCapacityKw || 2.36} kW</span></strong></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Battery Capacity</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${option.batteryCapacityKwh > 0 ? `${option.batteryCapacityKwh} kWh` : "No battery (Grid-tied system)"}</span></td></tr>
           </tbody>
         </table>
 
         <!-- Pill Note -->
-        <div class="pdf-highlight-box green" style="padding: 2mm 3mm; font-size: 7.2pt; line-height: 1.35; margin-bottom: 0;">
+        <div class="pdf-highlight-box green" style="padding: 2.8mm 3.5mm; font-size: 7.5pt; line-height: 1.35; margin-bottom: 0;">
           • <strong>Design &amp; Generation Note:</strong> Simulated yield based on NASA/Meteonorm irradiance data. Actual output varies with weather, grid uptime, and routine soft-water module washing.
         </div>
       </div>
@@ -759,27 +801,27 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
         </p>
 
         <!-- CAD Graphic Container -->
-        <div style="text-align: center; margin-bottom: 3mm; background: #0f172a; border-radius: 4px; padding: 3mm; height: 110mm; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">
+        <div style="text-align: center; margin-bottom: 4mm; background: #0f172a; border-radius: 4px; padding: 3mm; height: 125mm; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">
           ${cadCanvasDataUrl ? `<img src="${cadCanvasDataUrl}" alt="CAD Rooftop Layout Blueprint" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 2px;">` : `<div style="color: #94a3b8; font-size: 9pt;">CAD Aerial Blueprint Diagram (Active in Canvas)</div>`}
         </div>
 
         <!-- CAD Specifications Table -->
-        <table class="pdf-table" style="margin-bottom: 3mm; font-size: 7.5pt;">
+        <table class="pdf-table" style="margin-bottom: 4mm; font-size: 7.8pt; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
           <colgroup>
             <col style="width: 40%;">
             <col style="width: 60%;">
           </colgroup>
           <tbody>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Roof Dimensions</td><td><span class="editable-field">${roofL} ft × ${roofB} ft (${roofArea} sq ft)</span></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Net Usable Roof Space</td><td><span class="editable-field">${roofArea} sq ft (${(roofArea * 0.0929).toFixed(1)} sq m)</span></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Solar Module Placement</td><td><strong><span class="editable-field">${numPanels} / ${numPanels} Modules Placed (Complete Array)</span></strong></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Orientation &amp; True North</td><td><span class="editable-field">${northAngle}° Azimuth (${northAngle === 0 ? "True North Aligned" : `${northAngle}° from North`}) | Height: ${bldgHeight} ft</span></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700;">Simulated Shading Impact</td><td><span class="editable-field">0.0% Solar Shading Loss (Astronomical solar trajectory &amp; obstacle model)</span></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 2mm 3mm;">Roof Dimensions</td><td style="padding: 2mm 3mm;"><span class="editable-field">${roofL} ft × ${roofB} ft (${roofArea} sq ft)</span></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 2mm 3mm;">Net Usable Roof Space</td><td style="padding: 2mm 3mm;"><span class="editable-field">${roofArea} sq ft (${(roofArea * 0.0929).toFixed(1)} sq m)</span></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 2mm 3mm;">Solar Module Placement</td><td style="padding: 2mm 3mm;"><strong><span class="editable-field">${numPanels} / ${numPanels} Modules Placed (Complete Array)</span></strong></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 2mm 3mm;">Orientation &amp; True North</td><td style="padding: 2mm 3mm;"><span class="editable-field">${northAngle}° Azimuth (${northAngle === 0 ? "True North Aligned" : `${northAngle}° from North`}) | Height: ${bldgHeight} ft</span></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 2mm 3mm;">Simulated Shading Impact</td><td style="padding: 2mm 3mm;"><span class="editable-field">0.0% Solar Shading Loss (Astronomical solar trajectory &amp; obstacle model)</span></td></tr>
           </tbody>
         </table>
 
         <!-- Pill Note -->
-        <div class="pdf-highlight-box green" style="padding: 2.5mm 3.5mm; font-size: 7.2pt; line-height: 1.4; margin-bottom: 0;">
+        <div class="pdf-highlight-box green" style="padding: 3mm 4mm; font-size: 7.5pt; line-height: 1.45; margin-bottom: 0;">
           • <strong>Structural &amp; Layout Note:</strong> Rooftop CAD array layout is preliminary and subject to minor adjustments during physical installation. The client warrants that the roof slab possesses adequate structural load-bearing capacity; roof waterproofing and sealing integrity remain the client's sole responsibility.
         </div>
       </div>
@@ -845,48 +887,56 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
         </div>
 
         <!-- Side-by-Side MSEDCL Electricity Bill Comparison -->
-        <div style="font-weight: 700; font-size: 8.2pt; color: #0f172a; margin-bottom: 1mm;">MSEDCL Electricity Bill Comparison &amp; Projected Savings:</div>
-        <div class="pdf-grid-2" style="margin-bottom: 2.5mm;">
+        <div style="font-weight: 700; font-size: 8.2pt; color: #0f172a; margin-bottom: 1.5mm;">MSEDCL Electricity Bill Comparison &amp; Projected Savings:</div>
+        <div class="pdf-grid-2" style="margin-bottom: 2.5mm; display: flex; gap: 3.5mm; width: 100%; box-sizing: border-box;">
           <!-- Left: Current Bill Before Solar -->
-          <div style="flex: 1 1 0; min-width: 0;">
-            <table class="pdf-table" style="margin-bottom: 0;">
+          <div style="flex: 1 1 0; min-width: 0; box-sizing: border-box;">
+            <table class="pdf-table" style="margin-bottom: 0; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
+              <colgroup>
+                <col style="width: 60%;">
+                <col style="width: 40%;">
+              </colgroup>
               <thead>
                 <tr style="background: #334155; color: white;">
-                  <th style="color: white; padding: 1.2mm 2mm; font-size: 7pt;">Current MSEDCL Bill (Before Solar)</th>
-                  <th style="color: white; text-align: right; padding: 1.2mm 2mm; width: 35%; font-size: 7pt;">Amount</th>
+                  <th style="color: white; padding: 1.4mm 2mm; font-size: 7.2pt; width: 60%;">Current MSEDCL Bill (Before Solar)</th>
+                  <th style="color: white; text-align: right; padding: 1.4mm 2mm; width: 40%; font-size: 7.2pt;">Amount</th>
                 </tr>
               </thead>
               <tbody>
-                <tr><td>Units Consumed</td><td style="text-align: right;"><strong>${input.monthlyUnits || 450} kWh</strong></td></tr>
-                <tr><td>Fixed Charges</td><td style="text-align: right;"><span class="editable-field">${formatCurrency(curFixed)}</span></td></tr>
-                <tr><td>Energy Charges</td><td style="text-align: right;"><span class="editable-field">${formatCurrency(curEnergy)}</span></td></tr>
-                <tr><td>Wheeling Charges</td><td style="text-align: right;"><span class="editable-field">${formatCurrency(curWheeling)}</span></td></tr>
-                <tr><td>Fuel Adjustment (FAC)</td><td style="text-align: right;"><span class="editable-field">${formatCurrency(curBill.facCharge || 0)}</span></td></tr>
-                <tr><td>Electricity Duty</td><td style="text-align: right;"><span class="editable-field">${formatCurrency(curDuty)}</span></td></tr>
-                <tr style="background: #f8fafc; font-weight: 700;"><td>Total Current Bill</td><td style="text-align: right;"><span class="editable-field">${formatCurrency(curTotal)}</span></td></tr>
-                <tr style="background: #fee2e2; font-weight: 800; color: #b91c1c;"><td>Net Bill Payable</td><td style="text-align: right;"><span class="editable-field">${formatCurrency(curTotal)}</span></td></tr>
+                <tr><td style="padding: 1.3mm 2mm; width: 60%;">Units Consumed</td><td style="padding: 1.3mm 2mm; text-align: right; width: 40%;"><strong>${input.monthlyUnits || 450} kWh</strong></td></tr>
+                <tr><td style="padding: 1.3mm 2mm;">Fixed Charges</td><td style="padding: 1.3mm 2mm; text-align: right;"><span class="editable-field">${formatCurrency(curFixed)}</span></td></tr>
+                <tr><td style="padding: 1.3mm 2mm;">Energy Charges</td><td style="padding: 1.3mm 2mm; text-align: right;"><span class="editable-field">${formatCurrency(curEnergy)}</span></td></tr>
+                <tr><td style="padding: 1.3mm 2mm;">Wheeling Charges</td><td style="padding: 1.3mm 2mm; text-align: right;"><span class="editable-field">${formatCurrency(curWheeling)}</span></td></tr>
+                <tr><td style="padding: 1.3mm 2mm;">Fuel Adjustment (FAC)</td><td style="padding: 1.3mm 2mm; text-align: right;"><span class="editable-field">${formatCurrency(curBill.facCharge || 0)}</span></td></tr>
+                <tr><td style="padding: 1.3mm 2mm;">Electricity Duty</td><td style="padding: 1.3mm 2mm; text-align: right;"><span class="editable-field">${formatCurrency(curDuty)}</span></td></tr>
+                <tr style="background: #f8fafc; font-weight: 700;"><td style="padding: 1.3mm 2mm;">Total Current Bill</td><td style="padding: 1.3mm 2mm; text-align: right;"><span class="editable-field">${formatCurrency(curTotal)}</span></td></tr>
+                <tr style="background: #fee2e2; font-weight: 800; color: #b91c1c;"><td style="padding: 1.3mm 2mm;">Net Bill Payable</td><td style="padding: 1.3mm 2mm; text-align: right;"><span class="editable-field">${formatCurrency(curTotal)}</span></td></tr>
               </tbody>
             </table>
           </div>
 
           <!-- Right: With Rooftop Solar -->
-          <div style="flex: 1 1 0; min-width: 0;">
-            <table class="pdf-table" style="margin-bottom: 0;">
+          <div style="flex: 1 1 0; min-width: 0; box-sizing: border-box;">
+            <table class="pdf-table" style="margin-bottom: 0; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
+              <colgroup>
+                <col style="width: 60%;">
+                <col style="width: 40%;">
+              </colgroup>
               <thead>
                 <tr style="background: #63923e; color: white;">
-                  <th style="color: white; padding: 1.2mm 2mm; font-size: 7pt;">With Rooftop Solar (After Solar)</th>
-                  <th style="color: white; text-align: right; padding: 1.2mm 2mm; width: 35%; font-size: 7pt;">Amount</th>
+                  <th style="color: white; padding: 1.4mm 2mm; font-size: 7.2pt; width: 60%;">With Rooftop Solar (After Solar)</th>
+                  <th style="color: white; text-align: right; padding: 1.4mm 2mm; width: 40%; font-size: 7.2pt;">Amount</th>
                 </tr>
               </thead>
               <tbody>
-                <tr><td>Solar Generation</td><td style="text-align: right;"><strong>${postSolarGen} kWh</strong></td></tr>
-                <tr><td>Banked Solar Units</td><td style="text-align: right;"><strong>${postBanked} kWh</strong></td></tr>
-                <tr><td>Fixed Charges</td><td style="text-align: right;"><span class="editable-field">${formatCurrency(postFixed)}</span></td></tr>
-                <tr><td>Energy Charges</td><td style="text-align: right;"><span class="editable-field">${formatCurrency(postEnergy)}</span></td></tr>
-                <tr><td>Wheeling Charges</td><td style="text-align: right;"><span class="editable-field">${formatCurrency(postBill.wheelingCharge || 0)}</span></td></tr>
-                <tr><td>Electricity Duty</td><td style="text-align: right;"><span class="editable-field">${formatCurrency(postBill.duty || 0)}</span></td></tr>
-                <tr style="background: #f0fdf4; font-weight: 700; color: #166534;"><td>Net Bill Payable</td><td style="text-align: right;"><span class="editable-field">${formatCurrency(postNetPayable)}</span></td></tr>
-                <tr style="background: #dcfce7; font-weight: 800; color: #15803d;"><td>Net Monthly Savings</td><td style="text-align: right;"><span class="editable-field">${formatCurrency(postMonthlySavings)}/mo</span></td></tr>
+                <tr><td style="padding: 1.3mm 2mm; width: 60%;">Solar Generation</td><td style="padding: 1.3mm 2mm; text-align: right; width: 40%;"><strong>${postSolarGen} kWh</strong></td></tr>
+                <tr><td style="padding: 1.3mm 2mm;">Banked Solar Units</td><td style="padding: 1.3mm 2mm; text-align: right; width: 40%;"><strong>${postBanked} kWh</strong></td></tr>
+                <tr><td style="padding: 1.3mm 2mm;">Fixed Charges</td><td style="padding: 1.3mm 2mm; text-align: right;"><span class="editable-field">${formatCurrency(postFixed)}</span></td></tr>
+                <tr><td style="padding: 1.3mm 2mm;">Energy Charges</td><td style="padding: 1.3mm 2mm; text-align: right;"><span class="editable-field">${formatCurrency(postEnergy)}</span></td></tr>
+                <tr><td style="padding: 1.3mm 2mm;">Wheeling Charges</td><td style="padding: 1.3mm 2mm; text-align: right;"><span class="editable-field">${formatCurrency(postBill.wheelingCharge || 0)}</span></td></tr>
+                <tr><td style="padding: 1.3mm 2mm;">Electricity Duty</td><td style="padding: 1.3mm 2mm; text-align: right;"><span class="editable-field">${formatCurrency(postBill.duty || 0)}</span></td></tr>
+                <tr style="background: #f0fdf4; font-weight: 700; color: #166534;"><td style="padding: 1.3mm 2mm;">Net Bill Payable</td><td style="padding: 1.3mm 2mm; text-align: right;"><span class="editable-field">${formatCurrency(postNetPayable)}</span></td></tr>
+                <tr style="background: #dcfce7; font-weight: 800; color: #15803d;"><td style="padding: 1.3mm 2mm;">Net Monthly Savings</td><td style="padding: 1.3mm 2mm; text-align: right;"><span class="editable-field">${formatCurrency(postMonthlySavings)}/mo</span></td></tr>
               </tbody>
             </table>
           </div>
@@ -949,7 +999,12 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
           </div>
 
           <!-- Commercial Comparison Table -->
-          <table class="pdf-table" style="margin-bottom: 3mm; font-size: 7.2pt;">
+          <table class="pdf-table" style="margin-bottom: 3mm; font-size: 7.2pt; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
+            <colgroup>
+              <col style="width: 44%;">
+              <col style="width: 28%;">
+              <col style="width: 28%;">
+            </colgroup>
             <thead>
               <tr style="background: #63923e; color: white;">
                 <th style="color: white; padding: 1.5mm 2.5mm;">Commercial Feature</th>
@@ -1025,7 +1080,7 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
         </p>
 
         <!-- Product Warranty Table -->
-        <table class="pdf-table" style="margin-bottom: 2mm; font-size: 7.5pt;">
+        <table class="pdf-table" style="margin-bottom: 2mm; font-size: 7.5pt; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
           <colgroup>
             <col style="width: 8%;">
             <col style="width: 22%;">
@@ -1161,7 +1216,7 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
         </p>
 
         <div style="text-align: center; flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-          <img src="https://solarcalculator.cnergy.co.in/src/system_differences.png" alt="Solar System Types" style="max-width: 100%; max-height: 220mm; object-fit: contain;">
+          <img src="https://solarcalculator.cnergy.co.in/src/system_differences.png" onerror="this.src='system_differences.png'; this.onerror=null;" alt="Solar System Types" style="max-width: 100%; max-height: 220mm; object-fit: contain;">
         </div>
       </div>
       ${createPageFooter(sysTypesPageNum, totalPages)}

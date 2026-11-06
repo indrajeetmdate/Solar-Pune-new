@@ -1503,13 +1503,19 @@ function render() {
     let leftHtml = "";
     if (state.internalUnlocked && option.currentBillBreakdownList && option.currentBillBreakdownList.length > 0) {
       leftHtml += `
-      <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+      <table style="width: 100% !important; min-width: 0 !important; max-width: 100% !important; table-layout: fixed; border-collapse: collapse; font-size: 12px;">
+        <colgroup>
+          <col style="width: 44%;">
+          <col style="width: 25%;">
+          <col style="width: 23%;">
+          <col style="width: 8%;">
+        </colgroup>
         <thead>
           <tr style="border-bottom: 2px solid #cbd5e1; background: #f8fafc;">
             <th style="padding: 5px 6px; text-align: left; color: #475569;">Component</th>
-            <th style="padding: 5px 4px; text-align: right; color: #475569; width: 85px;">Override</th>
-            <th style="padding: 5px 6px; text-align: right; color: #475569; width: 75px;">Amount</th>
-            <th style="width: 28px; text-align: center;"></th>
+            <th style="padding: 5px 4px; text-align: right; color: #475569;">Override</th>
+            <th style="padding: 5px 6px; text-align: right; color: #475569;">Amount</th>
+            <th style="text-align: center;"></th>
           </tr>
         </thead>
         <tbody>
@@ -1572,7 +1578,11 @@ function render() {
       });
     } else {
       leftHtml += `
-      <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+      <table style="width: 100% !important; min-width: 0 !important; max-width: 100% !important; table-layout: fixed; border-collapse: collapse; font-size: 12px;">
+        <colgroup>
+          <col style="width: 60%;">
+          <col style="width: 40%;">
+        </colgroup>
         <tbody>
           <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
             <td style="padding: 5px 6px; color: #475569;">एकूण वीज वापर (Monthly Units Consumed)</td>
@@ -1633,7 +1643,11 @@ function render() {
     }
 
     postSolarBillContainer.innerHTML = `
-      <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+      <table style="width: 100% !important; min-width: 0 !important; max-width: 100% !important; table-layout: fixed; border-collapse: collapse; font-size: 12px;">
+        <colgroup>
+          <col style="width: 60%;">
+          <col style="width: 40%;">
+        </colgroup>
         <tbody>
           <tr style="border-bottom: 1px solid #dcfce7; background: #f0fdf4;">
             <td style="padding: 5px 6px; color: #166534;">सौर ऊर्जा निर्मिती (Solar Generation)</td>
