@@ -246,13 +246,13 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
             <col style="width: 14%;">
           </colgroup>
           <thead>
-            <tr style="background: #63923e; color: white; text-align: center;">
-              <th style="color: white; padding: 1.5mm;">Flat No</th>
-              <th style="color: white; padding: 1.5mm; text-align: left;">Resident Name</th>
-              <th style="color: white; padding: 1.5mm;">Monthly Units</th>
-              <th style="color: white; padding: 1.5mm;">Panels</th>
-              <th style="color: white; padding: 1.5mm;">Solar kWp</th>
-              <th style="color: white; padding: 1.5mm;">Array Share (%)</th>
+            <tr style="background-color: #63923e; color: white; text-align: center;">
+              <th style="background-color: #63923e !important; color: #ffffff !important; padding: 1.5mm; border-color: #4d7c2a;">Flat No</th>
+              <th style="background-color: #63923e !important; color: #ffffff !important; padding: 1.5mm; text-align: left; border-color: #4d7c2a;">Resident Name</th>
+              <th style="background-color: #63923e !important; color: #ffffff !important; padding: 1.5mm; border-color: #4d7c2a;">Monthly Units</th>
+              <th style="background-color: #63923e !important; color: #ffffff !important; padding: 1.5mm; border-color: #4d7c2a;">Panels</th>
+              <th style="background-color: #63923e !important; color: #ffffff !important; padding: 1.5mm; border-color: #4d7c2a;">Solar kWp</th>
+              <th style="background-color: #63923e !important; color: #ffffff !important; padding: 1.5mm; border-color: #4d7c2a;">Array Share (%)</th>
             </tr>
           </thead>
           <tbody>
@@ -312,21 +312,21 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
               <col style="width: 5.5%;">
             </colgroup>
             <thead>
-              <tr style="background: #1e293b; color: white; text-align: center;">
-                <th style="padding: 2px 1px; color: white;">#</th>
-                <th style="padding: 2px 1px; color: white;">Flat</th>
-                <th style="padding: 2px 2px; text-align: left; color: white;">Resident Name</th>
-                <th style="padding: 2px 1px; color: white;">Load<br>(kW)</th>
-                <th style="padding: 2px 1px; color: white;">Units<br>/mo</th>
-                <th style="padding: 2px 1px; color: white;">Panels</th>
-                <th style="padding: 2px 1px; color: white;">kWp</th>
-                <th style="padding: 2px 2px; color: white;">Gross (Rs)</th>
-                <th style="padding: 2px 2px; background: #064e3b; color: #a7f3d0;">Subsidy (Rs)</th>
-                <th style="padding: 2px 2px; background: #0c4a6e; color: #bae6fd;">Net Cost (Rs)</th>
-                <th style="padding: 2px 1px; color: white;">Gen/mo<br>(kWh)</th>
-                <th style="padding: 2px 2px; color: white;">Savings<br>/mo (Rs)</th>
-                <th style="padding: 2px 2px; color: white;">Post Bill<br>(Rs)</th>
-                <th style="padding: 2px 1px; color: white;">Payback</th>
+              <tr style="background-color: #1e293b; color: white; text-align: center;">
+                <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 1px; border-color: #0f172a;">#</th>
+                <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 1px; border-color: #0f172a;">Flat</th>
+                <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 2px; text-align: left; border-color: #0f172a;">Resident Name</th>
+                <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 1px; border-color: #0f172a;">Load<br>(kW)</th>
+                <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 1px; border-color: #0f172a;">Units<br>/mo</th>
+                <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 1px; border-color: #0f172a;">Panels</th>
+                <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 1px; border-color: #0f172a;">kWp</th>
+                <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 2px; border-color: #0f172a;">Gross (Rs)</th>
+                <th style="background-color: #064e3b !important; color: #a7f3d0 !important; padding: 2px 2px; border-color: #0f172a;">Subsidy (Rs)</th>
+                <th style="background-color: #0c4a6e !important; color: #bae6fd !important; padding: 2px 2px; border-color: #0f172a;">Net Cost (Rs)</th>
+                <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 1px; border-color: #0f172a;">Gen/mo<br>(kWh)</th>
+                <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 2px; border-color: #0f172a;">Savings<br>/mo (Rs)</th>
+                <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 2px; border-color: #0f172a;">Post Bill<br>(Rs)</th>
+                <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 1px; border-color: #0f172a;">Payback</th>
               </tr>
             </thead>
             <tbody>
@@ -440,11 +440,11 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
                 <col style="width: 23%;">
               </colgroup>
               <thead>
-                <tr style="background: #63923e; color: white;">
-                  <th style="color: white; padding: 1.5mm 2mm;">Bill Parameter</th>
-                  <th style="color: white; padding: 1.5mm 2mm; text-align: center;">Without Solar</th>
-                  <th style="color: white; padding: 1.5mm 2mm; text-align: center;">With Rooftop Solar</th>
-                  <th style="color: white; padding: 1.5mm 2mm; text-align: right;">Monthly Benefit</th>
+                <tr style="background-color: #63923e; color: white;">
+                  <th style="background-color: #63923e !important; color: #ffffff !important; padding: 1.5mm 2mm; border-color: #4d7c2a;">Bill Parameter</th>
+                  <th style="background-color: #63923e !important; color: #ffffff !important; padding: 1.5mm 2mm; text-align: center; border-color: #4d7c2a;">Without Solar</th>
+                  <th style="background-color: #63923e !important; color: #ffffff !important; padding: 1.5mm 2mm; text-align: center; border-color: #4d7c2a;">With Rooftop Solar</th>
+                  <th style="background-color: #63923e !important; color: #ffffff !important; padding: 1.5mm 2mm; text-align: right; border-color: #4d7c2a;">Monthly Benefit</th>
                 </tr>
               </thead>
               <tbody>
@@ -897,9 +897,9 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
                 <col style="width: 40%;">
               </colgroup>
               <thead>
-                <tr style="background: #334155; color: white;">
-                  <th style="color: white; padding: 1.4mm 2mm; font-size: 7.2pt; width: 60%;">Current MSEDCL Bill (Before Solar)</th>
-                  <th style="color: white; text-align: right; padding: 1.4mm 2mm; width: 40%; font-size: 7.2pt;">Amount</th>
+                <tr style="background-color: #334155; color: white;">
+                  <th style="background-color: #334155 !important; color: #ffffff !important; padding: 1.5mm 2mm; font-size: 7.2pt; width: 60%; border-color: #1e293b;">Current MSEDCL Bill (Before Solar)</th>
+                  <th style="background-color: #334155 !important; color: #ffffff !important; text-align: right; padding: 1.5mm 2mm; width: 40%; font-size: 7.2pt; border-color: #1e293b;">Amount</th>
                 </tr>
               </thead>
               <tbody>
@@ -923,9 +923,9 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
                 <col style="width: 40%;">
               </colgroup>
               <thead>
-                <tr style="background: #63923e; color: white;">
-                  <th style="color: white; padding: 1.4mm 2mm; font-size: 7.2pt; width: 60%;">With Rooftop Solar (After Solar)</th>
-                  <th style="color: white; text-align: right; padding: 1.4mm 2mm; width: 40%; font-size: 7.2pt;">Amount</th>
+                <tr style="background-color: #63923e; color: white;">
+                  <th style="background-color: #63923e !important; color: #ffffff !important; padding: 1.5mm 2mm; font-size: 7.2pt; width: 60%; border-color: #4d7c2a;">With Rooftop Solar (After Solar)</th>
+                  <th style="background-color: #63923e !important; color: #ffffff !important; text-align: right; padding: 1.5mm 2mm; width: 40%; font-size: 7.2pt; border-color: #4d7c2a;">Amount</th>
                 </tr>
               </thead>
               <tbody>
@@ -1006,10 +1006,10 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
               <col style="width: 28%;">
             </colgroup>
             <thead>
-              <tr style="background: #63923e; color: white;">
-                <th style="color: white; padding: 1.5mm 2.5mm;">Commercial Feature</th>
-                <th style="color: white; text-align: right; padding: 1.5mm 2.5mm;">Option A: Upfront Cash</th>
-                <th style="color: white; text-align: right; padding: 1.5mm 2.5mm; font-weight: bold;">Option B: Bank Loan (Zero Out-of-Pocket)</th>
+              <tr style="background-color: #63923e; color: white;">
+                <th style="background-color: #63923e !important; color: #ffffff !important; padding: 1.5mm 2.5mm; border-color: #4d7c2a;">Commercial Feature</th>
+                <th style="background-color: #63923e !important; color: #ffffff !important; text-align: right; padding: 1.5mm 2.5mm; border-color: #4d7c2a;">Option A: Upfront Cash</th>
+                <th style="background-color: #63923e !important; color: #ffffff !important; text-align: right; padding: 1.5mm 2.5mm; font-weight: bold; border-color: #4d7c2a;">Option B: Bank Loan (Zero Out-of-Pocket)</th>
               </tr>
             </thead>
             <tbody>
@@ -1088,11 +1088,11 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
             <col style="width: 25%;">
           </colgroup>
           <thead>
-            <tr style="background: #63923e; color: white;">
-              <th style="color: white; text-align: center; padding: 1.5mm;">Sr. No.</th>
-              <th style="color: white; padding: 1.5mm;">Product</th>
-              <th style="color: white; padding: 1.5mm;">Make &amp; Specification</th>
-              <th style="color: white; text-align: center; padding: 1.5mm;">Warranty</th>
+            <tr style="background-color: #63923e; color: white;">
+              <th style="background-color: #63923e !important; color: #ffffff !important; text-align: center; padding: 1.5mm; border-color: #4d7c2a;">Sr. No.</th>
+              <th style="background-color: #63923e !important; color: #ffffff !important; padding: 1.5mm; border-color: #4d7c2a;">Product</th>
+              <th style="background-color: #63923e !important; color: #ffffff !important; padding: 1.5mm; border-color: #4d7c2a;">Make &amp; Specification</th>
+              <th style="background-color: #63923e !important; color: #ffffff !important; text-align: center; padding: 1.5mm; border-color: #4d7c2a;">Warranty</th>
             </tr>
           </thead>
           <tbody>
@@ -1417,7 +1417,27 @@ export function resetSampleViewToDefaults() {
  * Print the exact Sample View to PDF using native browser print.
  */
 export function printPdfSampleView() {
-  window.print();
+  const origZoom = document.body.style.zoom;
+  document.body.style.zoom = "1";
+  try {
+    window.print();
+  } finally {
+    setTimeout(() => {
+      document.body.style.zoom = origZoom;
+    }, 1000);
+  }
+}
+
+// Global print hooks to ensure zoom is always 1 during printing
+if (typeof window !== "undefined") {
+  let savedZoom = "";
+  window.addEventListener("beforeprint", () => {
+    savedZoom = document.body.style.zoom || "";
+    document.body.style.zoom = "1";
+  });
+  window.addEventListener("afterprint", () => {
+    document.body.style.zoom = savedZoom;
+  });
 }
 
 /**

@@ -3258,6 +3258,40 @@ tr:hover td {
   overflow-wrap: break-word;
 }
 
+/* Ensure table headers in rows with dark backgrounds inherit row background and white text */
+.pdf-table thead tr[style*="background"] th,
+.pdf-table tr[style*="background"] th,
+.pdf-table th[style*="color: white"],
+.pdf-table th[style*="color: #ffffff"],
+.pdf-table th[style*="color:#ffffff"],
+.pdf-table th[style*="color:white"] {
+  background: inherit !important;
+  color: #ffffff !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+.pdf-table thead tr[style*="#334155"] th,
+.pdf-table thead tr[style*="rgb(51, 65, 85)"] th {
+  background-color: #334155 !important;
+  color: #ffffff !important;
+  border-color: #1e293b !important;
+}
+
+.pdf-table thead tr[style*="#63923e"] th,
+.pdf-table thead tr[style*="rgb(99, 146, 62)"] th {
+  background-color: #63923e !important;
+  color: #ffffff !important;
+  border-color: #4d7c2a !important;
+}
+
+.pdf-table thead tr[style*="#1e293b"] th,
+.pdf-table thead tr[style*="rgb(30, 41, 59)"] th {
+  background-color: #1e293b !important;
+  color: #ffffff !important;
+  border-color: #0f172a !important;
+}
+
 .pdf-table td {
   padding: 4px 6px;
   border: 1px solid #e2e8f0;
@@ -3331,8 +3365,11 @@ tr:hover td {
     padding: 0 !important;
     background: #ffffff !important;
     overflow: visible !important;
+    zoom: 1 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    -webkit-text-size-adjust: 100% !important;
+    transform: none !important;
   }
 
   #pdfSampleViewModal {
@@ -3349,6 +3386,8 @@ tr:hover td {
     overflow: visible !important;
     box-sizing: border-box !important;
     z-index: auto !important;
+    zoom: 1 !important;
+    transform: none !important;
   }
 
   .pdf-sample-toolbar,
@@ -3369,6 +3408,8 @@ tr:hover td {
     overflow: visible !important;
     gap: 0 !important;
     box-sizing: border-box !important;
+    zoom: 1 !important;
+    transform: none !important;
   }
 
   .pdf-sample-pages-container {
@@ -3381,6 +3422,8 @@ tr:hover td {
     padding: 0 !important;
     gap: 0 !important;
     box-sizing: border-box !important;
+    zoom: 1 !important;
+    transform: none !important;
   }
 
   .pdf-sample-page {
@@ -3406,6 +3449,8 @@ tr:hover td {
     break-after: page !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    zoom: 1 !important;
+    transform: none !important;
   }
 
   .pdf-sample-page:last-child {
