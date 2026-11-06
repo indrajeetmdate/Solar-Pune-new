@@ -2898,27 +2898,33 @@ tr:hover td {
 /* Individual A4 Page Representation */
 .pdf-sample-page {
   width: 210mm;
+  height: 297mm;
   min-height: 297mm;
+  max-height: 297mm;
   background: #ffffff;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
   border-radius: 4px;
-  padding: 14mm 15mm 16mm;
+  padding: 15mm;
   box-sizing: border-box;
   position: relative;
   color: #1e293b;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-size: 10pt;
-  line-height: 1.4;
+  font-size: 9.5pt;
+  line-height: 1.35;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  overflow: hidden;
 }
 
 @media (max-width: 900px) {
   .pdf-sample-page {
     width: 100%;
     min-height: auto;
+    height: auto;
+    max-height: none;
     padding: 12px;
+    overflow: visible;
   }
 }
 
@@ -3001,9 +3007,15 @@ tr:hover td {
 }
 
 .pdf-grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  display: flex;
+  gap: 3mm;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pdf-grid-2 > * {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .pdf-card {
@@ -3162,11 +3174,14 @@ tr:hover td {
 
 /* PDF Tables */
 .pdf-table {
-  width: 100%;
+  width: 100% !important;
+  max-width: 100% !important;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 8.5pt;
   margin-bottom: 6px;
   border: 1px solid #cbd5e1;
+  box-sizing: border-box;
 }
 
 .pdf-table th {
@@ -3176,16 +3191,36 @@ tr:hover td {
   text-align: left;
   padding: 4px 6px;
   border: 1px solid #cbd5e1;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .pdf-table td {
   padding: 4px 6px;
   border: 1px solid #e2e8f0;
   color: #334155;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .pdf-table tr:nth-child(even) {
   background: #fafafa;
+}
+
+.pdf-plain-table {
+  width: 100% !important;
+  max-width: 100% !important;
+  table-layout: fixed;
+  border-collapse: collapse;
+  box-sizing: border-box;
+}
+
+.pdf-plain-table td {
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 /* ==========================================================================
@@ -3215,9 +3250,29 @@ tr:hover td {
    ========================================================================== */
 
 @media print {
-  /* Hide whole body except the PDF sample modal */
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html, body {
+    width: 210mm !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide everything on the page except the PDF sample modal */
+  body > *:not(#pdfSampleViewModal) {
+    display: none !important;
+  }
+
   body * {
-    visibility: hidden !important;
+    visibility: hidden;
   }
 
   #pdfSampleViewModal,
@@ -3228,10 +3283,9 @@ tr:hover td {
   }
 
   #pdfSampleViewModal {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
+    position: static !important;
+    display: block !important;
+    width: 210mm !important;
     height: auto !important;
     background: #ffffff !important;
     margin: 0 !important;
@@ -3247,6 +3301,7 @@ tr:hover td {
   }
 
   .pdf-sample-scroll-area {
+    display: block !important;
     background: #ffffff !important;
     padding: 0 !important;
     margin: 0 !important;
@@ -3254,17 +3309,37 @@ tr:hover td {
     gap: 0 !important;
   }
 
+  .pdf-sample-pages-container {
+    display: block !important;
+    width: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+
   .pdf-sample-page {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    width: 210mm !important;
+    min-width: 210mm !important;
+    max-width: 210mm !important;
+    height: 297mm !important;
+    min-height: 297mm !important;
+    max-height: 297mm !important;
+    padding: 15mm !important;
     margin: 0 !important;
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
-    width: 100% !important;
-    min-height: 297mm !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
     page-break-after: always !important;
     break-after: page !important;
-    padding: 12mm 14mm !important;
-    box-sizing: border-box !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .pdf-sample-page:last-child {
@@ -3276,11 +3351,6 @@ tr:hover td {
     outline: none !important;
     background: transparent !important;
     box-shadow: none !important;
-  }
-
-  @page {
-    size: A4 portrait;
-    margin: 0;
   }
 }
 
