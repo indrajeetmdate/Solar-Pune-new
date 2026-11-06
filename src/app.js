@@ -4,6 +4,13 @@ import { parseMsebBillFile, parseMultipleMsebBillFiles } from "./billParser.js";
 import { isSupportedBillFile } from "./ocrExtractor.js";
 import { drawPanelArray, initRooftopCAD, getActiveRooftopCAD } from "./panelDiagram.js";
 import { openPdfSampleView, initPdfSampleView } from "./pdfSampleView.js";
+import {
+  calculateBuildingLedger,
+  generateBuildingCSVTemplate,
+  parseBuildingCSV,
+  exportBuildingToCSV,
+  FLAT_COLOR_PALETTE
+} from "./multiCustomerManager.js";
 
 const INTERNAL_PASSPHRASE_KEY = "puneSolarInternalPassphrase";
 
@@ -23,7 +30,27 @@ const state = {
   currentProposalSerialNo: null,
   panelSpec: "",
   panelSpecCustom: "",
-  isCustomPanelSpec: false
+  isCustomPanelSpec: false,
+  proposalMode: "single", // "single" | "multi_building"
+  buildingConfig: {
+    buildingName: "Shivaji Heights Co-op Housing Society",
+    buildingAddress: "Baner, Pune, Maharashtra - 411045",
+    roofArea: 2000,
+    panelMake: "Tier-1 Mono PERC DCR",
+    panelType: "dcr",
+    panelRate: 28,
+    panelWp: 550,
+    structureType: "hotDip",
+    loanRate: 7.0,
+    loanUpfront: 10
+  },
+  buildingFlats: [
+    { id: "flat-1", flatNo: "101", customerName: "Rahul Sharma", sanctionedLoad: 5, category: "LT-I", phase: "1-phase", monthlyUnits: 450, monthlyBill: 5200, loanMode: true },
+    { id: "flat-2", flatNo: "102", customerName: "Priya Deshmukh", sanctionedLoad: 4, category: "LT-I", phase: "1-phase", monthlyUnits: 380, monthlyBill: 4350, loanMode: true },
+    { id: "flat-3", flatNo: "201", customerName: "Amit Kulkarni", sanctionedLoad: 6, category: "LT-I", phase: "3-phase", monthlyUnits: 620, monthlyBill: 7400, loanMode: false },
+    { id: "flat-4", flatNo: "202", customerName: "Sunita Patil", sanctionedLoad: 3, category: "LT-I", phase: "1-phase", monthlyUnits: 290, monthlyBill: 3100, loanMode: true },
+  ],
+  buildingData: null,
 };
 
 if (typeof window !== "undefined") {
@@ -3158,9 +3185,17 @@ function switchWorkspaceTab(tabId) {
       wsHeader.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }
+  if (tabId === "building") {
+    updateBuildingStudio();
+  }
   if (tabId === "cad") {
     const cad = getActiveRooftopCAD();
     if (cad) {
+      if (state.proposalMode === "multi_building" && state.buildingData) {
+        if (typeof cad.assignPanelsToFlats === "function") {
+          cad.assignPanelsToFlats(state.buildingData.flatLedger);
+        }
+      }
       setTimeout(() => {
         if (typeof cad.resizeCanvas === "function") {
           cad.resizeCanvas();
@@ -3174,6 +3209,226 @@ function switchWorkspaceTab(tabId) {
     }
   }
 }
+
+// ================= MULTI-CUSTOMER BUILDING STUDIO LOGIC =================
+function updateBuildingStudio() {
+  const buildingName = $("buildingNameInput")?.value || state.buildingConfig?.buildingName || "Shivaji Heights Co-op Housing Society";
+  const buildingAddress = $("buildingAddressInput")?.value || state.buildingConfig?.buildingAddress || "Baner, Pune, Maharashtra - 411045";
+  const roofAreaSqft = Number($("buildingRoofAreaInput")?.value) || state.buildingConfig?.roofArea || 2000;
+  const panelMake = $("buildingPanelMakeInput")?.value || state.buildingConfig?.panelMake || "Tier-1 Mono PERC DCR";
+  const panelWp = Number($("buildingPanelWpInput")?.value) || state.buildingConfig?.panelWp || 550;
+  const panelRate = Number($("buildingPanelRateInput")?.value) || state.buildingConfig?.panelRate || 28;
+  const loanInterestRate = Number($("buildingLoanRateInput")?.value) || state.buildingConfig?.loanRate || 7.0;
+  const loanDownPaymentPct = Number($("buildingLoanUpfrontInput")?.value) || state.buildingConfig?.loanUpfront || 10;
+
+  state.buildingConfig = {
+    buildingName,
+    buildingAddress,
+    roofArea: roofAreaSqft,
+    panelMake,
+    panelType: "dcr",
+    panelRate,
+    panelWp,
+    structureType: "hotDip",
+    loanRate: loanInterestRate,
+    loanUpfront: loanDownPaymentPct,
+  };
+
+  const buildingResult = calculateBuildingLedger({
+    buildingName,
+    buildingAddress,
+    roofAreaSqft,
+    panelMake,
+    panelType: "dcr",
+    panelRate,
+    panelWp,
+    structureType: "hotDip",
+    loanInterestRate,
+    loanDownPaymentPct,
+    flats: state.buildingFlats,
+  });
+
+  state.buildingData = buildingResult;
+
+  // Update KPI Ribbon
+  const summary = buildingResult.summary;
+  if ($("bldgKpiFlats")) $("bldgKpiFlats").textContent = `${summary.totalFlats} Flats`;
+  if ($("bldgKpiUnits")) $("bldgKpiUnits").textContent = `${summary.totalMonthlyUnits.toLocaleString("en-IN")} kWh`;
+  if ($("bldgKpiCapacity")) $("bldgKpiCapacity").textContent = `${summary.totalBuildingCapacityKw.toFixed(1)} kWp (${summary.totalBuildingPanels} Panels)`;
+  if ($("bldgKpiCost")) $("bldgKpiCost").textContent = `₹${summary.totalBuildingGrossCost.toLocaleString("en-IN")}`;
+  if ($("bldgKpiSubsidy")) $("bldgKpiSubsidy").textContent = `₹${summary.totalSubsidy.toLocaleString("en-IN")}`;
+  if ($("bldgKpiNetCost")) $("bldgKpiNetCost").textContent = `₹${summary.totalNetCost.toLocaleString("en-IN")}`;
+  if ($("bldgKpiSavings")) $("bldgKpiSavings").textContent = `₹${summary.totalAnnualSavings.toLocaleString("en-IN")} / yr`;
+  if ($("bldgKpiPayback")) $("bldgKpiPayback").textContent = `${summary.buildingPaybackYears} yrs`;
+
+  // Render Table Rows
+  const tbody = $("buildingFlatsTableBody");
+  if (tbody) {
+    tbody.innerHTML = buildingResult.flatLedger.map((f, i) => `
+      <tr data-flat-idx="${i}">
+        <td style="text-align: center; vertical-align: middle;">
+          <span class="flat-color-badge" style="background: ${f.color || '#2563eb'};"></span>
+          <span>${i + 1}</span>
+        </td>
+        <td>
+          <input type="text" class="flat-row-field" data-field="flatNo" data-idx="${i}" value="${f.flatNo}" style="width: 55px; font-weight: 700; text-align: center;">
+        </td>
+        <td>
+          <input type="text" class="flat-row-field" data-field="customerName" data-idx="${i}" value="${f.customerName}" style="width: 120px;">
+        </td>
+        <td>
+          <input type="number" step="0.5" min="0.5" class="flat-row-field" data-field="sanctionedLoad" data-idx="${i}" value="${f.sanctionedLoad}" style="width: 55px; text-align: right;">
+        </td>
+        <td>
+          <select class="flat-row-field" data-field="category" data-idx="${i}" style="font-size: 10.5px;">
+            <option value="LT-I" ${f.category === "LT-I" ? "selected" : ""}>LT-I Res</option>
+            <option value="LT-I-GHS" ${f.category === "LT-I-GHS" ? "selected" : ""}>LT-I GHS</option>
+            <option value="LT-II" ${f.category === "LT-II" ? "selected" : ""}>LT-II Com</option>
+            <option value="LT-III" ${f.category === "LT-III" ? "selected" : ""}>LT-III Ind</option>
+          </select>
+        </td>
+        <td>
+          <select class="flat-row-field" data-field="phase" data-idx="${i}" style="font-size: 10.5px;">
+            <option value="1-phase" ${f.phase === "1-phase" ? "selected" : ""}>1-Phase</option>
+            <option value="3-phase" ${f.phase === "3-phase" ? "selected" : ""}>3-Phase</option>
+          </select>
+        </td>
+        <td>
+          <input type="number" step="10" min="0" class="flat-row-field" data-field="monthlyUnits" data-idx="${i}" value="${f.monthlyUnits}" style="width: 60px; text-align: right;">
+        </td>
+        <td>
+          <input type="number" step="50" min="0" class="flat-row-field" data-field="monthlyBill" data-idx="${i}" value="${f.monthlyBill}" style="width: 65px; text-align: right;">
+        </td>
+        <td style="text-align: center; font-weight: 700; color: #0f172a;">${f.panels}</td>
+        <td style="text-align: right; font-weight: 600;">${(f.allocatedKw || 0).toFixed(2)}</td>
+        <td style="text-align: right; font-weight: 700; color: #15803d; background: #f0fdf4;">₹${Number(f.subsidy || 0).toLocaleString("en-IN")}</td>
+        <td style="text-align: right;">₹${Number(f.grossCost || 0).toLocaleString("en-IN")}</td>
+        <td style="text-align: right; font-weight: 700; color: #0284c7; background: #f0f9ff;">₹${Number(f.netCost || 0).toLocaleString("en-IN")}</td>
+        <td style="text-align: right; color: #15803d; font-weight: 600;">₹${Number(f.monthlySavings || 0).toLocaleString("en-IN")}</td>
+        <td style="text-align: center;">${f.paybackYears} yrs</td>
+        <td>
+          <select class="flat-row-field" data-field="loanMode" data-idx="${i}" style="font-size: 10.5px;">
+            <option value="yes" ${f.loanMode ? "selected" : ""}>Yes</option>
+            <option value="no" ${!f.loanMode ? "selected" : ""}>No</option>
+          </select>
+        </td>
+        <td style="text-align: center;">
+          <div style="display: flex; gap: 2px; justify-content: center;">
+            <button type="button" class="btn-flat-clone" data-idx="${i}" title="Copy parameters down (Same as above)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 1px 3px;">⬇️</button>
+            <button type="button" class="btn-flat-del" data-idx="${i}" title="Remove flat" style="background: none; border: none; cursor: pointer; color: #ef4444; font-size: 12px; padding: 1px 3px;">🗑️</button>
+          </div>
+        </td>
+      </tr>
+    `).join("");
+
+    // Wire input changes in table
+    tbody.querySelectorAll(".flat-row-field").forEach((el) => {
+      el.addEventListener("change", (e) => {
+        const idx = parseInt(e.target.dataset.idx, 10);
+        const field = e.target.dataset.field;
+        let val = e.target.value;
+        if (field === "sanctionedLoad" || field === "monthlyUnits" || field === "monthlyBill") {
+          val = Number(val) || 0;
+        } else if (field === "loanMode") {
+          val = val === "yes";
+        }
+        if (state.buildingFlats[idx]) {
+          state.buildingFlats[idx][field] = val;
+          updateBuildingStudio();
+        }
+      });
+    });
+
+    // Wire clone buttons (Same as above)
+    tbody.querySelectorAll(".btn-flat-clone").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.idx, 10);
+        const source = state.buildingFlats[idx];
+        if (!source) return;
+        let nextNo = `${source.flatNo}-copy`;
+        const numMatch = String(source.flatNo).match(/\d+/);
+        if (numMatch) {
+          const nextInt = parseInt(numMatch[0], 10) + 1;
+          nextNo = String(source.flatNo).replace(numMatch[0], String(nextInt));
+        }
+        const cloned = {
+          ...source,
+          id: `flat-${Date.now()}-${state.buildingFlats.length + 1}`,
+          flatNo: nextNo,
+          customerName: `Resident ${nextNo}`,
+        };
+        state.buildingFlats.splice(idx + 1, 0, cloned);
+        updateBuildingStudio();
+      });
+    });
+
+    // Wire delete buttons
+    tbody.querySelectorAll(".btn-flat-del").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.idx, 10);
+        if (state.buildingFlats.length <= 1) {
+          alert("At least one flat is required for the building proposal.");
+          return;
+        }
+        state.buildingFlats.splice(idx, 1);
+        updateBuildingStudio();
+      });
+    });
+  }
+
+  // Update Footer Totals
+  if ($("footFlatsCount")) $("footFlatsCount").textContent = String(summary.totalFlats);
+  if ($("footSanctionLoad")) $("footSanctionLoad").textContent = `${summary.totalSanctionedLoad} kW`;
+  if ($("footUnits")) $("footUnits").textContent = `${summary.totalMonthlyUnits.toLocaleString("en-IN")} kWh`;
+  if ($("footBills")) $("footBills").textContent = `₹${summary.totalCurrentBill.toLocaleString("en-IN")}`;
+  if ($("footPanels")) $("footPanels").textContent = String(summary.totalBuildingPanels);
+  if ($("footKw")) $("footKw").textContent = `${summary.totalBuildingCapacityKw.toFixed(2)} kWp`;
+  if ($("footSubsidy")) $("footSubsidy").textContent = `₹${summary.totalSubsidy.toLocaleString("en-IN")}`;
+  if ($("footGross")) $("footGross").textContent = `₹${summary.totalBuildingGrossCost.toLocaleString("en-IN")}`;
+  if ($("footNet")) $("footNet").textContent = `₹${summary.totalNetCost.toLocaleString("en-IN")}`;
+  if ($("footSavings")) $("footSavings").textContent = `₹${summary.totalMonthlySavings.toLocaleString("en-IN")}`;
+  if ($("footPayback")) $("footPayback").textContent = `${summary.buildingPaybackYears} yrs`;
+
+  // Sync Rooftop CAD panels if CAD is active
+  const cad = getActiveRooftopCAD();
+  if (cad && typeof cad.assignPanelsToFlats === "function") {
+    cad.assignPanelsToFlats(buildingResult.flatLedger);
+  }
+}
+
+function setProposalMode(mode) {
+  state.proposalMode = mode;
+  const isBuilding = mode === "multi_building";
+
+  const singleBtn = $("modeSingleBtn");
+  const multiBtn = $("modeMultiBuildingBtn");
+  const buildingTabBtn = $("workspaceTabBuildingBtn");
+  const includeIndivLabel = $("includeIndividualSheetsLabel");
+
+  if (singleBtn) singleBtn.classList.toggle("active", !isBuilding);
+  if (multiBtn) multiBtn.classList.toggle("active", isBuilding);
+  if (buildingTabBtn) buildingTabBtn.style.display = isBuilding ? "inline-flex" : "none";
+  if (includeIndivLabel) includeIndivLabel.style.display = isBuilding ? "inline-flex" : "none";
+
+  const cad = getActiveRooftopCAD();
+  if (isBuilding) {
+    updateBuildingStudio();
+    switchWorkspaceTab("building");
+  } else {
+    if (cad && typeof cad.clearMultiCustomerDemarcation === "function") {
+      cad.clearMultiCustomerDemarcation();
+    }
+    if (state.activeWorkspaceTab === "building") {
+      switchWorkspaceTab("cad");
+    }
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.setProposalMode = setProposalMode;
+  window.updateBuildingStudio = updateBuildingStudio;
+}
+
 
 function switchSidebarCategory(catId) {
   if (catId === "rates" && !state.internalUnlocked) {
@@ -4057,9 +4312,13 @@ function attachEvents() {
   });
 
   const handleOpenPdfProposal = () => {
-    if (state.estimates) {
+    const isBuilding = state.proposalMode === "multi_building";
+    if (isBuilding && !state.buildingData) {
+      updateBuildingStudio();
+    }
+    if (state.estimates || isBuilding) {
       // Validate compulsory multi-meter fields before generating PDF
-      if (state.meteringMode === "multi" && state.meters.length > 0) {
+      if (!isBuilding && state.meteringMode === "multi" && state.meters.length > 0) {
         const invalidMeters = state.meters.filter(m => !m.consumerNumber?.trim() || !m.label?.trim() || !(Number(m.sanctionedLoad) > 0));
         if (invalidMeters.length > 0) {
           alert(`Cannot generate proposal: ${invalidMeters.length} flat/meter(s) are missing compulsory details.\n\nEvery meter must have at minimum:\n1. Consumer Number\n2. Consumer Name / Flat Identifier\n3. Sanctioned Load (kW)\n\nPlease complete these in the Multi-Meter panel before downloading.`);
@@ -4074,10 +4333,10 @@ function attachEvents() {
 
       saveProposalData(); // Automatically save data
 
-      const est = state.estimates;
-      const selectedOption = (state.selectedSystemIndex !== null && state.selectedSystemIndex >= 0 && state.selectedSystemIndex < est.options.length)
+      const est = state.estimates || { input: {}, options: [], recommended: {} };
+      const selectedOption = (state.selectedSystemIndex !== null && state.selectedSystemIndex >= 0 && est.options && state.selectedSystemIndex < est.options.length)
         ? est.options[state.selectedSystemIndex]
-        : est.recommended;
+        : (est.recommended || {});
         
       if (state.internalUnlocked && state.costBreakupList) {
         selectedOption.costBreakupList = state.costBreakupList;
@@ -4094,11 +4353,14 @@ function attachEvents() {
         hideFinancing: ($("paymentMode")?.value !== "loan") || ($("hideFinancing")?.checked || false),
         solarInstalled: $("solarInstalled")?.checked || false,
         proposalSerialNo: $("proposalSerialNo")?.value || getNextProposalSerialNo(),
-        customerAddress: $("customerAddress")?.value || "Pune, Maharashtra",
+        customerAddress: isBuilding ? (state.buildingConfig?.buildingAddress || "Pune, Maharashtra") : ($("customerAddress")?.value || "Pune, Maharashtra"),
         saveEnergyCharges: $("saveEnergyCharges")?.checked !== false,
         saveElectricityDuty: $("saveElectricityDuty")?.checked !== false,
         saveWheelingFac: $("saveWheelingFac")?.checked !== false,
         saveTodRebate: $("saveTodRebate")?.checked !== false,
+        isBuildingProposal: isBuilding,
+        buildingData: isBuilding ? state.buildingData : null,
+        includeIndividualSheets: isBuilding ? ($("includeIndividualSheets")?.checked || false) : false,
       };
 
       // Open Sample View before printing/downloading
@@ -4115,14 +4377,18 @@ function attachEvents() {
 
   // Wire Direct jsPDF Download button inside Sample View Modal
   $("sampleViewDownloadPdfBtn")?.addEventListener("click", () => {
-    if (state.estimates) {
+    const isBuilding = state.proposalMode === "multi_building";
+    if (isBuilding && !state.buildingData) {
+      updateBuildingStudio();
+    }
+    if (state.estimates || isBuilding) {
       const btn = $("sampleViewDownloadPdfBtn");
       const origText = btn?.innerHTML;
       if (btn) { btn.innerHTML = "<span>⏳</span> <span>Generating...</span>"; btn.disabled = true; }
-      const est = state.estimates;
-      const selectedOption = (state.selectedSystemIndex !== null && state.selectedSystemIndex >= 0 && state.selectedSystemIndex < est.options.length)
+      const est = state.estimates || { input: {}, options: [], recommended: {} };
+      const selectedOption = (state.selectedSystemIndex !== null && state.selectedSystemIndex >= 0 && est.options && state.selectedSystemIndex < est.options.length)
         ? est.options[state.selectedSystemIndex]
-        : est.recommended;
+        : (est.recommended || {});
       const hideFlags = {
         showCadDiagram: $("showCadDiagram")?.checked !== false,
         hidePayback: $("hidePayback")?.checked || false,
@@ -4132,7 +4398,10 @@ function attachEvents() {
         hideFinancing: ($("paymentMode")?.value !== "loan") || ($("hideFinancing")?.checked || false),
         solarInstalled: $("solarInstalled")?.checked || false,
         proposalSerialNo: $("proposalSerialNo")?.value || getNextProposalSerialNo(),
-        customerAddress: $("customerAddress")?.value || "Pune, Maharashtra",
+        customerAddress: isBuilding ? (state.buildingConfig?.buildingAddress || "Pune, Maharashtra") : ($("customerAddress")?.value || "Pune, Maharashtra"),
+        isBuildingProposal: isBuilding,
+        buildingData: isBuilding ? state.buildingData : null,
+        includeIndividualSheets: isBuilding ? ($("includeIndividualSheets")?.checked || false) : false,
       };
       import(`./reportGenerator.js?v=${Date.now()}`).then((module) => {
         if (module && module.generateProposalPDF) {
@@ -4151,6 +4420,119 @@ function attachEvents() {
 
   // Initialize PDF Sample View event listeners
   initPdfSampleView();
+
+  // Mode Selector: Single Customer vs Multi-Customer Building
+  $("modeSingleBtn")?.addEventListener("click", () => setProposalMode("single"));
+  $("modeMultiBuildingBtn")?.addEventListener("click", () => setProposalMode("multi_building"));
+
+  // Building Studio Toolbar & Actions
+  $("addFlatBtn")?.addEventListener("click", () => {
+    const flats = state.buildingFlats;
+    const last = flats[flats.length - 1];
+    let nextNo = "101";
+    if (last && last.flatNo) {
+      const numMatch = String(last.flatNo).match(/\d+/);
+      if (numMatch) {
+        const nextInt = parseInt(numMatch[0], 10) + 1;
+        nextNo = String(last.flatNo).replace(numMatch[0], String(nextInt));
+      } else {
+        nextNo = `Flat ${flats.length + 1}`;
+      }
+    }
+    const newFlat = {
+      id: `flat-${Date.now()}-${flats.length + 1}`,
+      flatNo: nextNo,
+      customerName: last ? `Resident ${nextNo}` : "New Resident",
+      sanctionedLoad: last ? last.sanctionedLoad : 5,
+      category: last ? last.category : "LT-I",
+      phase: last ? last.phase : "1-phase",
+      monthlyUnits: last ? last.monthlyUnits : 400,
+      monthlyBill: last ? last.monthlyBill : 4500,
+      loanMode: last ? last.loanMode : true,
+    };
+    flats.push(newFlat);
+    updateBuildingStudio();
+  });
+
+  $("copyDefaultsBtn")?.addEventListener("click", () => {
+    const flats = state.buildingFlats;
+    if (flats.length < 2) return;
+    const source = flats[0];
+    flats.forEach((f, i) => {
+      if (i > 0) {
+        f.sanctionedLoad = source.sanctionedLoad;
+        f.category = source.category;
+        f.phase = source.phase;
+        f.loanMode = source.loanMode;
+      }
+    });
+    updateBuildingStudio();
+  });
+
+  $("downloadCsvTemplateBtn")?.addEventListener("click", () => {
+    const csvContent = generateBuildingCSVTemplate();
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "building_solar_flats_template.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  });
+
+  $("exportCsvBtn")?.addEventListener("click", () => {
+    const csvContent = exportBuildingToCSV(state.buildingFlats);
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${(state.buildingConfig?.buildingName || "building").replace(/\s+/g, "_")}_flats.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  });
+
+  $("importCsvInput")?.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const text = evt.target.result;
+        const parsed = parseBuildingCSV(text);
+        if (parsed.flats && parsed.flats.length > 0) {
+          state.buildingFlats = parsed.flats;
+          updateBuildingStudio();
+          alert(`Successfully imported ${parsed.flats.length} flats from CSV!`);
+        } else {
+          alert("No valid flat records found in CSV. Please verify column headers.");
+        }
+      } catch (err) {
+        alert("Failed to parse CSV file: " + err.message);
+      }
+      e.target.value = "";
+    };
+    reader.readAsText(file);
+  });
+
+  $("syncCadPanelsBtn")?.addEventListener("click", () => {
+    updateBuildingStudio();
+    switchWorkspaceTab("cad");
+  });
+
+  $("buildingCalculateBtn")?.addEventListener("click", () => {
+    updateBuildingStudio();
+  });
+
+  // Building Config inputs changes
+  ["buildingNameInput", "buildingAddressInput", "buildingRoofAreaInput", "buildingPanelMakeInput", "buildingPanelWpInput", "buildingPanelRateInput", "buildingLoanRateInput", "buildingLoanUpfrontInput"].forEach((id) => {
+    $(id)?.addEventListener("change", () => {
+      if (state.proposalMode === "multi_building") {
+        updateBuildingStudio();
+      }
+    });
+  });
 
   document.querySelectorAll(".tab-button").forEach((button) => {
     button.addEventListener("click", () => switchTab(button.dataset.tab));
@@ -4724,6 +5106,9 @@ function buildProposalSnapshot() {
     state: serializedState,
     input,
     config,
+    proposalMode: state.proposalMode || "single",
+    buildingConfig: state.buildingConfig ? JSON.parse(JSON.stringify(state.buildingConfig)) : null,
+    buildingFlats: state.buildingFlats ? JSON.parse(JSON.stringify(state.buildingFlats)) : [],
   };
 
   const custName = input.customerName || $("customerName")?.value || $("internalCustomerName")?.value || "Draft Customer";
@@ -5744,6 +6129,29 @@ window.loadProposalState = function(data) {
       console.warn("Multi-meter render warning:", mmErr);
     }
 
+    // Restore Multi-Customer Building state if present
+    try {
+      if (sData.buildingConfig) {
+        state.buildingConfig = sData.buildingConfig;
+        if ($("buildingNameInput")) $("buildingNameInput").value = state.buildingConfig.buildingName || "";
+        if ($("buildingAddressInput")) $("buildingAddressInput").value = state.buildingConfig.buildingAddress || "";
+        if ($("buildingRoofAreaInput")) $("buildingRoofAreaInput").value = state.buildingConfig.roofArea || 2000;
+        if ($("buildingPanelMakeInput")) $("buildingPanelMakeInput").value = state.buildingConfig.panelMake || "Tier-1 Mono PERC DCR";
+        if ($("buildingPanelWpInput")) $("buildingPanelWpInput").value = state.buildingConfig.panelWp || 550;
+        if ($("buildingPanelRateInput")) $("buildingPanelRateInput").value = state.buildingConfig.panelRate || 28;
+        if ($("buildingLoanRateInput")) $("buildingLoanRateInput").value = state.buildingConfig.loanRate || 7;
+        if ($("buildingLoanUpfrontInput")) $("buildingLoanUpfrontInput").value = state.buildingConfig.loanUpfront || 10;
+      }
+      if (sData.buildingFlats && Array.isArray(sData.buildingFlats) && sData.buildingFlats.length > 0) {
+        state.buildingFlats = sData.buildingFlats;
+      }
+      if (sData.proposalMode) {
+        setProposalMode(sData.proposalMode);
+      }
+    } catch (bldgErr) {
+      console.warn("Building state restore warning:", bldgErr);
+    }
+
     // 6. Re-render Extracted Bill OCR card if present
     if (state.extractedBill && state.extractedBill.fields) {
       try {
@@ -5807,6 +6215,8 @@ window.closeInternalDialog = closeInternalDialog;
 window.unlockInternal = unlockInternal;
 window.lockInternal = lockInternal;
 window.openInternal = openInternal;
+window.setProposalMode = setProposalMode;
+window.updateBuildingStudio = updateBuildingStudio;
 
 export {
   autoSyncLatestProposalSerial,
@@ -5825,5 +6235,7 @@ export {
   closeInternalDialog,
   unlockInternal,
   lockInternal,
-  openInternal
+  openInternal,
+  setProposalMode,
+  updateBuildingStudio
 };

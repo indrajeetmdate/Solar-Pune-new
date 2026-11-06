@@ -431,4 +431,173 @@ assert.equal(sampleModal.style.display, "none", "Sample View modal must close");
 
 console.log("✓ PDF Sample View and Edit Mode with password 'editprop' verified successfully!");
 
+// =========================================================================
+// TEST SUITE: MULTI-CUSTOMER BUILDING SOLAR PROPOSAL STUDIO
+// =========================================================================
+console.log("\nTesting Multi-Customer Building Solar Proposal Studio...");
+
+// 1. Verify Mode Switcher buttons exist
+const modeSingleBtn = document.getElementById("modeSingleBtn");
+const modeMultiBuildingBtn = document.getElementById("modeMultiBuildingBtn");
+assert.ok(modeSingleBtn, "Single customer mode button must exist");
+assert.ok(modeMultiBuildingBtn, "Multi-customer building mode button must exist");
+
+// 2. Switch to Multi-Customer Building mode
+modeMultiBuildingBtn.click();
+assert.equal(window.appState.proposalMode, "multi_building", "Proposal mode must be 'multi_building'");
+assert.ok(modeMultiBuildingBtn.classList.contains("active"), "Multi-building mode button must be active");
+assert.ok(!modeSingleBtn.classList.contains("active"), "Single customer mode button must NOT be active");
+
+const bldgTabBtn = document.getElementById("workspaceTabBuildingBtn");
+assert.ok(bldgTabBtn, "Building Studio tab button must exist");
+assert.notEqual(bldgTabBtn.style.display, "none", "Building Studio tab button must be visible");
+
+const activePane = document.querySelector(".workspace-tab-pane.active");
+assert.equal(activePane?.dataset.pane, "building", "Active pane must switch to 'building'");
+
+// 3. Verify Building Studio UI & Initial Seeded Flats
+const bldgFlatsTbody = document.getElementById("buildingFlatsTableBody");
+assert.ok(bldgFlatsTbody, "Building flats table body must exist");
+assert.equal(bldgFlatsTbody.children.length, 4, "Initial seeded flats table must contain 4 flats");
+
+const kpiFlats = document.getElementById("bldgKpiFlats")?.textContent;
+assert.ok(kpiFlats && kpiFlats.includes("4 Flats"), `KPI flats must indicate 4 flats, got: ${kpiFlats}`);
+
+// 4. Test Adding a Flat and Auto-Increment Flat Number
+const addFlatBtn = document.getElementById("addFlatBtn");
+assert.ok(addFlatBtn, "Add flat button must exist");
+addFlatBtn.click();
+
+assert.equal(window.appState.buildingFlats.length, 5, "Building flats count must increase to 5");
+assert.equal(bldgFlatsTbody.children.length, 5, "Table rows must update to 5");
+const newRowFlatNo = bldgFlatsTbody.querySelector('tr[data-flat-idx="4"] input[data-field="flatNo"]')?.value;
+assert.equal(newRowFlatNo, "203", `New flat number must auto-increment to 203, got: ${newRowFlatNo}`);
+
+// 5. Test 'Same as above' Row Clone
+const firstCloneBtn = bldgFlatsTbody.querySelector('tr[data-flat-idx="0"] .btn-flat-clone');
+assert.ok(firstCloneBtn, "Clone button must exist on row 0");
+firstCloneBtn.click();
+assert.equal(window.appState.buildingFlats.length, 6, "Flats count must increase to 6 after cloning");
+
+// 6. Test Bulk Data Entry: Load at least 30 Flats (Verifying 30+ entries per page requirement)
+const bulk30Flats = [];
+for (let i = 1; i <= 32; i++) {
+  const flatNum = 100 + i;
+  bulk30Flats.push({
+    id: `flat-bulk-${i}`,
+    flatNo: String(flatNum),
+    customerName: `Flat Resident ${flatNum}`,
+    sanctionedLoad: 4.0,
+    category: "LT-I",
+    phase: "1-phase",
+    monthlyUnits: 300 + (i * 10),
+    monthlyBill: 3500 + (i * 120),
+    loanMode: (i % 2 === 0)
+  });
+}
+window.appState.buildingFlats = bulk30Flats;
+window.updateBuildingStudio();
+
+assert.equal(bldgFlatsTbody.children.length, 32, "Building flats table must render all 32 entries");
+const footFlats = document.getElementById("footFlatsCount")?.textContent;
+assert.equal(footFlats, "32", "Table footer must show 32 flats");
+
+// 7. Test Sizing & Subsidy Calculations on Building Ledger
+const ledger = window.appState.buildingData;
+assert.ok(ledger, "Building ledger calculation result must exist");
+assert.equal(ledger.flatLedger.length, 32, "Flat ledger must contain 32 entries");
+assert.ok(ledger.summary.totalBuildingCapacityKw > 0, "Total capacity must be greater than 0");
+assert.ok(ledger.summary.totalSubsidy > 0, "Total subsidy must be calculated");
+
+// Verify individual flat subsidies adhere to fixed quantum slabs (0, 30k, 60k, 78k)
+ledger.flatLedger.forEach(f => {
+  const sub = f.subsidy;
+  assert.ok(
+    sub === 0 || sub === 30000 || sub === 60000 || sub === 78000,
+    `Flat ${f.flatNo} subsidy (${sub}) must strictly follow fixed quantum slabs (0, 30k, 60k, 78k)`
+  );
+});
+
+// 8. Test CAD Demarcation
+const bldgCad = window.cad;
+if (bldgCad && typeof bldgCad.assignPanelsToFlats === "function") {
+  bldgCad.assignPanelsToFlats(ledger.flatLedger);
+  const firstPanel = bldgCad.panels[0];
+  if (firstPanel) {
+    assert.ok(firstPanel.flatColor, "CAD panel must have assigned flatColor border");
+    assert.ok(firstPanel.flatLabel, "CAD panel must have assigned flatLabel text");
+  }
+}
+
+// 9. Test Building Proposal Generation & Sample View
+const openPdfBtn = document.getElementById("openSampleViewBtn");
+assert.ok(openPdfBtn, "Open sample view button must exist");
+
+// Check default proposal output: checkbox 'Include Full Individual Resident Sheets' is unchecked by default
+const includeIndivCheckbox = document.getElementById("includeIndividualSheets");
+assert.ok(includeIndivCheckbox, "Include individual sheets checkbox must exist");
+assert.equal(includeIndivCheckbox.checked, false, "Include individual sheets must be unchecked by default (combined ledger default)");
+
+// Open Building Proposal in Sample View
+openPdfBtn.click();
+assert.equal(sampleModal.style.display, "flex", "Sample View modal must open for building proposal");
+
+// Verify Combined Ledger proposal pages (Page 1 = Executive Summary, Page 2 = CAD Blueprint, Page 3 = Master Ledger)
+const samplePages = samplePagesContainer.querySelectorAll(".pdf-sample-page");
+assert.equal(samplePages.length, 3, "Default building proposal output must be 3 pages (Combined Ledger)");
+
+const page1Text = samplePages[0].textContent;
+assert.ok(page1Text.includes("Building Executive Summary"), "Page 1 must contain Building Executive Summary");
+assert.ok(page1Text.includes("Shivaji Heights"), "Page 1 must contain Building Name");
+
+const page2Text = samplePages[1].textContent;
+assert.ok(page2Text.includes("Shared Rooftop Layout & Demarcated Flat Panel Allocation"), "Page 2 must contain CAD Demarcation title");
+
+const page3Text = samplePages[2].textContent;
+assert.ok(page3Text.includes("Resident-Wise Financial Allocation & Solar Ledger"), "Page 3 must contain Master Ledger title");
+assert.ok(page3Text.includes("BUILDING TOTALS (32 FLATS)"), "Page 3 must contain Master Ledger 32 flats totals");
+
+// 10. Test In-place text editing on Building Proposal preview with password 'editprop'
+const bldgUnlockBtn = document.getElementById("sampleViewUnlockEditBtn");
+const bldgPwdInput = document.getElementById("sampleViewPasswordInput");
+const bldgConfirmBtn = document.getElementById("sampleViewConfirmUnlockBtn");
+
+bldgUnlockBtn.click();
+bldgPwdInput.value = "editprop";
+bldgConfirmBtn.click();
+
+const editableBldgCell = samplePages[2].querySelector(".pdf-table td span.editable-field");
+assert.ok(editableBldgCell, "Editable field must exist on building ledger table");
+assert.equal(editableBldgCell.getAttribute("contenteditable"), "true", "Building ledger table text must be editable with password 'editprop'");
+
+// Lock edits
+bldgUnlockBtn.click();
+assert.notEqual(editableBldgCell.getAttribute("contenteditable"), "true", "Building ledger text must no longer be editable after locking");
+
+// Close Sample View modal
+document.getElementById("closeSampleViewModalBtn")?.click();
+
+// 11. Test Option: 'Include Full Individual Resident Sheets'
+includeIndivCheckbox.checked = true;
+openPdfBtn.click();
+
+const fullPages = samplePagesContainer.querySelectorAll(".pdf-sample-page");
+assert.equal(fullPages.length, 3 + 32, "When 'Include Full Individual Resident Sheets' is checked, proposal must include all 32 individual flat sheets!");
+
+const individualFlatPage = fullPages[3].textContent;
+assert.ok(individualFlatPage.includes("Official Solar Proposal — Flat 101"), "Individual sheet must have customized flat header");
+assert.ok(individualFlatPage.includes("ELECTRICITY BILL COMPARISON: BEFORE VS AFTER SOLAR"), "Individual sheet must NOT skip electricity bill comparison");
+assert.ok(individualFlatPage.includes("INVESTMENT & FIXED-QUANTUM SUBSIDY BREAKDOWN"), "Individual sheet must NOT skip investment & subsidy breakdown");
+assert.ok(individualFlatPage.includes("WARRANTIES & TURNKEY SCOPE OF DELIVERY"), "Individual sheet must NOT skip scope of work");
+assert.ok(individualFlatPage.includes("16 mm and 14 mm copper bonded earthing electrode rods"), "Individual sheet must specify 16mm and 14mm earthing rods");
+
+document.getElementById("closeSampleViewModalBtn")?.click();
+
+// 12. Switch back to Single Customer mode
+modeSingleBtn.click();
+assert.equal(window.appState.proposalMode, "single", "Proposal mode must restore to 'single'");
+assert.equal(bldgTabBtn.style.display, "none", "Building Studio tab must be hidden in single customer mode");
+
+console.log("✓ Multi-Customer Building Solar Proposal Studio verified successfully!");
+
 console.log("\nALL END-TO-END WORKSPACE & AUTO-CALCULATION TESTS PASSED! 🚀🎉");

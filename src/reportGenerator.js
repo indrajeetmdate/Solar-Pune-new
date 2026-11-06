@@ -193,6 +193,710 @@ export function buildSystemIncludesText(option, input = {}) {
   return "System Includes: " + sanitizeSystemIncludes(rawText);
 }
 
+/**
+ * Generate Multi-Customer Building Solar Proposal PDF
+ * Produces:
+ * 1. Building Executive Summary (Page 1)
+ * 2. Shared Rooftop CAD Map with demarcated flat panels & legend (Page 2)
+ * 3. Building Master Financial Ledger with dense flat rows & totals (Page 3+)
+ * 4. (Optional) Full Individual Resident Sheets for each flat
+ */
+export async function generateBuildingProposalPDF({
+  doc,
+  pageWidth,
+  pageHeight,
+  margin,
+  COLORS,
+  estimates,
+  selectedOption,
+  hideFlags,
+  logoResult,
+  sysDiffResult,
+  proposalSerialNo,
+  proposalDate,
+  customerAddress,
+}) {
+  const buildingData = hideFlags.buildingData || estimates.buildingData || {};
+  const summary = buildingData.summary || {};
+  const flatLedger = buildingData.flatLedger || [];
+  const includeIndividualSheets = hideFlags.includeIndividualSheets || false;
+
+  const formatCurrency = (val) =>
+    "Rs " + Number(val || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+
+  const addBuildingHeader = (title) => {
+    doc.setFillColor(COLORS.primary);
+    doc.rect(0, 0, pageWidth, 2.5, "F");
+
+    doc.setFillColor(COLORS.white);
+    doc.rect(0, 2.5, pageWidth, 18, "F");
+
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.4);
+    doc.line(margin, 20.5, pageWidth - margin, 20.5);
+
+    let textStartX = margin;
+    if (logoResult && logoResult.data) {
+      try {
+        const logoH = 12;
+        const logoW = (logoResult.width && logoResult.height) ? (logoResult.width / logoResult.height) * logoH : 28;
+        doc.addImage(logoResult.data, 'PNG', margin, 5.5, logoW, logoH);
+        textStartX = margin + logoW + 6;
+      } catch (e) {
+        console.warn("Could not draw logo in header:", e);
+      }
+    }
+
+    doc.setFontSize(10.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(COLORS.primary);
+    doc.text("DATLION CNERGY", textStartX, 11);
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(COLORS.textLight);
+    doc.text("COMMERCIAL & TECHNICAL SOLAR PROPOSAL", textStartX, 15.5);
+
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(COLORS.primary);
+    doc.text(title, pageWidth - margin, 11, { align: "right" });
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(COLORS.textLight);
+    doc.text(`Ref: ${proposalSerialNo}`, pageWidth - margin, 15.5, { align: "right" });
+  };
+
+  // ================= PAGE 1: Building Executive Summary =================
+  addBuildingHeader("Building Solar Proposal");
+  let yPos = 25;
+
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(COLORS.primary);
+  doc.text(`PROPOSAL REF: ${proposalSerialNo}`, margin, yPos);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(COLORS.textLight);
+  doc.text(`DATE: ${proposalDate}`, pageWidth - margin, yPos, { align: "right" });
+  yPos += 5;
+
+  // Corporate From & To Side-by-Side Cards
+  const colW = (pageWidth - margin * 2 - 8) / 2;
+  const cardH = 44;
+
+  // FROM CARD
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(margin, yPos, colW, cardH, 2, 2, "F");
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(margin, yPos, colW, cardH, 2, 2, "S");
+
+  doc.setFontSize(7.5);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(2, 132, 199);
+  doc.text("ISSUED BY (SOLAR EPC)", margin + 5, yPos + 6);
+
+  doc.setFontSize(9.5);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(15, 23, 42);
+  doc.text("DATLION CNERGY PRIVATE LIMITED", margin + 5, yPos + 12);
+
+  doc.setFontSize(7.5);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(71, 85, 105);
+  doc.text("Ground, Shed No. 1, Shashitara Pratishthan, Hingne Khurd,", margin + 5, yPos + 17);
+  doc.text("Pune, Maharashtra - 411051", margin + 5, yPos + 21);
+  doc.text("GSTIN: 27AALCD8550A1ZP | datlioncnergy@gmail.com", margin + 5, yPos + 26);
+  doc.text("Phone: +91 8956340980 | www.cnergy.co.in", margin + 5, yPos + 30);
+
+  // TO CARD (Building / Society)
+  const toX = margin + colW + 8;
+  doc.setFillColor(240, 253, 244);
+  doc.roundedRect(toX, yPos, colW, cardH, 2, 2, "F");
+  doc.setDrawColor(187, 247, 208);
+  doc.roundedRect(toX, yPos, colW, cardH, 2, 2, "S");
+
+  doc.setFontSize(7.5);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(22, 163, 74);
+  doc.text("PREPARED FOR (BUILDING / SOCIETY)", toX + 5, yPos + 6);
+
+  doc.setFontSize(9.5);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(15, 23, 42);
+  const bldgName = buildingData.buildingName || "Building Society Solar Project";
+  doc.text(bldgName, toX + 5, yPos + 12);
+
+  doc.setFontSize(7.5);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(71, 85, 105);
+  const bldgAddr = buildingData.buildingAddress || customerAddress || "Pune, Maharashtra";
+  doc.text(bldgAddr, toX + 5, yPos + 17);
+  doc.text(`Total Flats / Meters: ${summary.totalFlats || flatLedger.length} Units`, toX + 5, yPos + 22);
+  doc.text(`Total Sanction Load: ${summary.totalSanctionedLoad || 0} kW`, toX + 5, yPos + 26);
+  doc.text(`Total Monthly Consumption: ${(summary.totalMonthlyUnits || 0).toLocaleString("en-IN")} kWh/mo`, toX + 5, yPos + 30);
+
+  yPos += cardH + 8;
+
+  // Title: 1. Executive Summary & Key Indicators
+  doc.setTextColor(COLORS.black);
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text("1. Building Executive Summary & Financial Indicators", margin, yPos);
+  yPos += 5;
+
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(COLORS.text);
+  doc.text("Turnkey solar PV system economics, aggregate capacity, and PM Surya Ghar subsidy benefits for the society.", margin, yPos);
+  yPos += 5;
+
+  // KPI Grid Table
+  const kpiData = [
+    [
+      { content: "Total Solar PV Capacity", styles: { fontStyle: "bold" } },
+      `${(summary.totalBuildingCapacityKw || 0).toFixed(1)} kWp (${summary.totalBuildingPanels || 0} Modules)`,
+      { content: "Estimated Monthly Generation", styles: { fontStyle: "bold" } },
+      `${(summary.monthlyGenerationTotal || 0).toLocaleString("en-IN")} kWh / mo`
+    ],
+    [
+      { content: "Turnkey Project Value (Gross)", styles: { fontStyle: "bold" } },
+      formatCurrency(summary.totalBuildingGrossCost),
+      { content: "Estimated Annual Generation", styles: { fontStyle: "bold" } },
+      `${(summary.annualGenerationTotal || 0).toLocaleString("en-IN")} kWh / yr`
+    ],
+    [
+      { content: "Total PM Surya Ghar Subsidies", styles: { fontStyle: "bold", textColor: [21, 128, 61] } },
+      { content: formatCurrency(summary.totalSubsidy), styles: { fontStyle: "bold", textColor: [21, 128, 61] } },
+      { content: "Annual Electricity Savings", styles: { fontStyle: "bold", textColor: [21, 128, 61] } },
+      { content: `${formatCurrency(summary.totalAnnualSavings)} / yr`, styles: { fontStyle: "bold", textColor: [21, 128, 61] } }
+    ],
+    [
+      { content: "Net Investment (Society)", styles: { fontStyle: "bold", textColor: [2, 132, 199] } },
+      { content: formatCurrency(summary.totalNetCost), styles: { fontStyle: "bold", textColor: [2, 132, 199] } },
+      { content: "Blended Payback Period", styles: { fontStyle: "bold" } },
+      `${summary.buildingPaybackYears || 0} Years`
+    ]
+  ];
+
+  if (doc.autoTable) {
+    doc.autoTable({
+      startY: yPos,
+      body: kpiData,
+      theme: "grid",
+      styles: { fontSize: 8.5, cellPadding: 3, textColor: [15, 23, 42] },
+      columnStyles: {
+        0: { cellWidth: 50, fillColor: [248, 250, 252] },
+        1: { cellWidth: 40 },
+        2: { cellWidth: 50, fillColor: [248, 250, 252] },
+        3: { cellWidth: 40 }
+      },
+      margin: { left: margin, right: margin }
+    });
+    yPos = (doc.lastAutoTable?.finalY || yPos + 35) + 8;
+  } else {
+    yPos += 45;
+  }
+
+  // Shared Technical Architecture Box
+  doc.setTextColor(COLORS.primary);
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text("Shared Technical System Architecture", margin, yPos);
+  yPos += 5;
+
+  const techRows = [
+    ["Solar PV Modules", `${buildingData.panelMake || "Tier-1 Mono PERC DCR"} (${buildingData.panelWp || 550} Wp High-efficiency modules)`],
+    ["Mounting Structure", "Elevated Hot-dip Galvanized (HDG 80-120 micron, 25+ yr structural durability)"],
+    ["Inverter Architecture", "High-efficiency Multi-MPPT Grid-Tied Inverters with IP65 weatherproofing"],
+    ["Safety & Earthing", "Dedicated dual copper bonded earthing electrode rods (16mm & 14mm) + Type-2 SPDs"],
+    ["Metering & Grid Interconnection", "Individual bi-directional net meters / Group Net Metering under MSEDCL Solar Regulations"],
+    ["Turnkey Inclusions", "Supply, structural fabrication, DC/AC cabling, statutory MSEDCL approvals & commissioning"]
+  ];
+
+  if (doc.autoTable) {
+    doc.autoTable({
+      startY: yPos,
+      body: techRows,
+      theme: "plain",
+      styles: { fontSize: 8, cellPadding: 2, textColor: [51, 65, 85] },
+      columnStyles: {
+        0: { cellWidth: 55, fontStyle: "bold", textColor: [15, 23, 42] },
+        1: { cellWidth: pageWidth - margin * 2 - 55 }
+      },
+      margin: { left: margin, right: margin }
+    });
+  }
+
+  // ================= PAGE 2: Shared Rooftop CAD Layout & Demarcation =================
+  doc.addPage();
+  addBuildingHeader("Rooftop Layout & CAD Blueprint");
+  yPos = 25;
+
+  doc.setTextColor(COLORS.black);
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text("2. Shared Rooftop Layout & Demarcated Flat Panel Allocation", margin, yPos);
+  yPos += 5;
+
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(COLORS.text);
+  doc.text("Architectural CAD layout displaying physical panel allocations, color boundaries per flat, and maintenance pathways.", margin, yPos);
+  yPos += 6;
+
+  // Capture CAD Snapshot image from canvas
+  let cadImage = null;
+  try {
+    const canvas = (typeof document !== "undefined") ? document.getElementById("panelDiagramCanvas") : null;
+    if (canvas && canvas.width > 0 && canvas.height > 0) {
+      cadImage = canvas.toDataURL("image/png");
+    }
+  } catch (e) {
+    console.warn("Could not capture CAD canvas:", e);
+  }
+
+  if (cadImage) {
+    const maxImgW = pageWidth - margin * 2;
+    const maxImgH = 95;
+    const drawW = maxImgW;
+    const drawH = Math.min(maxImgH, drawW * 0.55);
+    const imgX = margin;
+
+    doc.setFillColor(15, 23, 42);
+    doc.roundedRect(imgX - 0.5, yPos - 0.5, drawW + 1, drawH + 1, 1.5, 1.5, "F");
+    try {
+      doc.addImage(cadImage, "PNG", imgX, yPos, drawW, drawH);
+    } catch (err) {
+      console.warn("Failed to add CAD image to building proposal PDF:", err);
+    }
+    yPos += drawH + 6;
+  }
+
+  // CAD Spatial & Allocation Summary Table
+  const cadMetrics = [
+    ["Total Roof Area", `${buildingData.roofAreaSqft || 2000} sq.ft.`, "Solar Array Area", `${Math.round((summary.totalBuildingPanels || 0) * 27.5)} sq.ft.`],
+    ["Walkways & Pathways", `${Math.max(0, (buildingData.roofAreaSqft || 2000) - Math.round((summary.totalBuildingPanels || 0) * 27.5))} sq.ft.`, "Orientation & Tilt", "South Facing, Optimal 18° Tilt"],
+    ["Allocated Modules", `${summary.totalBuildingPanels || 0} Modules`, "Allocation Strategy", "Proportional to Monthly Consumption"]
+  ];
+
+  if (doc.autoTable) {
+    doc.autoTable({
+      startY: yPos,
+      body: cadMetrics,
+      theme: "grid",
+      styles: { fontSize: 7.5, cellPadding: 2 },
+      columnStyles: {
+        0: { cellWidth: 40, fontStyle: "bold", fillColor: [248, 250, 252] },
+        1: { cellWidth: 50 },
+        2: { cellWidth: 40, fontStyle: "bold", fillColor: [248, 250, 252] },
+        3: { cellWidth: 50 }
+      },
+      margin: { left: margin, right: margin }
+    });
+    yPos = (doc.lastAutoTable?.finalY || yPos + 25) + 6;
+  } else {
+    yPos += 30;
+  }
+
+  // Demarcation Legend Table
+  doc.setFontSize(9.5);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(COLORS.primary);
+  doc.text("Demarcated Resident Panel Allocation Legend", margin, yPos);
+  yPos += 4;
+
+  const legendHead = [["Flat No", "Resident Name", "Monthly Units", "Assigned Panels", "Solar kWp", "Array Share (%)"]];
+  const totalP = summary.totalBuildingPanels || 1;
+  const legendRows = flatLedger.map((f) => [
+    f.flatNo || "-",
+    f.customerName || "-",
+    `${f.monthlyUnits || 0} kWh`,
+    `${f.panels || 0}`,
+    `${(f.allocatedKw || 0).toFixed(2)} kWp`,
+    `${Math.round(((f.panels || 0) / totalP) * 100)}%`
+  ]);
+
+  if (doc.autoTable) {
+    doc.autoTable({
+      startY: yPos,
+      head: legendHead,
+      body: legendRows,
+      theme: "striped",
+      headStyles: { fillColor: COLORS.primary, fontSize: 7.5, cellPadding: 2 },
+      bodyStyles: { fontSize: 7.2, cellPadding: 1.8, halign: "center" },
+      columnStyles: {
+        1: { halign: "left" }
+      },
+      margin: { left: margin, right: margin }
+    });
+  }
+
+  // ================= PAGE 3+: Building Master Financial Ledger =================
+  doc.addPage();
+  addBuildingHeader("Building Master Financial Ledger");
+  yPos = 25;
+
+  doc.setTextColor(COLORS.black);
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text("3. Resident-Wise Financial Allocation & Solar Ledger", margin, yPos);
+  yPos += 5;
+
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(COLORS.text);
+  doc.text("Comprehensive allocation of solar capacity, fixed-quantum subsidy, gross investment share, monthly generation, and net bills.", margin, yPos);
+  yPos += 5;
+
+  const ledgerHeaders = [[
+    "#",
+    "Flat No",
+    "Resident Name",
+    "Load\n(kW)",
+    "Units\n/mo",
+    "Panels",
+    "kWp",
+    "Gross\nShare (Rs)",
+    "PM Surya\nSubsidy (Rs)",
+    "Net Cost\n(Rs)",
+    "Gen/mo\n(kWh)",
+    "Savings\n/mo (Rs)",
+    "Post Bill\n(Rs)",
+    "Payback\n(Yrs)",
+    "Loan\nOpt"
+  ]];
+
+  const ledgerBody = flatLedger.map((f, i) => [
+    String(i + 1),
+    f.flatNo || "-",
+    f.customerName || "-",
+    String(f.sanctionedLoad || 0),
+    String(f.monthlyUnits || 0),
+    String(f.panels || 0),
+    Number(f.allocatedKw || 0).toFixed(2),
+    Number(f.grossCost || 0).toLocaleString("en-IN"),
+    Number(f.subsidy || 0).toLocaleString("en-IN"),
+    Number(f.netCost || 0).toLocaleString("en-IN"),
+    String(f.monthlyGeneration || 0),
+    Number(f.monthlySavings || 0).toLocaleString("en-IN"),
+    Number(f.postSolarBill || 0).toLocaleString("en-IN"),
+    `${f.paybackYears || 0}`,
+    f.loanMode ? "Yes" : "No"
+  ]);
+
+  const ledgerFoot = [[
+    "TOTALS",
+    `${summary.totalFlats || flatLedger.length} Flats`,
+    "—",
+    `${summary.totalSanctionedLoad || 0}`,
+    `${(summary.totalMonthlyUnits || 0).toLocaleString("en-IN")}`,
+    `${summary.totalBuildingPanels || 0}`,
+    `${(summary.totalBuildingCapacityKw || 0).toFixed(2)}`,
+    Number(summary.totalBuildingGrossCost || 0).toLocaleString("en-IN"),
+    Number(summary.totalSubsidy || 0).toLocaleString("en-IN"),
+    Number(summary.totalNetCost || 0).toLocaleString("en-IN"),
+    `${(summary.monthlyGenerationTotal || 0).toLocaleString("en-IN")}`,
+    Number(summary.totalMonthlySavings || 0).toLocaleString("en-IN"),
+    "—",
+    `${summary.buildingPaybackYears || 0}`,
+    "—"
+  ]];
+
+  if (doc.autoTable) {
+    doc.autoTable({
+      startY: yPos,
+      head: ledgerHeaders,
+      body: ledgerBody,
+      foot: ledgerFoot,
+      theme: "grid",
+      headStyles: {
+        fillColor: [30, 41, 59],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        fontSize: 6.8,
+        cellPadding: 1.5,
+        halign: "center",
+        valign: "middle"
+      },
+      bodyStyles: {
+        fontSize: 6.5,
+        cellPadding: 1.2,
+        halign: "center",
+        textColor: [15, 23, 42]
+      },
+      footStyles: {
+        fillColor: [241, 245, 249],
+        textColor: [15, 23, 42],
+        fontStyle: "bold",
+        fontSize: 6.8,
+        cellPadding: 1.5,
+        halign: "center"
+      },
+      columnStyles: {
+        0: { cellWidth: 7 },
+        1: { cellWidth: 12 },
+        2: { cellWidth: 24, halign: "left" },
+        3: { cellWidth: 10 },
+        4: { cellWidth: 11 },
+        5: { cellWidth: 10 },
+        6: { cellWidth: 10 },
+        7: { cellWidth: 16, halign: "right" },
+        8: { cellWidth: 16, halign: "right", textColor: [21, 128, 61], fontStyle: "bold" },
+        9: { cellWidth: 16, halign: "right", textColor: [2, 132, 199], fontStyle: "bold" },
+        10: { cellWidth: 11 },
+        11: { cellWidth: 14, halign: "right", textColor: [21, 128, 61] },
+        12: { cellWidth: 12, halign: "right" },
+        13: { cellWidth: 11 },
+        14: { cellWidth: 9 }
+      },
+      margin: { left: margin, right: margin },
+      didParseCell: function (data) {
+        if (data.section === "body") {
+          if (data.column.index === 8) {
+            data.cell.styles.fillColor = [240, 253, 244];
+          }
+          if (data.column.index === 9) {
+            data.cell.styles.fillColor = [240, 249, 255];
+          }
+        }
+      }
+    });
+  }
+
+  // ================= IF CHECKED: INDIVIDUAL RESIDENT PROPOSAL SHEETS =================
+  if (includeIndividualSheets && flatLedger.length > 0) {
+    for (const flat of flatLedger) {
+      doc.addPage();
+      addBuildingHeader(`Individual Proposal — Flat ${flat.flatNo}`);
+      let iyPos = 25;
+
+      doc.setTextColor(COLORS.black);
+      doc.setFontSize(13);
+      doc.setFont("helvetica", "bold");
+      doc.text(`Official Solar Proposal — Flat ${flat.flatNo} (${flat.customerName})`, margin, iyPos);
+      iyPos += 5;
+
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(COLORS.text);
+      doc.text(`Dedicated turnkey solar PV system share for Flat ${flat.flatNo} at ${buildingData.buildingName}.`, margin, iyPos);
+      iyPos += 6;
+
+      // Flat Resident Parameter Strip
+      const residentParams = [
+        [
+          { content: "Resident Name", styles: { fontStyle: "bold" } }, flat.customerName,
+          { content: "Flat Number", styles: { fontStyle: "bold" } }, flat.flatNo
+        ],
+        [
+          { content: "Sanctioned Load", styles: { fontStyle: "bold" } }, `${flat.sanctionedLoad} kW (${flat.phase || "1-phase"})`,
+          { content: "Consumer Category", styles: { fontStyle: "bold" } }, flat.category || "LT-I Residential"
+        ],
+        [
+          { content: "Baseline Monthly Units", styles: { fontStyle: "bold" } }, `${flat.monthlyUnits} kWh / month`,
+          { content: "Baseline Monthly Bill", styles: { fontStyle: "bold" } }, formatCurrency(flat.monthlyBill)
+        ],
+        [
+          { content: "Allocated Solar PV System", styles: { fontStyle: "bold", textColor: [2, 132, 199] } },
+          { content: `${(flat.allocatedKw || 0).toFixed(2)} kWp (${flat.panels} Modules @ ${buildingData.panelWp || 550} Wp)`, styles: { fontStyle: "bold", textColor: [2, 132, 199] } },
+          { content: "Estimated Monthly Solar Gen", styles: { fontStyle: "bold" } }, `${flat.monthlyGeneration} kWh / month`
+        ]
+      ];
+
+      if (doc.autoTable) {
+        doc.autoTable({
+          startY: iyPos,
+          body: residentParams,
+          theme: "grid",
+          styles: { fontSize: 8, cellPadding: 2.5 },
+          columnStyles: {
+            0: { cellWidth: 45, fillColor: [248, 250, 252] },
+            1: { cellWidth: 45 },
+            2: { cellWidth: 45, fillColor: [248, 250, 252] },
+            3: { cellWidth: 45 }
+          },
+          margin: { left: margin, right: margin }
+        });
+        iyPos = (doc.lastAutoTable?.finalY || iyPos + 25) + 6;
+      } else {
+        iyPos += 30;
+      }
+
+      // Electricity Bill Comparison Before vs After Solar
+      doc.setFontSize(10.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(COLORS.primary);
+      doc.text("Electricity Bill Comparison: Before vs After Solar", margin, iyPos);
+      iyPos += 4;
+
+      const billComparison = [
+        ["Bill Parameter", "Without Solar (Baseline)", "With Rooftop Solar", "Monthly Benefit"],
+        ["Units Billed", `${flat.monthlyUnits} units`, `${Math.max(0, flat.monthlyUnits - flat.monthlyGeneration)} units`, `Offset ${Math.min(flat.monthlyUnits, flat.monthlyGeneration)} units`],
+        ["Fixed Charges", "Rs 130", "Rs 130", "Rs 0 (Mandatory MSEDCL Grid Charge)"],
+        ["Energy Charges", formatCurrency(flat.energyCharge || (flat.monthlyBill - 130 - 300)), formatCurrency(Math.max(0, flat.monthlyBill - flat.monthlySavings - 130)), formatCurrency(flat.monthlySavings)],
+        ["Net Monthly Payable", formatCurrency(flat.monthlyBill), formatCurrency(flat.postSolarBill), formatCurrency(flat.monthlySavings)],
+        ["Annual Electricity Cost", formatCurrency(flat.monthlyBill * 12), formatCurrency(flat.postSolarBill * 12), formatCurrency(flat.monthlySavings * 12)]
+      ];
+
+      if (doc.autoTable) {
+        doc.autoTable({
+          startY: iyPos,
+          head: [billComparison[0]],
+          body: billComparison.slice(1),
+          theme: "striped",
+          headStyles: { fillColor: COLORS.primary, fontSize: 8, cellPadding: 2 },
+          bodyStyles: { fontSize: 7.5, cellPadding: 2, halign: "center" },
+          columnStyles: {
+            0: { halign: "left", fontStyle: "bold" },
+            3: { textColor: [21, 128, 61], fontStyle: "bold" }
+          },
+          margin: { left: margin, right: margin }
+        });
+        iyPos = (doc.lastAutoTable?.finalY || iyPos + 35) + 6;
+      } else {
+        iyPos += 40;
+      }
+
+      // Financial Investment & PM Surya Ghar Fixed-Quantum Subsidy Breakdown
+      doc.setFontSize(10.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(COLORS.primary);
+      doc.text("Investment & PM Surya Ghar Fixed-Quantum Subsidy Breakdown", margin, iyPos);
+      iyPos += 4;
+
+      let subsidySlabExplanation = "Not eligible for subsidy (< 1 kW or commercial)";
+      if (flat.subsidy === 30000) subsidySlabExplanation = "PM Surya Ghar 1 kW Completed Slab = Rs 30,000 (Fixed Quantum)";
+      else if (flat.subsidy === 60000) subsidySlabExplanation = "PM Surya Ghar 2 kW Completed Slab = Rs 60,000 (Fixed Quantum)";
+      else if (flat.subsidy === 78000) subsidySlabExplanation = "PM Surya Ghar 3 kW+ Slab Cap = Rs 78,000 (Fixed Quantum)";
+
+      const finBreakdown = [
+        ["Turnkey Gross Cost Share", formatCurrency(flat.grossCost), "Proportional share of building solar EPC delivery"],
+        ["PM Surya Ghar Subsidy", formatCurrency(flat.subsidy), subsidySlabExplanation],
+        ["Net Payable by Resident", formatCurrency(flat.netCost), "Gross cost minus direct central subsidy credit"],
+        ["Estimated Payback Period", `${flat.paybackYears} Years`, "Based on annual bill offset savings"],
+        ["Return on Investment (ROI)", `${Math.round(((flat.monthlySavings * 12) / (flat.netCost || 1)) * 100)}%`, "Annual savings divided by net customer investment"]
+      ];
+
+      if (doc.autoTable) {
+        doc.autoTable({
+          startY: iyPos,
+          body: finBreakdown,
+          theme: "grid",
+          styles: { fontSize: 7.5, cellPadding: 2 },
+          columnStyles: {
+            0: { cellWidth: 50, fontStyle: "bold", fillColor: [248, 250, 252] },
+            1: { cellWidth: 35, fontStyle: "bold" },
+            2: { cellWidth: pageWidth - margin * 2 - 85, textColor: [71, 85, 105] }
+          },
+          margin: { left: margin, right: margin },
+          didParseCell: function (data) {
+            if (data.row.index === 1) {
+              data.cell.styles.textColor = [21, 128, 61];
+            }
+            if (data.row.index === 2) {
+              data.cell.styles.textColor = [2, 132, 199];
+            }
+          }
+        });
+        iyPos = (doc.lastAutoTable?.finalY || iyPos + 30) + 6;
+      } else {
+        iyPos += 35;
+      }
+
+      // If Flat opted for Loan
+      if (flat.loanMode && flat.financing) {
+        doc.setFontSize(10.5);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(COLORS.primary);
+        doc.text("Solar Loan Financing Option (Nationalized Bank Tie-up)", margin, iyPos);
+        iyPos += 4;
+
+        const loanSchedule = [
+          ["Customer Down Payment (10%)", formatCurrency(flat.financing.downPayment || flat.netCost * 0.1), "Initial upfront customer investment"],
+          ["Bank Loan Principal (90%)", formatCurrency(flat.financing.principal || flat.netCost * 0.9), "Financed by SBI / Canara Bank / Bank of Maharashtra"],
+          ["Annual Interest Rate", `${flat.financing.interestRatePct || 7.0}% p.a.`, "Concessional PM Surya Ghar Priority Sector Green Lending"],
+          ["Loan Tenure", "5 Years (60 Months)", "Flexible repayment tenure"],
+          ["Estimated Monthly EMI", `${formatCurrency(flat.financing.monthlyEmi || Math.round(flat.monthlySavings * 0.85))} / mo`, "Less than or equal to monthly electricity bill savings!"],
+          ["Net Monthly Cashflow Gain", `${formatCurrency(Math.max(0, flat.monthlySavings - (flat.financing.monthlyEmi || 0)))} / mo`, "Monthly solar bill savings exceed loan EMI immediately!"]
+        ];
+
+        if (doc.autoTable) {
+          doc.autoTable({
+            startY: iyPos,
+            body: loanSchedule,
+            theme: "grid",
+            styles: { fontSize: 7.5, cellPadding: 2 },
+            columnStyles: {
+              0: { cellWidth: 50, fontStyle: "bold", fillColor: [248, 250, 252] },
+              1: { cellWidth: 35, fontStyle: "bold", textColor: [2, 132, 199] },
+              2: { cellWidth: pageWidth - margin * 2 - 85, textColor: [71, 85, 105] }
+            },
+            margin: { left: margin, right: margin }
+          });
+          iyPos = (doc.lastAutoTable?.finalY || iyPos + 35) + 6;
+        } else {
+          iyPos += 40;
+        }
+      }
+
+      // Component Specs & Scope of Work
+      doc.setFontSize(9.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(COLORS.primary);
+      doc.text("System Warranties & Turnkey Scope of Delivery", margin, iyPos);
+      iyPos += 4;
+
+      const warranties = [
+        ["Solar Modules", "25-Year Linear Performance Warranty (≥ 84.8% output at 25 yrs)"],
+        ["Grid-Tied Inverter", "8-Year Comprehensive Manufacturer Replacement Warranty"],
+        ["Mounting Structure", "25-Year Galvanization & Structural Integrity Warranty (HDG)"],
+        ["Safety & Earthing Rods", "Dedicated 16 mm and 14 mm chemical copper bonded earthing electrode rods"],
+        ["Turnkey Scope", "Includes Design, Procurement, Structural mounting, Electrical safety, Net Metering & Commissioning"]
+      ];
+
+      if (doc.autoTable) {
+        doc.autoTable({
+          startY: iyPos,
+          body: warranties,
+          theme: "plain",
+          styles: { fontSize: 7.2, cellPadding: 1.6 },
+          columnStyles: {
+            0: { cellWidth: 45, fontStyle: "bold", textColor: [15, 23, 42] },
+            1: { cellWidth: pageWidth - margin * 2 - 45, textColor: [71, 85, 105] }
+          },
+          margin: { left: margin, right: margin }
+        });
+      }
+    }
+  }
+
+  // ================= APPLY FOOTERS TO ALL PAGES =================
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    const footerY = pageHeight - 10;
+    doc.setTextColor(COLORS.text);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text("www.cnergy.co.in", margin, footerY);
+    doc.text(`Page ${i} of ${totalPages}  |  Ref: ${proposalSerialNo}`, pageWidth / 2, footerY, { align: "center" });
+    doc.setFontSize(7.5);
+    doc.text("DATLION CNERGY PRIVATE LIMITED", pageWidth - margin, footerY - 4, { align: "right" });
+    doc.text("GSTIN: 27AALCD8550A1ZP | Pune", pageWidth - margin, footerY, { align: "right" });
+  }
+
+  const cleanSerial = String(proposalSerialNo || "")
+    .trim()
+    .replaceAll("/", "-")
+    .replace(/[^a-zA-Z0-9_-]/g, "");
+
+  const filename = `${cleanSerial || "BUILDING-SOLAR-PROPOSAL"}.pdf`;
+  doc.save(filename);
+  return doc;
+}
+
+
 export async function generateProposalPDF(estimates, selectedOption, hideFlags = {}) {
   console.log("Starting PDF generation...", estimates);
 
@@ -248,6 +952,25 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
                            "DC/2026-27/PROP-1140";
   const customerAddress = hideFlags.customerAddress || input.customerAddress || "Pune, Maharashtra";
   const proposalDate = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+
+  // Multi-Customer Building Proposal Branch
+  if (hideFlags.isBuildingProposal || estimates.isBuildingProposal) {
+    return await generateBuildingProposalPDF({
+      doc,
+      pageWidth,
+      pageHeight,
+      margin,
+      COLORS,
+      estimates,
+      selectedOption: option,
+      hideFlags,
+      logoResult,
+      sysDiffResult,
+      proposalSerialNo,
+      proposalDate,
+      customerAddress,
+    });
+  }
 
   // --- Helpers ---
   const formatCurrency = (val) =>

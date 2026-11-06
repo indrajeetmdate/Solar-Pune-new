@@ -3008,6 +3008,123 @@ export class RooftopCAD {
 
     // True North Compass Dial (Fixed in Screen Space)
     this.drawCompass(logicalW, logicalH);
+
+    // Multi-Customer Flat Demarcation Legend (HUD)
+    this.drawMultiCustomerLegend(logicalW, logicalH);
+  }
+
+  assignPanelsToFlats(flats) {
+    if (!flats || !Array.isArray(flats) || flats.length === 0) {
+      this.clearMultiCustomerDemarcation();
+      return;
+    }
+
+    this.multiCustomerFlats = flats;
+
+    // Sort panels spatially (by y, then by x) to group contiguous panels for each flat
+    const sortedPanels = [...this.panels].sort((a, b) => {
+      const dy = a.y - b.y;
+      if (Math.abs(dy) > 10) return dy;
+      return a.x - b.x;
+    });
+
+    let currentPanelIdx = 0;
+    flats.forEach((flat) => {
+      const count = Number(flat.panels) || 0;
+      for (let i = 0; i < count && currentPanelIdx < sortedPanels.length; i++) {
+        const p = sortedPanels[currentPanelIdx++];
+        p.flatId = flat.id;
+        p.flatNo = flat.flatNo;
+        p.flatLabel = flat.flatNo;
+        p.flatColor = flat.color;
+        p.customerName = flat.customerName;
+      }
+    });
+
+    // Any remaining panels beyond allocated
+    while (currentPanelIdx < sortedPanels.length) {
+      const p = sortedPanels[currentPanelIdx++];
+      delete p.flatId;
+      delete p.flatNo;
+      delete p.flatLabel;
+      delete p.flatColor;
+      delete p.customerName;
+    }
+
+    this.render();
+  }
+
+  clearMultiCustomerDemarcation() {
+    this.multiCustomerFlats = null;
+    this.panels.forEach((p) => {
+      delete p.flatId;
+      delete p.flatNo;
+      delete p.flatLabel;
+      delete p.flatColor;
+      delete p.customerName;
+    });
+    this.render();
+  }
+
+  drawMultiCustomerLegend(logicalW, logicalH) {
+    if (!this.multiCustomerFlats || this.multiCustomerFlats.length === 0) return;
+    const ctx = this.ctx;
+    const flats = this.multiCustomerFlats;
+
+    ctx.save();
+    const legendMargin = 10;
+    const itemH = 13;
+    const maxCols = Math.min(4, Math.max(1, Math.floor((logicalW - 30) / 160)));
+    const itemsPerCol = Math.ceil(flats.length / maxCols);
+    const boxH = Math.min(105, 20 + itemsPerCol * itemH);
+    const boxW = Math.min(logicalW - 20, maxCols * 170 + 16);
+    const boxX = legendMargin;
+    const boxY = logicalH - boxH - legendMargin;
+
+    // Backdrop
+    ctx.fillStyle = "rgba(15, 23, 42, 0.90)";
+    if (typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, boxW, boxH, 6);
+      ctx.fill();
+    } else {
+      ctx.fillRect(boxX, boxY, boxW, boxH);
+    }
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+    // Title
+    ctx.font = "bold 9px Inter, sans-serif";
+    ctx.fillStyle = "#38bdf8";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText("🏢 Flat Solar Demarcation Map", boxX + 8, boxY + 5);
+
+    // Flat Items
+    flats.forEach((f, idx) => {
+      const col = Math.floor(idx / itemsPerCol);
+      const row = idx % itemsPerCol;
+      const itemX = boxX + 8 + col * 170;
+      const itemY = boxY + 18 + row * itemH;
+
+      if (itemY + itemH <= boxY + boxH) {
+        // Color box
+        ctx.fillStyle = f.color || "#38bdf8";
+        ctx.fillRect(itemX, itemY + 2, 8, 8);
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(itemX, itemY + 2, 8, 8);
+
+        // Text
+        ctx.font = "8px Inter, sans-serif";
+        ctx.fillStyle = "#f1f5f9";
+        const shortName = f.customerName ? ` (${f.customerName.slice(0, 8)})` : "";
+        ctx.fillText(`${f.flatNo}${shortName}: ${f.panels}p (${f.allocatedKw}kWp)`, itemX + 12, itemY + 2);
+      }
+    });
+
+    ctx.restore();
   }
 
   drawCompass(logicalW, logicalH) {
@@ -4303,6 +4420,14 @@ export class RooftopCAD {
       ctx.fillStyle = grad;
       ctx.fillRect(p.x, p.y, p.w, p.h);
 
+      // If flatColor is present (Multi-Customer building mode):
+      if (p.flatColor) {
+        ctx.fillStyle = p.flatColor;
+        ctx.globalAlpha = alpha * 0.25;
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+        ctx.globalAlpha = alpha;
+      }
+
       ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
       ctx.lineWidth = 0.75;
       ctx.beginPath();
@@ -4314,15 +4439,24 @@ export class RooftopCAD {
       ctx.lineTo(p.x + p.w * 0.5, p.y + p.h);
       ctx.stroke();
 
-      ctx.strokeStyle = isSelected ? "#38bdf8" : "#94a3b8";
-      ctx.lineWidth = isSelected ? 2 : 1;
+      if (isSelected) {
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 2.5;
+      } else if (p.flatColor) {
+        ctx.strokeStyle = p.flatColor;
+        ctx.lineWidth = 2.5;
+      } else {
+        ctx.strokeStyle = "#94a3b8";
+        ctx.lineWidth = 1;
+      }
       ctx.strokeRect(p.x, p.y, p.w, p.h);
 
-      ctx.font = "bold 8px Inter, sans-serif";
-      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.font = p.flatLabel ? "bold 8.5px Inter, sans-serif" : "bold 8px Inter, sans-serif";
+      ctx.fillStyle = p.flatColor ? "#ffffff" : "rgba(255, 255, 255, 0.85)";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(idx + 1, p.x + p.w / 2, p.y + p.h / 2);
+      const labelText = p.flatLabel ? `${p.flatLabel}` : `${idx + 1}`;
+      ctx.fillText(labelText, p.x + p.w / 2, p.y + p.h / 2);
 
       ctx.restore();
     });

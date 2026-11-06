@@ -26,9 +26,428 @@ const formatSysType = (t) => {
 };
 
 /**
+ * Build Multi-Customer Building Sample PDF Pages
+ * Generates interactive HTML pages for sample view and inline editing with password 'editprop'.
+ */
+export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags = {}) {
+  const buildingData = hideFlags.buildingData || estimates?.buildingData || {};
+  const summary = buildingData.summary || {};
+  const flatLedger = buildingData.flatLedger || [];
+  const includeIndividualSheets = hideFlags.includeIndividualSheets || false;
+
+  const proposalSerialNo =
+    hideFlags.proposalSerialNo ||
+    (typeof document !== "undefined" && document.getElementById("proposalSerialNo")?.value) ||
+    "DC/2026-27/PROP-1140";
+
+  const bldgName =
+    buildingData.buildingName ||
+    (typeof document !== "undefined" && document.getElementById("buildingNameInput")?.value) ||
+    "Shivaji Heights Co-op Housing Society";
+
+  const bldgAddress =
+    buildingData.buildingAddress ||
+    (typeof document !== "undefined" && document.getElementById("buildingAddressInput")?.value) ||
+    "Baner, Pune, Maharashtra - 411045";
+
+  const proposalDate = new Date().toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  let cadCanvasDataUrl = null;
+  if (typeof document !== "undefined") {
+    try {
+      const canvas = document.getElementById("panelDiagramCanvas");
+      if (canvas && canvas.width > 0 && canvas.height > 0) {
+        cadCanvasDataUrl = canvas.toDataURL("image/png");
+      }
+    } catch (e) {
+      console.warn("Could not capture CAD canvas:", e);
+    }
+  }
+
+  const formatCurrency = (val) =>
+    "Rs " + Number(val || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+
+  const createPageHeader = (pageTitle = "Building Solar Proposal") => `
+    <div class="pdf-page-header">
+      <div class="pdf-header-left">
+        <div class="pdf-company-title">DATLION CNERGY PRIVATE LIMITED</div>
+        <div class="pdf-company-sub">SOLAR EPC & CLEAN ENERGY SOLUTIONS</div>
+      </div>
+      <div class="pdf-header-right">
+        <div class="pdf-doc-title">${pageTitle}</div>
+        <div class="pdf-doc-meta"><strong>Ref:</strong> <span class="editable-field">${proposalSerialNo}</span> | <strong>Date:</strong> <span class="editable-field">${proposalDate}</span></div>
+      </div>
+    </div>
+  `;
+
+  const createPageFooter = (pageNum, totalPages) => `
+    <div class="pdf-page-footer">
+      <div class="pdf-footer-left">www.cnergy.co.in</div>
+      <div class="pdf-footer-center">Page ${pageNum} of ${totalPages} &nbsp;|&nbsp; Ref: ${proposalSerialNo}</div>
+      <div class="pdf-footer-right">
+        <div>DATLION CNERGY PRIVATE LIMITED</div>
+        <div style="font-size: 7pt; color: #64748b;">GSTIN: 27AALCD8550A1ZP | Pune, Maharashtra</div>
+      </div>
+    </div>
+  `;
+
+  const pages = [];
+  const basePagesCount = 3;
+  const totalPagesCount = includeIndividualSheets ? (basePagesCount + flatLedger.length) : basePagesCount;
+
+  // PAGE 1: Building Executive Summary
+  const page1 = `
+    <div class="pdf-sample-page" data-page-index="1">
+      ${createPageHeader("Multi-Customer Building Solar Proposal")}
+      <div class="pdf-page-body">
+        <div class="pdf-grid-2" style="margin-bottom: 14px;">
+          <div class="pdf-card pdf-card-from">
+            <div class="pdf-card-badge blue">Issued By (Solar EPC)</div>
+            <div class="pdf-card-name">DATLION CNERGY PRIVATE LIMITED</div>
+            <p class="pdf-card-address">
+              Ground, Shed No. 1, Shashitara Pratishthan BJP Office,<br>
+              Late Narayanrao Kondiba Jagtap Path, Hingne Khurd,<br>
+              Pune, Maharashtra - 411051
+            </p>
+            <div class="pdf-card-contact">
+              <div><strong>GSTIN:</strong> 27AALCD8550A1ZP</div>
+              <div><strong>Email:</strong> datlioncnergy@gmail.com</div>
+              <div><strong>Phone:</strong> +91 8956340980 | www.cnergy.co.in</div>
+            </div>
+          </div>
+          <div class="pdf-card pdf-card-to">
+            <div class="pdf-card-badge green">Prepared For (Building / Society)</div>
+            <div class="pdf-card-name editable-field">${bldgName}</div>
+            <p class="pdf-card-address editable-field">${bldgAddress}</p>
+            <div class="pdf-card-contact">
+              <div><strong>Total Flats / Meters:</strong> <span class="editable-field">${summary.totalFlats || flatLedger.length} Units</span></div>
+              <div><strong>Total Sanction Load:</strong> <span class="editable-field">${summary.totalSanctionedLoad || 0} kW</span></div>
+              <div><strong>Total Monthly Consumption:</strong> <span class="editable-field">${(summary.totalMonthlyUnits || 0).toLocaleString("en-IN")} units/month</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pdf-section-title">1. Building Executive Summary & Key Indicators</div>
+        <div class="pdf-section-desc">Aggregate solar capacity, turnkey project economics, and PM Surya Ghar subsidy benefits for the society.</div>
+
+        <div class="pdf-grid-4" style="margin-bottom: 12px;">
+          <div class="pdf-kpi-box">
+            <div class="kpi-box-label">Total Solar Capacity</div>
+            <div class="kpi-box-val editable-field">${(summary.totalBuildingCapacityKw || 0).toFixed(1)} kWp</div>
+            <div class="kpi-box-sub editable-field">${summary.totalBuildingPanels || 0} Solar Modules</div>
+          </div>
+          <div class="pdf-kpi-box">
+            <div class="kpi-box-label">Monthly Generation</div>
+            <div class="kpi-box-val editable-field">${(summary.monthlyGenerationTotal || 0).toLocaleString("en-IN")} units</div>
+            <div class="kpi-box-sub editable-field">${(summary.annualGenerationTotal || 0).toLocaleString("en-IN")} units / yr</div>
+          </div>
+          <div class="pdf-kpi-box highlight-green">
+            <div class="kpi-box-label">Total PM Surya Ghar Subsidy</div>
+            <div class="kpi-box-val editable-field" style="color: #15803d;">${formatCurrency(summary.totalSubsidy)}</div>
+            <div class="kpi-box-sub">Fixed Quantum Slabs</div>
+          </div>
+          <div class="pdf-kpi-box highlight-green">
+            <div class="kpi-box-label">Annual Bill Savings</div>
+            <div class="kpi-box-val editable-field" style="color: #15803d;">${formatCurrency(summary.totalAnnualSavings)}</div>
+            <div class="kpi-box-sub editable-field">${summary.buildingPaybackYears || 0} yrs payback</div>
+          </div>
+        </div>
+
+        <div class="pdf-card" style="margin-bottom: 12px; background: #f8fafc;">
+          <div style="font-size: 8.5pt; font-weight: 700; color: #0f172a; margin-bottom: 6px;">PROJECT INVESTMENT SUMMARY</div>
+          <table class="pdf-table" style="font-size: 8pt;">
+            <tbody>
+              <tr><td>Gross Turnkey Project Cost:</td><td style="text-align: right;"><strong class="editable-field">${formatCurrency(summary.totalBuildingGrossCost)}</strong></td></tr>
+              <tr><td>Total PM Surya Ghar Central Subsidies:</td><td style="text-align: right; color: #15803d;"><strong class="editable-field">(-) ${formatCurrency(summary.totalSubsidy)}</strong></td></tr>
+              <tr style="background: #f0fdf4;"><td><strong>Net Society & Resident Investment:</strong></td><td style="text-align: right; color: #0284c7;"><strong class="editable-field">${formatCurrency(summary.totalNetCost)}</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pdf-card" style="background: #ffffff; border: 1px solid #e2e8f0;">
+          <div style="font-size: 8.5pt; font-weight: 700; color: #63923e; margin-bottom: 6px;">SHARED TECHNICAL ARCHITECTURE</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 7.5pt; color: #334155;">
+            <div><strong>Modules:</strong> <span class="editable-field">${buildingData.panelMake || "Tier-1 Mono PERC DCR"} (${buildingData.panelWp || 550} Wp)</span></div>
+            <div><strong>Structure:</strong> <span class="editable-field">Hot-dip Galvanized Elevated (25+ yrs life)</span></div>
+            <div><strong>Inverters:</strong> <span class="editable-field">Multi-MPPT On-Grid Inverters (IP65)</span></div>
+            <div><strong>Safety:</strong> <span class="editable-field">16 mm & 14 mm chemical copper bonded earthing rods</span></div>
+            <div style="grid-column: 1 / -1;"><strong>Net Metering:</strong> <span class="editable-field">Group Net Metering / Individual Bi-directional meters compliant with MSEDCL</span></div>
+          </div>
+        </div>
+      </div>
+      ${createPageFooter(1, totalPagesCount)}
+    </div>
+  `;
+  pages.push(page1);
+
+  // PAGE 2: Shared Rooftop CAD Layout & Demarcation
+  const page2 = `
+    <div class="pdf-sample-page" data-page-index="2">
+      ${createPageHeader("Rooftop Layout & CAD Blueprint")}
+      <div class="pdf-page-body">
+        <div class="pdf-section-title">2. Shared Rooftop Layout & Demarcated Flat Panel Allocation</div>
+        <div class="pdf-section-desc">Architectural CAD layout displaying physical panel allocations, color boundaries per flat, and maintenance pathways.</div>
+
+        <div style="text-align: center; margin: 10px 0; background: #0f172a; border-radius: 6px; padding: 6px;">
+          ${cadCanvasDataUrl ? `<img src="${cadCanvasDataUrl}" alt="Shared Rooftop CAD Blueprint" style="max-width: 100%; max-height: 280px; object-fit: contain; border-radius: 4px;">` : `<div style="color: #94a3b8; padding: 40px; font-size: 10pt;">CAD Aerial Blueprint Diagram</div>`}
+        </div>
+
+        <div class="pdf-card" style="margin-bottom: 10px;">
+          <div style="font-size: 8.5pt; font-weight: 700; color: #0f172a; margin-bottom: 4px;">ROOFTOP ENGINEERING METRICS</div>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 7.5pt;">
+            <div>Available Roof: <strong class="editable-field">${buildingData.roofAreaSqft || 2000} sq.ft.</strong></div>
+            <div>Array Footprint: <strong class="editable-field">${Math.round((summary.totalBuildingPanels || 0) * 27.5)} sq.ft.</strong></div>
+            <div>Clear Pathways: <strong class="editable-field">${Math.max(0, (buildingData.roofAreaSqft || 2000) - Math.round((summary.totalBuildingPanels || 0) * 27.5))} sq.ft.</strong></div>
+            <div>Allocation: <strong class="editable-field">Proportional to Units</strong></div>
+          </div>
+        </div>
+
+        <div class="pdf-card" style="background: #ffffff;">
+          <div style="font-size: 8.5pt; font-weight: 700; color: #63923e; margin-bottom: 6px;">DEMARCATED RESIDENT PANEL ALLOCATION LEGEND</div>
+          <table class="pdf-table" style="font-size: 7pt;">
+            <thead>
+              <tr style="background: #1e293b; color: white;">
+                <th>Flat No</th>
+                <th>Resident Name</th>
+                <th>Monthly Units</th>
+                <th>Panels</th>
+                <th>Solar kWp</th>
+                <th>Array Share (%)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${flatLedger.map(f => `
+                <tr>
+                  <td style="text-align: center;"><span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${f.color || '#2563eb'}; margin-right: 4px;"></span><strong>${f.flatNo}</strong></td>
+                  <td>${f.customerName}</td>
+                  <td style="text-align: center;">${f.monthlyUnits} kWh</td>
+                  <td style="text-align: center;"><strong>${f.panels}</strong></td>
+                  <td style="text-align: center;">${(f.allocatedKw || 0).toFixed(2)} kWp</td>
+                  <td style="text-align: center;">${Math.round(((f.panels || 0) / (summary.totalBuildingPanels || 1)) * 100)}%</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      ${createPageFooter(2, totalPagesCount)}
+    </div>
+  `;
+  pages.push(page2);
+
+  // PAGE 3+: Building Master Financial Ledger
+  const page3 = `
+    <div class="pdf-sample-page" data-page-index="3">
+      ${createPageHeader("Building Master Financial Ledger")}
+      <div class="pdf-page-body">
+        <div class="pdf-section-title">3. Resident-Wise Financial Allocation & Solar Ledger</div>
+        <div class="pdf-section-desc">Comprehensive allocation of solar capacity, fixed-quantum subsidy, gross investment share, monthly generation, and net bills.</div>
+
+        <div style="width: 100%; overflow-x: auto; margin-top: 8px;">
+          <table class="pdf-table" style="font-size: 6.8pt; line-height: 1.2;">
+            <thead>
+              <tr style="background: #1e293b; color: white; text-align: center;">
+                <th style="padding: 4px 2px;">#</th>
+                <th style="padding: 4px 4px;">Flat No</th>
+                <th style="padding: 4px 6px; text-align: left;">Resident Name</th>
+                <th style="padding: 4px 2px;">Load<br>(kW)</th>
+                <th style="padding: 4px 2px;">Units<br>/mo</th>
+                <th style="padding: 4px 2px;">Panels</th>
+                <th style="padding: 4px 2px;">kWp</th>
+                <th style="padding: 4px 4px;">Gross (Rs)</th>
+                <th style="padding: 4px 4px; background: #064e3b; color: #a7f3d0;">Subsidy (Rs)</th>
+                <th style="padding: 4px 4px; background: #064e3b; color: #a7f3d0;">Net Cost (Rs)</th>
+                <th style="padding: 4px 2px;">Gen/mo<br>(kWh)</th>
+                <th style="padding: 4px 4px;">Savings<br>/mo</th>
+                <th style="padding: 4px 4px;">Post Bill</th>
+                <th style="padding: 4px 2px;">Payback</th>
+                <th style="padding: 4px 2px;">Loan</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${flatLedger.map((f, i) => `
+                <tr style="text-align: center;">
+                  <td style="padding: 3px 2px;">${i + 1}</td>
+                  <td style="padding: 3px 4px;"><strong><span class="editable-field">${f.flatNo}</span></strong></td>
+                  <td style="padding: 3px 6px; text-align: left;"><span class="editable-field">${f.customerName}</span></td>
+                  <td style="padding: 3px 2px;"><span class="editable-field">${f.sanctionedLoad}</span></td>
+                  <td style="padding: 3px 2px;"><span class="editable-field">${f.monthlyUnits}</span></td>
+                  <td style="padding: 3px 2px;"><strong><span class="editable-field">${f.panels}</span></strong></td>
+                  <td style="padding: 3px 2px;"><span class="editable-field">${(f.allocatedKw || 0).toFixed(2)}</span></td>
+                  <td style="padding: 3px 4px; text-align: right;"><span class="editable-field">${Number(f.grossCost || 0).toLocaleString("en-IN")}</span></td>
+                  <td style="padding: 3px 4px; text-align: right; background: #f0fdf4; color: #15803d; font-weight: bold;"><span class="editable-field">${Number(f.subsidy || 0).toLocaleString("en-IN")}</span></td>
+                  <td style="padding: 3px 4px; text-align: right; background: #f0f9ff; color: #0284c7; font-weight: bold;"><span class="editable-field">${Number(f.netCost || 0).toLocaleString("en-IN")}</span></td>
+                  <td style="padding: 3px 2px;"><span class="editable-field">${f.monthlyGeneration}</span></td>
+                  <td style="padding: 3px 4px; text-align: right; color: #15803d;"><span class="editable-field">${Number(f.monthlySavings || 0).toLocaleString("en-IN")}</span></td>
+                  <td style="padding: 3px 4px; text-align: right;"><span class="editable-field">${Number(f.postSolarBill || 0).toLocaleString("en-IN")}</span></td>
+                  <td style="padding: 3px 2px;"><span class="editable-field">${f.paybackYears}</span> yrs</td>
+                  <td style="padding: 3px 2px;"><span class="editable-field">${f.loanMode ? "Yes" : "No"}</span></td>
+                </tr>
+              `).join("")}
+            </tbody>
+            <tfoot>
+              <tr style="background: #f1f5f9; font-weight: bold; text-align: center;">
+                <td colspan="3" style="text-align: left; padding: 4px 6px;">BUILDING TOTALS (${summary.totalFlats || flatLedger.length} FLATS)</td>
+                <td>${summary.totalSanctionedLoad || 0}</td>
+                <td>${(summary.totalMonthlyUnits || 0).toLocaleString("en-IN")}</td>
+                <td>${summary.totalBuildingPanels || 0}</td>
+                <td>${(summary.totalBuildingCapacityKw || 0).toFixed(2)}</td>
+                <td style="text-align: right;">${Number(summary.totalBuildingGrossCost || 0).toLocaleString("en-IN")}</td>
+                <td style="text-align: right; color: #15803d;">${Number(summary.totalSubsidy || 0).toLocaleString("en-IN")}</td>
+                <td style="text-align: right; color: #0284c7;">${Number(summary.totalNetCost || 0).toLocaleString("en-IN")}</td>
+                <td>${(summary.monthlyGenerationTotal || 0).toLocaleString("en-IN")}</td>
+                <td style="text-align: right; color: #15803d;">${Number(summary.totalMonthlySavings || 0).toLocaleString("en-IN")}</td>
+                <td>—</td>
+                <td>${summary.buildingPaybackYears || 0} yrs</td>
+                <td>—</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+      ${createPageFooter(3, totalPagesCount)}
+    </div>
+  `;
+  pages.push(page3);
+
+  // OPTIONAL: Individual Resident Sheets
+  if (includeIndividualSheets && flatLedger.length > 0) {
+    flatLedger.forEach((flat, idx) => {
+      const pageIndex = 4 + idx;
+      let subsidyExplanation = "Not eligible for subsidy (< 1 kW or commercial)";
+      if (flat.subsidy === 30000) subsidyExplanation = "PM Surya Ghar 1 kW Slab = Rs 30,000 (Fixed Quantum)";
+      else if (flat.subsidy === 60000) subsidyExplanation = "PM Surya Ghar 2 kW Slab = Rs 60,000 (Fixed Quantum)";
+      else if (flat.subsidy === 78000) subsidyExplanation = "PM Surya Ghar 3 kW+ Slab Cap = Rs 78,000 (Fixed Quantum)";
+
+      const flatPage = `
+        <div class="pdf-sample-page" data-page-index="${pageIndex}">
+          ${createPageHeader(`Individual Proposal — Flat ${flat.flatNo}`)}
+          <div class="pdf-page-body">
+            <div class="pdf-section-title">Official Solar Proposal — Flat ${flat.flatNo} (<span class="editable-field">${flat.customerName}</span>)</div>
+            <div class="pdf-section-desc">Dedicated turnkey solar PV system share for Flat ${flat.flatNo} at ${bldgName}.</div>
+
+            <div class="pdf-card" style="margin-bottom: 10px;">
+              <div style="font-size: 8.5pt; font-weight: 700; color: #0f172a; margin-bottom: 4px;">RESIDENT SITE & ELECTRICAL PARAMETERS</div>
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 7.5pt;">
+                <div>Sanction Load: <strong class="editable-field">${flat.sanctionedLoad} kW</strong></div>
+                <div>Phase: <strong class="editable-field">${flat.phase || "1-phase"}</strong></div>
+                <div>Monthly Units: <strong class="editable-field">${flat.monthlyUnits} kWh</strong></div>
+                <div>Baseline Bill: <strong class="editable-field">${formatCurrency(flat.monthlyBill)}</strong></div>
+                <div>Allocated Solar: <strong class="editable-field" style="color: #0284c7;">${(flat.allocatedKw || 0).toFixed(2)} kWp (${flat.panels} Modules)</strong></div>
+                <div>Monthly Gen: <strong class="editable-field">${flat.monthlyGeneration} kWh</strong></div>
+                <div>PM Surya Subsidy: <strong class="editable-field" style="color: #15803d;">${formatCurrency(flat.subsidy)}</strong></div>
+                <div>Net Investment: <strong class="editable-field" style="color: #0284c7;">${formatCurrency(flat.netCost)}</strong></div>
+              </div>
+            </div>
+
+            <div class="pdf-card" style="margin-bottom: 10px;">
+              <div style="font-size: 8.5pt; font-weight: 700; color: #63923e; margin-bottom: 4px;">ELECTRICITY BILL COMPARISON: BEFORE VS AFTER SOLAR</div>
+              <table class="pdf-table" style="font-size: 7.5pt;">
+                <thead>
+                  <tr style="background: #1e293b; color: white;">
+                    <th>Bill Parameter</th>
+                    <th>Without Solar (Baseline)</th>
+                    <th>With Rooftop Solar</th>
+                    <th>Monthly Benefit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Units Billed</td>
+                    <td><span class="editable-field">${flat.monthlyUnits}</span> units</td>
+                    <td><span class="editable-field">${Math.max(0, flat.monthlyUnits - flat.monthlyGeneration)}</span> units</td>
+                    <td style="color: #15803d; font-weight: bold;">Offset <span class="editable-field">${Math.min(flat.monthlyUnits, flat.monthlyGeneration)}</span> units</td>
+                  </tr>
+                  <tr>
+                    <td>Fixed Charges</td>
+                    <td>Rs 130</td>
+                    <td>Rs 130</td>
+                    <td>Rs 0 (Mandatory MSEDCL Grid Charge)</td>
+                  </tr>
+                  <tr>
+                    <td>Energy Charges</td>
+                    <td><span class="editable-field">${formatCurrency(flat.energyCharge || (flat.monthlyBill - 130 - 300))}</span></td>
+                    <td><span class="editable-field">${formatCurrency(Math.max(0, flat.monthlyBill - flat.monthlySavings - 130))}</span></td>
+                    <td style="color: #15803d; font-weight: bold;"><span class="editable-field">${formatCurrency(flat.monthlySavings)}</span></td>
+                  </tr>
+                  <tr style="background: #f0fdf4;">
+                    <td><strong>Net Monthly Payable</strong></td>
+                    <td><strong class="editable-field">${formatCurrency(flat.monthlyBill)}</strong></td>
+                    <td><strong class="editable-field">${formatCurrency(flat.postSolarBill)}</strong></td>
+                    <td style="color: #15803d; font-weight: bold;"><strong class="editable-field">${formatCurrency(flat.monthlySavings)}</strong></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="pdf-card" style="margin-bottom: 10px;">
+              <div style="font-size: 8.5pt; font-weight: 700; color: #63923e; margin-bottom: 4px;">INVESTMENT & FIXED-QUANTUM SUBSIDY BREAKDOWN</div>
+              <div style="font-size: 7.5pt; line-height: 1.6; color: #334155;">
+                <div>Gross Turnkey Cost Share: <strong class="editable-field">${formatCurrency(flat.grossCost)}</strong></div>
+                <div style="color: #15803d;">PM Surya Ghar Subsidy: <strong class="editable-field">${formatCurrency(flat.subsidy)}</strong> (${subsidyExplanation})</div>
+                <div style="color: #0284c7;">Net Payable by Resident: <strong class="editable-field">${formatCurrency(flat.netCost)}</strong></div>
+                <div>Estimated Payback: <strong class="editable-field">${flat.paybackYears} Years</strong></div>
+              </div>
+            </div>
+
+            ${flat.loanMode && flat.financing ? `
+              <div class="pdf-card" style="margin-bottom: 10px; background: #f0f9ff; border-color: #bae6fd;">
+                <div style="font-size: 8.5pt; font-weight: 700; color: #0284c7; margin-bottom: 4px;">SOLAR BANK LOAN FINANCING DETAILS</div>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; font-size: 7.5pt;">
+                  <div>Down Payment (10%): <strong class="editable-field">${formatCurrency(flat.financing.downPayment || flat.netCost * 0.1)}</strong></div>
+                  <div>Loan Principal (90%): <strong class="editable-field">${formatCurrency(flat.financing.principal || flat.netCost * 0.9)}</strong></div>
+                  <div>Interest Rate: <strong class="editable-field">${flat.financing.interestRatePct || 7.0}% p.a.</strong></div>
+                  <div>Tenure: <strong class="editable-field">5 Years (60 Mos)</strong></div>
+                  <div>Monthly EMI: <strong class="editable-field" style="color: #0284c7;">${formatCurrency(flat.financing.monthlyEmi || Math.round(flat.monthlySavings * 0.85))}</strong></div>
+                  <div>Net Cashflow Gain: <strong class="editable-field" style="color: #15803d;">+${formatCurrency(Math.max(0, flat.monthlySavings - (flat.financing.monthlyEmi || 0)))} / mo</strong></div>
+                </div>
+              </div>
+            ` : ""}
+
+            <div class="pdf-card" style="background: #ffffff; border: 1px solid #e2e8f0;">
+              <div style="font-size: 8pt; font-weight: 700; color: #0f172a; margin-bottom: 4px;">WARRANTIES & TURNKEY SCOPE OF DELIVERY</div>
+              <div style="font-size: 7.2pt; color: #475569; line-height: 1.4;">
+                <div>✓ <strong>Solar Modules:</strong> 25-Year Linear Performance Warranty (Tier-1 DCR Mono PERC/TOPCon).</div>
+                <div>✓ <strong>Grid-Tied Inverter:</strong> 8-Year Comprehensive Manufacturer Replacement Warranty.</div>
+                <div>✓ <strong>Mounting Structure:</strong> 25-Year Hot-dip Galvanization Warranty.</div>
+                <div>✓ <strong>Earthing & Electrical Safety:</strong> Dedicated 16 mm and 14 mm copper bonded earthing electrode rods.</div>
+                <div>✓ <strong>Scope of Work:</strong> Turnkey Supply, Fabrication, Wiring, MSEDCL Net Metering statutory liaising & Commissioning.</div>
+              </div>
+            </div>
+          </div>
+          ${createPageFooter(pageIndex, totalPagesCount)}
+        </div>
+      `;
+      pages.push(flatPage);
+    });
+  }
+
+  return pages.join("\n");
+}
+
+/**
  * Generate high-fidelity HTML pages representing the PDF document.
  */
 export function buildSamplePdfPages(estimates, selectedOption, hideFlags = {}) {
+  // If Multi-Customer Building Proposal, use dedicated building generator
+  const isBuilding = hideFlags.isBuildingProposal || 
+                     estimates?.isBuildingProposal || 
+                     (typeof window !== "undefined" && window.appState?.proposalMode === "multi_building");
+
+  if (isBuilding) {
+    if (!hideFlags.buildingData && typeof window !== "undefined" && window.appState?.buildingData) {
+      hideFlags.buildingData = window.appState.buildingData;
+    }
+    if (hideFlags.includeIndividualSheets === undefined && typeof document !== "undefined") {
+      hideFlags.includeIndividualSheets = document.getElementById("includeIndividualSheets")?.checked || false;
+    }
+    return buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags);
+  }
+
   const { input = {}, sanctionedStatus = {} } = estimates || {};
   const option = selectedOption || estimates?.recommended || {};
   const isLoan = option.financing && option.financing.paymentMode === "loan";
@@ -889,15 +1308,22 @@ export function initPdfSampleView() {
 
   // Open Sample View button from Proposal tab
   document.getElementById("openSampleViewBtn")?.addEventListener("click", () => {
-    if (window.appState && window.appState.estimates) {
-      const est = window.appState.estimates;
+    if (window.appState) {
+      const isBuilding = window.appState.proposalMode === "multi_building";
+      const est = window.appState.estimates || { input: {}, options: [], recommended: {} };
       const opt =
         (window.appState.selectedSystemIndex !== null &&
           window.appState.selectedSystemIndex >= 0 &&
           est.options &&
           est.options[window.appState.selectedSystemIndex]) ||
-        est.recommended;
-      openPdfSampleView(est, opt);
+        (est.recommended || {});
+      const hideFlags = {
+        isBuildingProposal: isBuilding,
+        buildingData: isBuilding ? window.appState.buildingData : null,
+        includeIndividualSheets: isBuilding ? (document.getElementById("includeIndividualSheets")?.checked || false) : false,
+        proposalSerialNo: document.getElementById("proposalSerialNo")?.value || "DC/2026-27/PROP-1140",
+      };
+      openPdfSampleView(est, opt, hideFlags);
     }
   });
 }

@@ -19,6 +19,10 @@
           </div>
         </div>
       </div>
+      <div class="proposal-mode-pill-toggle" id="proposalModeSelector" aria-label="Proposal Mode">
+        <button type="button" class="mode-pill-btn active" id="modeSingleBtn" title="Single customer rooftop solar proposal">👤 Single Customer</button>
+        <button type="button" class="mode-pill-btn" id="modeMultiBuildingBtn" title="Multi-customer building shared rooftop proposal">🏢 Multi-Customer Building</button>
+      </div>
       <div class="header-actions" aria-label="Mode selector">
         <button class="mode-button active" id="easyModeButton" type="button" onclick="window.lockInternal && window.lockInternal()">Customer</button>
         <button class="mode-button" id="internalModeButton" type="button" onclick="window.openInternalDialog && window.openInternalDialog()">Internal</button>
@@ -650,6 +654,10 @@
             <button class="workspace-tab-btn" data-tab="proposal" id="workspaceTabProposalBtn" type="button">
               <span class="tab-icon">📋</span>
               <span class="tab-text">Proposal & Export</span>
+            </button>
+            <button class="workspace-tab-btn" data-tab="building" id="workspaceTabBuildingBtn" type="button" style="display: none;">
+              <span class="tab-icon">🏢</span>
+              <span class="tab-text">Building Studio</span>
             </button>
             <button class="workspace-tab-btn" data-tab="guide" id="workspaceTabGuideBtn" type="button">
               <span class="tab-icon">ℹ️</span>
@@ -1353,6 +1361,9 @@
                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
                   <input type="checkbox" id="solarInstalled"> Solar Already Installed
                 </label>
+                <label id="includeIndividualSheetsLabel" style="display: none; align-items: center; gap: 6px; cursor: pointer; background: #e0f2fe; color: #0369a1; padding: 3px 8px; border-radius: 4px; font-weight: 600; border: 1px solid #bae6fd;">
+                  <input type="checkbox" id="includeIndividualSheets"> Include Full Individual Resident Sheets
+                </label>
               </div>
             </fieldset>
 
@@ -1572,6 +1583,172 @@
             </div>
           </section>
         </div>
+
+        <!-- PANE 7: MULTI-CUSTOMER BUILDING STUDIO -->
+        <div class="workspace-tab-pane" id="paneBuilding" data-pane="building" style="display: none;">
+          <div class="building-studio-container">
+            
+            <!-- 1. Building Configuration & Common Specs Card -->
+            <div class="building-config-card">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+                <div>
+                  <span class="eyebrow" style="font-size: 10px; color: #0284c7; font-weight: 700;">Group Housing / Society Studio</span>
+                  <h2 style="font-size: 16px; margin: 2px 0 0; color: #0f172a;">Building & Common Rooftop Solar Configuration</h2>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <button type="button" class="primary-button" id="buildingCalculateBtn" style="padding: 6px 14px; font-size: 12px; background: #0284c7; border-color: #0284c7;">⚡ Calculate Ledger & Sync CAD</button>
+                </div>
+              </div>
+              <p class="muted small" style="margin: 0 0 8px;">Configure the shared rooftop area, common panel specifications, and financial defaults for all residents in the building.</p>
+
+              <div class="building-config-grid">
+                <label class="field">
+                  <span>Building / Society Name *</span>
+                  <input type="text" id="buildingNameInput" value="Shivaji Heights Co-op Housing Society" placeholder="e.g. Shivaji Heights CHS">
+                </label>
+                <label class="field">
+                  <span>Site / Building Address *</span>
+                  <input type="text" id="buildingAddressInput" value="Baner, Pune, Maharashtra - 411045" placeholder="e.g. Baner, Pune">
+                </label>
+                <label class="field">
+                  <span>Shared Usable Roof Area (sqft) *</span>
+                  <input type="number" id="buildingRoofAreaInput" min="100" step="50" value="2000">
+                </label>
+                <label class="field">
+                  <span>Common Panel Make *</span>
+                  <input type="text" id="buildingPanelMakeInput" value="Tier-1 Mono PERC DCR" placeholder="e.g. Tata Power / Waaree">
+                </label>
+                <label class="field">
+                  <span>Panel Watt Peak (Wp) *</span>
+                  <input type="number" id="buildingPanelWpInput" min="300" max="750" step="5" value="550">
+                </label>
+                <label class="field">
+                  <span>Common Panel Rate (₹/Wp) *</span>
+                  <input type="number" id="buildingPanelRateInput" min="10" max="60" step="0.5" value="28">
+                </label>
+                <label class="field">
+                  <span>Bank Loan Interest (%)</span>
+                  <input type="number" id="buildingLoanRateInput" min="0" max="25" step="0.25" value="7.0">
+                </label>
+                <label class="field">
+                  <span>Upfront Down Payment (%)</span>
+                  <input type="number" id="buildingLoanUpfrontInput" min="0" max="100" step="1" value="10">
+                </label>
+              </div>
+            </div>
+
+            <!-- 2. Building Summary Aggregate KPI Ribbon -->
+            <div class="building-kpi-ribbon" id="buildingKpiRibbon">
+              <div class="building-kpi-card highlight-blue">
+                <span class="kpi-label">Total Flats / Meters</span>
+                <strong class="kpi-val" id="bldgKpiFlats">0 Flats</strong>
+              </div>
+              <div class="building-kpi-card">
+                <span class="kpi-label">Total Monthly Units</span>
+                <strong class="kpi-val" id="bldgKpiUnits">0 kWh</strong>
+              </div>
+              <div class="building-kpi-card highlight-blue">
+                <span class="kpi-label">Total Solar Capacity</span>
+                <strong class="kpi-val" id="bldgKpiCapacity">0 kWp (0 Panels)</strong>
+              </div>
+              <div class="building-kpi-card">
+                <span class="kpi-label">Gross Project Cost</span>
+                <strong class="kpi-val" id="bldgKpiCost">₹0</strong>
+              </div>
+              <div class="building-kpi-card highlight-green">
+                <span class="kpi-label">Total Surya Ghar Subsidy</span>
+                <strong class="kpi-val" id="bldgKpiSubsidy">₹0</strong>
+              </div>
+              <div class="building-kpi-card highlight-green">
+                <span class="kpi-label">Net Investment (Society)</span>
+                <strong class="kpi-val" id="bldgKpiNetCost">₹0</strong>
+              </div>
+              <div class="building-kpi-card highlight-green">
+                <span class="kpi-label">Annual Bill Savings</span>
+                <strong class="kpi-val" id="bldgKpiSavings">₹0 / yr</strong>
+              </div>
+              <div class="building-kpi-card">
+                <span class="kpi-label">Avg Payback</span>
+                <strong class="kpi-val" id="bldgKpiPayback">0 yrs</strong>
+              </div>
+            </div>
+
+            <!-- 3. Action Toolbar -->
+            <div class="building-action-toolbar">
+              <div class="building-toolbar-group">
+                <button type="button" class="primary-button" id="addFlatBtn" style="padding: 6px 12px; font-size: 11.5px; font-weight: 700;">+ Add Flat</button>
+                <button type="button" class="secondary-button" id="copyDefaultsBtn" style="padding: 6px 10px; font-size: 11.5px;" title="Propagate common category, phase, and loan choice to all flats">⬇️ Same as Above (All)</button>
+                <button type="button" class="ghost-button" id="syncCadPanelsBtn" style="padding: 6px 10px; font-size: 11.5px; border: 1px solid #cbd5e1;" title="Distribute panels on Rooftop CAD proportionally to monthly consumption">🔄 Proportional CAD Sync</button>
+              </div>
+              <div class="building-toolbar-group">
+                <button type="button" class="secondary-button" id="downloadCsvTemplateBtn" style="padding: 6px 10px; font-size: 11.5px; background: #ffffff; border: 1px solid #cbd5e1;" title="Download empty or sample CSV template for bulk data entry">📥 CSV Template</button>
+                <input type="file" id="importCsvInput" accept=".csv" style="display: none;">
+                <label for="importCsvInput" id="importCsvBtn" class="secondary-button" style="padding: 6px 10px; font-size: 11.5px; background: #ffffff; border: 1px solid #cbd5e1; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" title="Upload filled CSV file to auto-populate all building flats">📤 Import CSV</label>
+                <button type="button" class="secondary-button" id="exportCsvBtn" style="padding: 6px 10px; font-size: 11.5px; background: #ffffff; border: 1px solid #cbd5e1;" title="Export current building flats data to CSV">💾 Export CSV</button>
+              </div>
+            </div>
+
+            <!-- 4. Interactive High-Density Building Flats Data Grid -->
+            <div class="building-table-wrap">
+              <table class="building-flats-table" id="buildingFlatsTable">
+                <thead>
+                  <tr>
+                    <th style="width: 32px; text-align: center;">#</th>
+                    <th style="width: 70px;">Flat No *</th>
+                    <th style="min-width: 140px;">Resident Name *</th>
+                    <th style="width: 80px;">Sanction (kW) *</th>
+                    <th style="width: 110px;">Category *</th>
+                    <th style="width: 85px;">Phase *</th>
+                    <th style="width: 80px;">Units/Mo *</th>
+                    <th style="width: 90px;">Bill (₹) *</th>
+                    <th style="width: 65px; text-align: center;">Panels</th>
+                    <th style="width: 70px; text-align: right;">kWp</th>
+                    <th style="width: 85px; text-align: right; background: #064e3b; color: #a7f3d0;">Subsidy (₹)</th>
+                    <th style="width: 90px; text-align: right;">Gross (₹)</th>
+                    <th style="width: 90px; text-align: right; background: #064e3b; color: #a7f3d0;">Net Cost (₹)</th>
+                    <th style="width: 85px; text-align: right;">Savings/Mo</th>
+                    <th style="width: 65px; text-align: center;">Payback</th>
+                    <th style="width: 75px;">Loan</th>
+                    <th style="width: 60px; text-align: center;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="buildingFlatsTableBody">
+                  <!-- Rendered dynamically by app.js -->
+                </tbody>
+                <tfoot>
+                  <tr id="buildingFlatsTableFoot">
+                    <th colspan="3" style="text-align: left;">BUILDING TOTALS (<span id="footFlatsCount">0</span> FLATS)</th>
+                    <th id="footSanctionLoad">0 kW</th>
+                    <th>—</th>
+                    <th>—</th>
+                    <th id="footUnits">0 kWh</th>
+                    <th id="footBills">₹0</th>
+                    <th id="footPanels" style="text-align: center;">0</th>
+                    <th id="footKw" style="text-align: right;">0.00 kWp</th>
+                    <th id="footSubsidy" style="text-align: right; color: #047857;">₹0</th>
+                    <th id="footGross" style="text-align: right;">₹0</th>
+                    <th id="footNet" style="text-align: right; color: #047857;">₹0</th>
+                    <th id="footSavings" style="text-align: right; color: #047857;">₹0</th>
+                    <th id="footPayback" style="text-align: center;">—</th>
+                    <th>—</th>
+                    <th></th>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <!-- Notes & Instructions Card -->
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; font-size: 11px; color: #64748b; line-height: 1.5;">
+              <strong style="color: #0f172a;">💡 Multi-Customer Society Workflow:</strong>
+              1. Enter or import flat details serially. Use <strong>⬇️ Same as above</strong> to instantly copy parameters from the previous resident.
+              2. PM Surya Ghar subsidies are computed per individual flat using official fixed quantum slabs (₹30k for 1kW, ₹60k for 2kW, ₹78k for 3kW+).
+              3. Panels on the shared rooftop CAD are automatically assigned proportional to monthly unit consumption.
+              4. Generate proposal with a single combined ledger, or check <em>"Include Full Individual Resident Sheets"</em> in the Proposal tab to produce full individual packs for each resident flat.
+            </div>
+
+          </div>
+        </div>
+
 
       </section>
     </main>
