@@ -41,21 +41,39 @@ export function calculatePerformanceFactor(performance, input = {}) {
 }
 
 export function calculateSingleMeterSubsidy(kw, category = "LT-I", policy = DEFAULT_CONFIG.policy) {
-  if (kw <= 0) return 0;
-  const profile = TARIFF_PROFILES[category];
-  if (!profile || profile.subsidyType === "none" || (category !== "LT-I" && category !== "LT-I-GHS")) {
+  const cap = Number(kw) || 0;
+  if (cap <= 0) return 0;
+
+  const cat = String(category || "LT-I").toUpperCase();
+  // Non-residential meters (LT-II, LT-III, HT) strictly receive ₹0 subsidy
+  if (cat.startsWith("LT-II") || cat.startsWith("LT-III") || cat.startsWith("HT")) {
     return 0;
   }
-  if (category === "LT-I-GHS") {
-    return round(kw * (policy.ghsSubsidyPerKw || 18000), 0);
+
+  const profile = TARIFF_PROFILES[category] || TARIFF_PROFILES[cat];
+  if (!profile || profile.subsidyType === "none" || (cat !== "LT-I" && cat !== "LT-I-GHS" && cat !== "GHS")) {
+    return 0;
   }
-  // Standard PM Surya Ghar residential:
-  // First 2 kW @ ₹30,000/kW (max ₹60,000)
-  // Next 1 kW @ ₹18,000/kW (max ₹18,000)
-  // Capped at ₹78,000 for 3 kW+
-  const firstBand = Math.min(kw, 2) * (policy.subsidyFirstTwoKw || 30000);
-  const secondBand = Math.min(Math.max(kw - 2, 0), 1) * (policy.subsidyNextOneKw || 18000);
-  return round(Math.min(firstBand + secondBand, policy.subsidyCap || 78000), 0);
+
+  // GHS Common Meter (Group Housing Society common services)
+  if (cat === "LT-I-GHS" || cat === "GHS") {
+    return round(cap * (policy.ghsSubsidyPerKw || 18000), 0);
+  }
+
+  // Strict PM Surya Ghar non-linear fixed-quantum slabs for residential (LT-I):
+  // Capacity < 1.0 kW ⟹ ₹0
+  // 1.0 kW ≤ Capacity < 2.0 kW ⟹ ₹30,000 (completed 1 kW slab)
+  // 2.0 kW ≤ Capacity < 3.0 kW ⟹ ₹60,000 (completed 2 kW slab)
+  // Capacity ≥ 3.0 kW ⟹ ₹78,000 (completed 3 kW+ cap)
+  if (cap < 1.0) {
+    return 0;
+  } else if (cap < 2.0) {
+    return 30000;
+  } else if (cap < 3.0) {
+    return 60000;
+  } else {
+    return 78000;
+  }
 }
 
 export function distributeCapacityAcrossMeters(totalCapacityKw, meters, strategy = "proportional") {
@@ -161,7 +179,13 @@ export function calculateSubsidy(systemType, panelType, dcCapacityKw, input = {}
   }
 
   // Single meter flow (backward compatible)
-  const profile = TARIFF_PROFILES[input.consumerCategory] || TARIFF_PROFILES["LT-I"];
+  const cat = String(input.consumerCategory || "LT-I").toUpperCase();
+  // Non-residential meters (LT-II, LT-III, HT) strictly receive ₹0 subsidy
+  if (cat.startsWith("LT-II") || cat.startsWith("LT-III") || cat.startsWith("HT")) {
+    return { total: 0, type: "none" };
+  }
+
+  const profile = TARIFF_PROFILES[input.consumerCategory] || TARIFF_PROFILES[cat] || TARIFF_PROFILES["LT-I"];
   let subsidyType = profile.subsidyType || "individual";
   if (subsidyType !== "none" && input.subsidyCategory) {
     subsidyType = input.subsidyCategory;
@@ -171,7 +195,7 @@ export function calculateSubsidy(systemType, panelType, dcCapacityKw, input = {}
     return { total: 0, type: "none" };
   }
 
-  if (subsidyType === "ghs") {
+  if (subsidyType === "ghs" || cat === "LT-I-GHS" || cat === "GHS") {
     // GHS: ₹18,000/kW flat, max 500kW, capped by 3kW per flat
     const maxByFlats = (input.numFlats || 100) * (policy.ghsPerFlatCapKw || 3);
     const maxCapacity = Math.min(policy.ghsSubsidyMaxKw || 500, maxByFlats);
@@ -179,10 +203,20 @@ export function calculateSubsidy(systemType, panelType, dcCapacityKw, input = {}
     return { total: round(eligibleKw * (policy.ghsSubsidyPerKw || 18000), 0), type: "ghs" };
   }
 
-  // Individual residential: PM Surya Ghar bands
-  const firstBand = Math.min(dcCapacityKw, 2) * policy.subsidyFirstTwoKw;
-  const secondBand = Math.min(Math.max(dcCapacityKw - 2, 0), 1) * policy.subsidyNextOneKw;
-  return { total: round(Math.min(firstBand + secondBand, policy.subsidyCap), 0), type: "individual" };
+  // Individual residential: Strict PM Surya Ghar non-linear fixed-quantum slabs (no linear interpolation)
+  // Capacity < 1.0 kW ⟹ ₹0
+  // 1.0 kW ≤ Capacity < 2.0 kW ⟹ ₹30,000 (completed 1 kW slab)
+  // 2.0 kW ≤ Capacity < 3.0 kW ⟹ ₹60,000 (completed 2 kW slab)
+  // Capacity ≥ 3.0 kW ⟹ ₹78,000 (completed 3 kW+ cap)
+  if (dcCapacityKw < 1.0) {
+    return { total: 0, type: "individual" };
+  } else if (dcCapacityKw < 2.0) {
+    return { total: 30000, type: "individual" };
+  } else if (dcCapacityKw < 3.0) {
+    return { total: 60000, type: "individual" };
+  } else {
+    return { total: 78000, type: "individual" };
+  }
 }
 
 export function calculateBill(units, tariff = DEFAULT_CONFIG.tariff) {

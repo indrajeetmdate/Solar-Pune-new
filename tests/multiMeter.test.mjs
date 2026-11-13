@@ -9,20 +9,27 @@ import {
 
 console.log("Running Multi-Meter & Multi-Subsidy Tests...");
 
-// 1. Single Meter Subsidy (PM Surya Ghar rules)
-// Up to 2 kW: ₹30,000/kW
-// Next 1 kW: ₹18,000/kW
-// 3 kW and above: capped at ₹78,000 for residential LT-I
+// 1. Single Meter Subsidy (PM Surya Ghar strict non-linear fixed-quantum slabs)
+// Capacity < 1.0 kW ⟹ ₹0
+// 1.0 kW ≤ Capacity < 2.0 kW ⟹ ₹30,000 (completed 1 kW slab)
+// 2.0 kW ≤ Capacity < 3.0 kW ⟹ ₹60,000 (completed 2 kW slab)
+// Capacity ≥ 3.0 kW ⟹ ₹78,000 (completed 3 kW+ cap)
+assert.equal(calculateSingleMeterSubsidy(0.5, "LT-I"), 0);
+assert.equal(calculateSingleMeterSubsidy(0.99, "LT-I"), 0);
 assert.equal(calculateSingleMeterSubsidy(1, "LT-I"), 30000);
+assert.equal(calculateSingleMeterSubsidy(1.5, "LT-I"), 30000);
 assert.equal(calculateSingleMeterSubsidy(2, "LT-I"), 60000);
-assert.equal(calculateSingleMeterSubsidy(2.5, "LT-I"), 69000);
+assert.equal(calculateSingleMeterSubsidy(2.5, "LT-I"), 60000);
 assert.equal(calculateSingleMeterSubsidy(3, "LT-I"), 78000);
+assert.equal(calculateSingleMeterSubsidy(3.5, "LT-I"), 78000);
 assert.equal(calculateSingleMeterSubsidy(5, "LT-I"), 78000);
 assert.equal(calculateSingleMeterSubsidy(10, "LT-I"), 78000);
 
 // Non-residential or commercial categories get ₹0 PM Surya Ghar subsidy
 assert.equal(calculateSingleMeterSubsidy(3, "LT-II"), 0);
+assert.equal(calculateSingleMeterSubsidy(3, "LT-III"), 0);
 assert.equal(calculateSingleMeterSubsidy(3, "LT-IX"), 0);
+assert.equal(calculateSingleMeterSubsidy(5, "HT"), 0);
 
 // GHS (Group Housing Society) common meter: flat ₹18,000/kW
 assert.equal(calculateSingleMeterSubsidy(10, "LT-I-GHS"), 180000);

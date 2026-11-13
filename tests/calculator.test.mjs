@@ -27,11 +27,22 @@ function makeInput(overrides = {}) {
   };
 }
 
+// Strict fixed-quantum subsidy tests:
+// < 1 kW: ₹0
+// 1 kW <= cap < 2 kW: ₹30,000
+// 2 kW <= cap < 3 kW: ₹60,000
+// >= 3 kW: ₹78,000
+// Commercial / non-residential: ₹0
+assert.equal(calculateSubsidy("ongrid", "dcr", 0.5).total, 0);
+assert.equal(calculateSubsidy("ongrid", "dcr", 0.99).total, 0);
 assert.equal(calculateSubsidy("ongrid", "dcr", 1).total, 30000);
+assert.equal(calculateSubsidy("ongrid", "dcr", 1.5).total, 30000);
 assert.equal(calculateSubsidy("ongrid", "dcr", 2).total, 60000);
-assert.equal(calculateSubsidy("ongrid", "dcr", 2.5).total, 69000);
+assert.equal(calculateSubsidy("ongrid", "dcr", 2.5).total, 60000);
 assert.equal(calculateSubsidy("ongrid", "dcr", 3).total, 78000);
 assert.equal(calculateSubsidy("ongrid", "dcr", 6).total, 78000);
+assert.equal(calculateSubsidy("ongrid", "dcr", 3, { consumerCategory: "LT-II" }).total, 0);
+assert.equal(calculateSubsidy("ongrid", "dcr", 3, { consumerCategory: "LT-III" }).total, 0);
 assert.equal(calculateSubsidy("ongrid", "nonDcr", 3).total, 0);
 assert.equal(calculateSubsidy("offgrid", "dcr", 3).total, 0);
 
