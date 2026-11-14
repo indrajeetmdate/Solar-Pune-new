@@ -10,28 +10,24 @@ import {
 
 console.log("Starting Multi-Customer Building Manager Tests...");
 
-// 1. Fixed Quantum Subsidy Tests
-// User Rule: Fixed quantums: 1kW = 30k, 2kW = 60k, >=3kW = 78k (no linear scaling)
-assert.equal(calculateFixedQuantumSubsidy(0.5, "LT-I"), 0, "Capacity < 1 kW must get ₹0 subsidy");
-assert.equal(calculateFixedQuantumSubsidy(0.99, "LT-I"), 0, "Capacity < 1 kW must get ₹0 subsidy");
-
+// 1. Pro-Rata Subsidy Tests (MNRE Guidelines 07.06.2024 & MERC Regulations)
+// Slab: 0 to 2 kWp: ₹30,000/kWp; >2 to 3 kWp: ₹18,000/kWp; >3 kWp: max cap ₹78,000
+assert.equal(calculateFixedQuantumSubsidy(0.5, "LT-I"), 15000, "0.5 kW must get ₹15,000 subsidy");
 assert.equal(calculateFixedQuantumSubsidy(1.0, "LT-I"), 30000, "1.0 kW must get ₹30,000 subsidy");
-assert.equal(calculateFixedQuantumSubsidy(1.5, "LT-I"), 30000, "1.5 kW must get ₹30,000 (fixed quantum for 1 kW slab)");
-assert.equal(calculateFixedQuantumSubsidy(1.9, "LT-I"), 30000, "1.9 kW must get ₹30,000 (fixed quantum for 1 kW slab)");
-
+assert.equal(calculateFixedQuantumSubsidy(1.5, "LT-I"), 45000, "1.5 kW must get ₹45,000 (MNRE Clause 5h worked example 1)");
 assert.equal(calculateFixedQuantumSubsidy(2.0, "LT-I"), 60000, "2.0 kW must get ₹60,000 subsidy");
-assert.equal(calculateFixedQuantumSubsidy(2.2, "LT-I"), 60000, "2.2 kW must get ₹60,000 (fixed quantum for 2 kW slab)");
-assert.equal(calculateFixedQuantumSubsidy(2.9, "LT-I"), 60000, "2.9 kW must get ₹60,000 (fixed quantum for 2 kW slab)");
-
+assert.equal(calculateFixedQuantumSubsidy(2.2, "LT-I"), 63600, "2.2 kW must get ₹63,600 (60k + 0.2*18k)");
+assert.equal(calculateFixedQuantumSubsidy(2.5, "LT-I"), 69000, "2.5 kW must get ₹69,000 (MNRE Clause 5h worked example 2)");
 assert.equal(calculateFixedQuantumSubsidy(3.0, "LT-I"), 78000, "3.0 kW must get ₹78,000 subsidy cap");
 assert.equal(calculateFixedQuantumSubsidy(4.4, "LT-I"), 78000, "4.4 kW must get ₹78,000 subsidy cap");
+assert.equal(calculateFixedQuantumSubsidy(6.0, "LT-I"), 78000, "6.0 kW must get ₹78,000 (MNRE Clause 5h worked example 3)");
 assert.equal(calculateFixedQuantumSubsidy(10.0, "LT-I"), 78000, "10 kW must get ₹78,000 subsidy cap");
 
 // Commercial / non-residential meters must get ₹0 subsidy
 assert.equal(calculateFixedQuantumSubsidy(3.0, "LT-II"), 0, "Commercial LT-II must get ₹0 subsidy");
 assert.equal(calculateFixedQuantumSubsidy(5.0, "LT-III"), 0, "Industrial LT-III must get ₹0 subsidy");
 
-console.log("✓ Fixed Quantum Subsidy slabs verified (0, 30k, 60k, 78k).");
+console.log("✓ Pro-Rata Subsidy slabs verified (0-2kW @ 30k/kW, 2-3kW @ 18k/kW, cap 78k).");
 
 // 2. Consumption-Proportional Panel Allocation
 const sampleFlats = [
@@ -74,14 +70,14 @@ assert.ok(buildingRes.totals.totalSubsidies > 0);
 assert.ok(buildingRes.totals.totalNetCost > 0);
 assert.equal(buildingRes.flatLedger.length, 3);
 
-// Verify per-flat subsidy matches fixed quantum slabs
+// Verify per-flat subsidy matches pro-rata slabs
 buildingRes.flatLedger.forEach((flat) => {
   if (flat.allocatedKw >= 3.0) {
     assert.equal(flat.subsidy, 78000);
-  } else if (flat.allocatedKw >= 2.0) {
-    assert.equal(flat.subsidy, 60000);
-  } else if (flat.allocatedKw >= 1.0) {
-    assert.equal(flat.subsidy, 30000);
+  } else if (flat.allocatedKw > 2.0) {
+    assert.equal(flat.subsidy, Math.round(60000 + (flat.allocatedKw - 2.0) * 18000));
+  } else if (flat.allocatedKw > 0) {
+    assert.equal(flat.subsidy, Math.round(flat.allocatedKw * 30000));
   } else {
     assert.equal(flat.subsidy, 0);
   }
@@ -205,8 +201,8 @@ assert.ok(exportedCsv.includes("GrossCost"));
 console.log("Testing MNRE Guidelines 07.06.2024 Multi-Customer Building Constraints...");
 
 // Special Category State in calculateFixedQuantumSubsidy
-assert.equal(calculateFixedQuantumSubsidy(1.5, "LT-I", { isSpecialCategoryState: true }), 33000);
-assert.equal(calculateFixedQuantumSubsidy(2.5, "LT-I", { isSpecialCategoryState: true }), 66000);
+assert.equal(calculateFixedQuantumSubsidy(1.5, "LT-I", { isSpecialCategoryState: true }), 49500); // 1.5 * 33k
+assert.equal(calculateFixedQuantumSubsidy(2.5, "LT-I", { isSpecialCategoryState: true }), 75900); // 66k + 0.5 * 19.8k
 assert.equal(calculateFixedQuantumSubsidy(3.5, "LT-I", { isSpecialCategoryState: true }), 85800);
 
 // Building in Special Category State

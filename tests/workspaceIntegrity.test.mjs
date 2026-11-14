@@ -544,13 +544,19 @@ assert.equal(ledger.flatLedger.length, 32, "Flat ledger must contain 32 entries"
 assert.ok(ledger.summary.totalBuildingCapacityKw > 0, "Total capacity must be greater than 0");
 assert.ok(ledger.summary.totalSubsidy > 0, "Total subsidy must be calculated");
 
-// Verify individual flat subsidies adhere to fixed quantum slabs (0, 30k, 60k, 78k)
+// Verify individual flat subsidies adhere to pro-rata slabs (0-2 kWp @ 30k/kW, >2-3 kWp @ 18k/kW, cap 78k)
 ledger.flatLedger.forEach(f => {
   const sub = f.subsidy;
-  assert.ok(
-    sub === 0 || sub === 30000 || sub === 60000 || sub === 78000,
-    `Flat ${f.flatNo} subsidy (${sub}) must strictly follow fixed quantum slabs (0, 30k, 60k, 78k)`
-  );
+  const kw = f.allocatedKw;
+  if (kw >= 3.0) {
+    assert.equal(sub, 78000);
+  } else if (kw > 2.0) {
+    assert.equal(sub, Math.round(60000 + (kw - 2.0) * 18000));
+  } else if (kw > 0) {
+    assert.equal(sub, Math.round(kw * 30000));
+  } else {
+    assert.equal(sub, 0);
+  }
 });
 
 // 8. Test CAD Demarcation & Cross-Workspace Tab Synchronization with Building Data
@@ -653,7 +659,11 @@ assert.equal(fullPages.length, 3 + 32, "When 'Include Full Individual Resident S
 const individualFlatPage = fullPages[3].textContent;
 assert.ok(individualFlatPage.includes("Official Solar Proposal — Flat 101"), "Individual sheet must have customized flat header");
 assert.ok(individualFlatPage.includes("ELECTRICITY BILL COMPARISON: BEFORE VS AFTER SOLAR"), "Individual sheet must NOT skip electricity bill comparison");
-assert.ok(individualFlatPage.includes("INVESTMENT & FIXED-QUANTUM SUBSIDY BREAKDOWN"), "Individual sheet must NOT skip investment & subsidy breakdown");
+assert.ok(
+  individualFlatPage.includes("INVESTMENT & PM SURYA GHAR SUBSIDY BREAKDOWN") ||
+  individualFlatPage.includes("INVESTMENT & FIXED-QUANTUM SUBSIDY BREAKDOWN"),
+  "Individual sheet must NOT skip investment & subsidy breakdown"
+);
 assert.ok(individualFlatPage.includes("WARRANTIES & TURNKEY SCOPE OF DELIVERY"), "Individual sheet must NOT skip scope of work");
 assert.ok(individualFlatPage.includes("16 mm and 14 mm copper bonded earthing electrode rods"), "Individual sheet must specify 16mm and 14mm earthing rods");
 

@@ -27,20 +27,18 @@ function makeInput(overrides = {}) {
   };
 }
 
-// Strict fixed-quantum subsidy tests:
-// < 1 kW: ₹0
-// 1 kW <= cap < 2 kW: ₹30,000
-// 2 kW <= cap < 3 kW: ₹60,000
-// >= 3 kW: ₹78,000
+// PM Surya Ghar pro-rata slab subsidy tests (MNRE Guidelines 07.06.2024 & MERC Regulations):
+// 0 to 2 kWp: ₹30,000 / kWp
+// >2 to 3 kWp: ₹18,000 / kWp
+// >3 kWp: max cap ₹78,000
 // Commercial / non-residential: ₹0
-assert.equal(calculateSubsidy("ongrid", "dcr", 0.5).total, 0);
-assert.equal(calculateSubsidy("ongrid", "dcr", 0.99).total, 0);
+assert.equal(calculateSubsidy("ongrid", "dcr", 0.5).total, 15000);
 assert.equal(calculateSubsidy("ongrid", "dcr", 1).total, 30000);
-assert.equal(calculateSubsidy("ongrid", "dcr", 1.5).total, 30000);
+assert.equal(calculateSubsidy("ongrid", "dcr", 1.5).total, 45000); // Worked Example 1: 1.5 * 30k = 45k
 assert.equal(calculateSubsidy("ongrid", "dcr", 2).total, 60000);
-assert.equal(calculateSubsidy("ongrid", "dcr", 2.5).total, 60000);
+assert.equal(calculateSubsidy("ongrid", "dcr", 2.5).total, 69000); // Worked Example 2: 60k + 0.5 * 18k = 69k
 assert.equal(calculateSubsidy("ongrid", "dcr", 3).total, 78000);
-assert.equal(calculateSubsidy("ongrid", "dcr", 6).total, 78000);
+assert.equal(calculateSubsidy("ongrid", "dcr", 6).total, 78000); // Worked Example 3: 6 kW cap = 78k
 assert.equal(calculateSubsidy("ongrid", "dcr", 3, { consumerCategory: "LT-II" }).total, 0);
 assert.equal(calculateSubsidy("ongrid", "dcr", 3, { consumerCategory: "LT-III" }).total, 0);
 assert.equal(calculateSubsidy("ongrid", "nonDcr", 3).total, 0);
@@ -626,12 +624,12 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.equal(calculateSubsidy("ongrid", "dcr", 3, { consumerCategory: "LT-AG" }).total, 0, "Agricultural meters must receive 0 CFA");
   assert.equal(calculateSubsidy("ongrid", "dcr", 3, { consumerCategory: "HT-I" }).total, 0, "HT meters must receive 0 CFA");
 
-  // 4. Special Category States (+10% CFA: 1 kW = 33k, 2 kW = 66k, >= 3 kW = 85.8k)
+  // 4. Special Category States (+10% CFA: 0 to 2 kWp @ 33k/kWp, >2 to 3 kWp @ 19.8k/kWp, Cap = 85.8k)
   // Direct flag
-  assert.equal(calculateSubsidy("ongrid", "dcr", 0.8, { isSpecialCategoryState: true }).total, 0);
-  assert.equal(calculateSubsidy("ongrid", "dcr", 1.2, { isSpecialCategoryState: true }).total, 33000);
-  assert.equal(calculateSubsidy("ongrid", "dcr", 2.0, { isSpecialCategoryState: true }).total, 66000);
-  assert.equal(calculateSubsidy("ongrid", "dcr", 2.9, { isSpecialCategoryState: true }).total, 66000);
+  assert.equal(calculateSubsidy("ongrid", "dcr", 0.8, { isSpecialCategoryState: true }).total, 26400); // 0.8 * 33k = 26,400
+  assert.equal(calculateSubsidy("ongrid", "dcr", 1.2, { isSpecialCategoryState: true }).total, 39600); // 1.2 * 33k = 39,600
+  assert.equal(calculateSubsidy("ongrid", "dcr", 2.0, { isSpecialCategoryState: true }).total, 66000); // 2.0 * 33k = 66,000
+  assert.equal(calculateSubsidy("ongrid", "dcr", 2.9, { isSpecialCategoryState: true }).total, 83820); // 66k + 0.9 * 19.8k = 83,820
   assert.equal(calculateSubsidy("ongrid", "dcr", 3.0, { isSpecialCategoryState: true }).total, 85800);
   assert.equal(calculateSubsidy("ongrid", "dcr", 5.0, { isSpecialCategoryState: true }).total, 85800);
 
@@ -648,6 +646,10 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
 
   // 5. Category C (GHS Common Facility Meter)
   // Standard rate: ₹18,000 / kW up to min(kW, (3 * houses) - residentCfa, 500)
+  // Worked Example 1 (MNRE Clause 5h): 100 kW plant, 20 houses: min(100, 20 * 3) = 60 kWp -> 60 * 18,000 = ₹10,80,000
+  assert.equal(calculateSubsidy("ongrid", "dcr", 100, { consumerCategory: "LT-I-GHS", numHouses: 20 }).total, 1080000, "100 kW plant for 20 houses must yield ₹10,80,000 CFA");
+  // Worked Example 2 (MNRE Clause 5h): 100 kW plant, 50 houses: min(100, 50 * 3) = 100 kWp -> 100 * 18,000 = ₹18,00,000
+  assert.equal(calculateSubsidy("ongrid", "dcr", 100, { consumerCategory: "LT-I-GHS", numHouses: 50 }).total, 1800000, "100 kW plant for 50 houses must yield ₹18,00,000 CFA");
   assert.equal(calculateSubsidy("ongrid", "dcr", 10, { consumerCategory: "LT-I-GHS", numHouses: 50 }).total, 180000);
   // Cap by society housing limit: 10 houses * 3 kW = 30 kW max
   assert.equal(calculateSubsidy("ongrid", "dcr", 50, { consumerCategory: "LT-I-GHS", numHouses: 10 }).total, 30 * 18000);
@@ -658,21 +660,21 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
 
   // 6. Category B (Multi-Meter Residential Building)
   const multiMeters = [
-    { id: 1, allocatedKw: 1.5, consumerCategory: "LT-I" }, // 30,000
-    { id: 2, allocatedKw: 2.2, consumerCategory: "LT-I" }, // 60,000
-    { id: 3, allocatedKw: 4.0, consumerCategory: "LT-I" }, // 78,000
+    { id: 1, allocatedKw: 1.5, consumerCategory: "LT-I" }, // 1.5 * 30k = 45,000
+    { id: 2, allocatedKw: 2.2, consumerCategory: "LT-I" }, // 60k + 0.2 * 18k = 63,600
+    { id: 3, allocatedKw: 4.0, consumerCategory: "LT-I" }, // Cap = 78,000
     { id: 4, allocatedKw: 3.0, consumerCategory: "LT-II" }, // Commercial = 0
   ];
   const mmSub = calculateSubsidy("ongrid", "dcr", 10.7, { meters: multiMeters });
-  assert.equal(mmSub.total, 30000 + 60000 + 78000 + 0, "Multi-meter subsidy sum must strictly follow slabs");
-  assert.equal(mmSub.meterBreakdown[0].subsidy, 30000);
-  assert.equal(mmSub.meterBreakdown[1].subsidy, 60000);
+  assert.equal(mmSub.total, 45000 + 63600 + 78000 + 0, "Multi-meter subsidy sum must strictly follow pro-rata slabs");
+  assert.equal(mmSub.meterBreakdown[0].subsidy, 45000);
+  assert.equal(mmSub.meterBreakdown[1].subsidy, 63600);
   assert.equal(mmSub.meterBreakdown[2].subsidy, 78000);
   assert.equal(mmSub.meterBreakdown[3].subsidy, 0);
 
   // Multi-Meter in Special Category State (+10%)
   const mmSubSpecial = calculateSubsidy("ongrid", "dcr", 10.7, { meters: multiMeters, isSpecialCategoryState: true });
-  assert.equal(mmSubSpecial.total, 33000 + 66000 + 85800 + 0, "Multi-meter subsidy in special state must have +10%");
+  assert.equal(mmSubSpecial.total, 49500 + 69960 + 85800 + 0, "Multi-meter subsidy in special state must have +10%");
 
   // Multi-Meter with ground mount = 0
   const mmSubGround = calculateSubsidy("ongrid", "dcr", 10.7, { meters: multiMeters, structureType: "ground" });

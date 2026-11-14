@@ -9,20 +9,19 @@ import {
 
 console.log("Running Multi-Meter & Multi-Subsidy Tests...");
 
-// 1. Single Meter Subsidy (PM Surya Ghar strict non-linear fixed-quantum slabs)
-// Capacity < 1.0 kW ⟹ ₹0
-// 1.0 kW ≤ Capacity < 2.0 kW ⟹ ₹30,000 (completed 1 kW slab)
-// 2.0 kW ≤ Capacity < 3.0 kW ⟹ ₹60,000 (completed 2 kW slab)
-// Capacity ≥ 3.0 kW ⟹ ₹78,000 (completed 3 kW+ cap)
-assert.equal(calculateSingleMeterSubsidy(0.5, "LT-I"), 0);
-assert.equal(calculateSingleMeterSubsidy(0.99, "LT-I"), 0);
+// 1. Single Meter Subsidy (PM Surya Ghar pro-rata slab formula per MNRE 07.06.2024 & MERC Regulations)
+// 0 to 2 kWp: ₹30,000 / kWp
+// >2 to 3 kWp: ₹18,000 / kWp
+// >3 kWp: max cap ₹78,000
+assert.equal(calculateSingleMeterSubsidy(0.5, "LT-I"), 15000);
 assert.equal(calculateSingleMeterSubsidy(1, "LT-I"), 30000);
-assert.equal(calculateSingleMeterSubsidy(1.5, "LT-I"), 30000);
+assert.equal(calculateSingleMeterSubsidy(1.5, "LT-I"), 45000); // MNRE Worked Example 1: 1.5 * 30k = 45k
 assert.equal(calculateSingleMeterSubsidy(2, "LT-I"), 60000);
-assert.equal(calculateSingleMeterSubsidy(2.5, "LT-I"), 60000);
+assert.equal(calculateSingleMeterSubsidy(2.5, "LT-I"), 69000); // MNRE Worked Example 2: 60k + 0.5 * 18k = 69k
 assert.equal(calculateSingleMeterSubsidy(3, "LT-I"), 78000);
 assert.equal(calculateSingleMeterSubsidy(3.5, "LT-I"), 78000);
 assert.equal(calculateSingleMeterSubsidy(5, "LT-I"), 78000);
+assert.equal(calculateSingleMeterSubsidy(6, "LT-I"), 78000); // MNRE Worked Example 3: 6 kWp cap = 78k
 assert.equal(calculateSingleMeterSubsidy(10, "LT-I"), 78000);
 
 // Non-residential or commercial categories get ₹0 PM Surya Ghar subsidy

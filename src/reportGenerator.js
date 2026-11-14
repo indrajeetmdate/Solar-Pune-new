@@ -546,7 +546,7 @@ export async function generateBuildingProposalPDF({
   doc.setFontSize(8.5);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(COLORS.text);
-  doc.text("Comprehensive allocation of solar capacity, fixed-quantum subsidy, gross investment share, monthly generation, and net bills.", margin, yPos);
+  doc.text("Comprehensive allocation of solar capacity, PM Surya Ghar subsidy, gross investment share, monthly generation, and net bills.", margin, yPos);
   yPos += 5;
 
   const ledgerHeaders = [[
@@ -758,18 +758,23 @@ export async function generateBuildingProposalPDF({
         iyPos += 40;
       }
 
-      // Financial Investment & PM Surya Ghar Fixed-Quantum Subsidy Breakdown
+      // Financial Investment & PM Surya Ghar Subsidy Breakdown
       doc.setFontSize(10.5);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(COLORS.primary);
-      doc.text("Investment & PM Surya Ghar Fixed-Quantum Subsidy Breakdown", margin, iyPos);
+      doc.text("Investment & PM Surya Ghar Subsidy Breakdown", margin, iyPos);
       iyPos += 4;
 
-      let subsidySlabExplanation = "Not eligible for subsidy (< 1 kW, ground mount, or commercial)";
-      if (flat.subsidy === 30000 || flat.subsidy === 33000) subsidySlabExplanation = `PM Surya Ghar 1 kW Slab = Rs ${flat.subsidy.toLocaleString("en-IN")} (Fixed Quantum)`;
-      else if (flat.subsidy === 60000 || flat.subsidy === 66000) subsidySlabExplanation = `PM Surya Ghar 2 kW Slab = Rs ${flat.subsidy.toLocaleString("en-IN")} (Fixed Quantum)`;
-      else if (flat.subsidy === 78000 || flat.subsidy === 85800) subsidySlabExplanation = `PM Surya Ghar 3 kW+ Slab Cap = Rs ${flat.subsidy.toLocaleString("en-IN")} (Fixed Quantum)`;
-      else if (flat.subsidy > 0) subsidySlabExplanation = `PM Surya Ghar Subsidy = Rs ${flat.subsidy.toLocaleString("en-IN")}`;
+      let subsidySlabExplanation = "Not eligible for subsidy (ground mount, off-grid, non-DCR, or commercial)";
+      if (flat.subsidy > 0) {
+        if (flat.allocatedKw <= 2.0) {
+          subsidySlabExplanation = `PM Surya Ghar Pro-Rata Slab (Rs 30,000/kWp) = Rs ${flat.subsidy.toLocaleString("en-IN")}`;
+        } else if (flat.allocatedKw <= 3.0) {
+          subsidySlabExplanation = `PM Surya Ghar Pro-Rata Slab (Rs 60,000 + Rs 18,000/kWp above 2 kWp) = Rs ${flat.subsidy.toLocaleString("en-IN")}`;
+        } else {
+          subsidySlabExplanation = `PM Surya Ghar Maximum CFA Cap = Rs ${flat.subsidy.toLocaleString("en-IN")}`;
+        }
+      }
 
       const finBreakdown = [
         ["Turnkey Gross Cost Share", formatCurrency(flat.grossCost), "Proportional share of building solar EPC delivery"],
@@ -2357,7 +2362,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
       terms: [
         {
           title: "1. PM Surya Ghar Central Subsidy (Direct Benefit Transfer) & CFA Eligibility:",
-          desc: "Central subsidy under PM Surya Ghar applies strictly to Capex mode (self-funded or loan financed) and is credited directly to the consumer's bank account via National Portal DBT. RESCO and off-grid configurations are strictly excluded (Rs 0 CFA). Sizing follows fixed-quantum slabs (1 kW: Rs 30k / 2 kW: Rs 60k / >= 3 kW: Rs 78k cap; +10% in Special States). EPC payments remain independent of DBT processing."
+          desc: "Central subsidy under PM Surya Ghar applies strictly to Capex mode (self-funded or loan financed) and is credited directly to the consumer's bank account via National Portal DBT. RESCO and off-grid configurations are strictly excluded (Rs 0 CFA). Sizing follows pro-rata slabs (0 to 2 kWp: Rs 30,000/kWp / >2 to 3 kWp: Rs 18,000/kWp / >3 kWp: Rs 0 additional; max CFA cap of Rs 78,000 per consumer). Maharashtra falls under General/Standard Category States (eligible DISCOMs: MSEDCL, BEST, Adani Electricity, Tata Power). EPC payments remain independent of DBT processing."
         },
         {
           title: "2. Mandatory Equipment & Mounting Compliance:",

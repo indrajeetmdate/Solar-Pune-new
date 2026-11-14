@@ -291,7 +291,7 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
         <div class="pdf-page-body">
           <div class="pdf-section-title">3. Resident-Wise Financial Allocation &amp; Solar Ledger${ledgerPagesCount > 1 ? ` (Part ${pIdx + 1} of ${ledgerPagesCount})` : ""}</div>
           <div class="pdf-section-desc" style="font-size: 7.5pt; color: #475569; margin-bottom: 2mm;">
-            Comprehensive allocation of solar capacity, fixed-quantum subsidy, gross investment share, monthly generation, and net bills.
+            Comprehensive allocation of solar capacity, PM Surya Ghar subsidy, gross investment share, monthly generation, and net bills.
           </div>
 
           <table class="pdf-table pdf-ledger-table" style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 5.8pt; line-height: 1.15; box-sizing: border-box;">
@@ -382,11 +382,16 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
   if (includeIndividualSheets && flatLedger.length > 0) {
     flatLedger.forEach((flat, idx) => {
       const pageIndex = basePagesCount + 1 + idx;
-      let subsidyExplanation = "Not eligible for subsidy (< 1 kW, ground mount, or commercial)";
-      if (flat.subsidy === 30000 || flat.subsidy === 33000) subsidyExplanation = `PM Surya Ghar 1 kW Slab = Rs ${flat.subsidy.toLocaleString("en-IN")} (Fixed Quantum)`;
-      else if (flat.subsidy === 60000 || flat.subsidy === 66000) subsidyExplanation = `PM Surya Ghar 2 kW Slab = Rs ${flat.subsidy.toLocaleString("en-IN")} (Fixed Quantum)`;
-      else if (flat.subsidy === 78000 || flat.subsidy === 85800) subsidyExplanation = `PM Surya Ghar 3 kW+ Slab Cap = Rs ${flat.subsidy.toLocaleString("en-IN")} (Fixed Quantum)`;
-      else if (flat.subsidy > 0) subsidyExplanation = `PM Surya Ghar Subsidy = Rs ${flat.subsidy.toLocaleString("en-IN")}`;
+      let subsidyExplanation = "Not eligible for subsidy (ground mount, off-grid, non-DCR, or commercial)";
+      if (flat.subsidy > 0) {
+        if (flat.allocatedKw <= 2.0) {
+          subsidyExplanation = `PM Surya Ghar Pro-Rata Slab (Rs 30,000/kWp) = Rs ${flat.subsidy.toLocaleString("en-IN")}`;
+        } else if (flat.allocatedKw <= 3.0) {
+          subsidyExplanation = `PM Surya Ghar Pro-Rata Slab (Rs 60,000 + Rs 18,000/kWp above 2 kWp) = Rs ${flat.subsidy.toLocaleString("en-IN")}`;
+        } else {
+          subsidyExplanation = `PM Surya Ghar Maximum CFA Cap = Rs ${flat.subsidy.toLocaleString("en-IN")}`;
+        }
+      }
 
       const dpPct = flat.financing?.downPaymentPct ?? (Number(flat.loanDownPaymentPct) || 10);
 
@@ -479,7 +484,7 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
             </table>
 
             <!-- Investment Breakdown -->
-            <div style="font-size: 8pt; font-weight: 700; color: #63923e; margin-bottom: 1mm;">INVESTMENT &amp; FIXED-QUANTUM SUBSIDY BREAKDOWN</div>
+            <div style="font-size: 8pt; font-weight: 700; color: #63923e; margin-bottom: 1mm;">INVESTMENT &amp; PM SURYA GHAR SUBSIDY BREAKDOWN</div>
             <table class="pdf-table" style="font-size: 7.2pt; margin-bottom: 2.5mm; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
               <colgroup>
                 <col style="width: 35%;">
@@ -1168,7 +1173,7 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
           D. MSEDCL Net Metering, Grid Interconnection &amp; PM Surya Ghar Subsidy Terms (MNRE 07.06.2024)
         </div>
         <div style="font-size: 6.8pt; color: #334155; line-height: 1.35; margin-bottom: 2.5mm;">
-          <div><strong>1. Central Financial Assistance (CFA) Eligibility &amp; DBT:</strong> Central subsidy under PM Surya Ghar: Muft Bijli Yojana applies strictly to Capex mode (consumer self-funded or bank loan financed) and is credited directly to the client's bank account via DBT. RESCO/utility aggregation models and off-grid setups are strictly excluded (₹0 CFA). Sizing strictly follows fixed-quantum slabs (1 kW: ₹30k / 2 kW: ₹60k / ≥3 kW: ₹78k cap; +10% in Special States). Datlion Cnergy assists with National Portal documentation; EPC payments remain independent of DBT disbursement.</div>
+          <div><strong>1. Central Financial Assistance (CFA) Eligibility &amp; DBT:</strong> Central subsidy under PM Surya Ghar: Muft Bijli Yojana applies strictly to Capex mode (consumer self-funded or bank loan financed) and is credited directly to the client's bank account via DBT. RESCO/utility aggregation models and off-grid setups are strictly excluded (₹0 CFA). Sizing strictly follows pro-rata slabs (0 to 2 kWp: ₹30,000/kWp / >2 to 3 kWp: ₹18,000/kWp / >3 kWp: ₹0 additional; max CFA cap of ₹78,000 per consumer). Maharashtra falls under General/Standard Category States (eligible DISCOMs: MSEDCL, BEST, Adani Electricity, Tata Power). Datlion Cnergy assists with National Portal documentation; EPC payments remain independent of DBT disbursement.</div>
           <div style="margin-top: 1mm;"><strong>2. Mandatory Equipment &amp; Mounting Compliance:</strong> CFA requires 100% Domestic Content Requirement (DCR) ALMM-listed solar cells/modules and BIS-compliant inverters. Systems must be mounted on rooftops, terraces, balconies, BIPV, or elevated structures with ≥ 8 ft ground clearance. Ground-mounted systems are strictly ineligible for CFA.</div>
           <div style="margin-top: 1mm;"><strong>3. Grid Feasibility &amp; Housing Society Sizing:</strong> Systems ≤ 10 kW enjoy deemed grid feasibility approval per MNRE guidelines. For Group Housing Societies / multi-meter buildings (Category B/C), total CFA capacity is capped at min(3 kWp × Total Houses, 500 kWp), and common utility power is prohibited from supplying individual residential flats.</div>
         </div>

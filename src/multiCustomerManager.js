@@ -42,20 +42,20 @@ export const FLAT_COLOR_PALETTE = [
 ];
 
 /**
- * PM Surya Ghar Fixed Quantum Subsidy Calculator (MNRE Guidelines 07.06.2024)
- * Slabs (Standard States):
- * - < 1 kW: ₹0 (minimum grid-tied capacity eligible for subsidy is 1 kW)
- * - 1 kW to < 2 kW: ₹30,000 (fixed quantum for 1 kW completed slab)
- * - 2 kW to < 3 kW: ₹60,000 (fixed quantum for 2 kW completed slab)
- * - >= 3 kW: ₹78,000 (fixed quantum cap for 3 kW+ slab)
+ * PM Surya Ghar Pro-Rata Subsidy Calculator (MNRE Guidelines 07.06.2024 & MERC Regulations)
+ * Pro-Rata Slab Formula:
+ * - 0 to 2 kWp (or part thereof): ₹30,000 / kWp
+ * - >2 to 3 kWp (or part thereof): ₹18,000 / kWp
+ * - >3 kWp: ₹0 additional CFA (Max cap = ₹78,000)
  * Special Category States (+10% CFA: UK, HP, J&K, Ladakh, NE States, A&N, Lakshadweep):
- * - 1 kW: ₹33,000 | 2 kW: ₹66,000 | >= 3 kW: ₹85,800
+ * - 0 to 2 kWp: ₹33,000/kWp | >2 to 3 kWp: ₹19,800/kWp | Cap: ₹85,800
  * Category C (Group Housing Society common services - lifts, pumps, lighting, EV):
  * - Flat ₹18,000/kW (Special: ₹19,800/kW) up to min(kW, 3 × No. of Houses - Resident CFA, 500 kW)
  * Note: Non-residential or commercial categories (LT-II, LT-III, HT, LT-AG) get ₹0.
  */
 export function calculateFixedQuantumSubsidy(capacityKw, category = "LT-I", options = {}) {
   const cap = Number(capacityKw) || 0;
+  if (cap <= 0) return 0;
   const cat = String(category || "LT-I").toUpperCase();
 
   // Commercial / Industrial meters (LT-II, LT-III, HT, LT-AG) strictly do not receive residential PM Surya Ghar subsidy
@@ -65,7 +65,7 @@ export function calculateFixedQuantumSubsidy(capacityKw, category = "LT-I", opti
 
   const isSpecial = Boolean(options.isSpecialCategoryState);
   const rate1 = isSpecial ? 33000 : 30000;
-  const rate2 = isSpecial ? 66000 : 60000;
+  const rate2 = isSpecial ? 19800 : 18000;
   const capRate = isSpecial ? 85800 : 78000;
   const ghsRate = isSpecial ? 19800 : 18000;
 
@@ -80,17 +80,20 @@ export function calculateFixedQuantumSubsidy(capacityKw, category = "LT-I", opti
     return Math.round(eligibleKw * ghsRate);
   }
 
-  // Category A & B: Individual residential flat meters: Fixed Quantum Slabs (no linear scaling)
-  if (cap < 1.0) {
-    return 0;
-  } else if (cap < 2.0) {
-    return rate1;
-  } else if (cap < 3.0) {
-    return rate2;
+  // Category A & B: Pro-Rata Slab Formula (MNRE Guidelines 07.06.2024 & MERC Regulations)
+  // 0 to 2 kWp (or part thereof): ₹30,000 / kWp
+  // > 2 to 3 kWp (or part thereof): ₹18,000 / kWp
+  // > 3 kWp: ₹0 additional CFA (Max cap = ₹78,000; Special: ₹85,800)
+  if (cap <= 2.0) {
+    return Math.round(cap * rate1);
+  } else if (cap <= 3.0) {
+    return Math.round((2.0 * rate1) + ((cap - 2.0) * rate2));
   } else {
     return capRate;
   }
 }
+
+export { calculateFixedQuantumSubsidy as calculateProRataSubsidy };
 
 /**
  * Assign distinct colors and labels to flats

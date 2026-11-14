@@ -57,7 +57,7 @@ export function calculateSingleMeterSubsidy(kw, category = "LT-I", policy = DEFA
 
   const isSpecial = Boolean(options.isSpecialCategoryState || policy?.isSpecialCategoryState);
   const rate1 = isSpecial ? (policy?.specialStateSubsidyFirstTwoKw || 33000) : (policy?.subsidyFirstTwoKw || 30000);
-  const rate2 = rate1 * 2;
+  const rate2 = isSpecial ? (policy?.specialStateSubsidyNextOneKw || 19800) : (policy?.subsidyNextOneKw || 18000);
   const maxCap = isSpecial ? (policy?.specialStateSubsidyCap || 85800) : (policy?.subsidyCap || 78000);
   const ghsRate = isSpecial ? (policy?.specialStateGhsSubsidyPerKw || 19800) : (policy?.ghsSubsidyPerKw || 18000);
 
@@ -75,17 +75,14 @@ export function calculateSingleMeterSubsidy(kw, category = "LT-I", policy = DEFA
     return round(eligibleKw * ghsRate, 0);
   }
 
-  // Category A & B: Strict PM Surya Ghar non-linear fixed-quantum slabs for residential (LT-I):
-  // Capacity < 1.0 kW ⟹ ₹0
-  // 1.0 kW ≤ Capacity < 2.0 kW ⟹ completed 1 kW slab (₹30,000; Special: ₹33,000)
-  // 2.0 kW ≤ Capacity < 3.0 kW ⟹ completed 2 kW slab (₹60,000; Special: ₹66,000)
-  // Capacity ≥ 3.0 kW ⟹ completed 3 kW+ cap (₹78,000; Special: ₹85,800)
-  if (cap < 1.0) {
-    return 0;
-  } else if (cap < 2.0) {
-    return rate1;
-  } else if (cap < 3.0) {
-    return rate2;
+  // Category A & B: PM Surya Ghar Pro-Rata Slab Formula (MNRE Guidelines 07.06.2024 & MERC Regulations)
+  // 0 to 2 kWp (or part thereof): ₹30,000 / kWp
+  // > 2 to 3 kWp (or part thereof): ₹18,000 / kWp
+  // > 3 kWp: ₹0 additional CFA (Max cap = ₹78,000; Special Category: ₹85,800)
+  if (cap <= 2.0) {
+    return round(cap * rate1, 0);
+  } else if (cap <= 3.0) {
+    return round((2.0 * rate1) + ((cap - 2.0) * rate2), 0);
   } else {
     return maxCap;
   }
@@ -182,7 +179,7 @@ export function calculateSubsidy(systemType, panelType, dcCapacityKw, input = {}
 
   const activePolicy = { ...policy, isSpecialCategoryState: isSpecial };
   const rate1 = isSpecial ? (policy?.specialStateSubsidyFirstTwoKw || 33000) : (policy?.subsidyFirstTwoKw || 30000);
-  const rate2 = rate1 * 2;
+  const rate2 = isSpecial ? (policy?.specialStateSubsidyNextOneKw || 19800) : (policy?.subsidyNextOneKw || 18000);
   const maxCap = isSpecial ? (policy?.specialStateSubsidyCap || 85800) : (policy?.subsidyCap || 78000);
   const ghsRate = isSpecial ? (policy?.specialStateGhsSubsidyPerKw || 19800) : (policy?.ghsSubsidyPerKw || 18000);
 
@@ -270,17 +267,16 @@ export function calculateSubsidy(systemType, panelType, dcCapacityKw, input = {}
   }
 
   // Category A: Single Bill — Single Customer (Individual Residential)
-  // Strict PM Surya Ghar non-linear fixed-quantum slabs (no linear interpolation)
-  // Capacity < 1.0 kW ⟹ ₹0
-  // 1.0 kW ≤ Capacity < 2.0 kW ⟹ completed 1 kW slab (₹30,000; Special: ₹33,000)
-  // 2.0 kW ≤ Capacity < 3.0 kW ⟹ completed 2 kW slab (₹60,000; Special: ₹66,000)
-  // Capacity ≥ 3.0 kW ⟹ completed 3 kW+ cap (₹78,000; Special: ₹85,800)
-  if (dcCapacityKw < 1.0) {
-    return { total: 0, type: "individual", isSpecialCategoryState: isSpecial };
-  } else if (dcCapacityKw < 2.0) {
-    return { total: rate1, type: "individual", isSpecialCategoryState: isSpecial };
-  } else if (dcCapacityKw < 3.0) {
-    return { total: rate2, type: "individual", isSpecialCategoryState: isSpecial };
+  // PM Surya Ghar Pro-Rata Slab Formula (MNRE Guidelines 07.06.2024 & MERC Regulations)
+  // 0 to 2 kWp (or part thereof): ₹30,000 / kWp
+  // > 2 to 3 kWp (or part thereof): ₹18,000 / kWp
+  // > 3 kWp: ₹0 additional CFA (Max cap = ₹78,000; Special Category: ₹85,800)
+  if (dcCapacityKw <= 2.0) {
+    const sub = round(dcCapacityKw * rate1, 0);
+    return { total: sub, type: "individual", isSpecialCategoryState: isSpecial };
+  } else if (dcCapacityKw <= 3.0) {
+    const sub = round((2.0 * rate1) + ((dcCapacityKw - 2.0) * rate2), 0);
+    return { total: sub, type: "individual", isSpecialCategoryState: isSpecial };
   } else {
     return { total: maxCap, type: "individual", isSpecialCategoryState: isSpecial };
   }
