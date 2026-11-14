@@ -151,5 +151,54 @@ const exportedCsv = exportBuildingToCSV(buildingRes.flatLedger);
 assert.ok(exportedCsv.includes("Silver Oaks") || exportedCsv.includes("Rahul S"));
 assert.ok(exportedCsv.includes("GrossCost"));
 
+// 6. Test MNRE Guidelines 07.06.2024 Building Constraints
+console.log("Testing MNRE Guidelines 07.06.2024 Multi-Customer Building Constraints...");
+
+// Special Category State in calculateFixedQuantumSubsidy
+assert.equal(calculateFixedQuantumSubsidy(1.5, "LT-I", { isSpecialCategoryState: true }), 33000);
+assert.equal(calculateFixedQuantumSubsidy(2.5, "LT-I", { isSpecialCategoryState: true }), 66000);
+assert.equal(calculateFixedQuantumSubsidy(3.5, "LT-I", { isSpecialCategoryState: true }), 85800);
+
+// Building in Special Category State
+const specialBuildingRes = calculateBuildingLedger({
+  buildingName: "Himalayan View Apartments",
+  buildingAddress: "Nainital, Uttarakhand",
+  isSpecialCategoryState: true,
+  flats: [
+    { flatNo: "101", customerName: "A", monthlyUnits: 250, monthlyBill: 2800, sanctionedLoad: 3, consumerCategory: "LT-I" },
+    { flatNo: "102", customerName: "B", monthlyUnits: 350, monthlyBill: 4000, sanctionedLoad: 4, consumerCategory: "LT-I" },
+    { flatNo: "103", customerName: "C", monthlyUnits: 450, monthlyBill: 5200, sanctionedLoad: 5, consumerCategory: "LT-I" },
+  ],
+});
+assert.equal(specialBuildingRes.totals.isSpecialCategoryState, true);
+assert.equal(specialBuildingRes.flatLedger[2].subsidy, 85800, "Flat with >= 3 kW in special state must receive ₹85,800");
+
+// Ground-Mounted Building System: ₹0 CFA for all flats
+const groundBuildingRes = calculateBuildingLedger({
+  buildingName: "Ground Mount Society",
+  structureType: "ground",
+  flats: sampleFlats.map(f => ({ ...f, monthlyBill: 3000, sanctionedLoad: 5, consumerCategory: "LT-I" })),
+});
+assert.equal(groundBuildingRes.totals.isGroundMount, true);
+assert.equal(groundBuildingRes.totals.totalSubsidies, 0, "Ground-mounted building solar must receive ₹0 total CFA");
+groundBuildingRes.flatLedger.forEach(f => {
+  assert.equal(f.subsidy, 0, "Each individual flat on ground mount must receive ₹0 CFA");
+});
+
+// Non-DCR Building System: ₹0 CFA for all flats
+const nonDcrBuildingRes = calculateBuildingLedger({
+  buildingName: "Non-DCR Society",
+  panelType: "nonDcr",
+  flats: sampleFlats.map(f => ({ ...f, monthlyBill: 3000, sanctionedLoad: 5, consumerCategory: "LT-I" })),
+});
+assert.equal(nonDcrBuildingRes.totals.isDcr, false);
+assert.equal(nonDcrBuildingRes.totals.totalSubsidies, 0, "Non-DCR building solar must receive ₹0 total CFA");
+
+// Category B Shared Building Cap
+assert.equal(buildingRes.totals.sharedBuildingCapKw, 9, "3 flats * 3 kW = 9 kW cap");
+assert.ok(buildingRes.totals.cfaCategory.includes("Category B"));
+
+console.log("✓ MNRE Guidelines 07.06.2024 Multi-Customer Building constraints verified!");
+
 console.log("✓ CSV template, parsing, and export verified.");
 console.log("ALL MULTI-CUSTOMER MANAGER TESTS PASSED! 🎉");

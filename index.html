@@ -200,6 +200,10 @@
                   <option value="ghs">Group Housing Society</option>
                 </select>
               </label>
+              <label class="field compact hidden" id="ghsResidentCfaField">
+                <span>Individual resident CFA (kWp)</span>
+                <input id="individualResidentCfaKw" type="number" min="0" step="0.5" placeholder="0" value="0">
+              </label>
 
               <!-- Row 6: Panel Make & Panel Watt Peak -->
               <label class="field compact">
@@ -321,6 +325,10 @@
                     <span>Site / Installation address</span>
                     <input id="customerAddress" type="text" placeholder="e.g. Plot 14, Hingne Khurd, Pune" value="Pune, Maharashtra">
                   </label>
+                  <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11px; grid-column: 1 / -1; margin-top: 2px;">
+                    <input type="checkbox" id="isSpecialCategoryState">
+                    <span>Special Category State (+10% CFA: UK, HP, J&amp;K, Ladakh, NE, Islands)</span>
+                  </label>
                 </div>
 
                 <!-- Structure, Orientation, Battery & Backup -->
@@ -328,9 +336,10 @@
                   <label class="field compact">
                     <span>Mounting structure</span>
                     <select id="structureType">
-                      <option value="hotDip" selected>Hot-dip galvanized (25+ yrs)</option>
-                      <option value="galvalume">Galvalume (Mid-range)</option>
-                      <option value="gpPurlin">GP purlin (Budget)</option>
+                      <option value="hotDip" selected>Hot-dip galvanized elevated (≥ 8 ft clearance)</option>
+                      <option value="galvalume">Galvalume (Rooftop / Terrace)</option>
+                      <option value="gpPurlin">GP purlin (Rooftop / Balcony)</option>
+                      <option value="ground">Ground-mounted (Ineligible for MNRE CFA)</option>
                     </select>
                   </label>
                   <label class="field compact">
@@ -1633,6 +1642,19 @@
                 <label class="field">
                   <span>Upfront Down Payment (%)</span>
                   <input type="number" id="buildingLoanUpfrontInput" min="0" max="100" step="1" value="10">
+                </label>
+                <label class="field">
+                  <span>Mounting Structure</span>
+                  <select id="buildingStructureType">
+                    <option value="hotDip" selected>Hot-dip elevated (≥ 8 ft)</option>
+                    <option value="galvalume">Galvalume Rooftop</option>
+                    <option value="gpPurlin">GP purlin Rooftop</option>
+                    <option value="ground">Ground-mounted (₹0 CFA)</option>
+                  </select>
+                </label>
+                <label class="field" style="display: flex; flex-direction: row; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" id="buildingIsSpecialCategoryState" style="width: auto; margin: 0;">
+                  <span style="font-size: 11px;">Special State (+10% CFA)</span>
                 </label>
               </div>
             </div>

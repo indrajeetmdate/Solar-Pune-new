@@ -42,37 +42,53 @@ export const FLAT_COLOR_PALETTE = [
 ];
 
 /**
- * PM Surya Ghar Fixed Quantum Subsidy Calculator
- * Slabs:
+ * PM Surya Ghar Fixed Quantum Subsidy Calculator (MNRE Guidelines 07.06.2024)
+ * Slabs (Standard States):
  * - < 1 kW: ₹0 (minimum grid-tied capacity eligible for subsidy is 1 kW)
  * - 1 kW to < 2 kW: ₹30,000 (fixed quantum for 1 kW completed slab)
  * - 2 kW to < 3 kW: ₹60,000 (fixed quantum for 2 kW completed slab)
  * - >= 3 kW: ₹78,000 (fixed quantum cap for 3 kW+ slab)
- * Note: Non-residential or commercial categories (LT-II, LT-III) get ₹0.
+ * Special Category States (+10% CFA: UK, HP, J&K, Ladakh, NE States, A&N, Lakshadweep):
+ * - 1 kW: ₹33,000 | 2 kW: ₹66,000 | >= 3 kW: ₹85,800
+ * Category C (Group Housing Society common services - lifts, pumps, lighting, EV):
+ * - Flat ₹18,000/kW (Special: ₹19,800/kW) up to min(kW, 3 × No. of Houses - Resident CFA, 500 kW)
+ * Note: Non-residential or commercial categories (LT-II, LT-III, HT, LT-AG) get ₹0.
  */
-export function calculateFixedQuantumSubsidy(capacityKw, category = "LT-I") {
+export function calculateFixedQuantumSubsidy(capacityKw, category = "LT-I", options = {}) {
   const cap = Number(capacityKw) || 0;
   const cat = String(category || "LT-I").toUpperCase();
 
-  // Commercial / Industrial meters do not receive residential PM Surya Ghar subsidy
-  if (cat.startsWith("LT-II") || cat.startsWith("LT-III") || cat.startsWith("HT")) {
+  // Commercial / Industrial meters (LT-II, LT-III, HT, LT-AG) strictly do not receive residential PM Surya Ghar subsidy
+  if (cat.startsWith("LT-II") || cat.startsWith("LT-III") || cat.startsWith("HT") || cat.startsWith("LT-AG")) {
     return 0;
   }
 
-  // GHS Common Meter (Group Housing Society common services)
+  const isSpecial = Boolean(options.isSpecialCategoryState);
+  const rate1 = isSpecial ? 33000 : 30000;
+  const rate2 = isSpecial ? 66000 : 60000;
+  const capRate = isSpecial ? 85800 : 78000;
+  const ghsRate = isSpecial ? 19800 : 18000;
+
+  // Category C: GHS Common Meter (Group Housing Society common services)
+  // MNRE Rule: Power must only serve common facilities (lifts, water pumps, corridor lights, EV charging).
+  // Capacity cap: min(Installed kWp, (3 kWp × No. of Houses) - Individual Resident CFA kWp, 500 kWp)
   if (cat === "LT-I-GHS" || cat === "GHS") {
-    return Math.min(Math.floor(cap) * 18000, 78000 * 10);
+    const numHouses = options.numHouses || options.numFlats || 100;
+    const residentCfaKw = Number(options.individualResidentCfaKw) || 0;
+    const maxCapacity = Math.min(500, Math.max(0, (numHouses * 3) - residentCfaKw));
+    const eligibleKw = Math.min(cap, maxCapacity);
+    return Math.round(eligibleKw * ghsRate);
   }
 
-  // Individual residential flat meters: Fixed Quantum Slabs (no linear scaling)
+  // Category A & B: Individual residential flat meters: Fixed Quantum Slabs (no linear scaling)
   if (cap < 1.0) {
     return 0;
   } else if (cap < 2.0) {
-    return 30000;
+    return rate1;
   } else if (cap < 3.0) {
-    return 60000;
+    return rate2;
   } else {
-    return 78000;
+    return capRate;
   }
 }
 
@@ -157,12 +173,30 @@ export function calculateBuildingLedger({
   panelRate = 25,
   panelWp = 550,
   structureType = "hotDip",
+  mountingType = "roof",
+  isSpecialCategoryState = false,
   loanInterestRate = 7,
   loanDownPaymentPct = 10,
   flats = [],
   config = DEFAULT_CONFIG,
 } = {}) {
   const coloredFlats = assignFlatColors(flats);
+
+  // Auto-detect special category state (+10% CFA) from address if not explicitly set
+  const specialStates = [
+    "uttarakhand", "himachal", "jammu", "kashmir", "ladakh",
+    "sikkim", "arunachal", "assam", "manipur", "meghalaya", "mizoram", "nagaland", "tripura",
+    "andaman", "nicobar", "lakshadweep"
+  ];
+  const addrText = typeof buildingAddress === "string" ? buildingAddress.toLowerCase() : "";
+  const isSpecial = Boolean(isSpecialCategoryState || config?.policy?.isSpecialCategoryState || specialStates.some(st => addrText.includes(st)));
+
+  // Universal Hard Constraints (MNRE 07.06.2024 Guidelines):
+  // 1. Mandatory 100% DCR ALMM modules
+  const pLower = typeof panelType === "string" ? panelType.toLowerCase() : "";
+  const isDcr = pLower && !pLower.includes("nondcr") && !pLower.includes("non_dcr") && (pLower.startsWith("dcr") || pLower.includes("_dcr"));
+  // 2. Eligible mounting: Roof/terrace/balcony/BIPV/elevated (≥8 ft). Ground-mounted strictly ineligible (₹0 CFA).
+  const isGroundMount = structureType === "ground" || mountingType === "ground";
 
   // Sizing by roof area
   const panelWidthMm = 1123;
@@ -192,7 +226,9 @@ export function calculateBuildingLedger({
 
   // Pricing constants (matches calculator.js / config.js)
   const pricing = config.pricing || DEFAULT_CONFIG.pricing;
-  const structureRate = pricing.structureRates?.[structureType] || 6;
+  const structureRate = (pricing.structureRates && pricing.structureRates[structureType] !== undefined)
+    ? pricing.structureRates[structureType]
+    : 6;
   const installationRate = pricing.installationRatePerW || 2.5;
   const consultancyRate = pricing.consultancyRatePerW || 1.0;
   const inverterRate = 5.5; // Rs/W average for large scale ongrid inverters
@@ -220,6 +256,12 @@ export function calculateBuildingLedger({
   const annualGenerationTotal = monthlyGenerationTotal * 12;
   const lifetimeGenerationTotal = annualGenerationTotal * 25;
 
+  // Category B Shared Building Cap (MNRE Guidelines 07.06.2024):
+  // Cap = min(3 kWp × Total Houses, 500 kWp)
+  const sharedBuildingCapKw = Math.min(Math.max(1, allocatedFlats.length) * 3, 500);
+  const maxCapPerFlat = isSpecial ? 85800 : 78000;
+  const maxBuildingSubsidy = allocatedFlats.length * maxCapPerFlat;
+
   // Process individual flat metrics
   let totalSubsidiesSum = 0;
   let totalNetCostSum = 0;
@@ -232,8 +274,13 @@ export function calculateBuildingLedger({
     const flatShareFraction = totalBuildingCapacityKw > 0 ? (flatCapKw / totalBuildingCapacityKw) : (1 / allocatedFlats.length);
     const grossCost = Math.round(totalBuildingGrossCost * flatShareFraction);
 
-    // Fixed Quantum Subsidy per flat
-    const subsidy = calculateFixedQuantumSubsidy(flatCapKw, flat.consumerCategory || "LT-I");
+    // Fixed Quantum Subsidy per flat under Category B
+    let subsidy = 0;
+    if (isDcr && !isGroundMount && flat.paymentMode !== "resco") {
+      subsidy = calculateFixedQuantumSubsidy(flatCapKw, flat.consumerCategory || flat.category || "LT-I", {
+        isSpecialCategoryState: isSpecial,
+      });
+    }
     totalSubsidiesSum += subsidy;
 
     const netCost = Math.max(0, grossCost - subsidy);
@@ -313,8 +360,12 @@ export function calculateBuildingLedger({
     };
   });
 
-  const overallPaybackYears = totalAnnualSavingsSum > 0 && totalNetCostSum > 0
-    ? Math.round((totalNetCostSum / totalAnnualSavingsSum) * 10) / 10
+  // Cap total subsidies by maxBuildingSubsidy
+  const effectiveTotalSubsidies = Math.min(totalSubsidiesSum, maxBuildingSubsidy);
+  const effectiveTotalNetCost = Math.max(0, totalBuildingGrossCost - effectiveTotalSubsidies);
+
+  const overallPaybackYears = totalAnnualSavingsSum > 0 && effectiveTotalNetCost > 0
+    ? Math.round((effectiveTotalNetCost / totalAnnualSavingsSum) * 10) / 10
     : 0;
 
   const totals = {
@@ -325,8 +376,8 @@ export function calculateBuildingLedger({
     totalPanels: totalBuildingPanels,
     totalCapacityKw: totalBuildingCapacityKw,
     totalGrossCost: totalBuildingGrossCost,
-    totalSubsidies: totalSubsidiesSum,
-    totalNetCost: totalNetCostSum,
+    totalSubsidies: effectiveTotalSubsidies,
+    totalNetCost: effectiveTotalNetCost,
     monthlyGeneration: monthlyGenerationTotal,
     annualGeneration: annualGenerationTotal,
     lifetimeGeneration: lifetimeGenerationTotal,
@@ -339,6 +390,14 @@ export function calculateBuildingLedger({
     panelRate,
     panelWp,
     structureType,
+    mountingType,
+    isSpecialCategoryState: isSpecial,
+    isDcr,
+    isGroundMount,
+    cfaCategory: "Category B (Multi-Bill Multi-Customer / VNM / GNM)",
+    sharedBuildingCapKw,
+    maxBuildingSubsidy,
+    deemedApprovalEligible: totalBuildingCapacityKw <= 10,
     loanInterestRate,
     loanDownPaymentPct,
   };
@@ -351,9 +410,9 @@ export function calculateBuildingLedger({
     totalBuildingCapacityKw,
     totalGrossCost: totalBuildingGrossCost,
     totalBuildingGrossCost,
-    totalSubsidy: totalSubsidiesSum,
-    totalSubsidies: totalSubsidiesSum,
-    totalNetCost: totalNetCostSum,
+    totalSubsidy: effectiveTotalSubsidies,
+    totalSubsidies: effectiveTotalSubsidies,
+    totalNetCost: effectiveTotalNetCost,
     monthlyGenerationTotal,
     annualGenerationTotal,
     buildingPaybackYears: overallPaybackYears,
@@ -368,6 +427,11 @@ export function calculateBuildingLedger({
     panelType,
     panelRate,
     panelWp,
+    structureType,
+    isSpecialCategoryState: isSpecial,
+    cfaCategory: totals.cfaCategory,
+    deemedApprovalEligible: totals.deemedApprovalEligible,
+    sharedBuildingCapKw,
     loanInterestRate,
     loanDownPaymentPct,
     totals: summary,

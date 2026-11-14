@@ -765,10 +765,11 @@ export async function generateBuildingProposalPDF({
       doc.text("Investment & PM Surya Ghar Fixed-Quantum Subsidy Breakdown", margin, iyPos);
       iyPos += 4;
 
-      let subsidySlabExplanation = "Not eligible for subsidy (< 1 kW or commercial)";
-      if (flat.subsidy === 30000) subsidySlabExplanation = "PM Surya Ghar 1 kW Completed Slab = Rs 30,000 (Fixed Quantum)";
-      else if (flat.subsidy === 60000) subsidySlabExplanation = "PM Surya Ghar 2 kW Completed Slab = Rs 60,000 (Fixed Quantum)";
-      else if (flat.subsidy === 78000) subsidySlabExplanation = "PM Surya Ghar 3 kW+ Slab Cap = Rs 78,000 (Fixed Quantum)";
+      let subsidySlabExplanation = "Not eligible for subsidy (< 1 kW, ground mount, or commercial)";
+      if (flat.subsidy === 30000 || flat.subsidy === 33000) subsidySlabExplanation = `PM Surya Ghar 1 kW Slab = Rs ${flat.subsidy.toLocaleString("en-IN")} (Fixed Quantum)`;
+      else if (flat.subsidy === 60000 || flat.subsidy === 66000) subsidySlabExplanation = `PM Surya Ghar 2 kW Slab = Rs ${flat.subsidy.toLocaleString("en-IN")} (Fixed Quantum)`;
+      else if (flat.subsidy === 78000 || flat.subsidy === 85800) subsidySlabExplanation = `PM Surya Ghar 3 kW+ Slab Cap = Rs ${flat.subsidy.toLocaleString("en-IN")} (Fixed Quantum)`;
+      else if (flat.subsidy > 0) subsidySlabExplanation = `PM Surya Ghar Subsidy = Rs ${flat.subsidy.toLocaleString("en-IN")}`;
 
       const finBreakdown = [
         ["Turnkey Gross Cost Share", formatCurrency(flat.grossCost), "Proportional share of building solar EPC delivery"],
@@ -1598,9 +1599,9 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.setFillColor(16, 185, 129);  // #10b981 left accent
     doc.roundedRect(margin, yPos, 2.2, pillH, 0.8, 0.8, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
+    doc.setFontSize(7.6);
     doc.setTextColor(6, 95, 70);     // #065f46 dark emerald
-    doc.text("• Note: All of the above are in line with MNRE guidelines.", margin + 5, yPos + 4.7);
+    doc.text("• Note: All of the above are in line with MNRE guidelines (100% DCR, elevated ≥ 8 ft clearance).", margin + 5, yPos + 4.7);
     yPos += pillH + pillGap;
 
     // 2. Cabling/Wiring Charges Note (Amber Highlight Pill)
@@ -2352,15 +2353,19 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
       ]
     },
     {
-      categoryTitle: "D. MSEDCL Net Metering, Grid Interconnection & PM Surya Ghar Subsidy Terms",
+      categoryTitle: "D. MSEDCL Net Metering, Grid Interconnection & PM Surya Ghar Subsidy Terms (MNRE 07.06.2024)",
       terms: [
         {
-          title: "1. PM Surya Ghar Central Subsidy (Direct Benefit Transfer):",
-          desc: "The central capital subsidy under PM Surya Ghar is credited directly into the client's bank account via government DBT. Datlion Cnergy actively assists with National Portal documentation; project contract payments to the EPC remain independent of government DBT processing timelines."
+          title: "1. PM Surya Ghar Central Subsidy (Direct Benefit Transfer) & CFA Eligibility:",
+          desc: "Central subsidy under PM Surya Ghar applies strictly to Capex mode (self-funded or loan financed) and is credited directly to the consumer's bank account via National Portal DBT. RESCO and off-grid configurations are strictly excluded (Rs 0 CFA). Sizing follows fixed-quantum slabs (1 kW: Rs 30k / 2 kW: Rs 60k / >= 3 kW: Rs 78k cap; +10% in Special States). EPC payments remain independent of DBT processing."
         },
         {
-          title: "2. DISCOM Net Metering Feasibility & Approvals:",
-          desc: "Net meter connectivity and sanctioned load feasibility are governed by MSEDCL regulations and local distribution transformer (DT) solar limits. Datlion Cnergy provides comprehensive liaisoning support, with official utility statutory fees and infrastructure charges borne by the applicant."
+          title: "2. Mandatory Equipment & Mounting Compliance:",
+          desc: "Per MNRE universal hard constraints, CFA strictly requires 100% Domestic Content Requirement (DCR) ALMM-listed modules and BIS-compliant inverters. Mounting is permitted on rooftops, terraces, balconies, BIPV, or elevated structures (>= 8 ft ground clearance). Ground-mounted systems receive Rs 0 CFA."
+        },
+        {
+          title: "3. Grid Feasibility & Housing Society Sizing:",
+          desc: "Capacities <= 10 kW enjoy deemed grid feasibility approval under simplified DISCOM rules. In Group Housing Societies / multi-meter buildings (Category B/C), aggregate CFA capacity is capped at min(3 kWp x Total Houses, 500 kWp), and common utility generation is prohibited from powering individual residential flats."
         }
       ]
     },

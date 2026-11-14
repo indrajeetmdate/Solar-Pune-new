@@ -611,6 +611,76 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.equal(getPanelSpecificationText("dcr", "Waaree 545Wp Bifacial DCR", 550), "Waaree 545Wp Bifacial DCR");
 }
 
+// MNRE Guidelines 07.06.2024 PM Surya Ghar Rules Comprehensive Tests
+{
+  console.log("Testing MNRE Guidelines 07.06.2024 PM Surya Ghar rules...");
+  
+  // 1. Universal Hard Constraints: Ground-mount ineligibility
+  assert.equal(calculateSubsidy("ongrid", "dcr", 3, { structureType: "ground" }).total, 0, "Ground-mounted systems must receive 0 CFA");
+  assert.equal(calculateSubsidy("ongrid", "dcr", 3, { mountingType: "ground" }).total, 0, "Ground mountingType must receive 0 CFA");
+
+  // 2. Universal Hard Constraints: RESCO exclusion
+  assert.equal(calculateSubsidy("ongrid", "dcr", 3, { paymentMode: "resco" }).total, 0, "RESCO mode must receive 0 CFA");
+
+  // 3. Universal Hard Constraints: Non-residential meters receive 0 CFA
+  assert.equal(calculateSubsidy("ongrid", "dcr", 3, { consumerCategory: "LT-AG" }).total, 0, "Agricultural meters must receive 0 CFA");
+  assert.equal(calculateSubsidy("ongrid", "dcr", 3, { consumerCategory: "HT-I" }).total, 0, "HT meters must receive 0 CFA");
+
+  // 4. Special Category States (+10% CFA: 1 kW = 33k, 2 kW = 66k, >= 3 kW = 85.8k)
+  // Direct flag
+  assert.equal(calculateSubsidy("ongrid", "dcr", 0.8, { isSpecialCategoryState: true }).total, 0);
+  assert.equal(calculateSubsidy("ongrid", "dcr", 1.2, { isSpecialCategoryState: true }).total, 33000);
+  assert.equal(calculateSubsidy("ongrid", "dcr", 2.0, { isSpecialCategoryState: true }).total, 66000);
+  assert.equal(calculateSubsidy("ongrid", "dcr", 2.9, { isSpecialCategoryState: true }).total, 66000);
+  assert.equal(calculateSubsidy("ongrid", "dcr", 3.0, { isSpecialCategoryState: true }).total, 85800);
+  assert.equal(calculateSubsidy("ongrid", "dcr", 5.0, { isSpecialCategoryState: true }).total, 85800);
+
+  // Auto-detection by address
+  assert.equal(calculateSubsidy("ongrid", "dcr", 3.0, { address: "Dehradun, Uttarakhand" }).total, 85800, "Uttarakhand address must trigger +10% CFA");
+  assert.equal(calculateSubsidy("ongrid", "dcr", 3.0, { address: "Shimla, Himachal Pradesh" }).total, 85800, "Himachal Pradesh address must trigger +10% CFA");
+  assert.equal(calculateSubsidy("ongrid", "dcr", 3.0, { address: "Srinagar, Jammu & Kashmir" }).total, 85800, "J&K address must trigger +10% CFA");
+  assert.equal(calculateSubsidy("ongrid", "dcr", 3.0, { address: "Gangtok, Sikkim" }).total, 85800, "Sikkim address must trigger +10% CFA");
+  assert.equal(calculateSubsidy("ongrid", "dcr", 3.0, { address: "Guwahati, Assam" }).total, 85800, "Assam address must trigger +10% CFA");
+  assert.equal(calculateSubsidy("ongrid", "dcr", 3.0, { address: "Port Blair, Andaman & Nicobar" }).total, 85800, "Andaman address must trigger +10% CFA");
+
+  // Standard states retain standard slabs
+  assert.equal(calculateSubsidy("ongrid", "dcr", 3.0, { address: "Pune, Maharashtra" }).total, 78000, "Maharashtra address must get standard 78k cap");
+
+  // 5. Category C (GHS Common Facility Meter)
+  // Standard rate: ₹18,000 / kW up to min(kW, (3 * houses) - residentCfa, 500)
+  assert.equal(calculateSubsidy("ongrid", "dcr", 10, { consumerCategory: "LT-I-GHS", numHouses: 50 }).total, 180000);
+  // Cap by society housing limit: 10 houses * 3 kW = 30 kW max
+  assert.equal(calculateSubsidy("ongrid", "dcr", 50, { consumerCategory: "LT-I-GHS", numHouses: 10 }).total, 30 * 18000);
+  // Deducting individual resident CFA: 10 houses * 3 = 30 kW, minus 10 kW resident = 20 kW max
+  assert.equal(calculateSubsidy("ongrid", "dcr", 50, { consumerCategory: "LT-I-GHS", numHouses: 10, individualResidentCfaKw: 10 }).total, 20 * 18000);
+  // Special State GHS rate: ₹19,800 / kW
+  assert.equal(calculateSubsidy("ongrid", "dcr", 10, { consumerCategory: "LT-I-GHS", numHouses: 50, isSpecialCategoryState: true }).total, 198000);
+
+  // 6. Category B (Multi-Meter Residential Building)
+  const multiMeters = [
+    { id: 1, allocatedKw: 1.5, consumerCategory: "LT-I" }, // 30,000
+    { id: 2, allocatedKw: 2.2, consumerCategory: "LT-I" }, // 60,000
+    { id: 3, allocatedKw: 4.0, consumerCategory: "LT-I" }, // 78,000
+    { id: 4, allocatedKw: 3.0, consumerCategory: "LT-II" }, // Commercial = 0
+  ];
+  const mmSub = calculateSubsidy("ongrid", "dcr", 10.7, { meters: multiMeters });
+  assert.equal(mmSub.total, 30000 + 60000 + 78000 + 0, "Multi-meter subsidy sum must strictly follow slabs");
+  assert.equal(mmSub.meterBreakdown[0].subsidy, 30000);
+  assert.equal(mmSub.meterBreakdown[1].subsidy, 60000);
+  assert.equal(mmSub.meterBreakdown[2].subsidy, 78000);
+  assert.equal(mmSub.meterBreakdown[3].subsidy, 0);
+
+  // Multi-Meter in Special Category State (+10%)
+  const mmSubSpecial = calculateSubsidy("ongrid", "dcr", 10.7, { meters: multiMeters, isSpecialCategoryState: true });
+  assert.equal(mmSubSpecial.total, 33000 + 66000 + 85800 + 0, "Multi-meter subsidy in special state must have +10%");
+
+  // Multi-Meter with ground mount = 0
+  const mmSubGround = calculateSubsidy("ongrid", "dcr", 10.7, { meters: multiMeters, structureType: "ground" });
+  assert.equal(mmSubGround.total, 0, "Multi-meter on ground mount must have 0 total subsidy");
+
+  console.log("✓ All MNRE Guidelines 07.06.2024 rules verified in calculator!");
+}
+
 console.log("calculator tests passed");
 
 

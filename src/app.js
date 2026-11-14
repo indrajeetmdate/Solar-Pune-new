@@ -109,6 +109,9 @@ const ids = [
   "panelMake",
   "panelRate",
   "structureType",
+  "isSpecialCategoryState",
+  "individualResidentCfaKw",
+  "subsidyCategory",
   "capacityOverride",
   "inverterOverride",
   "batteryOverride",
@@ -325,6 +328,8 @@ function readInput() {
     panelSpec: state.panelSpec || "",
     panelSpecCustom: state.panelSpecCustom || "",
     subsidyCategory: safeStr("subsidyCategory"),
+    isSpecialCategoryState: Boolean($("isSpecialCategoryState")?.checked),
+    individualResidentCfaKw: numberValue("individualResidentCfaKw") || 0,
     structureType: safeStr("structureType"),
     capacityOverride: numberValue("capacityOverride"),
     inverterOverride: numberValue("inverterOverride"),
@@ -435,11 +440,27 @@ function getOptionNotes(option, input) {
   const notes = [];
 
   if (option.systemType === "offgrid") {
-    notes.push("Off-grid with grid charging is treated as no-subsidy.");
+    notes.push("Off-grid configurations are strictly ineligible for PM Surya Ghar CFA (₹0 subsidy per MNRE guidelines).");
+  } else if (input.structureType === "ground" || input.mountingType === "ground") {
+    notes.push("Ground-mounted systems are strictly ineligible for PM Surya Ghar CFA (₹0 subsidy per universal hard constraints; elevated or rooftop mounting required).");
+  } else if (input.paymentMode === "resco") {
+    notes.push("RESCO / third-party owned mode is excluded from PM Surya Ghar CFA (Capex mode only).");
   } else if (option.panelType === "dcr") {
-    notes.push("Subsidy shown only for compliant residential grid-connected DCR systems.");
+    if (input.isSpecialCategoryState) {
+      notes.push("Special Category State (+10% PM Surya Ghar CFA applied: max ₹85,800).");
+    } else {
+      notes.push("Subsidy shown only for compliant residential grid-connected 100% DCR ALMM systems.");
+    }
   } else {
-    notes.push("Non-DCR systems are shown without PM Surya Ghar subsidy.");
+    notes.push("Non-DCR systems are strictly ineligible for PM Surya Ghar subsidy (100% DCR required).");
+  }
+
+  if (option.dcCapacityKw <= 10) {
+    notes.push("⚡ Deemed grid feasibility approval (system capacity ≤ 10 kW per MNRE guidelines).");
+  }
+
+  if (input.structureType === "hotDip") {
+    notes.push("Elevated structure complies with ≥ 8 ft minimum ground clearance at lowest point per MNRE CFA rules.");
   }
 
   if (option.systemType === "hybrid") {
@@ -3235,6 +3256,8 @@ function updateBuildingStudio() {
   const panelRate = Number($("buildingPanelRateInput")?.value) || state.buildingConfig?.panelRate || 28;
   const loanInterestRate = Number($("buildingLoanRateInput")?.value) || state.buildingConfig?.loanRate || 7.0;
   const loanDownPaymentPct = Number($("buildingLoanUpfrontInput")?.value) || state.buildingConfig?.loanUpfront || 10;
+  const structureType = $("buildingStructureType")?.value || state.buildingConfig?.structureType || "hotDip";
+  const isSpecialCategoryState = Boolean($("buildingIsSpecialCategoryState")?.checked);
 
   state.buildingConfig = {
     buildingName,
@@ -3244,7 +3267,8 @@ function updateBuildingStudio() {
     panelType: "dcr",
     panelRate,
     panelWp,
-    structureType: "hotDip",
+    structureType,
+    isSpecialCategoryState,
     loanRate: loanInterestRate,
     loanUpfront: loanDownPaymentPct,
   };
@@ -3257,7 +3281,8 @@ function updateBuildingStudio() {
     panelType: "dcr",
     panelRate,
     panelWp,
-    structureType: "hotDip",
+    structureType,
+    isSpecialCategoryState,
     loanInterestRate,
     loanDownPaymentPct,
     flats: state.buildingFlats,
@@ -3924,7 +3949,9 @@ function attachEvents() {
 
     // Toggle conditional fields
     const sub = $("subsidyCategory")?.value;
-    $("numFlatsField")?.classList.toggle("hidden", cat !== "LT-I-GHS" && sub !== "ghs");
+    const isGhs = cat === "LT-I-GHS" || sub === "ghs";
+    $("numFlatsField")?.classList.toggle("hidden", !isGhs);
+    $("ghsResidentCfaField")?.classList.toggle("hidden", !isGhs);
     $("powerFactorField")?.classList.toggle("hidden", !profile.pfIncentiveApplicable);
     $("peakUsageField")?.classList.toggle("hidden", profile.todPeakPenaltyPct <= 0);
     $("subsidyCategoryContainer")?.classList.toggle("hidden", profile.subsidyType === "none");
@@ -3947,6 +3974,15 @@ function attachEvents() {
     const dutyEl = $("electricityDuty");
     if (dutyEl) dutyEl.value = profile.dutyRate || 7;
 
+    render();
+  });
+
+  $("subsidyCategory")?.addEventListener("change", () => {
+    const cat = $("consumerCategory")?.value;
+    const sub = $("subsidyCategory")?.value;
+    const isGhs = cat === "LT-I-GHS" || sub === "ghs";
+    $("numFlatsField")?.classList.toggle("hidden", !isGhs);
+    $("ghsResidentCfaField")?.classList.toggle("hidden", !isGhs);
     render();
   });
 
@@ -4557,7 +4593,7 @@ function attachEvents() {
   });
 
   // Building Config inputs changes
-  ["buildingNameInput", "buildingAddressInput", "buildingRoofAreaInput", "buildingPanelMakeInput", "buildingPanelWpInput", "buildingPanelRateInput", "buildingLoanRateInput", "buildingLoanUpfrontInput"].forEach((id) => {
+  ["buildingNameInput", "buildingAddressInput", "buildingRoofAreaInput", "buildingPanelMakeInput", "buildingPanelWpInput", "buildingPanelRateInput", "buildingLoanRateInput", "buildingLoanUpfrontInput", "buildingStructureType", "buildingIsSpecialCategoryState"].forEach((id) => {
     $(id)?.addEventListener("change", () => {
       if (state.proposalMode === "multi_building") {
         updateBuildingStudio();

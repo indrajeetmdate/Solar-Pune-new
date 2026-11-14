@@ -382,10 +382,11 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
   if (includeIndividualSheets && flatLedger.length > 0) {
     flatLedger.forEach((flat, idx) => {
       const pageIndex = basePagesCount + 1 + idx;
-      let subsidyExplanation = "Not eligible for subsidy (< 1 kW or commercial)";
-      if (flat.subsidy === 30000) subsidyExplanation = "PM Surya Ghar 1 kW Slab = Rs 30,000 (Fixed Quantum)";
-      else if (flat.subsidy === 60000) subsidyExplanation = "PM Surya Ghar 2 kW Slab = Rs 60,000 (Fixed Quantum)";
-      else if (flat.subsidy === 78000) subsidyExplanation = "PM Surya Ghar 3 kW+ Slab Cap = Rs 78,000 (Fixed Quantum)";
+      let subsidyExplanation = "Not eligible for subsidy (< 1 kW, ground mount, or commercial)";
+      if (flat.subsidy === 30000 || flat.subsidy === 33000) subsidyExplanation = `PM Surya Ghar 1 kW Slab = Rs ${flat.subsidy.toLocaleString("en-IN")} (Fixed Quantum)`;
+      else if (flat.subsidy === 60000 || flat.subsidy === 66000) subsidyExplanation = `PM Surya Ghar 2 kW Slab = Rs ${flat.subsidy.toLocaleString("en-IN")} (Fixed Quantum)`;
+      else if (flat.subsidy === 78000 || flat.subsidy === 85800) subsidyExplanation = `PM Surya Ghar 3 kW+ Slab Cap = Rs ${flat.subsidy.toLocaleString("en-IN")} (Fixed Quantum)`;
+      else if (flat.subsidy > 0) subsidyExplanation = `PM Surya Ghar Subsidy = Rs ${flat.subsidy.toLocaleString("en-IN")}`;
 
       const dpPct = flat.financing?.downPaymentPct ?? (Number(flat.loanDownPaymentPct) || 10);
 
@@ -861,9 +862,9 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
 
         <!-- 3 Highlighted Notes -->
         <div style="display: flex; flex-direction: column; gap: 1.5mm; margin-bottom: 2.5mm;">
-          <div class="pdf-highlight-box green" style="padding: 1.5mm 3mm; margin: 0; font-size: 7.2pt; font-weight: 700;">• Note: All of the above are in line with MNRE guidelines.</div>
+          <div class="pdf-highlight-box green" style="padding: 1.5mm 3mm; margin: 0; font-size: 7.2pt; font-weight: 700;">• Note: All of the above are in line with MNRE guidelines (100% DCR ALMM modules; elevated structures with ≥ 8 ft clearance).</div>
           <div class="pdf-highlight-box yellow" style="padding: 1.5mm 3mm; margin: 0; font-size: 7.2pt; font-weight: 700;">• Note: Cabling/wiring charges will be at actual length of DC and AC cabling required.</div>
-          <div class="pdf-highlight-box blue" style="padding: 1.5mm 3mm; margin: 0; font-size: 7.2pt; font-weight: 700;">• Note: MSEDCL Net Metering Liaisoning &amp; Discom Documentation Support charges at actuals.</div>
+          <div class="pdf-highlight-box blue" style="padding: 1.5mm 3mm; margin: 0; font-size: 7.2pt; font-weight: 700;">• Note: MSEDCL Net Metering Liaisoning &amp; Discom Documentation Support charges at actuals (Systems ≤ 10 kW enjoy deemed feasibility).</div>
         </div>
 
         <!-- Commercial Summary Plain Lines -->
@@ -1164,11 +1165,12 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
 
         <!-- Section D -->
         <div class="pdf-card" style="background: #f1f5f9; border-color: #cbd5e1; padding: 1.5mm 3mm; font-size: 7.5pt; font-weight: 700; color: #63923e; margin-bottom: 1.5mm;">
-          D. MSEDCL Net Metering, Grid Interconnection &amp; PM Surya Ghar Subsidy Terms
+          D. MSEDCL Net Metering, Grid Interconnection &amp; PM Surya Ghar Subsidy Terms (MNRE 07.06.2024)
         </div>
         <div style="font-size: 6.8pt; color: #334155; line-height: 1.35; margin-bottom: 2.5mm;">
-          <div><strong>1. PM Surya Ghar Central Subsidy (Direct Benefit Transfer):</strong> The central capital subsidy under PM Surya Ghar is credited directly into the client's bank account via government DBT. Datlion Cnergy actively assists with National Portal documentation; project contract payments to the EPC remain independent of government DBT processing timelines.</div>
-          <div style="margin-top: 1mm;"><strong>2. DISCOM Net Metering Feasibility &amp; Approvals:</strong> Net meter connectivity and sanctioned load feasibility are governed by MSEDCL regulations and local distribution transformer (DT) solar limits. Datlion Cnergy provides comprehensive liaisoning support, with official utility statutory fees and infrastructure charges borne by the applicant.</div>
+          <div><strong>1. Central Financial Assistance (CFA) Eligibility &amp; DBT:</strong> Central subsidy under PM Surya Ghar: Muft Bijli Yojana applies strictly to Capex mode (consumer self-funded or bank loan financed) and is credited directly to the client's bank account via DBT. RESCO/utility aggregation models and off-grid setups are strictly excluded (₹0 CFA). Sizing strictly follows fixed-quantum slabs (1 kW: ₹30k / 2 kW: ₹60k / ≥3 kW: ₹78k cap; +10% in Special States). Datlion Cnergy assists with National Portal documentation; EPC payments remain independent of DBT disbursement.</div>
+          <div style="margin-top: 1mm;"><strong>2. Mandatory Equipment &amp; Mounting Compliance:</strong> CFA requires 100% Domestic Content Requirement (DCR) ALMM-listed solar cells/modules and BIS-compliant inverters. Systems must be mounted on rooftops, terraces, balconies, BIPV, or elevated structures with ≥ 8 ft ground clearance. Ground-mounted systems are strictly ineligible for CFA.</div>
+          <div style="margin-top: 1mm;"><strong>3. Grid Feasibility &amp; Housing Society Sizing:</strong> Systems ≤ 10 kW enjoy deemed grid feasibility approval per MNRE guidelines. For Group Housing Societies / multi-meter buildings (Category B/C), total CFA capacity is capped at min(3 kWp × Total Houses, 500 kWp), and common utility power is prohibited from supplying individual residential flats.</div>
         </div>
 
         <!-- Section E -->

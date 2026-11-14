@@ -179,6 +179,7 @@ export const DEFAULT_CONFIG = {
       hotDip: 6,
       galvalume: 5.3,
       gpPurlin: 4.8,
+      ground: 4.5,
     },
     wiringRatePerW: 0,
     installationRatePerW: 2.5,
@@ -213,6 +214,15 @@ export const DEFAULT_CONFIG = {
     ghsSubsidyPerKw: 18000,
     ghsSubsidyMaxKw: 500,
     ghsPerFlatCapKw: 3,
+    // MNRE 07.06.2024 Guidelines: Special Category States (+10% CFA)
+    // Uttarakhand, HP, J&K, Ladakh, NE States (incl. Sikkim), A&N Islands, Lakshadweep
+    isSpecialCategoryState: false,
+    specialStateSubsidyFirstTwoKw: 33000,
+    specialStateSubsidyNextOneKw: 19800,
+    specialStateSubsidyCap: 85800,
+    specialStateGhsSubsidyPerKw: 19800,
+    minElevatedClearanceFt: 8,
+    deemedApprovalMaxKw: 10,
   },
   financing: {
     defaultInterestRatePct: 7,
@@ -241,9 +251,10 @@ export const PANEL_LABELS = {
 };
 
 export const STRUCTURE_LABELS = {
-  hotDip: "Hot-dip galvanized",
-  galvalume: "Galvalume",
-  gpPurlin: "GP purlin",
+  hotDip: "Hot-dip galvanized elevated (≥ 8 ft clearance)",
+  galvalume: "Galvalume (Rooftop / Terrace)",
+  gpPurlin: "GP purlin (Rooftop / Balcony)",
+  ground: "Ground-mounted (Ineligible for MNRE CFA)",
 };
 
 export function getPanelSpecificationText(panelType, customSpec, panelWp = 550, panelMake = "") {

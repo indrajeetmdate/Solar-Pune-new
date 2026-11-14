@@ -40,13 +40,13 @@ export function calculatePerformanceFactor(performance, input = {}) {
   return round((1 - shading) * (1 - orientation) * (1 - system), 4);
 }
 
-export function calculateSingleMeterSubsidy(kw, category = "LT-I", policy = DEFAULT_CONFIG.policy) {
+export function calculateSingleMeterSubsidy(kw, category = "LT-I", policy = DEFAULT_CONFIG.policy, options = {}) {
   const cap = Number(kw) || 0;
   if (cap <= 0) return 0;
 
   const cat = String(category || "LT-I").toUpperCase();
-  // Non-residential meters (LT-II, LT-III, HT) strictly receive ₹0 subsidy
-  if (cat.startsWith("LT-II") || cat.startsWith("LT-III") || cat.startsWith("HT")) {
+  // Non-residential meters (LT-II, LT-III, HT, LT-AG) strictly receive ₹0 subsidy
+  if (cat.startsWith("LT-II") || cat.startsWith("LT-III") || cat.startsWith("HT") || cat.startsWith("LT-AG")) {
     return 0;
   }
 
@@ -55,24 +55,39 @@ export function calculateSingleMeterSubsidy(kw, category = "LT-I", policy = DEFA
     return 0;
   }
 
-  // GHS Common Meter (Group Housing Society common services)
+  const isSpecial = Boolean(options.isSpecialCategoryState || policy?.isSpecialCategoryState);
+  const rate1 = isSpecial ? (policy?.specialStateSubsidyFirstTwoKw || 33000) : (policy?.subsidyFirstTwoKw || 30000);
+  const rate2 = rate1 * 2;
+  const maxCap = isSpecial ? (policy?.specialStateSubsidyCap || 85800) : (policy?.subsidyCap || 78000);
+  const ghsRate = isSpecial ? (policy?.specialStateGhsSubsidyPerKw || 19800) : (policy?.ghsSubsidyPerKw || 18000);
+
+  // Category C: GHS Common Meter (Group Housing Society common services - lifts, pumps, lighting, EV)
+  // MNRE Rule: Power must strictly serve common facilities. Prohibited from supplying individual residential flats.
+  // Capacity cap: min(Installed kWp, (3 kWp × No. of Houses) - Individual Resident CFA kWp, 500 kWp)
   if (cat === "LT-I-GHS" || cat === "GHS") {
-    return round(cap * (policy.ghsSubsidyPerKw || 18000), 0);
+    const numHouses = options.numHouses || options.numFlats || 100;
+    const residentCfaKw = Number(options.individualResidentCfaKw) || 0;
+    const maxCapacity = Math.min(
+      policy?.ghsSubsidyMaxKw || 500,
+      Math.max(0, (numHouses * (policy?.ghsPerFlatCapKw || 3)) - residentCfaKw)
+    );
+    const eligibleKw = Math.min(cap, maxCapacity);
+    return round(eligibleKw * ghsRate, 0);
   }
 
-  // Strict PM Surya Ghar non-linear fixed-quantum slabs for residential (LT-I):
+  // Category A & B: Strict PM Surya Ghar non-linear fixed-quantum slabs for residential (LT-I):
   // Capacity < 1.0 kW ⟹ ₹0
-  // 1.0 kW ≤ Capacity < 2.0 kW ⟹ ₹30,000 (completed 1 kW slab)
-  // 2.0 kW ≤ Capacity < 3.0 kW ⟹ ₹60,000 (completed 2 kW slab)
-  // Capacity ≥ 3.0 kW ⟹ ₹78,000 (completed 3 kW+ cap)
+  // 1.0 kW ≤ Capacity < 2.0 kW ⟹ completed 1 kW slab (₹30,000; Special: ₹33,000)
+  // 2.0 kW ≤ Capacity < 3.0 kW ⟹ completed 2 kW slab (₹60,000; Special: ₹66,000)
+  // Capacity ≥ 3.0 kW ⟹ completed 3 kW+ cap (₹78,000; Special: ₹85,800)
   if (cap < 1.0) {
     return 0;
   } else if (cap < 2.0) {
-    return 30000;
+    return rate1;
   } else if (cap < 3.0) {
-    return 60000;
+    return rate2;
   } else {
-    return 78000;
+    return maxCap;
   }
 }
 
@@ -128,37 +143,70 @@ export function calculateSubsidy(systemType, panelType, dcCapacityKw, input = {}
   const isGridConnected = systemType.startsWith("ongrid") || systemType.startsWith("hybrid");
   const pLower = typeof panelType === "string" ? panelType.toLowerCase() : "";
   const isDcr = pLower && !pLower.includes("nondcr") && !pLower.includes("non_dcr") && (pLower.startsWith("dcr") || pLower.includes("_dcr"));
-  if (!isGridConnected || !isDcr || dcCapacityKw <= 0) {
+  
+  // Universal Hard Constraints (MNRE Guidelines 07.06.2024):
+  // 1. Capex mode only (consumer-funded / loan). RESCO & Utility-led aggregation excluded.
+  const isResco = input.paymentMode === "resco" || input.isResco === true;
+  // 2. Eligible Mounting: Roof, terrace, balcony, BIPV, or elevated structure (≥ 8 ft clearance).
+  //    Ground-mounted systems and off-grid configurations are strictly ineligible (₹0 CFA).
+  const isGroundMount = input.structureType === "ground" || input.mountingType === "ground";
+
+  if (!isGridConnected || !isDcr || isGroundMount || isResco || dcCapacityKw <= 0) {
     if (input.meters && Array.isArray(input.meters) && input.meters.length > 1) {
+      const perMeter = input.meters.map((m) => ({
+        id: m.id,
+        label: m.label || `Meter ${m.consumerNumber || ""}`,
+        consumerNumber: m.consumerNumber || "",
+        consumerName: m.consumerName || "",
+        sanctionedLoad: Number(m.sanctionedLoad) || 0,
+        allocatedKw: Number(m.allocatedKw) || 0,
+        subsidy: 0,
+      }));
       return {
         total: 0,
         type: "none",
-        perMeter: input.meters.map((m) => ({
-          id: m.id,
-          label: m.label || `Meter ${m.consumerNumber || ""}`,
-          consumerNumber: m.consumerNumber || "",
-          consumerName: m.consumerName || "",
-          sanctionedLoad: Number(m.sanctionedLoad) || 0,
-          allocatedKw: Number(m.allocatedKw) || 0,
-          subsidy: 0,
-        })),
+        perMeter,
+        meterBreakdown: perMeter,
       };
     }
     return { total: 0, type: "none" };
   }
 
-  // Multi-meter subsidy: calculate per-meter subsidy and sum them up
+  // Check special category state (+10% CFA: Uttarakhand, HP, J&K, Ladakh, NE States, Sikkim, A&N, Lakshadweep)
+  const addrText = String(input.address || input.customerAddress || "");
+  const isSpecial = Boolean(
+    input.isSpecialCategoryState ||
+    policy?.isSpecialCategoryState ||
+    (addrText && /uttarakhand|himachal|j&k|jammu|kashmir|ladakh|sikkim|assam|meghalaya|manipur|mizoram|nagaland|tripura|arunachal|andaman|nicobar|lakshadweep/i.test(addrText))
+  );
+
+  const activePolicy = { ...policy, isSpecialCategoryState: isSpecial };
+  const rate1 = isSpecial ? (policy?.specialStateSubsidyFirstTwoKw || 33000) : (policy?.subsidyFirstTwoKw || 30000);
+  const rate2 = rate1 * 2;
+  const maxCap = isSpecial ? (policy?.specialStateSubsidyCap || 85800) : (policy?.subsidyCap || 78000);
+  const ghsRate = isSpecial ? (policy?.specialStateGhsSubsidyPerKw || 19800) : (policy?.ghsSubsidyPerKw || 18000);
+
+  // Category B: Multi-Bill — Multi-Customer (Multiple Individuals / VNM / GNM in Same Building)
+  // Shared Building Cap: Total CFA-supported capacity across all individual residents + common plant cannot exceed 3 kWp × Total Houses (max 500 kWp)
   if (input.meters && Array.isArray(input.meters) && input.meters.length > 1) {
     let metersToUse = input.meters;
     const totalAllocated = metersToUse.reduce((s, m) => s + (Number(m.allocatedKw) || 0), 0);
     if (totalAllocated === 0 && dcCapacityKw > 0) {
       metersToUse = distributeCapacityAcrossMeters(dcCapacityKw, metersToUse, input.allocationStrategy || "proportional");
     }
+
+    const totalHouses = metersToUse.length;
+    const sharedBuildingCapKw = Math.min(totalHouses * (policy?.ghsPerFlatCapKw || 3), policy?.ghsSubsidyMaxKw || 500);
+
     let totalSubsidy = 0;
     const perMeter = metersToUse.map((m) => {
       const allocatedKw = Number(m.allocatedKw) || 0;
       const cat = m.consumerCategory || "LT-I";
-      const sub = calculateSingleMeterSubsidy(allocatedKw, cat, policy);
+      const sub = calculateSingleMeterSubsidy(allocatedKw, cat, activePolicy, {
+        numHouses: totalHouses,
+        individualResidentCfaKw: input.individualResidentCfaKw || 0,
+        isSpecialCategoryState: isSpecial,
+      });
       totalSubsidy += sub;
       return {
         id: m.id,
@@ -171,17 +219,23 @@ export function calculateSubsidy(systemType, panelType, dcCapacityKw, input = {}
       };
     });
 
+    const maxBuildingSubsidy = totalHouses * maxCap;
+    totalSubsidy = Math.min(totalSubsidy, maxBuildingSubsidy);
+
     return {
       total: round(totalSubsidy, 0),
       type: "multi_meter",
       perMeter,
+      meterBreakdown: perMeter,
+      sharedBuildingCapKw,
+      isSpecialCategoryState: isSpecial,
     };
   }
 
   // Single meter flow (backward compatible)
   const cat = String(input.consumerCategory || "LT-I").toUpperCase();
-  // Non-residential meters (LT-II, LT-III, HT) strictly receive ₹0 subsidy
-  if (cat.startsWith("LT-II") || cat.startsWith("LT-III") || cat.startsWith("HT")) {
+  // Non-residential meters (LT-II, LT-III, HT, LT-AG) strictly receive ₹0 subsidy
+  if (cat.startsWith("LT-II") || cat.startsWith("LT-III") || cat.startsWith("HT") || cat.startsWith("LT-AG")) {
     return { total: 0, type: "none" };
   }
 
@@ -195,27 +249,40 @@ export function calculateSubsidy(systemType, panelType, dcCapacityKw, input = {}
     return { total: 0, type: "none" };
   }
 
+  // Category C: Single Bill — Group Housing Society / RWA / AOA (Common Facilities)
+  // Power must strictly serve common facilities (lifts, water pumps, corridor lights, common EV charging). Prohibited from supplying individual residential flats.
+  // CFA Rate: Flat ₹18,000 / kWp (Special States: ₹19,800 / kWp).
+  // Capacity Cap: min(Installed kWp, (3 kWp × No. of Houses) - Individual Resident CFA kWp, 500 kWp)
   if (subsidyType === "ghs" || cat === "LT-I-GHS" || cat === "GHS") {
-    // GHS: ₹18,000/kW flat, max 500kW, capped by 3kW per flat
-    const maxByFlats = (input.numFlats || 100) * (policy.ghsPerFlatCapKw || 3);
-    const maxCapacity = Math.min(policy.ghsSubsidyMaxKw || 500, maxByFlats);
+    const numFlats = Number(input.numHouses) || Number(input.numFlats) || 100;
+    const residentCfaKw = Number(input.individualResidentCfaKw) || 0;
+    const maxByFlats = Math.max(0, (numFlats * (policy?.ghsPerFlatCapKw || 3)) - residentCfaKw);
+    const maxCapacity = Math.min(policy?.ghsSubsidyMaxKw || 500, maxByFlats);
     const eligibleKw = Math.min(dcCapacityKw, maxCapacity);
-    return { total: round(eligibleKw * (policy.ghsSubsidyPerKw || 18000), 0), type: "ghs" };
+    return {
+      total: round(eligibleKw * ghsRate, 0),
+      type: "ghs",
+      eligibleKw,
+      maxCapacity,
+      ratePerKw: ghsRate,
+      isSpecialCategoryState: isSpecial,
+    };
   }
 
-  // Individual residential: Strict PM Surya Ghar non-linear fixed-quantum slabs (no linear interpolation)
+  // Category A: Single Bill — Single Customer (Individual Residential)
+  // Strict PM Surya Ghar non-linear fixed-quantum slabs (no linear interpolation)
   // Capacity < 1.0 kW ⟹ ₹0
-  // 1.0 kW ≤ Capacity < 2.0 kW ⟹ ₹30,000 (completed 1 kW slab)
-  // 2.0 kW ≤ Capacity < 3.0 kW ⟹ ₹60,000 (completed 2 kW slab)
-  // Capacity ≥ 3.0 kW ⟹ ₹78,000 (completed 3 kW+ cap)
+  // 1.0 kW ≤ Capacity < 2.0 kW ⟹ completed 1 kW slab (₹30,000; Special: ₹33,000)
+  // 2.0 kW ≤ Capacity < 3.0 kW ⟹ completed 2 kW slab (₹60,000; Special: ₹66,000)
+  // Capacity ≥ 3.0 kW ⟹ completed 3 kW+ cap (₹78,000; Special: ₹85,800)
   if (dcCapacityKw < 1.0) {
-    return { total: 0, type: "individual" };
+    return { total: 0, type: "individual", isSpecialCategoryState: isSpecial };
   } else if (dcCapacityKw < 2.0) {
-    return { total: 30000, type: "individual" };
+    return { total: rate1, type: "individual", isSpecialCategoryState: isSpecial };
   } else if (dcCapacityKw < 3.0) {
-    return { total: 60000, type: "individual" };
+    return { total: rate2, type: "individual", isSpecialCategoryState: isSpecial };
   } else {
-    return { total: 78000, type: "individual" };
+    return { total: maxCap, type: "individual", isSpecialCategoryState: isSpecial };
   }
 }
 
@@ -673,7 +740,10 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   // Cost breakup
   const pricing = config.pricing;
   const panelCost = dcCapacityWp * getPanelRate(panelType, pricing);
-  const structureCost = dcCapacityWp * pricing.structureRates[input.structureType];
+  const structureRate = (pricing.structureRates && pricing.structureRates[input.structureType] !== undefined)
+    ? pricing.structureRates[input.structureType]
+    : 5.3;
+  const structureCost = dcCapacityWp * structureRate;
   const inverterCost = inverterCapacityW * getInverterRate(systemType, inverterCapacityKw);
   let batteryCost = batteryCapacityWh * pricing.batteryRatePerWh;
   let backupInverterCost = 0;
