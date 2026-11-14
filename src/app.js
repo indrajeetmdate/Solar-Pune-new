@@ -714,13 +714,14 @@ function renderBreakup(option, input, customerView, config) {
 
     itemsHtml += `<div><dt style="font-weight: bold; color: var(--text);">Total System Cost (Inc. GST)</dt><dd style="font-weight: bold;">${money(option.totalPreSubsidy)}</dd></div>`;
     
-    if (!$("hideSubsidy")?.checked) {
+    if (!$("hideSubsidy")?.checked && (option.subsidy || 0) > 0) {
       itemsHtml += `<div><dt>Expected Subsidy</dt><dd style="color: var(--primary);">- ${money(option.subsidy)}</dd></div>`;
     }
     
+    const displayNetCost = ($("hideSubsidy")?.checked || !(option.subsidy > 0)) ? option.totalPreSubsidy : option.netCost;
     itemsHtml += `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line);">
       <dt style="font-weight: bold; color: var(--text); font-size: 1.1em;">Net customer cost</dt>
-      <dd style="font-weight: bold; font-size: 1.1em;">${money(option.netCost)}</dd>
+      <dd style="font-weight: bold; font-size: 1.1em;">${money(displayNetCost)}</dd>
     </div>`;
 
     if (exceeds60) {
@@ -4952,16 +4953,13 @@ function applyBreakupConfig(estimate, input, config = readConfig()) {
     option.costBreakup.marginRate = marginRate;
     option.costBreakup.margin = margin;
 
-    let effectiveSubsidy = $("hideSubsidy")?.checked ? 0 : option.subsidy;
-    
     if ($("hideCost")?.checked) {
       option.totalPreSubsidy = 0;
-      effectiveSubsidy = 0;
       option.subsidy = 0;
       option.netCost = 0;
     } else {
       option.totalPreSubsidy = baseCostInclGst + margin;
-      option.netCost = Math.max(option.totalPreSubsidy - effectiveSubsidy, 0);
+      option.netCost = Math.max(option.totalPreSubsidy - (option.subsidy || 0), 0);
     }
     
     option.paybackYears = option.annualSavings > 0 && option.netCost > 0 ? option.netCost / option.annualSavings : 0;

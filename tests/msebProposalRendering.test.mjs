@@ -162,4 +162,23 @@ await generateProposalPDF(estBifacial, estBifacial.recommended, { hideFinancing:
 const hasLoanProposalWithoutLoan = pdfWithoutLoanCalls.some(c => c.head && c.head[0] && String(c.head[0][0]).includes("Bank Partner Loan"));
 assert.equal(hasLoanProposalWithoutLoan, false, "When Without Loan is selected, proposal must not show loan calculations");
 
+// Test 6: Commercial Summary in Sample View strictly subtracts subsidy when shown
+const { buildSingleSamplePdfPages } = await import("../src/pdfSampleView.js");
+const sampleOpt = {
+  ...estBifacial.recommended,
+  totalPreSubsidy: 192776,
+  subsidy: 60000,
+  netCost: 192776, // intentionally set stale/gross to ensure renderer derives correct net
+};
+const htmlWithSubsidy = buildSingleSamplePdfPages(estBifacial, sampleOpt, { hideSubsidy: false });
+assert.ok(htmlWithSubsidy.includes("Expected Subsidy (PM Surya Ghar Direct bank transfer to Customers bank account)"), "Expected subsidy must be visible");
+assert.ok(htmlWithSubsidy.includes("1,92,776"), "Total gross cost must be 1,92,776");
+assert.ok(htmlWithSubsidy.includes("60,000"), "Subsidy must be 60,000");
+assert.ok(htmlWithSubsidy.includes("1,32,776"), "Net Payable Cost must be strictly 1,32,776 (192,776 - 60,000)");
+
+// Test 7: Commercial Summary in Sample View hides subsidy row when hideSubsidy: true
+const htmlHideSubsidy = buildSingleSamplePdfPages(estBifacial, sampleOpt, { hideSubsidy: true });
+assert.ok(!htmlHideSubsidy.includes("Expected Subsidy (PM Surya Ghar Direct bank transfer to Customers bank account)"), "Expected subsidy row must be hidden when hideSubsidy is true");
+assert.ok(htmlHideSubsidy.includes("Net Payable Cost to customer"), "Net Payable Cost row must be present");
+
 console.log("All MSEB Proposal Rendering, Panel Selection, and Loan Omission tests passed successfully! 🎉");

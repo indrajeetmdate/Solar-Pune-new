@@ -387,6 +387,8 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
       else if (flat.subsidy === 60000) subsidyExplanation = "PM Surya Ghar 2 kW Slab = Rs 60,000 (Fixed Quantum)";
       else if (flat.subsidy === 78000) subsidyExplanation = "PM Surya Ghar 3 kW+ Slab Cap = Rs 78,000 (Fixed Quantum)";
 
+      const dpPct = flat.financing?.downPaymentPct ?? (Number(flat.loanDownPaymentPct) || 10);
+
       const flatPage = `
         <div class="pdf-sample-page" data-page-index="${pageIndex}">
           ${createPageHeader(`Individual Proposal — Flat ${flat.flatNo}`)}
@@ -517,13 +519,13 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
                 </colgroup>
                 <tbody>
                   <tr>
-                    <td style="width: 35%; background: #f0f9ff; font-weight: 700;">Customer Down Payment (10%)</td>
-                    <td style="width: 25%;"><span class="editable-field">${formatCurrency(flat.financing.downPayment || flat.netCost * 0.1)}</span></td>
+                    <td style="width: 35%; background: #f0f9ff; font-weight: 700;">Customer Down Payment (${dpPct}%)</td>
+                    <td style="width: 25%;"><span class="editable-field">${formatCurrency(flat.financing.downPayment || (flat.netCost * (dpPct / 100)))}</span></td>
                     <td style="color: #64748b; font-size: 6.8pt;">Initial upfront customer investment</td>
                   </tr>
                   <tr>
-                    <td style="background: #f0f9ff; font-weight: 700;">Bank Loan Principal (90%)</td>
-                    <td><strong><span class="editable-field">${formatCurrency(flat.financing.principal || flat.netCost * 0.9)}</span></strong></td>
+                    <td style="background: #f0f9ff; font-weight: 700;">Bank Loan Principal (${100 - dpPct}%)</td>
+                    <td><strong><span class="editable-field">${formatCurrency(flat.financing.principal || (flat.netCost * ((100 - dpPct) / 100)))}</span></strong></td>
                     <td style="color: #64748b; font-size: 6.8pt;">Financed by SBI / Canara Bank / Bank of Maharashtra</td>
                   </tr>
                   <tr>
@@ -871,13 +873,14 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
               <td style="padding: 1mm 0;"><strong>Total System Cost (Inc. GST) (as payable to Datlion Cnergy Pvt. Ltd.)</strong></td>
               <td style="text-align: right; font-weight: 700;"><span class="editable-field">${formatCurrency(option.totalPreSubsidy)}</span></td>
             </tr>
+            ${!hideFlags.hideSubsidy && (option.subsidy || 0) > 0 ? `
             <tr>
-              <td style="padding: 1mm 0; color: #15803d; font-weight: 700;">Expected Subsidy (PM Surya Ghar Direct bank transfer to Customers bank account)</td>
+              <td style="padding: 1mm 0; color: #15803d; font-weight: 700;">${(input.meters && Array.isArray(input.meters) && input.meters.length > 1) ? `Expected Subsidy (PM Surya Ghar Direct bank transfer to Customers bank account across ${input.meters.length} flats)` : "Expected Subsidy (PM Surya Ghar Direct bank transfer to Customers bank account)"}</td>
               <td style="text-align: right; color: #15803d; font-weight: 700;"><span class="editable-field">- ${formatCurrency(option.subsidy)}</span></td>
-            </tr>
+            </tr>` : ""}
             <tr style="border-top: 1px solid #cbd5e1;">
               <td style="padding: 1.5mm 0; font-weight: 800; font-size: 8.5pt;">Net Payable Cost to customer</td>
-              <td style="text-align: right; font-weight: 800; font-size: 8.5pt;"><span class="editable-field">${formatCurrency(option.netCost)}</span></td>
+              <td style="text-align: right; font-weight: 800; font-size: 8.5pt;"><span class="editable-field">${formatCurrency((hideFlags.hideSubsidy || !(option.subsidy > 0)) ? option.totalPreSubsidy : Math.max(0, (option.totalPreSubsidy || 0) - (option.subsidy || 0)))}</span></td>
             </tr>
           </tbody>
         </table>
@@ -1429,14 +1432,18 @@ export function printPdfSampleView() {
 }
 
 // Global print hooks to ensure zoom is always 1 during printing
-if (typeof window !== "undefined") {
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
   let savedZoom = "";
   window.addEventListener("beforeprint", () => {
-    savedZoom = document.body.style.zoom || "";
-    document.body.style.zoom = "1";
+    if (typeof document !== "undefined" && document.body) {
+      savedZoom = document.body.style.zoom || "";
+      document.body.style.zoom = "1";
+    }
   });
   window.addEventListener("afterprint", () => {
-    document.body.style.zoom = savedZoom;
+    if (typeof document !== "undefined" && document.body) {
+      document.body.style.zoom = savedZoom;
+    }
   });
 }
 

@@ -812,9 +812,10 @@ export async function generateBuildingProposalPDF({
         doc.text("Solar Loan Financing Option (Nationalized Bank Tie-up)", margin, iyPos);
         iyPos += 4;
 
+        const dpPct = flat.financing?.downPaymentPct ?? (Number(flat.loanDownPaymentPct) || 10);
         const loanSchedule = [
-          ["Customer Down Payment (10%)", formatCurrency(flat.financing.downPayment || flat.netCost * 0.1), "Initial upfront customer investment"],
-          ["Bank Loan Principal (90%)", formatCurrency(flat.financing.principal || flat.netCost * 0.9), "Financed by SBI / Canara Bank / Bank of Maharashtra"],
+          [`Customer Down Payment (${dpPct}%)`, formatCurrency(flat.financing.downPayment || (flat.netCost * (dpPct / 100))), "Initial upfront customer investment"],
+          [`Bank Loan Principal (${100 - dpPct}%)`, formatCurrency(flat.financing.principal || (flat.netCost * ((100 - dpPct) / 100))), "Financed by SBI / Canara Bank / Bank of Maharashtra"],
           ["Annual Interest Rate", `${flat.financing.interestRatePct || 7.0}% p.a.`, "Concessional PM Surya Ghar Priority Sector Green Lending"],
           ["Loan Tenure", "5 Years (60 Months)", "Flexible repayment tenure"],
           ["Estimated Monthly EMI", `${formatCurrency(flat.financing.monthlyEmi || Math.round(flat.monthlySavings * 0.85))} / mo`, "Less than or equal to monthly electricity bill savings!"],
@@ -1632,14 +1633,17 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     costData.push(["Total System Cost (Inc. GST) (as payable to Datlion Cnergy Pvt. Ltd.)", formatCurrency(option.totalPreSubsidy)]);
 
     // Conditionally include subsidy
-    if (!hideSubsidy) {
+    if (!hideSubsidy && (option.subsidy || 0) > 0) {
       const isMulti = input.meters && Array.isArray(input.meters) && input.meters.length > 1;
       const subLabel = isMulti
         ? `Expected Subsidy (PM Surya Ghar Direct bank transfer to Customers bank account across ${input.meters.length} flats)`
         : "Expected Subsidy (PM Surya Ghar Direct bank transfer to Customers bank account)";
       costData.push([subLabel, `- ${formatCurrency(option.subsidy)}`]);
     }
-    costData.push(["Net Payable Cost to customer", formatCurrency(option.netCost)]);
+    const finalNet = (hideSubsidy || !(option.subsidy > 0))
+      ? option.totalPreSubsidy
+      : Math.max(0, (option.totalPreSubsidy || 0) - (option.subsidy || 0));
+    costData.push(["Net Payable Cost to customer", formatCurrency(finalNet)]);
 
     doc.autoTable({
       startY: yPos,
