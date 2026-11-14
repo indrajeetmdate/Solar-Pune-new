@@ -514,6 +514,58 @@ assert.equal(window.appState.buildingFlats[0].loanMode, false);
 assert.equal(window.appState.buildingFlats[4].monthlyUnits, 376);
 assert.ok(alertMessage.includes("Successfully imported 8 flats"), `Must show success alert, got: ${alertMessage}`);
 
+// Verify compulsory roof area modal upon CSV import
+{
+  const csvModal = document.getElementById("csvRoofAreaModal");
+  assert.ok(csvModal, "CSV Roof Area Modal must exist in DOM");
+  assert.equal(csvModal.style.display, "flex", "CSV Roof Area Modal must be displayed after CSV import");
+  const csvAreaInput = document.getElementById("csvRoofAreaInput");
+  assert.ok(Number(csvAreaInput.value) >= 800, "Recommended minimum roof area must be calculated and prefilled");
+
+  // Confirm roof area (2500 sq ft)
+  csvAreaInput.value = "2500";
+  const confirmBtn = document.getElementById("csvRoofAreaConfirmBtn");
+  assert.ok(confirmBtn, "Confirm Roof Area button must exist");
+  confirmBtn.click();
+  assert.equal(csvModal.style.display, "none", "CSV Roof Area Modal must close on confirmation");
+  assert.equal(window.appState.buildingConfig.roofArea, 2500, "Building config roof area must be updated to 2500 sq ft");
+
+  // Verify CAD loaded panels and all panels have strictly uniform, fixed physical dimensions
+  const cadInst = getActiveRooftopCAD();
+  assert.ok(cadInst.panels.length > 0, "Rooftop CAD must have panels allocated for the building");
+  const basePanelW = cadInst.panels[0].w;
+  const basePanelH = cadInst.panels[0].h;
+  for (let pi = 0; pi < cadInst.panels.length; pi++) {
+    const p = cadInst.panels[pi];
+    assert.equal(p.w, basePanelW, `Panel #${pi + 1} width must match uniform base panel width`);
+    assert.equal(p.h, basePanelH, `Panel #${pi + 1} height must match uniform base panel height`);
+  }
+
+  // Verify Aerial Image Scaling with respect to Base Roof
+  assert.ok(cadInst.image.isLoaded, "Aerial image must be loaded");
+  cadInst.fitImageToRoof("width");
+  const expectedWidthScale = cadInst.roofW / cadInst.image.origWidth;
+  assert.ok(Math.abs(cadInst.image.scale - expectedWidthScale) < 0.01, "fitImageToRoof('width') must scale image width to roof width");
+
+  cadInst.fitImageToRoof("height");
+  const expectedHeightScale = cadInst.roofH / cadInst.image.origHeight;
+  assert.ok(Math.abs(cadInst.image.scale - expectedHeightScale) < 0.01, "fitImageToRoof('height') must scale image height to roof height");
+
+  cadInst.scaleImageToPercentOfRoof(120);
+  assert.equal(cadInst.getImageScaleToRoofPercent(), 120, "scaleImageToPercentOfRoof(120) must set scale to 120%");
+
+  cadInst.setImagePhysicalWidthFt(65);
+  const pDims = cadInst.getImagePhysicalDimensionsFt();
+  assert.equal(pDims.widthFt, 65, "Physical width of image must be set to 65 ft");
+
+  // Test inspector buttons for aerial image
+  cadInst.selectItem("image", { id: "roof_image", type: "image" });
+  const fitWidthBtn = document.getElementById("inspectorFitWidthBtn");
+  assert.ok(fitWidthBtn, "Inspector fit width button must exist");
+  fitWidthBtn.click();
+  assert.ok(Math.abs(cadInst.image.scale - expectedWidthScale) < 0.01, "Inspector fit width button must execute fitImageToRoof('width')");
+}
+
 // 6. Test Bulk Data Entry: Load at least 30 Flats (Verifying 30+ entries per page requirement)
 const bulk30Flats = [];
 for (let i = 1; i <= 32; i++) {

@@ -213,6 +213,7 @@ export class RooftopCAD {
       this.roofY = Math.max(padY, (logicalH - bboxPxH) / 2 - minYFt * this.scalePxPerFt);
     }
 
+    this.updateAllPanelDimensions();
     this.clampItemsToRoof();
   }
 
@@ -253,6 +254,7 @@ export class RooftopCAD {
         p.x = this.roofX + (p.x - oldX) * rx;
         p.y = this.roofY + (p.y - oldY) * ry;
       });
+      this.updateAllPanelDimensions();
     }
 
     this.clampItemsToRoof();
@@ -264,6 +266,7 @@ export class RooftopCAD {
     this.requiredPanels = Math.max(0, parseInt(count) || 0);
     if (widthMm) this.panelWidthMm = widthMm;
     if (heightMm) this.panelHeightMm = heightMm;
+    this.updateAllPanelDimensions();
     this.notifyChanges();
     this.render();
   }
@@ -398,6 +401,22 @@ export class RooftopCAD {
     return { w: wFt * this.scalePxPerFt, h: hFt * this.scalePxPerFt };
   }
 
+  // Strictly enforce uniform, non-distorted physical panel dimensions across all panels
+  updateAllPanelDimensions() {
+    if (!this.panels || this.panels.length === 0) return;
+    const { w: portW, h: portH } = this.getPanelSizePx("portrait");
+    const { w: landW, h: landH } = this.getPanelSizePx("landscape");
+    this.panels.forEach((p) => {
+      if (p.orientation === "landscape") {
+        p.w = landW;
+        p.h = landH;
+      } else {
+        p.w = portW;
+        p.h = portH;
+      }
+    });
+  }
+
   // Place a single panel from latent pool
   placePanel(orientation = "portrait", x = null, y = null) {
     if (this.panels.length >= this.requiredPanels) return null;
@@ -468,6 +487,7 @@ export class RooftopCAD {
 
   // Collision-free auto placement algorithm (NEVER STACKS PANELS)
   autoPlaceRemainingPanels(orientation = "portrait") {
+    this.updateAllPanelDimensions();
     const remaining = this.requiredPanels - this.panels.length;
     if (remaining <= 0) return;
 
@@ -963,6 +983,7 @@ export class RooftopCAD {
       p.h = oldW;
       p.x = cx - p.w / 2;
       p.y = cy - p.h / 2;
+      p.orientation = p.w > p.h ? "landscape" : "portrait";
     });
 
     this.notifyChanges();
@@ -995,7 +1016,9 @@ export class RooftopCAD {
       this.selectedItems.forEach((s) => {
         const it = s.item;
         if (!it) return;
-        if (s.type === "panel") {
+        if (s.type === "image") {
+          this.scaleImageByFactor(factor);
+        } else if (s.type === "panel") {
           const curCx = it.x + it.w / 2;
           const curCy = it.y + it.h / 2;
           const newCx = collectiveCx + (curCx - collectiveCx) * factor;
@@ -1023,7 +1046,9 @@ export class RooftopCAD {
       this.selectedItems.forEach((s) => {
         const it = s.item;
         if (!it) return;
-        if (s.type === "cutout" || s.type === "pathway") {
+        if (s.type === "image") {
+          this.scaleImageByFactor(factor);
+        } else if (s.type === "cutout" || s.type === "pathway") {
           const cx = it.x + it.w / 2;
           const cy = it.y + it.h / 2;
           it.w = Math.max(10, it.w * factor);
@@ -1701,13 +1726,131 @@ export class RooftopCAD {
   }
 
   resetImageTransform() {
-    if (!this.image.element || this.image.locked) return;
+    if ((!this.image.element && !this.image.isLoaded) || this.image.locked) return;
     this.image.x = 0;
     this.image.y = 0;
-    const scaleX = this.roofW / this.image.origWidth;
-    const scaleY = this.roofH / this.image.origHeight;
+    const origW = this.image.origWidth || this.roofW || 1;
+    const origH = this.image.origHeight || this.roofH || 1;
+    const scaleX = this.roofW / origW;
+    const scaleY = this.roofH / origH;
     this.image.scale = Math.max(scaleX, scaleY);
     this.image.rotation = 0;
+    this.render();
+    this.notifyChanges();
+  }
+
+  // ================= SCALING IMAGE WITH RESPECT TO BASE ROOF =================
+  getImageScreenBounds() {
+    if (!this.image.isLoaded && !this.image.element) return null;
+    const cx = this.roofX + this.roofW / 2 + (this.image.x || 0);
+    const cy = this.roofY + this.roofH / 2 + (this.image.y || 0);
+    const curW = (this.image.origWidth || this.roofW) * (this.image.scale || 1.0);
+    const curH = (this.image.origHeight || this.roofH) * (this.image.scale || 1.0);
+    const pxPerFt = this.scalePxPerFt > 0 ? this.scalePxPerFt : 1;
+    return {
+      x: cx - curW / 2,
+      y: cy - curH / 2,
+      w: curW,
+      h: curH,
+      cx,
+      cy,
+      lengthFt: Number((curW / pxPerFt).toFixed(1)),
+      breadthFt: Number((curH / pxPerFt).toFixed(1)),
+    };
+  }
+
+  getImageBaseFitScale() {
+    const origW = this.image.origWidth || this.roofW || 1;
+    const origH = this.image.origHeight || this.roofH || 1;
+    return Math.min(this.roofW / origW, this.roofH / origH);
+  }
+
+  getImageScaleToRoofPercent() {
+    const baseFit = this.getImageBaseFitScale();
+    if (!baseFit || baseFit <= 0) return 100;
+    return Math.round(((this.image.scale || baseFit) / baseFit) * 100);
+  }
+
+  fitImageToRoof(mode = "contain") {
+    if (!this.image.isLoaded && !this.image.element) return;
+    const origW = this.image.origWidth || this.roofW;
+    const origH = this.image.origHeight || this.roofH;
+    if (origW <= 0 || origH <= 0 || this.roofW <= 0 || this.roofH <= 0) return;
+
+    const scaleX = this.roofW / origW;
+    const scaleY = this.roofH / origH;
+
+    let targetScale = scaleX;
+    if (mode === "width") {
+      targetScale = scaleX;
+    } else if (mode === "height") {
+      targetScale = scaleY;
+    } else if (mode === "cover") {
+      targetScale = Math.max(scaleX, scaleY);
+    } else {
+      // contain / fit inside
+      targetScale = Math.min(scaleX, scaleY);
+    }
+
+    if (this.image.locked) this.setImageLocked(false);
+    this.image.scale = Math.max(0.01, Math.min(10.0, targetScale));
+    this.render();
+    this.notifyChanges();
+    this.notifyLayersChange();
+  }
+
+  scaleImageByFactor(factor = 1.05) {
+    if (!this.image.isLoaded && !this.image.element) return;
+    if (this.image.locked) this.setImageLocked(false);
+    const newScale = Math.max(0.01, Math.min(10.0, (this.image.scale || 1.0) * Number(factor)));
+    this.setImageZoom(newScale);
+  }
+
+  scaleImageToPercentOfRoof(percent) {
+    if (!this.image.isLoaded && !this.image.element) return;
+    const pct = Math.max(5, Math.min(500, Number(percent) || 100));
+    const baseFit = this.getImageBaseFitScale();
+    if (this.image.locked) this.setImageLocked(false);
+    this.setImageZoom(baseFit * (pct / 100));
+  }
+
+  getImagePhysicalDimensionsFt() {
+    const scale = this.image.scale || 1.0;
+    const pxPerFt = this.scalePxPerFt > 0 ? this.scalePxPerFt : 1;
+    const origW = this.image.origWidth || this.roofW;
+    const origH = this.image.origHeight || this.roofH;
+    const wFt = Number(((origW * scale) / pxPerFt).toFixed(1));
+    const hFt = Number(((origH * scale) / pxPerFt).toFixed(1));
+    return { widthFt: wFt, heightFt: hFt, roofLengthFt: this.roofLengthFt, roofBreadthFt: this.roofBreadthFt };
+  }
+
+  setImagePhysicalWidthFt(targetWidthFt) {
+    if (!this.image.isLoaded && !this.image.element) return;
+    const targetW = Number(targetWidthFt);
+    if (targetW <= 0) return;
+    const origW = this.image.origWidth || this.roofW;
+    const pxPerFt = this.scalePxPerFt > 0 ? this.scalePxPerFt : 1;
+    const targetScale = (targetW * pxPerFt) / origW;
+    if (this.image.locked) this.setImageLocked(false);
+    this.setImageZoom(targetScale);
+  }
+
+  setImagePhysicalHeightFt(targetHeightFt) {
+    if (!this.image.isLoaded && !this.image.element) return;
+    const targetH = Number(targetHeightFt);
+    if (targetH <= 0) return;
+    const origH = this.image.origHeight || this.roofH;
+    const pxPerFt = this.scalePxPerFt > 0 ? this.scalePxPerFt : 1;
+    const targetScale = (targetH * pxPerFt) / origH;
+    if (this.image.locked) this.setImageLocked(false);
+    this.setImageZoom(targetScale);
+  }
+
+  centerImageOnRoof() {
+    if (!this.image.isLoaded && !this.image.element) return;
+    if (this.image.locked) this.setImageLocked(false);
+    this.image.x = 0;
+    this.image.y = 0;
     this.render();
     this.notifyChanges();
   }
@@ -1875,6 +2018,13 @@ export class RooftopCAD {
     let { x, y, w, h } = item;
     if (this.selectedItem && this.selectedItem.type === "obstacle") {
       const b = this.getObstacleScreenBounds(item);
+      x = b.x;
+      y = b.y;
+      w = b.w;
+      h = b.h;
+    } else if (this.selectedItem && this.selectedItem.type === "image") {
+      const b = this.getImageScreenBounds();
+      if (!b) return [];
       x = b.x;
       y = b.y;
       w = b.w;
@@ -2268,6 +2418,17 @@ export class RooftopCAD {
           radius: b.radius || b.w / 2,
           distanceFromRoofX: it.distanceFromRoofX,
           distanceFromRoofY: it.distanceFromRoofY,
+        };
+      } else if (this.selectedItem.type === "image") {
+        const b = this.getImageScreenBounds();
+        this.initialBounds = {
+          x: b ? b.x : 0,
+          y: b ? b.y : 0,
+          w: b ? b.w : 100,
+          h: b ? b.h : 100,
+          cx: b ? b.cx : this.roofX + this.roofW / 2,
+          cy: b ? b.cy : this.roofY + this.roofH / 2,
+          scale: this.image.scale || 1.0,
         };
       } else {
         this.initialBounds = { x: it.x, y: it.y, w: it.w, h: it.h, radius: it.radius || it.w / 2 };
@@ -2670,6 +2831,23 @@ export class RooftopCAD {
   }
 
   applyResize(mouseX, mouseY) {
+    if (this.selectedItem && this.selectedItem.type === "image") {
+      const b = this.initialBounds;
+      if (!b || !b.w || !b.h) return;
+      const origHypot = Math.hypot(b.w / 2, b.h / 2);
+      const curHypot = Math.hypot(mouseX - b.cx, mouseY - b.cy);
+      if (origHypot > 0 && curHypot > 0) {
+        const factor = curHypot / origHypot;
+        const newScale = Math.max(0.01, Math.min(10.0, b.scale * factor));
+        this.setImageZoom(newScale);
+      }
+      if (this.onSelectionChange) {
+        this.onSelectionChange(this.selectedItem);
+      }
+      this.notifyChanges();
+      return;
+    }
+
     const isObs = this.selectedItem && this.selectedItem.type === "obstacle";
     const it = this.selectedItem.item;
     const b = this.initialBounds;
@@ -4187,9 +4365,13 @@ export class RooftopCAD {
     const ctx = this.ctx;
     ctx.save();
 
-    ctx.beginPath();
-    ctx.rect(this.roofX, this.roofY, this.roofW, this.roofH);
-    ctx.clip();
+    const isImageSelected = this.isSelected("image", this.image);
+    const shouldClip = this.image.clipToRoof || (this.image.locked && !isImageSelected && !this.isExportingSnapshot);
+    if (shouldClip) {
+      ctx.beginPath();
+      ctx.rect(this.roofX, this.roofY, this.roofW, this.roofH);
+      ctx.clip();
+    }
 
     ctx.globalAlpha = layerAlpha * (this.image.opacity ?? 0.85);
 
@@ -4403,8 +4585,19 @@ export class RooftopCAD {
 
   drawPanels(layerAlpha = 1.0) {
     const ctx = this.ctx;
+    const { w: portW, h: portH } = this.getPanelSizePx("portrait");
+    const { w: landW, h: landH } = this.getPanelSizePx("landscape");
 
     this.panels.forEach((p, idx) => {
+      // Strictly enforce uniform physical panel dimensions across all panels
+      if (p.orientation === "landscape") {
+        p.w = landW;
+        p.h = landH;
+      } else {
+        p.w = portW;
+        p.h = portH;
+      }
+
       const isSelected = this.isSelected("panel", p);
       const alpha = layerAlpha * (p.opacity ?? 1.0);
 
@@ -4521,11 +4714,19 @@ export class RooftopCAD {
     if (!this.selectedItem || !this.selectedItem.item) return;
     const it = this.selectedItem.item;
 
+    let b = it;
+    if (this.selectedItem.type === "obstacle") {
+      b = this.getObstacleScreenBounds(it);
+    } else if (this.selectedItem.type === "image") {
+      b = this.getImageScreenBounds();
+      if (!b) return;
+    }
+
     // Outer selection bounding box
     ctx.strokeStyle = "#38bdf8";
     ctx.lineWidth = 1.5;
-    ctx.setLineDash([3, 3]);
-    ctx.strokeRect(it.x - 2, it.y - 2, it.w + 4, it.h + 4);
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(b.x - 2, b.y - 2, b.w + 4, b.h + 4);
     ctx.setLineDash([]);
 
     // Draw handles
@@ -4542,8 +4743,15 @@ export class RooftopCAD {
       ctx.stroke();
     });
 
-    // Dimension tooltip during resize
-    if (this.dragMode === "resize_item") {
+    // Dimension tooltip during resize or image selection
+    if (this.selectedItem.type === "image") {
+      const pct = this.getImageScaleToRoofPercent();
+      ctx.font = "bold 11px Inter, sans-serif";
+      ctx.fillStyle = "#38bdf8";
+      ctx.textAlign = "center";
+      const dimText = `Aerial Image: ${b.lengthFt} ft × ${b.breadthFt} ft (${pct}% vs Base Roof)`;
+      ctx.fillText(dimText, b.x + b.w / 2, b.y - 8);
+    } else if (this.dragMode === "resize_item") {
       ctx.font = "bold 10px Inter, sans-serif";
       ctx.fillStyle = "#38bdf8";
       ctx.textAlign = "center";

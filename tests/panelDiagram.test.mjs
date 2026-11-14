@@ -1073,5 +1073,76 @@ console.log("Running RooftopCAD tests...");
   console.log("✓ Test 17 Passed: Total Grid Pan Controls, Sliders & Multi-Item Coordinate Positioning");
 }
 
+// Test 18: Scaling Uploaded Aerial Image with Respect to Base Roof & Uniform Panel Sizing
+{
+  const canvas = new MockCanvas();
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 50,
+    roofBreadthFt: 35,
+    requiredPanels: 10,
+  });
+
+  // 1. Initial panel placement and uniform dimensions check
+  cad.autoPlaceRemainingPanels();
+  assert.equal(cad.panels.length, 10, "10 panels placed");
+  const firstW = cad.panels[0].w;
+  const firstH = cad.panels[0].h;
+  for (const p of cad.panels) {
+    assert.equal(p.w, firstW, "All panels must have uniform width");
+    assert.equal(p.h, firstH, "All panels must have uniform height");
+  }
+
+  // 2. Change roof dimensions & verify all panels remain uniform
+  cad.setRoofDimensions(70, 50);
+  const newW = cad.panels[0].w;
+  const newH = cad.panels[0].h;
+  for (const p of cad.panels) {
+    assert.equal(p.w, newW, "All panels must have updated uniform width after roof resize");
+    assert.equal(p.h, newH, "All panels must have updated uniform height after roof resize");
+  }
+
+  // 3. Load aerial image
+  cad.image.isLoaded = true;
+  cad.image.origWidth = 800;
+  cad.image.origHeight = 600;
+  cad.image.locked = false;
+
+  // Fit Width to Base Roof
+  cad.fitImageToRoof("width");
+  const expectedWidthScale = cad.roofW / 800;
+  assert.ok(Math.abs(cad.image.scale - expectedWidthScale) < 0.001, "fitImageToRoof('width') should scale image width to match roof width");
+
+  // Fit Height to Base Roof
+  cad.fitImageToRoof("height");
+  const expectedHeightScale = cad.roofH / 600;
+  assert.ok(Math.abs(cad.image.scale - expectedHeightScale) < 0.001, "fitImageToRoof('height') should scale image height to match roof height");
+
+  // Fit Inside (contain)
+  cad.fitImageToRoof("contain");
+  const expectedContain = Math.min(cad.roofW / 800, cad.roofH / 600);
+  assert.ok(Math.abs(cad.image.scale - expectedContain) < 0.001, "fitImageToRoof('contain') should fit image inside base roof");
+
+  // Scale vs Roof percentage
+  cad.scaleImageToPercentOfRoof(150);
+  assert.equal(cad.getImageScaleToRoofPercent(), 150, "Scale vs Roof percent should be 150%");
+
+  // Set real-world physical width in feet
+  cad.setImagePhysicalWidthFt(60);
+  const dims = cad.getImagePhysicalDimensionsFt();
+  assert.equal(dims.widthFt, 60, "Physical image width should be set to 60 ft");
+
+  // Scale selected item via toolbar/keyboard scale action
+  cad.selectItem("image", { id: "roof_image", type: "image" });
+  const prevScale = cad.image.scale;
+  cad.scaleSelectedItems(1.1);
+  assert.ok(cad.image.scale > prevScale, "scaleSelectedItems should scale aerial image");
+
+  // Resize handles for image
+  const handles = cad.getResizeHandles({ type: "image", id: "roof_image" });
+  assert.equal(handles.length, 8, "Selected image must provide 8 interactive resize handles");
+
+  console.log("✓ Test 18 Passed: Scaling Uploaded Aerial Image with Respect to Base Roof & Uniform Panel Sizing");
+}
+
 console.log("All RooftopCAD tests passed successfully!");
 

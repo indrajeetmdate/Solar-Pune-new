@@ -9,6 +9,7 @@ import {
   generateBuildingCSVTemplate,
   parseBuildingCSV,
   exportBuildingToCSV,
+  getRecommendedPanelsForFlat,
   FLAT_COLOR_PALETTE
 } from "./multiCustomerManager.js";
 
@@ -2265,6 +2266,12 @@ function setupCadEventListeners(cad) {
     const opacityInput = $("inspectorOpacity");
     const opacityVal = $("inspectorOpacityVal");
     const zOrderGroup = $("inspectorZOrderGroup");
+    const imgActions = $("inspectorImageActionsGroup");
+    if (imgActions) imgActions.style.display = "none";
+    const lenLbl = lenGroup?.querySelector("label");
+    if (lenLbl) lenLbl.textContent = "L:";
+    const brLbl = brGroup?.querySelector("label");
+    if (brLbl) brLbl.textContent = "B:";
 
     const multi = selectedItems || (cad.selectedItems && cad.selectedItems.length > 1 ? cad.selectedItems : null);
 
@@ -2430,14 +2437,25 @@ function setupCadEventListeners(cad) {
       if (areaVal) areaVal.textContent = `${Math.round((it.w * it.h) / (cad.scalePxPerFt * cad.scalePxPerFt))} sq ft`;
     } else if (sel.type === "image") {
       if (icon) icon.textContent = "🖼️";
-      if (title) title.textContent = "Aerial Image";
+      if (title) title.textContent = "Aerial Image Overlay";
       if (labelGroup) labelGroup.style.display = "none";
-      if (lenGroup) lenGroup.style.display = "none";
-      if (brGroup) brGroup.style.display = "none";
+      const dims = typeof cad.getImagePhysicalDimensionsFt === "function" ? cad.getImagePhysicalDimensionsFt() : { widthFt: 0, heightFt: 0 };
+      const pct = typeof cad.getImageScaleToRoofPercent === "function" ? cad.getImageScaleToRoofPercent() : 100;
+      if (lenGroup) {
+        lenGroup.style.display = "flex";
+        if (lenLbl) lenLbl.textContent = "W:";
+      }
+      if (lenInput) lenInput.value = dims.widthFt;
+      if (brGroup) {
+        brGroup.style.display = "flex";
+        if (brLbl) brLbl.textContent = "H:";
+      }
+      if (brInput) brInput.value = dims.heightFt;
       if (diaGroup) diaGroup.style.display = "none";
-      if (areaVal) areaVal.textContent = "Site Photo";
+      if (areaVal) areaVal.textContent = `${pct}% vs Roof (${dims.widthFt}×${dims.heightFt} ft)`;
       if (delBtn) delBtn.style.display = "none";
       if (zOrderGroup) zOrderGroup.style.display = "none";
+      if (imgActions) imgActions.style.display = "flex";
     } else if (sel.type === "obstacle") {
       const obsIcons = {
         tree: "🌳",
@@ -2492,6 +2510,9 @@ function setupCadEventListeners(cad) {
     if (!cad.selectedItem || cad.selectedItem.type === "roof") {
       cad.setRoofDimensions(val, cad.roofBreadthFt);
       if ($("cadRoofLength")) $("cadRoofLength").value = val;
+    } else if (cad.selectedItem.type === "image") {
+      cad.setImagePhysicalWidthFt(val);
+      syncImageScaleUI();
     } else {
       cad.updateSelectedItem({ lengthFt: val });
     }
@@ -2502,6 +2523,9 @@ function setupCadEventListeners(cad) {
     if (!cad.selectedItem || cad.selectedItem.type === "roof") {
       cad.setRoofDimensions(cad.roofLengthFt, val);
       if ($("cadRoofBreadth")) $("cadRoofBreadth").value = val;
+    } else if (cad.selectedItem.type === "image") {
+      cad.setImagePhysicalHeightFt(val);
+      syncImageScaleUI();
     } else {
       cad.updateSelectedItem({ breadthFt: val });
     }
@@ -2894,12 +2918,33 @@ function setupCadEventListeners(cad) {
     if (rotSlider && Number(rotSlider.value) !== rot) rotSlider.value = rot;
   };
 
+  const syncImageScaleUI = () => {
+    if (!cad.image || (!cad.image.isLoaded && !cad.image.element)) return;
+    const pct = typeof cad.getImageScaleToRoofPercent === "function" ? cad.getImageScaleToRoofPercent() : 100;
+    const pctInput = $("cadImageScaleRoofPctInput");
+    if (pctInput && Number(pctInput.value) !== pct) pctInput.value = pct;
+
+    const dims = typeof cad.getImagePhysicalDimensionsFt === "function" ? cad.getImagePhysicalDimensionsFt() : { widthFt: 0, heightFt: 0 };
+    const wInput = $("cadImagePhysicalWidthInput");
+    if (wInput && Number(wInput.value) !== dims.widthFt) wInput.value = dims.widthFt;
+
+    const zoomSlider = $("cadZoomSlider");
+    if (zoomSlider && Math.abs(Number(zoomSlider.value) - cad.image.scale) > 0.01) {
+      zoomSlider.value = cad.image.scale.toFixed(3);
+    }
+  };
+
   imgInput?.addEventListener("change", (e) => {
     if (e.target.files && e.target.files[0]) {
       cad.loadCustomImage(e.target.files[0]);
       if (imgControls) imgControls.style.display = "flex";
+      const drawer = $("cadImageDrawer");
+      if (drawer) drawer.style.display = "flex";
+      const openBtn = $("cadOpenImageDrawerBtn");
+      if (openBtn) openBtn.style.display = "inline-flex";
       updateLockBtnUI();
       syncImageRotationUI();
+      syncImageScaleUI();
       // Switch active tool to move image so user can immediately reposition it
       toolBtns.forEach(t => $(t.id)?.classList.remove("active"));
       $("cadToolPanBtn")?.classList.add("active");
@@ -2907,19 +2952,99 @@ function setupCadEventListeners(cad) {
     }
   });
 
+  $("cadOpenImageDrawerBtn")?.addEventListener("click", () => {
+    const drawer = $("cadImageDrawer");
+    if (!drawer) return;
+    const isHidden = drawer.style.display === "none" || !drawer.style.display;
+    drawer.style.display = isHidden ? "flex" : "none";
+    if (imgControls) imgControls.style.display = "flex";
+  });
+
   $("cadLockImageBtn")?.addEventListener("click", () => {
     cad.setImageLocked(!cad.image.locked);
     updateLockBtnUI();
   });
 
-  $("cadZoomSlider")?.addEventListener("input", (e) => cad.setImageZoom(e.target.value));
+  $("cadZoomSlider")?.addEventListener("input", (e) => {
+    cad.setImageZoom(e.target.value);
+    syncImageScaleUI();
+  });
   $("cadZoomInBtn")?.addEventListener("click", () => {
     cad.setImageZoom(cad.image.scale * 1.02);
-    if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale;
+    syncImageScaleUI();
   });
   $("cadZoomOutBtn")?.addEventListener("click", () => {
     cad.setImageZoom(cad.image.scale * 0.98);
-    if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale;
+    syncImageScaleUI();
+  });
+
+  $("cadFitImageContainBtn")?.addEventListener("click", () => {
+    cad.fitImageToRoof("contain");
+    syncImageScaleUI();
+    updateLockBtnUI();
+  });
+  $("cadFitImageWidthBtn")?.addEventListener("click", () => {
+    cad.fitImageToRoof("width");
+    syncImageScaleUI();
+    updateLockBtnUI();
+  });
+  $("cadFitImageHeightBtn")?.addEventListener("click", () => {
+    cad.fitImageToRoof("height");
+    syncImageScaleUI();
+    updateLockBtnUI();
+  });
+  $("cadFitImageCoverBtn")?.addEventListener("click", () => {
+    cad.fitImageToRoof("cover");
+    syncImageScaleUI();
+    updateLockBtnUI();
+  });
+  $("cadScaleImageMinusBtn")?.addEventListener("click", () => {
+    cad.scaleImageByFactor(0.95);
+    syncImageScaleUI();
+  });
+  $("cadScaleImagePlusBtn")?.addEventListener("click", () => {
+    cad.scaleImageByFactor(1.05);
+    syncImageScaleUI();
+  });
+  $("cadImageScaleRoofPctInput")?.addEventListener("input", (e) => {
+    const val = Number(e.target.value);
+    if (val > 0) {
+      cad.scaleImageToPercentOfRoof(val);
+      syncImageScaleUI();
+    }
+  });
+  $("cadImagePhysicalWidthInput")?.addEventListener("input", (e) => {
+    const val = Number(e.target.value);
+    if (val > 0) {
+      cad.setImagePhysicalWidthFt(val);
+      syncImageScaleUI();
+    }
+  });
+
+  // Inspector quick image buttons
+  $("inspectorFitWidthBtn")?.addEventListener("click", () => {
+    cad.fitImageToRoof("width");
+    syncImageScaleUI();
+    updateLockBtnUI();
+  });
+  $("inspectorFitHeightBtn")?.addEventListener("click", () => {
+    cad.fitImageToRoof("height");
+    syncImageScaleUI();
+    updateLockBtnUI();
+  });
+  $("inspectorFitContainBtn")?.addEventListener("click", () => {
+    cad.fitImageToRoof("contain");
+    syncImageScaleUI();
+    updateLockBtnUI();
+  });
+  $("inspectorFitCoverBtn")?.addEventListener("click", () => {
+    cad.fitImageToRoof("cover");
+    syncImageScaleUI();
+    updateLockBtnUI();
+  });
+  $("inspectorCenterImageBtn")?.addEventListener("click", () => {
+    cad.centerImageOnRoof();
+    updateLockBtnUI();
   });
 
   $("cadImageRotationInput")?.addEventListener("input", (e) => {
@@ -2992,6 +3117,10 @@ function setupCadEventListeners(cad) {
   $("cadRemoveImageBtn")?.addEventListener("click", () => {
     cad.removeCustomImage();
     if (imgControls) imgControls.style.display = "none";
+    const drawer = $("cadImageDrawer");
+    if (drawer) drawer.style.display = "none";
+    const openBtn = $("cadOpenImageDrawerBtn");
+    if (openBtn) openBtn.style.display = "none";
     if (imgInput) imgInput.value = "";
   });
 
@@ -3578,9 +3707,10 @@ function syncBuildingDataToWorkspace(buildingResult) {
   const cad = getActiveRooftopCAD();
   if (cad) {
     const minNeededArea = summary.requiredRoofAreaSqft || Math.ceil((summary.totalBuildingPanels * 27.5) / 0.70);
+    const chosenArea = Math.max(Number(cfg.roofArea) || 0, Number($("buildingRoofAreaInput")?.value) || 0, minNeededArea);
     const curStats = typeof cad.getAreaStats === "function" ? cad.getAreaStats() : { netUsableSqft: 0 };
-    if (curStats.netUsableSqft < minNeededArea) {
-      const { l, b } = solveRoofDimensions(minNeededArea, 1.35);
+    if (curStats.netUsableSqft < chosenArea || cad.roofW <= 0) {
+      const { l, b } = solveRoofDimensions(chosenArea, 1.35);
       if (typeof cad.setRoofDimensions === "function") cad.setRoofDimensions(l, b);
       if ($("cadRoofLength")) $("cadRoofLength").value = l;
       if ($("cadRoofBreadth")) $("cadRoofBreadth").value = b;
@@ -3588,10 +3718,17 @@ function syncBuildingDataToWorkspace(buildingResult) {
     if (typeof cad.setRequiredPanels === "function") {
       cad.setRequiredPanels(summary.totalBuildingPanels, 1123, 2279);
     }
+    // Clear old single-customer or mismatched panels so building panels are placed fresh and uniformly
+    if (cad.panels && cad.panels.length !== summary.totalBuildingPanels) {
+      cad.panels = [];
+    }
     if (cad.panels && cad.panels.length < summary.totalBuildingPanels) {
       if (typeof cad.autoPlaceRemainingPanels === "function") {
         cad.autoPlaceRemainingPanels("portrait");
       }
+    }
+    if (typeof cad.updateAllPanelDimensions === "function") {
+      cad.updateAllPanelDimensions();
     }
     if (typeof cad.assignPanelsToFlats === "function") {
       cad.assignPanelsToFlats(buildingResult.flatLedger);
@@ -4779,6 +4916,51 @@ function attachEvents() {
     document.body.removeChild(link);
   });
 
+  function applyConfirmedRoofArea(areaSqft) {
+    const finalArea = Math.max(100, Number(areaSqft) || 2000);
+    if (!state.buildingConfig) state.buildingConfig = {};
+    state.buildingConfig.roofArea = finalArea;
+    if ($("buildingRoofAreaInput")) $("buildingRoofAreaInput").value = finalArea;
+    if ($("roofArea")) $("roofArea").value = finalArea;
+
+    const { l, b } = solveRoofDimensions(finalArea, 1.35);
+    const cad = getActiveRooftopCAD();
+    if (cad) {
+      cad.panels = [];
+      cad.setRoofDimensions(l, b);
+      if ($("cadRoofLength")) $("cadRoofLength").value = l;
+      if ($("cadRoofBreadth")) $("cadRoofBreadth").value = b;
+    }
+
+    updateBuildingStudio();
+    switchWorkspaceTab("building");
+  }
+  if (typeof window !== "undefined") window.applyConfirmedRoofArea = applyConfirmedRoofArea;
+
+  $("csvRoofAreaConfirmBtn")?.addEventListener("click", () => {
+    const input = $("csvRoofAreaInput");
+    const area = Number(input?.value);
+    if (!area || area <= 0) {
+      if (typeof window !== "undefined" && typeof window.alert === "function") {
+        window.alert("Please enter a valid rooftop area greater than 0 sq. ft.");
+      }
+      return;
+    }
+    const modal = $("csvRoofAreaModal");
+    if (modal) modal.style.display = "none";
+    applyConfirmedRoofArea(area);
+  });
+
+  $("csvRoofAreaCancelBtn")?.addEventListener("click", () => {
+    const modal = $("csvRoofAreaModal");
+    if (modal) modal.style.display = "none";
+  });
+
+  $("closeCsvRoofAreaModal")?.addEventListener("click", () => {
+    const modal = $("csvRoofAreaModal");
+    if (modal) modal.style.display = "none";
+  });
+
   $("importCsvInput")?.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -4801,8 +4983,41 @@ function attachEvents() {
         const flatsList = Array.isArray(parsed) ? parsed : (parsed?.flats || []);
         if (flatsList && flatsList.length > 0) {
           state.buildingFlats = flatsList;
-          updateBuildingStudio();
-          notify(`Successfully imported ${flatsList.length} flats from CSV!`);
+
+          // Calculate estimated requirements based on imported flat records
+          const totalPanels = flatsList.reduce((sum, f) => {
+            const p = Number(f.panels) || getRecommendedPanelsForFlat(f.monthlyUnits, f.sanctionedLoad, 550, 105);
+            return sum + p;
+          }, 0);
+          const minRecommendedArea = Math.ceil((totalPanels * 27.5) / 0.70);
+          const totalKw = ((totalPanels * 550) / 1000).toFixed(1);
+
+          // Compulsory Rooftop Area Modal Display
+          const modal = $("csvRoofAreaModal");
+          if (modal) {
+            if ($("csvModalFlatsCount")) $("csvModalFlatsCount").textContent = `${flatsList.length} flats`;
+            if ($("csvModalPanelsCount")) $("csvModalPanelsCount").textContent = `${totalPanels} panels`;
+            if ($("csvModalKwCount")) $("csvModalKwCount").textContent = `${totalKw} kWp`;
+            if ($("csvModalRecommendedText")) {
+              $("csvModalRecommendedText").innerHTML = `Recommended minimum: <strong>${minRecommendedArea.toLocaleString("en-IN")} sq. ft.</strong> (based on panel footprint & 70% roof utilization factor)`;
+            }
+            const curVal = Math.max(minRecommendedArea, Number($("buildingRoofAreaInput")?.value) || 0);
+            const input = $("csvRoofAreaInput");
+            if (input) {
+              input.value = curVal;
+              const updateDims = (areaVal) => {
+                const { l, b } = solveRoofDimensions(areaVal, 1.35);
+                if ($("csvModalRoofDimsText")) $("csvModalRoofDimsText").textContent = `${l} ft × ${b} ft`;
+              };
+              updateDims(curVal);
+              input.oninput = () => updateDims(Number(input.value) || minRecommendedArea);
+            }
+            modal.style.display = "flex";
+          } else {
+            // Headless fallback
+            applyConfirmedRoofArea(Math.max(minRecommendedArea, Number($("buildingRoofAreaInput")?.value) || 2000));
+          }
+          notify(`Successfully imported ${flatsList.length} flats from CSV! Please confirm the available rooftop area.`);
         } else {
           notify("No valid flat records found in CSV. Please verify column headers.");
         }
