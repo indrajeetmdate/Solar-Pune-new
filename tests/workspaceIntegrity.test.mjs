@@ -67,12 +67,17 @@ window.FileReader = class {
       if (this.onload) this.onload({ target: this });
     }, 10);
   }
+  readAsText(file) {
+    this.result = file.textData || "";
+    if (this.onload) this.onload({ target: this });
+  }
 };
 
 // Global mocks
 globalThis.window = window;
 globalThis.document = document;
 globalThis.localStorage = window.localStorage;
+globalThis.FileReader = window.FileReader;
 globalThis.Image = class {
   constructor() {
     setTimeout(() => {
@@ -478,6 +483,36 @@ const firstCloneBtn = bldgFlatsTbody.querySelector('tr[data-flat-idx="0"] .btn-f
 assert.ok(firstCloneBtn, "Clone button must exist on row 0");
 firstCloneBtn.click();
 assert.equal(window.appState.buildingFlats.length, 6, "Flats count must increase to 6 after cloning");
+
+// 5b. Test CSV/TSV File Upload via importCsvInput with User's Exact Data
+const userActualCsv = `FlatNo\tCustomerName\tSanctionLoadKw\tCategory\tPhase\tMonthlyUnits\tMonthlyBill\tPaymentMode\tLoanDownPaymentPct\tLoanInterestRate
+101\tAjay kulkarni\t5\tLT-I\t3-phase\t93\t1023\twithout_loan\t10\t7
+102\tRuchi Bhindwale\t5\tLT-I\t3-phase\t153\t1836\twithout_loan\t10\t7
+103\tAjay Uke\t4\tLT-I\t1-phase\t91\t910\twithout_loan\t10\t7
+201\tAshok Mahajan\t5\tLT-I\t3-phase\t92\t1104\twithout_loan\t10\t7
+202\tShriniwas Badrayani\t5\tLT-I\t3-phase\t376\t4512\twithout_loan\t10\t7
+203\tSudhir Aptekar\t4\tLT-I\t1-phase\t194\t2134\twithout_loan\t10\t7
+301\tShrirang Jamadagani\t5\tLT-I\t3-phase\t240\t2640\twithout_loan\t10\t7
+302\tSanjeevani Toley\t5\tLT-I\t3-phase\t195\t2340\twithout_loan\t10\t7`;
+
+const importInput = document.getElementById("importCsvInput");
+assert.ok(importInput, "importCsvInput must exist");
+let alertMessage = "";
+window.alert = (msg) => { alertMessage = msg; };
+globalThis.alert = window.alert;
+
+Object.defineProperty(importInput, "files", {
+  value: [{ textData: userActualCsv, name: "actual_customers.csv" }],
+  configurable: true,
+});
+importInput.dispatchEvent(new window.Event("change"));
+
+assert.equal(window.appState.buildingFlats.length, 8, "Must import all 8 flats from user TSV");
+assert.equal(window.appState.buildingFlats[0].customerName, "Ajay kulkarni");
+assert.equal(window.appState.buildingFlats[0].paymentMode, "upfront");
+assert.equal(window.appState.buildingFlats[0].loanMode, false);
+assert.equal(window.appState.buildingFlats[4].monthlyUnits, 376);
+assert.ok(alertMessage.includes("Successfully imported 8 flats"), `Must show success alert, got: ${alertMessage}`);
 
 // 6. Test Bulk Data Entry: Load at least 30 Flats (Verifying 30+ entries per page requirement)
 const bulk30Flats = [];

@@ -285,7 +285,8 @@ export function calculateBuildingLedger({
       flatNo: flat.flatNo || `Flat ${idx + 101}`,
       customerName: flat.customerName || `Resident ${idx + 1}`,
       sanctionedLoad: Number(flat.sanctionedLoad) || 3,
-      consumerCategory: flat.consumerCategory || "LT-I",
+      category: flat.category || flat.consumerCategory || "LT-I",
+      consumerCategory: flat.consumerCategory || flat.category || "LT-I",
       phase: flat.phase || "1-phase",
       monthlyUnits: flatMonthlyUnits,
       monthlyBill: flatMonthlyBill,
@@ -302,6 +303,7 @@ export function calculateBuildingLedger({
       postSolarBill,
       paybackYears,
       roiPercent,
+      loanMode: isLoan,
       paymentMode: isLoan ? "loan" : "upfront",
       downPaymentPct,
       interestRate,
@@ -405,77 +407,190 @@ export function generateBuildingCSVTemplate() {
 }
 
 /**
- * Parse uploaded Building Flats CSV into flat objects
+ * Parse uploaded Building Flats CSV/TSV into flat objects
  */
+const cleanNum = (str, fallback = 0) => {
+  if (str === null || str === undefined) return fallback;
+  const num = parseFloat(String(str).replace(/[^0-9.-]/g, ""));
+  return isNaN(num) ? fallback : num;
+};
+
+function detectDelimiter(text) {
+  const firstLine = text.split(/\r?\n/).find((l) => l.trim().length > 0) || "";
+  let inQuotes = false;
+  let tabs = 0;
+  let commas = 0;
+  let semicolons = 0;
+  for (let i = 0; i < firstLine.length; i++) {
+    const ch = firstLine[i];
+    if (ch === '"' || ch === "'") {
+      inQuotes = !inQuotes;
+    } else if (!inQuotes) {
+      if (ch === "\t") tabs++;
+      else if (ch === ",") commas++;
+      else if (ch === ";") semicolons++;
+    }
+  }
+  if (tabs > commas && tabs >= semicolons) return "\t";
+  if (semicolons > commas && semicolons > tabs) return ";";
+  return ",";
+}
+
+// RFC 4180 compliant line parser supporting configurable delimiter
+export function splitCsvLine(line, delimiter = ",") {
+  const result = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"' || char === "'") {
+      if (inQuotes && i + 1 < line.length && line[i + 1] === char) {
+        current += char;
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === delimiter && !inQuotes) {
+      result.push(current.trim().replace(/^["']|["']$/g, ""));
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  result.push(current.trim().replace(/^["']|["']$/g, ""));
+  return result;
+}
+
 export function parseBuildingCSV(csvText) {
   if (!csvText || typeof csvText !== "string") {
     throw new Error("Invalid or empty CSV content");
   }
 
-  const lines = csvText.trim().split(/\r?\n/).filter((l) => l.trim().length > 0);
+  // Strip UTF-8 BOM if present (e.g. from Excel export)
+  const cleanedText = csvText.replace(/^\uFEFF/, "");
+  const lines = cleanedText.trim().split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) {
     throw new Error("CSV file must contain a header row and at least one data row");
   }
 
+  const delimiter = detectDelimiter(lines[0]);
   // Parse header
-  const rawHeaders = splitCsvLine(lines[0]).map((h) => h.trim().toLowerCase().replace(/[^a-z0-9]/g, ""));
+  const rawHeaders = splitCsvLine(lines[0], delimiter).map((h) => h.trim().toLowerCase().replace(/[^a-z0-9]/g, ""));
+
+  const findCol = (predicate) => rawHeaders.findIndex(predicate);
+
+  let flatNoIdx = findCol((h) => h === "flatno" || h === "flat" || h === "flatnumber" || h === "flatnum" || h === "apt" || h === "apartment" || h === "unitno" || h === "room");
+  if (flatNoIdx === -1) {
+    flatNoIdx = findCol((h) => h.includes("flat") || (h.includes("unit") && !h.includes("monthly") && !h.includes("kwh") && !h.includes("consum")));
+  }
+
+  let custNameIdx = findCol((h) => h === "customername" || h === "consumername" || h === "residentname" || h === "name" || h === "customer" || h === "client" || h === "resident");
+  if (custNameIdx === -1) {
+    custNameIdx = findCol((h) => h.includes("name") || h.includes("consumer") || h.includes("resident") || h.includes("customer"));
+  }
+
+  let loadIdx = findCol((h) => h === "sanctionloadkw" || h === "sanctionedload" || h === "sanctionload" || h === "loadkw" || h === "load");
+  if (loadIdx === -1) {
+    loadIdx = findCol((h) => h.includes("sanction") || (h.includes("load") && !h.includes("down") && !h.includes("upfront")));
+  }
+
+  let catIdx = findCol((h) => h === "category" || h === "tariff" || h === "tariffcategory" || h === "consumercategory" || h === "cat");
+  if (catIdx === -1) {
+    catIdx = findCol((h) => h.includes("cat") || h.includes("tariff"));
+  }
+
+  let phaseIdx = findCol((h) => h === "phase" || h === "connectionphase" || h === "supplyphase");
+  if (phaseIdx === -1) {
+    phaseIdx = findCol((h) => h.includes("phase"));
+  }
+
+  let unitsIdx = findCol((h) => h === "monthlyunits" || h === "units" || h === "kwh" || h === "unitsmo" || h === "monthlyconsumption" || h === "consumption");
+  if (unitsIdx === -1) {
+    unitsIdx = findCol((h) => (h.includes("unit") || h.includes("kwh") || h.includes("consum")) && !h.includes("flat") && !h.includes("apt"));
+  }
+
+  let billIdx = findCol((h) => h === "monthlybill" || h === "bill" || h === "billamount" || h === "currentbill" || h === "billrs" || h === "amount");
+  if (billIdx === -1) {
+    billIdx = findCol((h) => h.includes("bill") || (h.includes("amount") && !h.includes("loan") && !h.includes("down")));
+  }
+
+  let payModeIdx = findCol((h) => h === "paymentmode" || h === "paymode" || h === "mode" || h === "payment" || h === "loanmode");
+  if (payModeIdx === -1) {
+    payModeIdx = findCol((h) => (!h.includes("down") && !h.includes("interest") && !h.includes("rate") && !h.includes("pct")) && (h.includes("payment") || h.includes("mode") || h === "loan"));
+  }
+
+  let downPctIdx = findCol((h) => h === "loandownpaymentpct" || h === "downpaymentpct" || h === "downpayment" || h === "upfrontpct" || h === "downpct");
+  if (downPctIdx === -1) {
+    downPctIdx = findCol((h) => h.includes("down") || h.includes("upfront"));
+  }
+
+  let interestIdx = findCol((h) => h === "loaninterestrate" || h === "interestrate" || h === "interest" || h === "roi" || h === "ratepct");
+  if (interestIdx === -1) {
+    interestIdx = findCol((h) => h.includes("interest") || (h.includes("rate") && !h.includes("slab") && !h.includes("panel")));
+  }
 
   const colMap = {
-    flatNo: rawHeaders.findIndex((h) => h.includes("flat") || h.includes("unit")),
-    customerName: rawHeaders.findIndex((h) => h.includes("name") || h.includes("consumer") || h.includes("resident")),
-    sanctionedLoad: rawHeaders.findIndex((h) => h.includes("load") || h.includes("sanction")),
-    category: rawHeaders.findIndex((h) => h.includes("cat") || h.includes("tariff")),
-    phase: rawHeaders.findIndex((h) => h.includes("phase")),
-    monthlyUnits: rawHeaders.findIndex((h) => h.includes("unit") || h.includes("kwh") || h.includes("consum")),
-    monthlyBill: rawHeaders.findIndex((h) => h.includes("bill") || h.includes("amount")),
-    paymentMode: rawHeaders.findIndex((h) => h.includes("loan") || h.includes("payment") || h.includes("mode")),
-    loanDownPaymentPct: rawHeaders.findIndex((h) => h.includes("down") || h.includes("upfront")),
-    loanInterestRate: rawHeaders.findIndex((h) => h.includes("interest") || h.includes("rate")),
+    flatNo: flatNoIdx,
+    customerName: custNameIdx,
+    sanctionedLoad: loadIdx,
+    category: catIdx,
+    phase: phaseIdx,
+    monthlyUnits: unitsIdx,
+    monthlyBill: billIdx,
+    paymentMode: payModeIdx,
+    loanDownPaymentPct: downPctIdx,
+    loanInterestRate: interestIdx,
   };
 
   const flats = [];
   for (let i = 1; i < lines.length; i++) {
-    const cols = splitCsvLine(lines[i]);
+    const cols = splitCsvLine(lines[i], delimiter);
     if (cols.length === 0 || cols.every((c) => !c.trim())) continue;
 
     const flatNo = (colMap.flatNo !== -1 && cols[colMap.flatNo]) ? cols[colMap.flatNo].trim() : `Flat ${i}`;
     const customerName = (colMap.customerName !== -1 && cols[colMap.customerName]) ? cols[colMap.customerName].trim() : `Resident ${flatNo}`;
-    const sanctionedLoad = (colMap.sanctionedLoad !== -1 && !isNaN(parseFloat(cols[colMap.sanctionedLoad]))) ? parseFloat(cols[colMap.sanctionedLoad]) : 3;
-    const category = (colMap.category !== -1 && cols[colMap.category]) ? cols[colMap.category].trim() : "LT-I";
+    const sanctionedLoad = (colMap.sanctionedLoad !== -1) ? cleanNum(cols[colMap.sanctionedLoad], 3) : 3;
+    const rawCat = (colMap.category !== -1 && cols[colMap.category]) ? cols[colMap.category].trim().toUpperCase() : "LT-I";
+    const category = rawCat.includes("GHS") ? "LT-I-GHS" : rawCat.includes("LT-II") ? "LT-II" : rawCat.includes("LT-III") ? "LT-III" : "LT-I";
     const phase = (colMap.phase !== -1 && cols[colMap.phase] && cols[colMap.phase].includes("3")) ? "3-phase" : "1-phase";
-    const monthlyUnits = (colMap.monthlyUnits !== -1 && !isNaN(parseFloat(cols[colMap.monthlyUnits]))) ? parseFloat(cols[colMap.monthlyUnits]) : 300;
-    const monthlyBill = (colMap.monthlyBill !== -1 && !isNaN(parseFloat(cols[colMap.monthlyBill]))) ? parseFloat(cols[colMap.monthlyBill]) : Math.round(monthlyUnits * 11);
-    
+    const monthlyUnits = (colMap.monthlyUnits !== -1) ? cleanNum(cols[colMap.monthlyUnits], 300) : 300;
+    const monthlyBill = (colMap.monthlyBill !== -1) ? cleanNum(cols[colMap.monthlyBill], Math.round(monthlyUnits * 11)) : Math.round(monthlyUnits * 11);
+
     let paymentMode = "upfront";
+    let loanMode = false;
     if (colMap.paymentMode !== -1 && cols[colMap.paymentMode]) {
-      const pm = cols[colMap.paymentMode].toLowerCase();
-      if (pm.includes("loan") || pm.includes("bank") || pm.includes("emi")) {
+      const pm = cols[colMap.paymentMode].toLowerCase().trim();
+      if (pm.includes("without") || pm.includes("no") || pm.includes("cash") || pm.includes("upfront") || pm === "false" || pm === "0") {
+        paymentMode = "upfront";
+        loanMode = false;
+      } else if (pm.includes("loan") || pm.includes("bank") || pm.includes("emi") || pm.includes("finance") || pm === "true" || pm === "yes" || pm === "1") {
         paymentMode = "loan";
+        loanMode = true;
       }
     }
 
-    const loanDownPaymentPct = (colMap.loanDownPaymentPct !== -1 && !isNaN(parseFloat(cols[colMap.loanDownPaymentPct])))
-      ? parseFloat(cols[colMap.loanDownPaymentPct])
-      : 10;
-    const loanInterestRate = (colMap.loanInterestRate !== -1 && !isNaN(parseFloat(cols[colMap.loanInterestRate])))
-      ? parseFloat(cols[colMap.loanInterestRate])
-      : 7;
+    const loanDownPaymentPct = (colMap.loanDownPaymentPct !== -1) ? cleanNum(cols[colMap.loanDownPaymentPct], 10) : 10;
+    const loanInterestRate = (colMap.loanInterestRate !== -1) ? cleanNum(cols[colMap.loanInterestRate], 7) : 7;
 
     flats.push({
       id: `flat_${i}`,
       flatNo,
       customerName,
       sanctionedLoad,
+      category,
       consumerCategory: category,
       phase,
       monthlyUnits,
       monthlyBill,
       paymentMode,
+      loanMode,
       loanDownPaymentPct,
       loanInterestRate,
     });
   }
 
+  // Ensure both Array.isArray(result) and result.flats work identically
+  flats.flats = flats;
   return flats;
 }
 
@@ -522,22 +637,4 @@ export function exportBuildingToCSV(flats) {
   return [headers.join(","), ...rows.map((r) => r.map((c) => `"${c}"`).join(","))].join("\n");
 }
 
-// Simple RFC 4180 CSV line parser
-function splitCsvLine(line) {
-  const result = [];
-  let current = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '"' || char === "'") {
-      inQuotes = !inQuotes;
-    } else if (char === "," && !inQuotes) {
-      result.push(current);
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-  result.push(current);
-  return result;
-}
+

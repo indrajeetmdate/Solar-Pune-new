@@ -101,10 +101,50 @@ assert.ok(csvTemplate.includes("MonthlyBill"));
 
 const parsedFlats = parseBuildingCSV(csvTemplate);
 assert.ok(parsedFlats.length >= 5, "Template should parse into at least 5 flats");
+assert.ok(Array.isArray(parsedFlats.flats), "parsedFlats.flats must be an array");
 assert.equal(parsedFlats[0].flatNo, "101");
 assert.equal(parsedFlats[0].customerName, "Rahul Sharma");
 assert.equal(parsedFlats[0].sanctionedLoad, 3);
 assert.equal(parsedFlats[0].monthlyUnits, 280);
+
+// 5. Test User's Exact TSV/CSV format with Tab Delimiters
+const userTabCsv = `FlatNo\tCustomerName\tSanctionLoadKw\tCategory\tPhase\tMonthlyUnits\tMonthlyBill\tPaymentMode\tLoanDownPaymentPct\tLoanInterestRate
+101\tAjay kulkarni\t5\tLT-I\t3-phase\t93\t1023\twithout_loan\t10\t7
+102\tRuchi Bhindwale\t5\tLT-I\t3-phase\t153\t1836\twithout_loan\t10\t7
+103\tAjay Uke\t4\tLT-I\t1-phase\t91\t910\twithout_loan\t10\t7
+201\tAshok Mahajan\t5\tLT-I\t3-phase\t92\t1104\twithout_loan\t10\t7
+202\tShriniwas Badrayani\t5\tLT-I\t3-phase\t376\t4512\twithout_loan\t10\t7
+203\tSudhir Aptekar\t4\tLT-I\t1-phase\t194\t2134\twithout_loan\t10\t7
+301\tShrirang Jamadagani\t5\tLT-I\t3-phase\t240\t2640\twithout_loan\t10\t7
+302\tSanjeevani Toley\t5\tLT-I\t3-phase\t195\t2340\twithout_loan\t10\t7`;
+
+const userParsedFlats = parseBuildingCSV(userTabCsv);
+assert.equal(userParsedFlats.length, 8, "Must parse all 8 user records");
+assert.equal(userParsedFlats[0].flatNo, "101");
+assert.equal(userParsedFlats[0].customerName, "Ajay kulkarni");
+assert.equal(userParsedFlats[0].sanctionedLoad, 5);
+assert.equal(userParsedFlats[0].category, "LT-I");
+assert.equal(userParsedFlats[0].phase, "3-phase");
+assert.equal(userParsedFlats[0].monthlyUnits, 93);
+assert.equal(userParsedFlats[0].monthlyBill, 1023);
+assert.equal(userParsedFlats[0].paymentMode, "upfront");
+assert.equal(userParsedFlats[0].loanMode, false);
+assert.equal(userParsedFlats[0].loanDownPaymentPct, 10);
+assert.equal(userParsedFlats[0].loanInterestRate, 7);
+
+assert.equal(userParsedFlats[7].flatNo, "302");
+assert.equal(userParsedFlats[7].customerName, "Sanjeevani Toley");
+assert.equal(userParsedFlats[7].monthlyUnits, 195);
+assert.equal(userParsedFlats[7].monthlyBill, 2340);
+
+// Test building ledger calculation with user's flats
+const userBuildingRes = calculateBuildingLedger({
+  buildingName: "User Test Building",
+  flats: userParsedFlats,
+});
+assert.equal(userBuildingRes.flatLedger.length, 8);
+assert.ok(userBuildingRes.summary.totalBuildingCapacityKw > 0);
+assert.ok(userBuildingRes.summary.totalSubsidy > 0);
 
 // Export to CSV
 const exportedCsv = exportBuildingToCSV(buildingRes.flatLedger);

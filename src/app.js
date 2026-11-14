@@ -4510,20 +4510,36 @@ function attachEvents() {
   $("importCsvInput")?.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
+    const ReaderClass = typeof FileReader !== "undefined" ? FileReader : (typeof window !== "undefined" ? window.FileReader : null);
+    if (!ReaderClass) return;
+    const reader = new ReaderClass();
     reader.onload = (evt) => {
       try {
+        const notify = (msg) => {
+          if (typeof window !== "undefined" && typeof window.alert === "function") {
+            window.alert(msg);
+          } else if (typeof alert === "function") {
+            alert(msg);
+          } else {
+            console.log(msg);
+          }
+        };
         const text = evt.target.result;
         const parsed = parseBuildingCSV(text);
-        if (parsed.flats && parsed.flats.length > 0) {
-          state.buildingFlats = parsed.flats;
+        const flatsList = Array.isArray(parsed) ? parsed : (parsed?.flats || []);
+        if (flatsList && flatsList.length > 0) {
+          state.buildingFlats = flatsList;
           updateBuildingStudio();
-          alert(`Successfully imported ${parsed.flats.length} flats from CSV!`);
+          notify(`Successfully imported ${flatsList.length} flats from CSV!`);
         } else {
-          alert("No valid flat records found in CSV. Please verify column headers.");
+          notify("No valid flat records found in CSV. Please verify column headers.");
         }
       } catch (err) {
-        alert("Failed to parse CSV file: " + err.message);
+        if (typeof window !== "undefined" && typeof window.alert === "function") {
+          window.alert("Failed to parse CSV file: " + err.message);
+        } else {
+          console.error("Failed to parse CSV file:", err);
+        }
       }
       e.target.value = "";
     };
