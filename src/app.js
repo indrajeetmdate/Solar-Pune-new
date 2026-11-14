@@ -1528,10 +1528,10 @@ function render() {
 
   // Sync Proposal Preview Card: Prepared For (To)
   if ($("proposalToCustomerName")) {
-    $("proposalToCustomerName").textContent = isBuildingMode ? (state.buildingConfig?.buildingName || "Shivaji Heights Co-op Housing Society") : (input.customerName || "Valued Customer");
+    $("proposalToCustomerName").textContent = isBuildingMode ? (state.buildingConfig?.buildingName || state.buildingData?.buildingName || $("customerName")?.value || "Shivaji Heights Co-op Housing Society") : (input.customerName || "Valued Customer");
   }
   if ($("proposalToCustomerAddress")) {
-    $("proposalToCustomerAddress").textContent = isBuildingMode ? (state.buildingConfig?.buildingAddress || "Baner, Pune, Maharashtra - 411045") : (input.customerAddress || "Pune, Maharashtra");
+    $("proposalToCustomerAddress").textContent = isBuildingMode ? (state.buildingConfig?.buildingAddress || state.buildingData?.buildingAddress || $("customerAddress")?.value || "Baner, Pune, Maharashtra - 411045") : (input.customerAddress || "Pune, Maharashtra");
   }
   if ($("proposalToCustomerPhone")) {
     $("proposalToCustomerPhone").textContent = isBuildingMode ? "Society Management Office" : (input.mobileNumber || "—");
@@ -3948,7 +3948,7 @@ function attachEvents() {
   });
 
   // Report Display hide toggles
-  ["hidePayback", "hideAreaFit", "hideSubsidy", "hideCost", "hideFinancing", "solarInstalled"].forEach(id => {
+  ["hidePayback", "hideAreaFit", "hideSubsidy", "hideCost", "hideFinancing", "solarInstalled", "showCadDiagram"].forEach(id => {
     $(id)?.addEventListener("change", render);
   });
 
@@ -4088,12 +4088,22 @@ function attachEvents() {
     const val = e.target.value;
     if ($("internalCustomerName")) $("internalCustomerName").value = val;
     if ($("proposalToCustomerName")) $("proposalToCustomerName").textContent = val || "Valued Customer";
+    if (state.proposalMode === "multi_building" || state.proposalScope === "building") {
+      if (state.buildingConfig) state.buildingConfig.buildingName = val;
+      if (state.buildingData) state.buildingData.buildingName = val;
+      if ($("buildingNameInput")) $("buildingNameInput").value = val;
+    }
     updateProposalStatusBadge("modified", state.currentProposalSerialNo);
   });
   $("internalCustomerName")?.addEventListener("input", (e) => {
     const val = e.target.value;
     if ($("customerName")) $("customerName").value = val;
     if ($("proposalToCustomerName")) $("proposalToCustomerName").textContent = val || "Valued Customer";
+    if (state.proposalMode === "multi_building" || state.proposalScope === "building") {
+      if (state.buildingConfig) state.buildingConfig.buildingName = val;
+      if (state.buildingData) state.buildingData.buildingName = val;
+      if ($("buildingNameInput")) $("buildingNameInput").value = val;
+    }
     updateProposalStatusBadge("modified", state.currentProposalSerialNo);
   });
   $("mobileNumber")?.addEventListener("input", (e) => {
@@ -4121,6 +4131,11 @@ function attachEvents() {
   $("customerAddress")?.addEventListener("input", (e) => {
     const val = e.target.value;
     if ($("proposalToCustomerAddress")) $("proposalToCustomerAddress").textContent = val || "Pune, Maharashtra";
+    if (state.proposalMode === "multi_building" || state.proposalScope === "building") {
+      if (state.buildingConfig) state.buildingConfig.buildingAddress = val;
+      if (state.buildingData) state.buildingData.buildingAddress = val;
+      if ($("buildingAddressInput")) $("buildingAddressInput").value = val;
+    }
     updateProposalStatusBadge("modified", state.currentProposalSerialNo);
   });
 
@@ -4520,6 +4535,21 @@ function attachEvents() {
     if ($("proposalToCustomerName")) $("proposalToCustomerName").textContent = name;
     if ($("proposalToCustomerPhone")) $("proposalToCustomerPhone").textContent = mobile || "—";
     if ($("proposalToCustomerAddress")) $("proposalToCustomerAddress").textContent = address || "Pune, Maharashtra";
+
+    const isBuilding = state.proposalMode === "multi_building" || state.proposalScope === "building";
+    if (isBuilding || state.buildingConfig || state.buildingData) {
+      if (state.buildingConfig) {
+        state.buildingConfig.buildingName = name;
+        if (address) state.buildingConfig.buildingAddress = address;
+      }
+      if (state.buildingData) {
+        state.buildingData.buildingName = name;
+        if (address) state.buildingData.buildingAddress = address;
+      }
+      if ($("buildingNameInput")) $("buildingNameInput").value = name;
+      if (address && $("buildingAddressInput")) $("buildingAddressInput").value = address;
+    }
+
     saveProposalData();
     render();
     closeChangeCustomerModal();
@@ -4804,6 +4834,23 @@ function attachEvents() {
         updateBuildingStudio();
       }
     });
+  });
+
+  $("buildingNameInput")?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    if (state.buildingConfig) state.buildingConfig.buildingName = val;
+    if (state.buildingData) state.buildingData.buildingName = val;
+    if ($("customerName")) $("customerName").value = val;
+    if ($("internalCustomerName")) $("internalCustomerName").value = val;
+    if ($("proposalToCustomerName")) $("proposalToCustomerName").textContent = val || "Shivaji Heights Co-op Housing Society";
+  });
+
+  $("buildingAddressInput")?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    if (state.buildingConfig) state.buildingConfig.buildingAddress = val;
+    if (state.buildingData) state.buildingData.buildingAddress = val;
+    if ($("customerAddress")) $("customerAddress").value = val;
+    if ($("proposalToCustomerAddress")) $("proposalToCustomerAddress").textContent = val || "Baner, Pune, Maharashtra - 411045";
   });
 
   document.querySelectorAll(".tab-button").forEach((button) => {
@@ -5589,6 +5636,20 @@ function cloneProposalForCustomer(newCustomerName = null, newMobile = null, newE
   if ($("internalCustomerName")) $("internalCustomerName").value = name;
   if ($("proposalToCustomerName")) $("proposalToCustomerName").textContent = name;
 
+  const isBuilding = state.proposalMode === "multi_building" || state.proposalScope === "building";
+  if (isBuilding || state.buildingConfig || state.buildingData) {
+    if (state.buildingConfig) {
+      state.buildingConfig.buildingName = name;
+      if (newAddress) state.buildingConfig.buildingAddress = newAddress;
+    }
+    if (state.buildingData) {
+      state.buildingData.buildingName = name;
+      if (newAddress) state.buildingData.buildingAddress = newAddress;
+    }
+    if ($("buildingNameInput")) $("buildingNameInput").value = name;
+    if (newAddress && $("buildingAddressInput")) $("buildingAddressInput").value = newAddress;
+  }
+
   // 2. Update contact details if provided
   if (newMobile !== null && newMobile !== undefined) {
     if ($("mobileNumber")) $("mobileNumber").value = newMobile;
@@ -5708,10 +5769,13 @@ async function deleteProposal(proposalOrId) {
 function openChangeCustomerModal(suggestedName = null) {
   const modal = $("changeCustomerModal");
   if (!modal) return;
-  const currentName = suggestedName || $("customerName")?.value || $("internalCustomerName")?.value || "";
+  const isBuilding = state.proposalMode === "multi_building" || state.proposalScope === "building";
+  const buildingName = state.buildingConfig?.buildingName || state.buildingData?.buildingName || $("buildingNameInput")?.value;
+  const buildingAddress = state.buildingConfig?.buildingAddress || state.buildingData?.buildingAddress || $("buildingAddressInput")?.value;
+  const currentName = suggestedName || (isBuilding ? (buildingName || $("customerName")?.value || "") : ($("customerName")?.value || $("internalCustomerName")?.value || ""));
   const currentMobile = $("mobileNumber")?.value || $("internalMobileNumber")?.value || "";
   const currentEmail = $("emailAddress")?.value || $("internalEmailAddress")?.value || "";
-  const currentAddress = $("customerAddress")?.value || "Pune, Maharashtra";
+  const currentAddress = isBuilding ? (buildingAddress || $("customerAddress")?.value || "Pune, Maharashtra") : ($("customerAddress")?.value || "Pune, Maharashtra");
 
   if ($("modalCustomerName")) $("modalCustomerName").value = currentName;
   if ($("modalMobileNumber")) $("modalMobileNumber").value = currentMobile;
@@ -6486,6 +6550,7 @@ window.lockInternal = lockInternal;
 window.openInternal = openInternal;
 window.setProposalMode = setProposalMode;
 window.updateBuildingStudio = updateBuildingStudio;
+window.render = render;
 
 export {
   autoSyncLatestProposalSerial,

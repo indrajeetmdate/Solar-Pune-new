@@ -220,6 +220,9 @@ export async function generateBuildingProposalPDF({
   const summary = buildingData.summary || {};
   const flatLedger = buildingData.flatLedger || [];
   const includeIndividualSheets = hideFlags.includeIndividualSheets || false;
+  const showCadDiagram = hideFlags.showCadDiagram !== undefined 
+    ? Boolean(hideFlags.showCadDiagram) 
+    : (hideFlags.hideCadDiagram !== undefined ? !hideFlags.hideCadDiagram : true);
 
   const formatCurrency = (val) =>
     "Rs " + Number(val || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
@@ -428,119 +431,122 @@ export async function generateBuildingProposalPDF({
     });
   }
 
-  // ================= PAGE 2: Shared Rooftop CAD Layout & Demarcation =================
-  doc.addPage();
-  addBuildingHeader("Rooftop Layout & CAD Blueprint");
-  yPos = 25;
+  // ================= PAGE 2 (OPTIONAL): Shared Rooftop CAD Layout & Demarcation =================
+  if (showCadDiagram) {
+    doc.addPage();
+    addBuildingHeader("Rooftop Layout & CAD Blueprint");
+    yPos = 25;
 
-  doc.setTextColor(COLORS.black);
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.text("2. Shared Rooftop Layout & Demarcated Flat Panel Allocation", margin, yPos);
-  yPos += 5;
+    doc.setTextColor(COLORS.black);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("2. Shared Rooftop Layout & Demarcated Flat Panel Allocation", margin, yPos);
+    yPos += 5;
 
-  doc.setFontSize(8.5);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(COLORS.text);
-  doc.text("Architectural CAD layout displaying physical panel allocations, color boundaries per flat, and maintenance pathways.", margin, yPos);
-  yPos += 6;
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(COLORS.text);
+    doc.text("Architectural CAD layout displaying physical panel allocations, color boundaries per flat, and maintenance pathways.", margin, yPos);
+    yPos += 6;
 
-  // Capture CAD Snapshot image from canvas
-  let cadImage = null;
-  try {
-    const canvas = (typeof document !== "undefined") ? document.getElementById("panelDiagramCanvas") : null;
-    if (canvas && canvas.width > 0 && canvas.height > 0) {
-      cadImage = canvas.toDataURL("image/png");
-    }
-  } catch (e) {
-    console.warn("Could not capture CAD canvas:", e);
-  }
-
-  if (cadImage) {
-    const maxImgW = pageWidth - margin * 2;
-    const maxImgH = 95;
-    const drawW = maxImgW;
-    const drawH = Math.min(maxImgH, drawW * 0.55);
-    const imgX = margin;
-
-    doc.setFillColor(15, 23, 42);
-    doc.roundedRect(imgX - 0.5, yPos - 0.5, drawW + 1, drawH + 1, 1.5, 1.5, "F");
+    // Capture CAD Snapshot image from canvas
+    let cadImage = null;
     try {
-      doc.addImage(cadImage, "PNG", imgX, yPos, drawW, drawH);
-    } catch (err) {
-      console.warn("Failed to add CAD image to building proposal PDF:", err);
+      const canvas = (typeof document !== "undefined") ? document.getElementById("panelDiagramCanvas") : null;
+      if (canvas && canvas.width > 0 && canvas.height > 0) {
+        cadImage = canvas.toDataURL("image/png");
+      }
+    } catch (e) {
+      console.warn("Could not capture CAD canvas:", e);
     }
-    yPos += drawH + 6;
+
+    if (cadImage) {
+      const maxImgW = pageWidth - margin * 2;
+      const maxImgH = 95;
+      const drawW = maxImgW;
+      const drawH = Math.min(maxImgH, drawW * 0.55);
+      const imgX = margin;
+
+      doc.setFillColor(15, 23, 42);
+      doc.roundedRect(imgX - 0.5, yPos - 0.5, drawW + 1, drawH + 1, 1.5, 1.5, "F");
+      try {
+        doc.addImage(cadImage, "PNG", imgX, yPos, drawW, drawH);
+      } catch (err) {
+        console.warn("Failed to add CAD image to building proposal PDF:", err);
+      }
+      yPos += drawH + 6;
+    }
+
+    // CAD Spatial & Allocation Summary Table
+    const cadMetrics = [
+      ["Total Roof Area", `${buildingData.roofAreaSqft || 2000} sq.ft.`, "Solar Array Area", `${Math.round((summary.totalBuildingPanels || 0) * 27.5)} sq.ft.`],
+      ["Walkways & Pathways", `${Math.max(0, (buildingData.roofAreaSqft || 2000) - Math.round((summary.totalBuildingPanels || 0) * 27.5))} sq.ft.`, "Orientation & Tilt", "South Facing, Optimal 18° Tilt"],
+      ["Allocated Modules", `${summary.totalBuildingPanels || 0} Modules`, "Allocation Strategy", "Proportional to Monthly Consumption"]
+    ];
+
+    if (doc.autoTable) {
+      doc.autoTable({
+        startY: yPos,
+        body: cadMetrics,
+        theme: "grid",
+        styles: { fontSize: 7.5, cellPadding: 2 },
+        columnStyles: {
+          0: { cellWidth: 40, fontStyle: "bold", fillColor: [248, 250, 252] },
+          1: { cellWidth: 50 },
+          2: { cellWidth: 40, fontStyle: "bold", fillColor: [248, 250, 252] },
+          3: { cellWidth: 50 }
+        },
+        margin: { left: margin, right: margin }
+      });
+      yPos = (doc.lastAutoTable?.finalY || yPos + 25) + 6;
+    } else {
+      yPos += 30;
+    }
+
+    // Demarcation Legend Table
+    doc.setFontSize(9.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(COLORS.primary);
+    doc.text("Demarcated Resident Panel Allocation Legend", margin, yPos);
+    yPos += 4;
+
+    const legendHead = [["Flat No", "Resident Name", "Monthly Units", "Assigned Panels", "Solar kWp", "Array Share (%)"]];
+    const totalP = summary.totalBuildingPanels || 1;
+    const legendRows = flatLedger.map((f) => [
+      f.flatNo || "-",
+      f.customerName || "-",
+      `${f.monthlyUnits || 0} kWh`,
+      `${f.panels || 0}`,
+      `${(f.allocatedKw || 0).toFixed(2)} kWp`,
+      `${Math.round(((f.panels || 0) / totalP) * 100)}%`
+    ]);
+
+    if (doc.autoTable) {
+      doc.autoTable({
+        startY: yPos,
+        head: legendHead,
+        body: legendRows,
+        theme: "striped",
+        headStyles: { fillColor: COLORS.primary, fontSize: 7.5, cellPadding: 2 },
+        bodyStyles: { fontSize: 7.2, cellPadding: 1.8, halign: "center" },
+        columnStyles: {
+          1: { halign: "left" }
+        },
+        margin: { left: margin, right: margin }
+      });
+    }
   }
 
-  // CAD Spatial & Allocation Summary Table
-  const cadMetrics = [
-    ["Total Roof Area", `${buildingData.roofAreaSqft || 2000} sq.ft.`, "Solar Array Area", `${Math.round((summary.totalBuildingPanels || 0) * 27.5)} sq.ft.`],
-    ["Walkways & Pathways", `${Math.max(0, (buildingData.roofAreaSqft || 2000) - Math.round((summary.totalBuildingPanels || 0) * 27.5))} sq.ft.`, "Orientation & Tilt", "South Facing, Optimal 18° Tilt"],
-    ["Allocated Modules", `${summary.totalBuildingPanels || 0} Modules`, "Allocation Strategy", "Proportional to Monthly Consumption"]
-  ];
-
-  if (doc.autoTable) {
-    doc.autoTable({
-      startY: yPos,
-      body: cadMetrics,
-      theme: "grid",
-      styles: { fontSize: 7.5, cellPadding: 2 },
-      columnStyles: {
-        0: { cellWidth: 40, fontStyle: "bold", fillColor: [248, 250, 252] },
-        1: { cellWidth: 50 },
-        2: { cellWidth: 40, fontStyle: "bold", fillColor: [248, 250, 252] },
-        3: { cellWidth: 50 }
-      },
-      margin: { left: margin, right: margin }
-    });
-    yPos = (doc.lastAutoTable?.finalY || yPos + 25) + 6;
-  } else {
-    yPos += 30;
-  }
-
-  // Demarcation Legend Table
-  doc.setFontSize(9.5);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(COLORS.primary);
-  doc.text("Demarcated Resident Panel Allocation Legend", margin, yPos);
-  yPos += 4;
-
-  const legendHead = [["Flat No", "Resident Name", "Monthly Units", "Assigned Panels", "Solar kWp", "Array Share (%)"]];
-  const totalP = summary.totalBuildingPanels || 1;
-  const legendRows = flatLedger.map((f) => [
-    f.flatNo || "-",
-    f.customerName || "-",
-    `${f.monthlyUnits || 0} kWh`,
-    `${f.panels || 0}`,
-    `${(f.allocatedKw || 0).toFixed(2)} kWp`,
-    `${Math.round(((f.panels || 0) / totalP) * 100)}%`
-  ]);
-
-  if (doc.autoTable) {
-    doc.autoTable({
-      startY: yPos,
-      head: legendHead,
-      body: legendRows,
-      theme: "striped",
-      headStyles: { fillColor: COLORS.primary, fontSize: 7.5, cellPadding: 2 },
-      bodyStyles: { fontSize: 7.2, cellPadding: 1.8, halign: "center" },
-      columnStyles: {
-        1: { halign: "left" }
-      },
-      margin: { left: margin, right: margin }
-    });
-  }
-
-  // ================= PAGE 3+: Building Master Financial Ledger =================
+  // ================= Building Master Financial Ledger =================
   doc.addPage();
   addBuildingHeader("Building Master Financial Ledger");
   yPos = 25;
 
+  const ledgerSectionNum = showCadDiagram ? "3" : "2";
   doc.setTextColor(COLORS.black);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text("3. Resident-Wise Financial Allocation & Solar Ledger", margin, yPos);
+  doc.text(`${ledgerSectionNum}. Resident-Wise Financial Allocation & Solar Ledger`, margin, yPos);
   yPos += 5;
 
   doc.setFontSize(8.5);

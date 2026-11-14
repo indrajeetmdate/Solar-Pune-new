@@ -669,7 +669,63 @@ assert.ok(individualFlatPage.includes("16 mm and 14 mm copper bonded earthing el
 
 document.getElementById("closeSampleViewModalBtn")?.click();
 
-// 12. Switch back to Single Customer mode
+// 11b. Test Changing Customer/Building Name via Modal without Fallback Bug
+const quickChangeCustomerBtn = document.getElementById("quickChangeCustomerBtn");
+assert.ok(quickChangeCustomerBtn, "Quick Change Customer button must exist");
+quickChangeCustomerBtn.click();
+
+const changeCustModal = document.getElementById("changeCustomerModal");
+assert.ok(changeCustModal && changeCustModal.style.display !== "none", "Change customer modal must be open");
+
+const modalCustNameInput = document.getElementById("modalCustomerName");
+const modalCustAddrInput = document.getElementById("modalCustomerAddress");
+const modalUpdateBtn = document.getElementById("modalUpdateCustomerOnlyBtn");
+
+modalCustNameInput.value = "Gokuldham Heights CHS";
+modalCustAddrInput.value = "Kothrud, Pune, Maharashtra - 411038";
+modalUpdateBtn.click();
+
+assert.equal(changeCustModal.style.display, "none", "Modal must close after update");
+assert.equal(document.getElementById("proposalToCustomerName")?.textContent, "Gokuldham Heights CHS", "Proposal Prepared For name must be updated immediately");
+assert.equal(window.appState.buildingConfig?.buildingName, "Gokuldham Heights CHS", "buildingConfig.buildingName must be updated");
+assert.equal(window.appState.buildingData?.buildingName, "Gokuldham Heights CHS", "buildingData.buildingName must be updated");
+assert.equal(document.getElementById("buildingNameInput")?.value, "Gokuldham Heights CHS", "buildingNameInput value must be updated");
+
+// Trigger re-render to verify it does NOT fall back to original name
+window.render();
+assert.equal(document.getElementById("proposalToCustomerName")?.textContent, "Gokuldham Heights CHS", "Proposal Prepared For name must NOT fall back after render()");
+
+// 11c. Test Hiding CAD Layout Blueprint (#showCadDiagram)
+const showCadCheckbox = document.getElementById("showCadDiagram");
+assert.ok(showCadCheckbox, "showCadDiagram checkbox must exist");
+
+// Uncheck CAD diagram and uncheck individual sheets
+includeIndivCheckbox.checked = false;
+showCadCheckbox.checked = false;
+showCadCheckbox.dispatchEvent(new window.Event("change"));
+
+openPdfBtn.click();
+const noCadPages = samplePagesContainer.querySelectorAll(".pdf-sample-page");
+assert.equal(noCadPages.length, 2, "Building proposal must only have 2 pages when CAD diagram is unchecked");
+
+const noCadContent = samplePagesContainer.textContent;
+assert.ok(!noCadContent.includes("Shared Rooftop Layout & Demarcated Flat Panel Allocation"), "Shared Rooftop Layout & Demarcated Flat Panel Allocation MUST be hidden when CAD is unchecked");
+assert.ok(noCadPages[0].textContent.includes("Gokuldham Heights CHS"), "Page 1 must show updated building name");
+assert.ok(noCadPages[1].textContent.includes("2. Resident-Wise Financial Allocation & Solar Ledger"), "Master ledger must be numbered as section 2 when CAD is hidden");
+
+document.getElementById("closeSampleViewModalBtn")?.click();
+
+// Re-check CAD diagram to verify it restores
+showCadCheckbox.checked = true;
+showCadCheckbox.dispatchEvent(new window.Event("change"));
+
+openPdfBtn.click();
+const restoredCadPages = samplePagesContainer.querySelectorAll(".pdf-sample-page");
+assert.equal(restoredCadPages.length, 3, "Building proposal must have 3 pages when CAD diagram is re-checked");
+assert.ok(samplePagesContainer.textContent.includes("Shared Rooftop Layout & Demarcated Flat Panel Allocation"), "CAD section must be restored when showCadDiagram is checked");
+assert.ok(restoredCadPages[2].textContent.includes("3. Resident-Wise Financial Allocation & Solar Ledger"), "Master ledger must be numbered as section 3 when CAD is shown");
+
+document.getElementById("closeSampleViewModalBtn")?.click();
 modeSingleBtn.click();
 assert.equal(window.appState.proposalMode, "single", "Proposal mode must restore to 'single'");
 assert.equal(bldgTabBtn.style.display, "none", "Building Studio tab must be hidden in single customer mode");

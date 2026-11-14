@@ -89,9 +89,14 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
   `;
 
   // Calculate total pages dynamically
+  const showCadDiagram = hideFlags.showCadDiagram !== undefined 
+    ? Boolean(hideFlags.showCadDiagram) 
+    : (typeof document !== "undefined" ? document.getElementById("showCadDiagram")?.checked !== false : true);
+
   const FLATS_PER_LEDGER_PAGE = 32;
   const ledgerPagesCount = Math.max(1, Math.ceil(flatLedger.length / FLATS_PER_LEDGER_PAGE));
-  const basePagesCount = 2 + ledgerPagesCount; // Page 1 (Exec Summary), Page 2 (CAD Map), Page 3.. (Master Ledger)
+  const cadPagesCount = showCadDiagram ? 1 : 0;
+  const basePagesCount = 1 + cadPagesCount + ledgerPagesCount; // Page 1 (Exec Summary), [Page 2 (CAD Map)], Page 2/3.. (Master Ledger)
   const totalPagesCount = includeIndividualSheets ? (basePagesCount + flatLedger.length) : basePagesCount;
 
   const pages = [];
@@ -192,10 +197,11 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
   pages.push(page1);
 
   // ==========================================
-  // PAGE 2: Shared Rooftop CAD Layout & Demarcation
+  // PAGE 2 (OPTIONAL): Shared Rooftop CAD Layout & Demarcation
   // ==========================================
-  const totalPanelsCount = summary.totalBuildingPanels || 1;
-  const page2 = `
+  if (showCadDiagram) {
+    const totalPanelsCount = summary.totalBuildingPanels || 1;
+    const page2 = `
     <div class="pdf-sample-page" data-page-index="2">
       ${createPageHeader("Rooftop Layout & CAD Blueprint")}
       <div class="pdf-page-body">
@@ -272,14 +278,16 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
       ${createPageFooter(2, totalPagesCount)}
     </div>
   `;
-  pages.push(page2);
+    pages.push(page2);
+  }
 
   // ==========================================
-  // PAGE 3+: Building Master Financial Ledger
+  // Building Master Financial Ledger
   // (Paginates cleanly with 30-32 flats per page)
   // ==========================================
+  const ledgerSectionNum = showCadDiagram ? "3" : "2";
   for (let pIdx = 0; pIdx < ledgerPagesCount; pIdx++) {
-    const pageNum = 3 + pIdx;
+    const pageNum = 1 + cadPagesCount + 1 + pIdx;
     const startRow = pIdx * FLATS_PER_LEDGER_PAGE;
     const endRow = Math.min(flatLedger.length, startRow + FLATS_PER_LEDGER_PAGE);
     const chunkFlats = flatLedger.slice(startRow, endRow);
@@ -289,7 +297,7 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
       <div class="pdf-sample-page" data-page-index="${pageNum}">
         ${createPageHeader("Building Master Financial Ledger")}
         <div class="pdf-page-body">
-          <div class="pdf-section-title">3. Resident-Wise Financial Allocation &amp; Solar Ledger${ledgerPagesCount > 1 ? ` (Part ${pIdx + 1} of ${ledgerPagesCount})` : ""}</div>
+          <div class="pdf-section-title">${ledgerSectionNum}. Resident-Wise Financial Allocation &amp; Solar Ledger${ledgerPagesCount > 1 ? ` (Part ${pIdx + 1} of ${ledgerPagesCount})` : ""}</div>
           <div class="pdf-section-desc" style="font-size: 7.5pt; color: #475569; margin-bottom: 2mm;">
             Comprehensive allocation of solar capacity, PM Surya Ghar subsidy, gross investment share, monthly generation, and net bills.
           </div>
@@ -1252,6 +1260,9 @@ export function buildSamplePdfPages(estimates, selectedOption, hideFlags = {}) {
     }
     if (hideFlags.includeIndividualSheets === undefined && typeof document !== "undefined") {
       hideFlags.includeIndividualSheets = document.getElementById("includeIndividualSheets")?.checked || false;
+    }
+    if (hideFlags.showCadDiagram === undefined && typeof document !== "undefined") {
+      hideFlags.showCadDiagram = document.getElementById("showCadDiagram")?.checked !== false;
     }
     return buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags);
   }
