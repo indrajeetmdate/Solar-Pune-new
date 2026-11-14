@@ -553,7 +553,7 @@ ledger.flatLedger.forEach(f => {
   );
 });
 
-// 8. Test CAD Demarcation
+// 8. Test CAD Demarcation & Cross-Workspace Tab Synchronization with Building Data
 const bldgCad = window.cad;
 if (bldgCad && typeof bldgCad.assignPanelsToFlats === "function") {
   bldgCad.assignPanelsToFlats(ledger.flatLedger);
@@ -563,6 +563,37 @@ if (bldgCad && typeof bldgCad.assignPanelsToFlats === "function") {
     assert.ok(firstPanel.flatLabel, "CAD panel must have assigned flatLabel text");
   }
 }
+
+// Verify Cross-Workspace Tab Synchronization:
+// 1. Sidebar Inputs sync to building
+const custNameInput = document.getElementById("customerName")?.value;
+assert.ok(custNameInput && custNameInput.includes("Shivaji Heights"), `Sidebar customerName must sync with building name, got: ${custNameInput}`);
+const mUnitsInput = Number(document.getElementById("monthlyUnits")?.value);
+assert.equal(mUnitsInput, ledger.summary.totalMonthlyUnits, `Sidebar monthlyUnits must sync with building total units (${ledger.summary.totalMonthlyUnits}), got: ${mUnitsInput}`);
+
+// 2. Sizing & Compare Pane metrics sync
+const recCap = document.getElementById("recommendedCapacity")?.textContent;
+assert.ok(recCap && recCap.includes(ledger.summary.totalBuildingCapacityKw.toFixed(1)), `Recommended capacity must show building capacity, got: ${recCap}`);
+const recTitle = document.getElementById("recommendationTitle")?.textContent;
+assert.ok(recTitle && recTitle.includes("Flats Combined"), `Recommendation title must indicate combined flats, got: ${recTitle}`);
+
+// 3. Financials & Savings Pane metrics sync
+const finGross = document.getElementById("financialTotalCost")?.textContent;
+assert.ok(finGross && (finGross.includes("Rs") || finGross.includes("₹")), `Financials gross cost must be formatted in currency, got: ${finGross}`);
+const multiSubCard = document.getElementById("financialMultiSubsidyCard");
+assert.equal(multiSubCard?.style.display, "block", "Multi-Meter Financial Subsidy Card must be visible in building mode");
+
+// 4. Loan & EMI Pane sync
+const finContent = document.getElementById("financingBreakdownContent")?.innerHTML;
+assert.ok(finContent && finContent.includes("Resident Financing Mode Breakdown"), "Loan pane must include Resident Financing Mode Breakdown");
+
+// 5. Proposal & Export Preview Card sync
+const propToName = document.getElementById("proposalToCustomerName")?.textContent;
+assert.ok(propToName && propToName.includes("Shivaji Heights"), `Proposal Prepared For name must sync with building name, got: ${propToName}`);
+
+// 6. Tech Guide Pane sync
+const guideSection = document.getElementById("multiBuildingGuideSection");
+assert.ok(guideSection, "Tech Guide must contain Category B Multi-Customer Building Solar guide section");
 
 // 9. Test Building Proposal Generation & Sample View
 const openPdfBtn = document.getElementById("openSampleViewBtn");
@@ -632,7 +663,9 @@ document.getElementById("closeSampleViewModalBtn")?.click();
 modeSingleBtn.click();
 assert.equal(window.appState.proposalMode, "single", "Proposal mode must restore to 'single'");
 assert.equal(bldgTabBtn.style.display, "none", "Building Studio tab must be hidden in single customer mode");
+const restoredName = document.getElementById("customerName")?.value;
+assert.notEqual(restoredName, "Shivaji Heights Co-op Housing Society", "Single customer name must be restored when switching back");
 
-console.log("✓ Multi-Customer Building Solar Proposal Studio verified successfully!");
+console.log("✓ Multi-Customer Building Solar Proposal Studio & Cross-Workspace Synchronization verified successfully!");
 
 console.log("\nALL END-TO-END WORKSPACE & AUTO-CALCULATION TESTS PASSED! 🚀🎉");

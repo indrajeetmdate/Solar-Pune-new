@@ -929,6 +929,48 @@ function renderFinancing(option, input) {
     </div>
   </div>`;
 
+  if (state.proposalMode === "multi_building" && state.buildingData?.flatLedger?.length > 1) {
+    const flats = state.buildingData.flatLedger;
+    const loanFlats = flats.filter(f => f.loanMode || f.paymentMode === "loan");
+    html += `
+    <div style="margin-top: 14px; background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 12px 14px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <h4 style="margin: 0; font-size: 13.5px; font-weight: 700; color: #0f172a;">🏢 Resident Financing Mode Breakdown (${loanFlats.length} on Bank Loan, ${flats.length - loanFlats.length} Upfront)</h4>
+        <span style="font-size: 11px; background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-weight: 600;">Category B PM Surya Ghar</span>
+      </div>
+      <div style="max-height: 240px; overflow-y: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          <thead>
+            <tr style="border-bottom: 1.5px solid #cbd5e1; background: #f8fafc;">
+              <th style="padding: 5px; text-align: left;">Flat</th>
+              <th style="padding: 5px; text-align: left;">Resident Name</th>
+              <th style="padding: 5px; text-align: center;">Mode</th>
+              <th style="padding: 5px; text-align: right;">Net Cost</th>
+              <th style="padding: 5px; text-align: right;">Down Payment</th>
+              <th style="padding: 5px; text-align: right;">Monthly EMI</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${flats.map((f, i) => `
+              <tr style="border-bottom: 1px solid #e2e8f0; ${i % 2 === 0 ? '' : 'background: #f8fafc;'}">
+                <td style="padding: 4px 6px; font-weight: 700;">${f.flatNo}</td>
+                <td style="padding: 4px 6px;">${f.customerName}</td>
+                <td style="padding: 4px 6px; text-align: center;">
+                  <span style="font-size: 10.5px; padding: 1px 6px; border-radius: 3px; font-weight: 600; background: ${f.loanMode || f.paymentMode === 'loan' ? '#dcfce7; color: #15803d;' : '#f1f5f9; color: #475569;'}">
+                    ${f.loanMode || f.paymentMode === 'loan' ? 'Bank Loan' : 'Upfront'}
+                  </span>
+                </td>
+                <td style="padding: 4px 6px; text-align: right; font-weight: 600;">₹${Number(f.netCost).toLocaleString('en-IN')}</td>
+                <td style="padding: 4px 6px; text-align: right;">₹${Number(f.financing?.downPayment || Math.round(f.grossCost * 0.1)).toLocaleString('en-IN')}</td>
+                <td style="padding: 4px 6px; text-align: right; font-weight: 700; color: #15803d;">${f.loanMode || f.paymentMode === 'loan' ? `₹${Number(f.financing?.monthlyEmi || 0).toLocaleString('en-IN')}/mo` : '—'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
   container.innerHTML = html;
 }
 
@@ -1315,48 +1357,60 @@ function render() {
   const isOverride = state.selectedSystemIndex !== null && estimate.options[state.selectedSystemIndex] !== estimate.recommended;
   const reasonText = isOverride ? "Manually selected option." : getGoalReason(input.goal, option);
 
-  $("recommendationTitle").textContent = `${SYSTEM_LABELS[option.systemType] || SYSTEM_LABELS[option.systemType.split('_')[0]]} ${PANEL_LABELS[option.panelType]} solar`;
-  $("recommendationReason").textContent = reasonText;
-  $("recommendedCapacity").textContent = `${option.dcCapacityKw.toFixed(1)} kWp`;
-  $("monthlyGeneration").textContent = units(option.monthlyGeneration);
-  
+  const isBuildingMode = state.proposalMode === "multi_building" && Boolean(state.buildingData);
+  const bSummary = isBuildingMode ? state.buildingData.summary : null;
   const isLoan = input.paymentMode === "loan";
   const fin = option.financing;
-  if (isLoan && fin) {
-    $("monthlySavings").textContent = money(fin.monthlyEmi);
-    if ($("monthlySavings")?.previousElementSibling) {
-      $("monthlySavings").previousElementSibling.innerHTML = `Loan EMI <i class="info-tip" data-tip="Monthly loan installment to bank partner, matched with your average electricity bill.">i</i>`;
-    }
-    $("payback").textContent = fin.tenureFormatted;
-    if ($("payback")?.previousElementSibling) {
-      $("payback").previousElementSibling.innerHTML = `Loan Payoff <i class="info-tip" data-tip="Time to 100% free solar system ownership. After this, your electricity is completely free.">i</i>`;
-    }
+
+  if (isBuildingMode && bSummary) {
+    $("recommendationTitle").textContent = `${SYSTEM_LABELS[option.systemType] || "On-grid"} DCR solar (${bSummary.totalFlats} Flats Combined)`;
+    $("recommendationReason").textContent = `Category B PM Surya Ghar shared solar rooftop installation for ${bSummary.totalFlats} residential flats.`;
+    $("recommendedCapacity").textContent = `${bSummary.totalBuildingCapacityKw.toFixed(1)} kWp (${bSummary.totalBuildingPanels} Panels)`;
+    $("monthlyGeneration").textContent = units(bSummary.monthlyGenerationTotal);
+    $("monthlySavings").textContent = money(bSummary.totalMonthlySavings);
+    $("payback").textContent = `${bSummary.buildingPaybackYears} yrs`;
   } else {
-    $("monthlySavings").textContent = money(option.monthlySavings);
-    if ($("monthlySavings")?.previousElementSibling) {
-      $("monthlySavings").previousElementSibling.innerHTML = `Save/mo <i class="info-tip" data-tip="How much your monthly electricity bill will reduce. Includes tariff savings, ToD rebates, and other applicable benefits.">i</i>`;
-    }
-    $("payback").textContent = years(option.paybackYears);
-    if ($("payback")?.previousElementSibling) {
-      $("payback").previousElementSibling.innerHTML = `Payback <i class="info-tip" data-tip="Time to recover your investment. After this period, your solar system generates pure profit through bill savings.">i</i>`;
+    $("recommendationTitle").textContent = `${SYSTEM_LABELS[option.systemType] || SYSTEM_LABELS[option.systemType.split('_')[0]]} ${PANEL_LABELS[option.panelType]} solar`;
+    $("recommendationReason").textContent = reasonText;
+    $("recommendedCapacity").textContent = `${option.dcCapacityKw.toFixed(1)} kWp`;
+    $("monthlyGeneration").textContent = units(option.monthlyGeneration);
+    
+    if (isLoan && fin) {
+      $("monthlySavings").textContent = money(fin.monthlyEmi);
+      if ($("monthlySavings")?.previousElementSibling) {
+        $("monthlySavings").previousElementSibling.innerHTML = `Loan EMI <i class="info-tip" data-tip="Monthly loan installment to bank partner, matched with your average electricity bill.">i</i>`;
+      }
+      $("payback").textContent = fin.tenureFormatted;
+      if ($("payback")?.previousElementSibling) {
+        $("payback").previousElementSibling.innerHTML = `Loan Payoff <i class="info-tip" data-tip="Time to 100% free solar system ownership. After this, your electricity is completely free.">i</i>`;
+      }
+    } else {
+      $("monthlySavings").textContent = money(option.monthlySavings);
+      if ($("monthlySavings")?.previousElementSibling) {
+        $("monthlySavings").previousElementSibling.innerHTML = `Save/mo <i class="info-tip" data-tip="How much your monthly electricity bill will reduce. Includes tariff savings, ToD rebates, and other applicable benefits.">i</i>`;
+      }
+      $("payback").textContent = years(option.paybackYears);
+      if ($("payback")?.previousElementSibling) {
+        $("payback").previousElementSibling.innerHTML = `Payback <i class="info-tip" data-tip="Time to recover your investment. After this period, your solar system generates pure profit through bill savings.">i</i>`;
+      }
     }
   }
 
   // Update sticky header quick-stats ribbon KPIs
   const ribbonCap = $("ribbonCapacity");
-  if (ribbonCap) ribbonCap.textContent = `${option.dcCapacityKw.toFixed(1)} kWp`;
+  if (ribbonCap) ribbonCap.textContent = isBuildingMode && bSummary ? `${bSummary.totalBuildingCapacityKw.toFixed(1)} kWp` : `${option.dcCapacityKw.toFixed(1)} kWp`;
   const ribbonSav = $("ribbonSavings");
-  if (ribbonSav) ribbonSav.textContent = money(option.monthlySavings);
+  if (ribbonSav) ribbonSav.textContent = money(isBuildingMode && bSummary ? bSummary.totalMonthlySavings : option.monthlySavings);
   const ribbonPay = $("ribbonPayback");
-  if (ribbonPay) ribbonPay.textContent = isLoan && fin ? fin.tenureFormatted : years(option.paybackYears);
+  if (ribbonPay) ribbonPay.textContent = isBuildingMode && bSummary ? `${bSummary.buildingPaybackYears} yrs` : (isLoan && fin ? fin.tenureFormatted : years(option.paybackYears));
 
   // Update Financials tab summary metrics
   const finTotal = $("financialTotalCost");
-  if (finTotal) finTotal.textContent = money(option.totalPreSubsidy);
+  if (finTotal) finTotal.textContent = money(isBuildingMode && bSummary ? bSummary.totalBuildingGrossCost : option.totalPreSubsidy);
   const finSub = $("financialSubsidy");
-  if (finSub) finSub.textContent = `- ${money(option.subsidy)}`;
+  if (finSub) finSub.textContent = `- ${money(isBuildingMode && bSummary ? bSummary.totalSubsidy : option.subsidy)}`;
   const finNet = $("financialNetCost");
-  if (finNet) finNet.textContent = money(option.netCost);
+  if (finNet) finNet.textContent = money(isBuildingMode && bSummary ? bSummary.totalNetCost : option.netCost);
 
   // Check cost per watt limit (> 60 Rs/W)
   const dcWp = option.dcCapacityKw * 1000;
@@ -1380,7 +1434,27 @@ function render() {
   const multiSubCount = $("financialMultiSubsidyCount");
 
   if (multiSubCard && multiSubList) {
-    if (state.meteringMode === "multi" && option.meterBreakdown && option.meterBreakdown.length > 1) {
+    if (isBuildingMode && state.buildingData?.flatLedger?.length > 1) {
+      multiSubCard.style.display = "block";
+      if (multiSubCount) {
+        const eligibleCount = state.buildingData.flatLedger.filter((f) => f.subsidy > 0).length;
+        multiSubCount.textContent = `${eligibleCount} of ${state.buildingData.flatLedger.length} Flats Eligible for PM Surya Ghar (Category B)`;
+      }
+      multiSubList.innerHTML = state.buildingData.flatLedger
+        .map((f) => `
+          <div style="background: #ffffff; border: 1px solid #dcfce7; border-radius: 6px; padding: 6px 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+              <strong style="font-size: 11.5px; color: var(--ink);"><span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${f.color || '#2563eb'}; margin-right: 5px;"></span>Flat ${escapeHtml(f.flatNo)} (${escapeHtml(f.customerName || 'Resident')})</strong>
+              <span style="font-size: 11px; font-weight: 700; color: #15803d;">₹${Number(f.subsidy).toLocaleString('en-IN')}</span>
+            </div>
+            <div style="font-size: 10.5px; color: var(--muted); display: flex; justify-content: space-between;">
+              <span>${f.panels} Panels · ${Number(f.allocatedKw || 0).toFixed(2)} kWp</span>
+              <span>${f.monthlyUnits} kWh/mo</span>
+            </div>
+          </div>
+        `)
+        .join("");
+    } else if (state.meteringMode === "multi" && option.meterBreakdown && option.meterBreakdown.length > 1) {
       multiSubCard.style.display = "block";
       if (multiSubCount) {
         const eligibleCount = option.meterBreakdown.filter((m) => m.subsidy > 0).length;
@@ -1417,18 +1491,22 @@ function render() {
   if (isInstalled) {
     $("recommendationTitle").textContent = `${SYSTEM_LABELS[option.systemType] || SYSTEM_LABELS[option.systemType.split('_')[0]]} ${PANEL_LABELS[option.panelType]} solar`;
     $("recommendedCapacity").previousElementSibling.innerHTML = `Installed capacity <i class="info-tip" data-tip="The capacity of the solar system already installed.">i</i>`;
-  } else {
+  } else if (!isBuildingMode) {
     $("recommendationTitle").textContent = `${SYSTEM_LABELS[option.systemType] || SYSTEM_LABELS[option.systemType.split('_')[0]]} ${PANEL_LABELS[option.panelType]} solar`;
     $("recommendedCapacity").previousElementSibling.innerHTML = `Size <i class="info-tip" data-tip="Recommended solar system capacity in kilowatts peak (kWp). Based on your consumption, roof area, and sanctioned load.">i</i>`;
   }
 
   // Panel layout
   const pl = estimate.panelLayout;
-  if ($("panelCount")) $("panelCount").textContent = `${pl.numPanels} panels`;
-  if ($("panelAreaRequired")) $("panelAreaRequired").textContent = `${pl.totalAreaSqft} sq ft (${pl.totalAreaSqm} m²)`;
-  if ($("panelSpec")) $("panelSpec").textContent = `${pl.panelDimensions} · ${pl.panelWp} Wp`;
+  if ($("panelCount")) $("panelCount").textContent = isBuildingMode && bSummary ? `${bSummary.totalBuildingPanels} panels` : `${pl.numPanels} panels`;
+  if ($("panelAreaRequired")) $("panelAreaRequired").textContent = isBuildingMode && bSummary ? `${Math.round(bSummary.totalBuildingPanels * 27.5)} sq ft` : `${pl.totalAreaSqft} sq ft (${pl.totalAreaSqm} m²)`;
+  if ($("panelSpec")) $("panelSpec").textContent = isBuildingMode ? `1123 × 2279 mm · ${state.buildingConfig?.panelWp || 550} Wp Tier-1 DCR` : `${pl.panelDimensions} · ${pl.panelWp} Wp`;
   if ($("areaFitStatus")) {
-    if (pl.fitsInArea === null) {
+    if (isBuildingMode && bSummary) {
+      const avail = state.buildingConfig?.roofArea || bSummary.requiredRoofAreaSqft;
+      $("areaFitStatus").textContent = `Fits in ${avail} sq ft`;
+      $("areaFitStatus").className = "status-pill";
+    } else if (pl.fitsInArea === null) {
       $("areaFitStatus").textContent = "Area not specified";
       $("areaFitStatus").className = "status-pill review";
     } else if (pl.fitsInArea) {
@@ -1450,22 +1528,22 @@ function render() {
 
   // Sync Proposal Preview Card: Prepared For (To)
   if ($("proposalToCustomerName")) {
-    $("proposalToCustomerName").textContent = input.customerName || "Valued Customer";
+    $("proposalToCustomerName").textContent = isBuildingMode ? (state.buildingConfig?.buildingName || "Shivaji Heights Co-op Housing Society") : (input.customerName || "Valued Customer");
   }
   if ($("proposalToCustomerAddress")) {
-    $("proposalToCustomerAddress").textContent = input.customerAddress || "Pune, Maharashtra";
+    $("proposalToCustomerAddress").textContent = isBuildingMode ? (state.buildingConfig?.buildingAddress || "Baner, Pune, Maharashtra - 411045") : (input.customerAddress || "Pune, Maharashtra");
   }
   if ($("proposalToCustomerPhone")) {
-    $("proposalToCustomerPhone").textContent = input.mobileNumber || "—";
+    $("proposalToCustomerPhone").textContent = isBuildingMode ? "Society Management Office" : (input.mobileNumber || "—");
   }
   if ($("proposalToCustomerLoad")) {
-    $("proposalToCustomerLoad").textContent = `${input.sanctionedLoad || 5} kW`;
+    $("proposalToCustomerLoad").textContent = isBuildingMode && bSummary ? `${bSummary.totalSanctionedLoad} kW (${bSummary.totalFlats} Flats)` : `${input.sanctionedLoad || 5} kW`;
   }
   if ($("proposalToCustomerCategory")) {
-    $("proposalToCustomerCategory").textContent = input.consumerCategory || "LT-I Residential";
+    $("proposalToCustomerCategory").textContent = isBuildingMode ? "Category B Shared Residential (PM Surya Ghar)" : (input.consumerCategory || "LT-I Residential");
   }
   if ($("proposalToCustomerUnits")) {
-    $("proposalToCustomerUnits").textContent = `${input.monthlyUnits || 450} units`;
+    $("proposalToCustomerUnits").textContent = isBuildingMode && bSummary ? `${bSummary.totalMonthlyUnits.toLocaleString("en-IN")} units/month` : `${input.monthlyUnits || 450} units`;
   }
 
   // Update Panel Spec in Material / Warranty Table & Proposal Selector
@@ -3001,6 +3079,9 @@ function renderDiagram(pl, input) {
 
   const targetUsableArea = Math.max(25, Number(input.roofArea) || 650);
 
+  const isBuildingMode = state.proposalMode === "multi_building" && Boolean(state.buildingData);
+  const effectiveReqPanels = isBuildingMode ? state.buildingData.summary.totalBuildingPanels : pl.numPanels;
+
   let cad = getActiveRooftopCAD();
   if (!cad || cad.canvas !== canvas) {
     // Initial CAD creation: derive dimensions directly from input.roofArea
@@ -3012,7 +3093,7 @@ function renderDiagram(pl, input) {
     cad = initRooftopCAD(canvas, {
       roofLengthFt: initialLen,
       roofBreadthFt: initialBr,
-      requiredPanels: pl.numPanels,
+      requiredPanels: effectiveReqPanels,
       panelWidthMm: pl.panelWidthMm,
       panelHeightMm: pl.panelHeightMm,
       onStatsChange: (stats) => {
@@ -3038,7 +3119,7 @@ function renderDiagram(pl, input) {
       state.pendingCadState = null;
     }
   } else {
-    cad.setRequiredPanels(pl.numPanels, pl.panelWidthMm, pl.panelHeightMm);
+    cad.setRequiredPanels(effectiveReqPanels, pl.panelWidthMm, pl.panelHeightMm);
     if (state.pendingCadState) {
       cad.loadState(state.pendingCadState);
       state.pendingCadState = null;
@@ -3061,6 +3142,16 @@ function renderDiagram(pl, input) {
     }
   }
 
+  // Multi-Customer Building demarcation in CAD
+  if (isBuildingMode && state.buildingData?.flatLedger) {
+    if (cad.panels && cad.panels.length < effectiveReqPanels && typeof cad.autoPlaceRemainingPanels === "function") {
+      cad.autoPlaceRemainingPanels("portrait");
+    }
+    if (typeof cad.assignPanelsToFlats === "function") {
+      cad.assignPanelsToFlats(state.buildingData.flatLedger);
+    }
+  }
+
   // Update initial UI stats
   const stats = cad.getAreaStats();
   const isEditingCad = document.activeElement === $("cadRoofLength") || document.activeElement === $("cadRoofBreadth");
@@ -3074,8 +3165,8 @@ function renderDiagram(pl, input) {
   if ($("cadBuildingHeightInput")) $("cadBuildingHeightInput").value = cad.buildingHeightFt;
   if ($("cadElevationBldgHeightInput")) $("cadElevationBldgHeightInput").value = cad.buildingHeightFt;
   if ($("cadInventoryCount")) {
-    const remaining = Math.max(0, pl.numPanels - cad.panels.length);
-    $("cadInventoryCount").textContent = `${cad.panels.length} / ${pl.numPanels} Placed (${remaining} Remaining)`;
+    const remaining = Math.max(0, effectiveReqPanels - (cad.panels ? cad.panels.length : 0));
+    $("cadInventoryCount").textContent = `${cad.panels ? cad.panels.length : 0} / ${effectiveReqPanels} Placed (${remaining} Remaining)`;
   }
   renderLayersPanel(cad, cad.getLayerState());
 }
@@ -3290,6 +3381,13 @@ function updateBuildingStudio() {
 
   state.buildingData = buildingResult;
 
+  // Auto-scale roof area input if needed to prevent accidental throttling of recommendations
+  if (buildingResult.summary && buildingResult.summary.requiredRoofAreaSqft && buildingResult.summary.requiredRoofAreaSqft > roofAreaSqft) {
+    const recommendedRoofArea = Math.ceil(buildingResult.summary.requiredRoofAreaSqft / 100) * 100;
+    if ($("buildingRoofAreaInput")) $("buildingRoofAreaInput").value = recommendedRoofArea;
+    state.buildingConfig.roofArea = recommendedRoofArea;
+  }
+
   // Update KPI Ribbon
   const summary = buildingResult.summary;
   if ($("bldgKpiFlats")) $("bldgKpiFlats").textContent = `${summary.totalFlats} Flats`;
@@ -3429,11 +3527,82 @@ function updateBuildingStudio() {
   if ($("footSavings")) $("footSavings").textContent = `₹${summary.totalMonthlySavings.toLocaleString("en-IN")}`;
   if ($("footPayback")) $("footPayback").textContent = `${summary.buildingPaybackYears} yrs`;
 
-  // Sync Rooftop CAD panels if CAD is active
+  // Synchronize building data across all other workspace tabs
+  syncBuildingDataToWorkspace(buildingResult);
+}
+
+function syncBuildingDataToWorkspace(buildingResult) {
+  if (!buildingResult || !buildingResult.summary) return;
+  const summary = buildingResult.summary;
+  const cfg = state.buildingConfig || {};
+
+  // 1. Sidebar Project Details & Inputs
+  if ($("customerName")) $("customerName").value = cfg.buildingName || "Shivaji Heights Co-op Housing Society";
+  if ($("internalCustomerName")) $("internalCustomerName").value = cfg.buildingName || "Shivaji Heights Co-op Housing Society";
+  if ($("customerAddress")) $("customerAddress").value = cfg.buildingAddress || "Baner, Pune, Maharashtra - 411045";
+  if ($("monthlyUnits")) $("monthlyUnits").value = summary.totalMonthlyUnits;
+  if ($("monthlyBill")) $("monthlyBill").value = summary.totalCurrentBill;
+  if ($("sanctionedLoad")) $("sanctionedLoad").value = summary.totalSanctionedLoad;
+  
+  const roofArea = Math.max(Number($("roofArea")?.value) || 0, summary.requiredRoofAreaSqft || cfg.roofArea || 2000);
+  if ($("roofArea")) $("roofArea").value = roofArea;
+  if ($("panelWp")) $("panelWp").value = cfg.panelWp || 550;
+  if ($("panelRate")) $("panelRate").value = cfg.panelRate || 28;
+  if ($("structureType")) $("structureType").value = cfg.structureType || "hotDip";
+  if ($("panelType")) $("panelType").value = "dcr";
+  if ($("isSpecialCategoryState")) $("isSpecialCategoryState").checked = Boolean(cfg.isSpecialCategoryState);
+  if ($("loanInterestRate")) $("loanInterestRate").value = cfg.loanRate || 7.0;
+  if ($("loanDownPaymentPct")) $("loanDownPaymentPct").value = cfg.loanUpfront || 10;
+  if ($("consumerCategory")) $("consumerCategory").value = "LT-I";
+
+  // 2. Sync state.meters and meteringMode
+  state.meteringMode = "multi";
+  state.meters = (buildingResult.flatLedger || []).map((f, i) => ({
+    id: f.id || `meter_${i + 1}`,
+    label: `${f.flatNo} (${f.customerName || 'Resident'})`,
+    flatNo: f.flatNo,
+    consumerNumber: f.consumerNumber || `FLAT-${f.flatNo}`,
+    consumerName: f.customerName || `Resident ${f.flatNo}`,
+    sanctionedLoad: Number(f.sanctionedLoad) || 3,
+    consumerCategory: f.category || "LT-I",
+    phase: f.phase || "1-phase",
+    monthlyUnits: Number(f.monthlyUnits) || 0,
+    monthlyBill: Number(f.monthlyBill) || 0,
+    allocatedKw: Number(f.allocatedKw) || 0,
+    panels: Number(f.panels) || 0,
+    subsidy: Number(f.subsidy) || 0,
+    color: f.color,
+  }));
+
+  // 3. Sync Rooftop CAD (#paneCad)
   const cad = getActiveRooftopCAD();
-  if (cad && typeof cad.assignPanelsToFlats === "function") {
-    cad.assignPanelsToFlats(buildingResult.flatLedger);
+  if (cad) {
+    const minNeededArea = summary.requiredRoofAreaSqft || Math.ceil((summary.totalBuildingPanels * 27.5) / 0.70);
+    const curStats = typeof cad.getAreaStats === "function" ? cad.getAreaStats() : { netUsableSqft: 0 };
+    if (curStats.netUsableSqft < minNeededArea) {
+      const { l, b } = solveRoofDimensions(minNeededArea, 1.35);
+      if (typeof cad.setRoofDimensions === "function") cad.setRoofDimensions(l, b);
+      if ($("cadRoofLength")) $("cadRoofLength").value = l;
+      if ($("cadRoofBreadth")) $("cadRoofBreadth").value = b;
+    }
+    if (typeof cad.setRequiredPanels === "function") {
+      cad.setRequiredPanels(summary.totalBuildingPanels, 1123, 2279);
+    }
+    if (cad.panels && cad.panels.length < summary.totalBuildingPanels) {
+      if (typeof cad.autoPlaceRemainingPanels === "function") {
+        cad.autoPlaceRemainingPanels("portrait");
+      }
+    }
+    if (typeof cad.assignPanelsToFlats === "function") {
+      cad.assignPanelsToFlats(buildingResult.flatLedger);
+    }
+    if (typeof cad.render === "function") {
+      cad.render();
+    }
   }
+
+  // 4. Trigger global render() to update Sizing, Financials, Loan, Proposal & Export, and Guide
+  render();
 }
 
 function setProposalMode(mode) {
@@ -3452,12 +3621,48 @@ function setProposalMode(mode) {
 
   const cad = getActiveRooftopCAD();
   if (isBuilding) {
+    if (!state.singleCustomerBackup) {
+      state.singleCustomerBackup = {
+        customerName: $("customerName")?.value || "",
+        customerAddress: $("customerAddress")?.value || "",
+        monthlyUnits: $("monthlyUnits")?.value || "450",
+        monthlyBill: $("monthlyBill")?.value || "5200",
+        sanctionedLoad: $("sanctionedLoad")?.value || "5",
+        roofArea: $("roofArea")?.value || "650",
+        panelType: $("panelType")?.value || "dcr",
+        panelWp: $("panelWp")?.value || "550",
+        panelRate: $("panelRate")?.value || "25",
+        structureType: $("structureType")?.value || "hotDip",
+        paymentMode: $("paymentMode")?.value || "upfront",
+        loanInterestRate: $("loanInterestRate")?.value || "7",
+        loanDownPaymentPct: $("loanDownPaymentPct")?.value || "10",
+      };
+    }
     updateBuildingStudio();
     switchWorkspaceTab("building");
   } else {
     if (cad && typeof cad.clearMultiCustomerDemarcation === "function") {
       cad.clearMultiCustomerDemarcation();
     }
+    state.meteringMode = "single";
+    if (state.singleCustomerBackup) {
+      const b = state.singleCustomerBackup;
+      if ($("customerName")) $("customerName").value = b.customerName;
+      if ($("customerAddress")) $("customerAddress").value = b.customerAddress;
+      if ($("monthlyUnits")) $("monthlyUnits").value = b.monthlyUnits;
+      if ($("monthlyBill")) $("monthlyBill").value = b.monthlyBill;
+      if ($("sanctionedLoad")) $("sanctionedLoad").value = b.sanctionedLoad;
+      if ($("roofArea")) $("roofArea").value = b.roofArea;
+      if ($("panelType")) $("panelType").value = b.panelType;
+      if ($("panelWp")) $("panelWp").value = b.panelWp;
+      if ($("panelRate")) $("panelRate").value = b.panelRate;
+      if ($("structureType")) $("structureType").value = b.structureType;
+      if ($("paymentMode")) $("paymentMode").value = b.paymentMode;
+      if ($("loanInterestRate")) $("loanInterestRate").value = b.loanInterestRate;
+      if ($("loanDownPaymentPct")) $("loanDownPaymentPct").value = b.loanDownPaymentPct;
+      state.singleCustomerBackup = null;
+    }
+    render();
     if (state.activeWorkspaceTab === "building") {
       switchWorkspaceTab("cad");
     }

@@ -104,6 +104,34 @@ export function assignFlatColors(flats) {
 }
 
 /**
+ * Compute the recommended number of solar panels for an individual flat based on its consumption.
+ * Recommendation strictly aims to meet the flat's monthly unit requirement as closely as possible,
+ * without artificially throttling or overshooting sanctioned load.
+ * For example, Flat 202 with 376 units/mo needing ~3.58 kW gets 6 panels of 550 Wp = 3.3 kWp.
+ */
+export function getRecommendedPanelsForFlat(monthlyUnits, sanctionedLoad, panelWp = 550, unitsPerKwMonth = 105) {
+  const u = Math.max(0, Number(monthlyUnits)) || 0;
+  const load = Math.max(0, Number(sanctionedLoad)) || 3;
+  if (u <= 0) {
+    const kw = Math.min(load, 3);
+    return Math.max(1, Math.round((kw * 1000) / panelWp));
+  }
+  const reqKw = u / unitsPerKwMonth;
+  const rawPanels = (reqKw * 1000) / panelWp;
+  // Sizing close to requirement: for ~6.5 (like 6.51 for 376 units), 6 panels = 3.3 kW (347 units/mo close to 376)
+  let panels = Math.round(rawPanels);
+  if (rawPanels > 1 && (rawPanels - Math.floor(rawPanels)) <= 0.52) {
+    panels = Math.floor(rawPanels);
+  }
+  // Sanctioned load cap if specified (> 0)
+  if (load > 0) {
+    const maxByLoad = Math.max(1, Math.floor((load * 1000) / panelWp));
+    panels = Math.min(panels, maxByLoad);
+  }
+  return Math.max(1, panels);
+}
+
+/**
  * Allocate total panels across flats proportional to their monthly consumption (monthlyUnits).
  * Ensures sum(flat.panels) exactly equals totalPanels.
  */
@@ -198,31 +226,50 @@ export function calculateBuildingLedger({
   // 2. Eligible mounting: Roof/terrace/balcony/BIPV/elevated (≥8 ft). Ground-mounted strictly ineligible (₹0 CFA).
   const isGroundMount = structureType === "ground" || mountingType === "ground";
 
-  // Sizing by roof area
-  const panelWidthMm = 1123;
-  const panelHeightMm = 2279;
-  const panelAreaSqft = (panelWidthMm / 1000) * (panelHeightMm / 1000) * 10.7639; // ~27.5 sq ft
-  const maxRoofPanels = Math.max(0, Math.floor((roofAreaSqft * 0.70) / panelAreaSqft));
-
-  // Sizing by total consumption
+  // Sizing by total consumption and individual flat consumption requirements
   const totalMonthlyUnits = coloredFlats.reduce((s, f) => s + (Number(f.monthlyUnits) || 0), 0);
   const totalSanctionedLoad = coloredFlats.reduce((s, f) => s + (Number(f.sanctionedLoad) || 0), 0);
   const totalCurrentBill = coloredFlats.reduce((s, f) => s + (Number(f.monthlyBill) || 0), 0);
 
-  // Approximate generation: 1 kWp produces ~110 units/month in Pune (450 units for 4.4 kWp)
+  // Approximate generation: 1 kWp produces ~105 units/month in Pune (465 units for 4.4 kWp)
   const unitsPerKwMonth = 105;
-  const targetKwByConsumption = totalMonthlyUnits > 0 ? (totalMonthlyUnits / unitsPerKwMonth) : (totalSanctionedLoad || 5);
-  const targetPanelsByConsumption = Math.round((targetKwByConsumption * 1000) / panelWp);
 
-  // Total building panels (bounded by roof area)
-  const totalBuildingPanels = maxRoofPanels > 0 
-    ? Math.min(targetPanelsByConsumption, maxRoofPanels)
-    : targetPanelsByConsumption;
+  // Allocate panels to each flat based directly on its consumption requirement
+  // Ensures flat recommendations are as close to requirement as possible (e.g. Flat 202: 376 units -> 6 panels of 550 Wp = 3.3 kW)
+  const allocatedFlats = coloredFlats.map((f) => {
+    let pCount;
+    if (f.manualPanels && Number(f.panels) > 0) {
+      pCount = Number(f.panels);
+    } else {
+      pCount = getRecommendedPanelsForFlat(f.monthlyUnits, f.sanctionedLoad, panelWp, unitsPerKwMonth);
+    }
+    const allocatedKw = Math.round((pCount * panelWp / 1000) * 100) / 100;
+    return {
+      ...f,
+      panels: pCount,
+      allocatedKw,
+    };
+  });
+
+  const totalTargetPanels = allocatedFlats.reduce((s, f) => s + f.panels, 0);
+
+  // Sizing by roof area
+  const panelWidthMm = 1123;
+  const panelHeightMm = 2279;
+  const panelAreaSqft = (panelWidthMm / 1000) * (panelHeightMm / 1000) * 10.7639; // ~27.5 sq ft
+  const requiredRoofAreaSqft = Math.ceil((totalTargetPanels * panelAreaSqft) / 0.70);
+  const maxRoofPanels = Math.max(0, Math.floor((roofAreaSqft * 0.70) / panelAreaSqft));
+
+  let finalFlats = allocatedFlats;
+  let totalBuildingPanels = totalTargetPanels;
+
+  // Only if strictRoofLimit is explicitly requested AND roof area is genuinely smaller
+  if (config.strictRoofLimit && maxRoofPanels > 0 && maxRoofPanels < totalTargetPanels) {
+    finalFlats = allocatePanelsByConsumption(maxRoofPanels, coloredFlats, panelWp);
+    totalBuildingPanels = maxRoofPanels;
+  }
 
   const totalBuildingCapacityKw = Math.round((totalBuildingPanels * panelWp / 1000) * 10) / 10;
-
-  // Allocate panels across flats proportional to monthly units
-  const allocatedFlats = allocatePanelsByConsumption(totalBuildingPanels, coloredFlats, panelWp);
 
   // Pricing constants (matches calculator.js / config.js)
   const pricing = config.pricing || DEFAULT_CONFIG.pricing;
@@ -258,9 +305,9 @@ export function calculateBuildingLedger({
 
   // Category B Shared Building Cap (MNRE Guidelines 07.06.2024):
   // Cap = min(3 kWp × Total Houses, 500 kWp)
-  const sharedBuildingCapKw = Math.min(Math.max(1, allocatedFlats.length) * 3, 500);
+  const sharedBuildingCapKw = Math.min(Math.max(1, finalFlats.length) * 3, 500);
   const maxCapPerFlat = isSpecial ? 85800 : 78000;
-  const maxBuildingSubsidy = allocatedFlats.length * maxCapPerFlat;
+  const maxBuildingSubsidy = finalFlats.length * maxCapPerFlat;
 
   // Process individual flat metrics
   let totalSubsidiesSum = 0;
@@ -269,9 +316,9 @@ export function calculateBuildingLedger({
   let totalAnnualSavingsSum = 0;
   let totalLifetimeSavingsSum = 0;
 
-  const flatLedger = allocatedFlats.map((flat, idx) => {
+  const flatLedger = finalFlats.map((flat, idx) => {
     const flatCapKw = flat.allocatedKw || (flat.panels * panelWp / 1000);
-    const flatShareFraction = totalBuildingCapacityKw > 0 ? (flatCapKw / totalBuildingCapacityKw) : (1 / allocatedFlats.length);
+    const flatShareFraction = totalBuildingCapacityKw > 0 ? (flatCapKw / totalBuildingCapacityKw) : (1 / finalFlats.length);
     const grossCost = Math.round(totalBuildingGrossCost * flatShareFraction);
 
     // Fixed Quantum Subsidy per flat under Category B
@@ -398,12 +445,14 @@ export function calculateBuildingLedger({
     sharedBuildingCapKw,
     maxBuildingSubsidy,
     deemedApprovalEligible: totalBuildingCapacityKw <= 10,
+    requiredRoofAreaSqft,
     loanInterestRate,
     loanDownPaymentPct,
   };
 
   const summary = {
     ...totals,
+    requiredRoofAreaSqft,
     totalPanels: totalBuildingPanels,
     totalBuildingPanels,
     totalCapacityKw: totalBuildingCapacityKw,

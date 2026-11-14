@@ -146,6 +146,56 @@ assert.equal(userBuildingRes.flatLedger.length, 8);
 assert.ok(userBuildingRes.summary.totalBuildingCapacityKw > 0);
 assert.ok(userBuildingRes.summary.totalSubsidy > 0);
 
+// Verify Flat 202 (376 units, 5 kW load) gets close to 3.58 kW requirement: approx 6 panels of 550 Wp = 3.3 kWp, ₹78k subsidy
+const flat202 = userBuildingRes.flatLedger.find(f => f.flatNo === "202");
+assert.ok(flat202, "Flat 202 must exist in building ledger");
+assert.equal(flat202.panels, 6, "Flat 202 (376 units) must be recommended 6 panels (3.3 kW)");
+assert.equal(flat202.allocatedKw, 3.3, "Flat 202 must have 3.3 kWp allocated");
+assert.equal(flat202.subsidy, 78000, "Flat 202 (3.3 kWp >= 3 kW) must receive completed ₹78,000 subsidy");
+assert.ok(flat202.monthlyGeneration >= 340 && flat202.monthlyGeneration <= 355, `Flat 202 generation should be ~347 kWh/mo, got: ${flat202.monthlyGeneration}`);
+
+// Test with full 27-flat dataset
+const user27Flats = [
+  { flatNo: "101", customerName: "Ajay kulkarni", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 93, monthlyBill: 1023 },
+  { flatNo: "102", customerName: "Ruchi Bhindwale", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 153, monthlyBill: 1836 },
+  { flatNo: "103", customerName: "Ajay Uke", sanctionedLoad: 4, category: "LT-I", monthlyUnits: 91, monthlyBill: 910 },
+  { flatNo: "201", customerName: "Ashok Mahajan", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 92, monthlyBill: 1104 },
+  { flatNo: "202", customerName: "Shriniwas Badrayani", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 376, monthlyBill: 4512 },
+  { flatNo: "203", customerName: "Sudhir Aptekar", sanctionedLoad: 4, category: "LT-I", monthlyUnits: 194, monthlyBill: 2134 },
+  { flatNo: "301", customerName: "Shrirang Jamadagani", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 240, monthlyBill: 2640 },
+  { flatNo: "302", customerName: "Sanjeevani Toley", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 195, monthlyBill: 2340 },
+  { flatNo: "303", customerName: "Vivekanand Shetty", sanctionedLoad: 4, category: "LT-I", monthlyUnits: 131, monthlyBill: 1048 },
+  { flatNo: "401", customerName: "Prasad Bhogle", sanctionedLoad: 4.98, category: "LT-I", monthlyUnits: 88, monthlyBill: 880 },
+  { flatNo: "402", customerName: "Amit Ponkshe", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 326, monthlyBill: 4890 },
+  { flatNo: "403", customerName: "Kiran Kanaskar", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 170, monthlyBill: 1700 },
+  { flatNo: "501", customerName: "Supriya Potnis", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 127, monthlyBill: 1524 },
+  { flatNo: "502", customerName: "Amruta Kulkarni", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 300, monthlyBill: 3900 },
+  { flatNo: "503", customerName: "Anagha Naik", sanctionedLoad: 4, category: "LT-I", monthlyUnits: 106, monthlyBill: 954 },
+  { flatNo: "601", customerName: "Sandeep Kadu", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 100, monthlyBill: 1200 },
+  { flatNo: "602", customerName: "Sonali Saraf", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 167, monthlyBill: 1837 },
+  { flatNo: "603", customerName: "Swati Kulkarni", sanctionedLoad: 4, category: "LT-I", monthlyUnits: 255, monthlyBill: 2805 },
+  { flatNo: "701", customerName: "Prasad Deshmukh", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 304, monthlyBill: 3648 },
+  { flatNo: "702", customerName: "Advait Inamdar", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 120, monthlyBill: 1440 },
+  { flatNo: "703", customerName: "Archana Tikotekar", sanctionedLoad: 4, category: "LT-I", monthlyUnits: 108, monthlyBill: 1080 },
+  { flatNo: "801", customerName: "Amruta Bedekar", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 227, monthlyBill: 2724 },
+  { flatNo: "802", customerName: "Jitendra Balkundi", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 300, monthlyBill: 5100 },
+  { flatNo: "803", customerName: "Atul Hindlekar", sanctionedLoad: 4, category: "LT-I", monthlyUnits: 163, monthlyBill: 1630 },
+  { flatNo: "901", customerName: "Madhav Phatak", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 148, monthlyBill: 1628 },
+  { flatNo: "902", customerName: "Nikhil Kirtikar", sanctionedLoad: 5, category: "LT-I", monthlyUnits: 330, monthlyBill: 3960 },
+  { flatNo: "903", customerName: "Amol Kulkarni", sanctionedLoad: 4, category: "LT-I", monthlyUnits: 300, monthlyBill: 3300 },
+];
+const bldg27Res = calculateBuildingLedger({
+  buildingName: "27 Flats Society",
+  flats: user27Flats,
+});
+assert.equal(bldg27Res.flatLedger.length, 27);
+const flat202In27 = bldg27Res.flatLedger.find(f => f.flatNo === "202");
+assert.equal(flat202In27.panels, 6, "Flat 202 must get 6 panels even in large 27-flat society without arbitrary throttling");
+assert.equal(flat202In27.allocatedKw, 3.3);
+assert.equal(flat202In27.subsidy, 78000);
+assert.ok(bldg27Res.summary.totalBuildingPanels >= 80, `Total panels for 27 flats should be ~85-95, got: ${bldg27Res.summary.totalBuildingPanels}`);
+assert.ok(bldg27Res.summary.requiredRoofAreaSqft >= 3000, `Required roof area should be >= 3000 sq ft, got: ${bldg27Res.summary.requiredRoofAreaSqft}`);
+
 // Export to CSV
 const exportedCsv = exportBuildingToCSV(buildingRes.flatLedger);
 assert.ok(exportedCsv.includes("Silver Oaks") || exportedCsv.includes("Rahul S"));
