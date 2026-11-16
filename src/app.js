@@ -12,6 +12,16 @@ import {
   getRecommendedPanelsForFlat,
   FLAT_COLOR_PALETTE
 } from "./multiCustomerManager.js";
+import {
+  CLONED_APP_USERS,
+  CRM_STATUS_MAP,
+  SAMPLE_CRM_LEADS,
+  authenticateInternalUser,
+  fetchCrmLeads,
+  saveCrmLeadLocallyAndRemote,
+  addNoteToLead,
+  deleteCrmLeadById
+} from "./crm.js";
 
 const INTERNAL_PASSPHRASE_KEY = "puneSolarInternalPassphrase";
 
@@ -19,6 +29,8 @@ const $ = (id) => document.getElementById(id);
 
 const state = {
   internalUnlocked: false,
+  userMode: "customer", // "customer" | "internal"
+  currentUser: null,
   activeTab: "system",
   extractedBill: null,
   ongridBackup: "none",
@@ -3381,19 +3393,71 @@ function renderDiagram(pl, input) {
 
 
 function lockInternal() {
+  setCustomerMode();
+}
+
+function setCustomerMode() {
   state.internalUnlocked = false;
-  $("internalPanel")?.classList.add("hidden");
+  state.userMode = "customer";
+  state.currentUser = null;
+  try {
+    localStorage.removeItem("solar_currentUser");
+  } catch (_) {}
+
+  // 1. Header session badge & buttons
+  const userBadge = $("loggedInUserBadge");
+  if (userBadge) userBadge.style.display = "none";
+
   $("easyModeButton")?.classList.add("active");
   $("internalModeButton")?.classList.remove("active");
 
+  // Landing banner
+  const activeUserPill = $("landingActiveUserPill");
+  if (activeUserPill) activeUserPill.style.display = "none";
+  $("landingMakeEstimateBtn")?.classList.add("active");
+  $("landingTeamLoginBtn")?.classList.remove("active");
+
+  // 2. Hide Internal tabs: CAD, Proposal & Export, Building Studio, and CRM
+  const cadTab = $("workspaceTabCadBtn");
+  if (cadTab) cadTab.style.display = "none";
+  const propTab = $("workspaceTabProposalBtn");
+  if (propTab) propTab.style.display = "none";
+  const crmTab = $("workspaceTabCrmBtn");
+  if (crmTab) crmTab.style.display = "none";
+  const buildingTab = $("workspaceTabBuildingBtn");
+  if (buildingTab) buildingTab.style.display = "none";
+
+  // If currently on cad, proposal, building, or crm, switch back to sizing
+  if (state.activeWorkspaceTab === "cad" || state.activeWorkspaceTab === "proposal" || state.activeWorkspaceTab === "building" || state.activeWorkspaceTab === "crm") {
+    switchWorkspaceTab("sizing");
+  }
+
+  // 3. Hide server sync buttons; show local customer buttons
+  const btnSave = $("sidebarSaveProposalBtn");
+  if (btnSave) btnSave.style.display = "none";
+  const btnLoad = $("openLoadProposalModalButton");
+  if (btnLoad) btnLoad.style.display = "none";
+  const btnClone = $("sidebarCloneProposalBtn");
+  if (btnClone) btnClone.style.display = "none";
+
+  const btnCustSave = $("customerSaveLocalBtn");
+  if (btnCustSave) btnCustSave.style.display = "inline-flex";
+  const btnCustLoad = $("customerLoadLocalBtn");
+  if (btnCustLoad) btnCustLoad.style.display = "inline-flex";
+
+  // 4. In sidebar: hide rates & internal panels
+  $("internalPanel")?.classList.add("hidden");
   const ratesPill = $("ratesPillBtn");
   if (ratesPill) ratesPill.style.display = "none";
   const ratesRail = $("ratesRailBtn");
   if (ratesRail) ratesRail.style.display = "none";
-
   if (state.activeSidebarCategory === "rates") {
     switchSidebarCategory("contact");
   }
+
+  // 5. Show customer CTA banner on sizing pane
+  const custBanner = $("customerEstimateCtaBanner");
+  if (custBanner) custBanner.style.display = "flex";
 
   document.querySelectorAll('.wizard-actions').forEach(el => el.classList.remove('hidden'));
   render();
@@ -3437,32 +3501,122 @@ function closeInternalDialog() {
   }
 }
 
-function unlockInternal() {
-  const pwd = document.getElementById("internalPassword")?.value;
+async function unlockInternal() {
+  const pwdInput = document.getElementById("internalPassword");
+  const userInput = document.getElementById("internalUsername");
+  const userSelect = document.getElementById("loginUserQuickSelect");
+  const errEl = document.getElementById("passwordError");
+
+  const pwd = (pwdInput?.value || "").trim();
+  const username = (userInput?.value || userSelect?.value || "").trim();
+
+  // 1. Backward compatibility check for test suites and emergency passphrase
   if (pwd === "solar2026") {
-    document.getElementById("passwordError")?.classList.add("hidden");
+    errEl?.classList.add("hidden");
     closeInternalDialog();
-    openInternal();
+    openInternal(CLONED_APP_USERS[0]);
+    return;
+  }
+
+  if (!pwd) {
+    if (errEl) {
+      errEl.textContent = "Please enter your password.";
+      errEl.classList.remove("hidden");
+    }
+    pwdInput?.focus();
+    return;
+  }
+
+  // 2. Cloned user credentials verification
+  const authRes = await authenticateInternalUser(username, pwd);
+  if (authRes && authRes.success && authRes.user) {
+    errEl?.classList.add("hidden");
+    closeInternalDialog();
+    openInternal(authRes.user);
   } else {
-    document.getElementById("passwordError")?.classList.remove("hidden");
-    document.getElementById("internalPassword")?.focus();
+    if (errEl) {
+      errEl.textContent = authRes?.error || "Incorrect username or password. Please verify credentials.";
+      errEl.classList.remove("hidden");
+    }
+    pwdInput?.focus();
   }
 }
 
-// Expose internal mode methods to window early
-window.openInternalDialog = openInternalDialog;
-window.closeInternalDialog = closeInternalDialog;
-window.unlockInternal = unlockInternal;
-window.lockInternal = lockInternal;
-window.openInternal = openInternal;
-
-function openInternal() {
+function openInternal(user = null) {
   state.internalUnlocked = true;
+  state.userMode = "internal";
+
+  if (user) {
+    state.currentUser = user;
+    try {
+      localStorage.setItem("solar_currentUser", JSON.stringify(user));
+    } catch (_) {}
+  } else if (!state.currentUser) {
+    try {
+      const stored = localStorage.getItem("solar_currentUser");
+      if (stored) state.currentUser = JSON.parse(stored);
+    } catch (_) {}
+    if (!state.currentUser) {
+      state.currentUser = CLONED_APP_USERS[0];
+    }
+  }
+
+  // 1. Show user session badge in header
+  const userBadge = $("loggedInUserBadge");
+  const userNameSpan = $("loggedInUserName");
+  if (userBadge && userNameSpan) {
+    userBadge.style.display = "inline-flex";
+    const displayName = state.currentUser.name || state.currentUser.username || "Team Member";
+    const roleTag = state.currentUser.role ? ` (${state.currentUser.role.toUpperCase()})` : "";
+    userNameSpan.textContent = `👤 ${displayName}${roleTag}`;
+  }
+
+  // Landing banner indicator
+  const activeUserPill = $("landingActiveUserPill");
+  const landingActiveUserText = $("landingActiveUserText");
+  if (activeUserPill && landingActiveUserText) {
+    activeUserPill.style.display = "inline-flex";
+    landingActiveUserText.textContent = `Signed in: ${state.currentUser.name || state.currentUser.username}`;
+  }
+  $("landingMakeEstimateBtn")?.classList.remove("active");
+  $("landingTeamLoginBtn")?.classList.add("active");
+
+  $("easyModeButton")?.classList.remove("active");
+  $("internalModeButton")?.classList.add("active");
+
+  // 2. Show internal tabs: CAD, Proposal, Building (if applicable), and CRM
+  const cadTab = $("workspaceTabCadBtn");
+  if (cadTab) cadTab.style.display = "inline-flex";
+  const propTab = $("workspaceTabProposalBtn");
+  if (propTab) propTab.style.display = "inline-flex";
+  const crmTab = $("workspaceTabCrmBtn");
+  if (crmTab) crmTab.style.display = "inline-flex";
+  const buildingTab = $("workspaceTabBuildingBtn");
+  if (buildingTab && (state.proposalMode === "multi_building" || state.internalUnlocked)) {
+    buildingTab.style.display = "inline-flex";
+  }
+
+  // 3. Show Server Save/Load/Clone buttons, hide local customer buttons
+  const btnSave = $("sidebarSaveProposalBtn");
+  if (btnSave) btnSave.style.display = "inline-flex";
+  const btnLoad = $("openLoadProposalModalButton");
+  if (btnLoad) btnLoad.style.display = "inline-flex";
+  const btnClone = $("sidebarCloneProposalBtn");
+  if (btnClone) btnClone.style.display = "inline-flex";
+
+  const btnCustSave = $("customerSaveLocalBtn");
+  if (btnCustSave) btnCustSave.style.display = "none";
+  const btnCustLoad = $("customerLoadLocalBtn");
+  if (btnCustLoad) btnCustLoad.style.display = "none";
+
+  // 4. In sizing pane: hide customer CTA banner
+  const custBanner = $("customerEstimateCtaBanner");
+  if (custBanner) custBanner.style.display = "none";
+
+  // 5. Sidebar internal controls & rates
   $("internalPanel")?.classList.remove("hidden");
   const resultsPanel = document.querySelector('.results-panel');
   if (resultsPanel) resultsPanel.classList.remove('blurred-overlay');
-  $("easyModeButton")?.classList.remove("active");
-  $("internalModeButton")?.classList.add("active");
 
   const ratesPill = $("ratesPillBtn");
   if (ratesPill) ratesPill.style.display = "inline-flex";
@@ -3493,6 +3647,702 @@ function openInternal() {
   render();
 }
 
+function logoutInternal() {
+  state.currentUser = null;
+  state.internalUnlocked = false;
+  try {
+    localStorage.removeItem("solar_currentUser");
+  } catch (_) {}
+  setCustomerMode();
+  showLoadToast("Logged out of internal session. Switched to Customer Estimate Mode.");
+}
+
+function safeAlert(msg) {
+  if (typeof window !== "undefined" && typeof window.alert === "function") {
+    window.alert(msg);
+  } else if (typeof alert === "function") {
+    alert(msg);
+  } else {
+    showLoadToast(msg);
+  }
+}
+
+// Customer Local Estimate Save & Load
+function saveCustomerLocalEstimate() {
+  try {
+    const custData = {
+      customerName: $("customerName")?.value || "",
+      mobileNumber: $("mobileNumber")?.value || "",
+      emailAddress: $("emailAddress")?.value || "",
+      customerAddress: $("customerAddress")?.value || "Pune, Maharashtra",
+      consumerCategory: $("consumerCategory")?.value || "residential",
+      monthlyBill: $("monthlyBill")?.value || "",
+      monthlyUnits: $("monthlyUnits")?.value || "",
+      sanctionedLoad: $("sanctionedLoad")?.value || "",
+      roofArea: $("roofArea")?.value || "",
+      powerGoal: state.powerGoal || "ongrid",
+      batteryHours: $("batteryHours")?.value || "2",
+      savedAt: new Date().toISOString()
+    };
+    localStorage.setItem("solar_customer_estimate", JSON.stringify(custData));
+    showLoadToast("Estimate saved locally on this device! 💾");
+  } catch (err) {
+    console.error("Local save error:", err);
+    safeAlert("Could not save locally: " + err.message);
+  }
+}
+
+function loadCustomerLocalEstimate() {
+  try {
+    const raw = localStorage.getItem("solar_customer_estimate");
+    if (!raw) {
+      safeAlert("No saved estimate found on this browser or device.");
+      return;
+    }
+    const data = JSON.parse(raw);
+    if ($("customerName")) $("customerName").value = data.customerName || "";
+    if ($("mobileNumber")) $("mobileNumber").value = data.mobileNumber || "";
+    if ($("emailAddress")) $("emailAddress").value = data.emailAddress || "";
+    if ($("customerAddress")) $("customerAddress").value = data.customerAddress || "Pune, Maharashtra";
+    if ($("consumerCategory")) $("consumerCategory").value = data.consumerCategory || "residential";
+    if ($("monthlyBill")) $("monthlyBill").value = data.monthlyBill || "";
+    if ($("monthlyUnits")) $("monthlyUnits").value = data.monthlyUnits || "";
+    if ($("sanctionedLoad")) $("sanctionedLoad").value = data.sanctionedLoad || "";
+    if ($("roofArea")) $("roofArea").value = data.roofArea || "";
+    if (data.powerGoal) {
+      state.powerGoal = data.powerGoal;
+      document.querySelectorAll(".power-goal-pill").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.goal === data.powerGoal);
+      });
+    }
+    render();
+    showLoadToast("Locally saved estimate loaded! 📂");
+  } catch (err) {
+    console.error("Local load error:", err);
+    safeAlert("Could not load local estimate: " + err.message);
+  }
+}
+
+// Customer Request Site Visit Modal
+function openCustomerSiteVisitModal() {
+  const modal = $("customerSiteVisitModal");
+  if (!modal) return;
+
+  if ($("custModalName")) $("custModalName").value = $("customerName")?.value || "";
+  if ($("custModalPhone")) $("custModalPhone").value = $("mobileNumber")?.value || "";
+  if ($("custModalAddress")) $("custModalAddress").value = $("customerAddress")?.value || "Pune, Maharashtra";
+  if ($("custModalNotes")) $("custModalNotes").value = "";
+
+  modal.style.display = "flex";
+}
+
+function closeCustomerSiteVisitModal() {
+  const modal = $("customerSiteVisitModal");
+  if (modal) modal.style.display = "none";
+}
+
+async function submitCustomerSiteVisitRequest() {
+  const name = $("custModalName")?.value?.trim();
+  const phone = $("custModalPhone")?.value?.trim();
+  const address = $("custModalAddress")?.value?.trim();
+  const notesText = $("custModalNotes")?.value?.trim();
+
+  if (!name || !phone) {
+    safeAlert("Please provide your Name and Mobile Number so our engineers can contact you.");
+    return;
+  }
+
+  const bill = numberValue("monthlyBill") || 5000;
+  const units = numberValue("monthlyUnits") || 450;
+  const load = numberValue("sanctionedLoad") || 5;
+  const cap = state.estimates?.recommended?.dcCapacityKw || 3.3;
+  const cost = state.estimates?.recommended?.netCost || 200000;
+
+  const notes = [
+    {
+      id: "note_" + Date.now(),
+      text: `Customer requested free site survey via online estimate portal. ${notesText ? "Client note: " + notesText : ""}`,
+      author: "Customer Portal",
+      created_at: new Date().toISOString()
+    }
+  ];
+
+  const lead = {
+    customer_name: name,
+    mobile_number: phone,
+    email_address: $("emailAddress")?.value || "",
+    customer_address: address || "Pune, Maharashtra",
+    monthly_units: units,
+    monthly_bill: bill,
+    sanctioned_load: load,
+    system_capacity_kw: cap,
+    estimated_cost: cost,
+    status: "lead",
+    assigned_to: "indrajeet.date@cnergy.co.in",
+    assigned_name: "Indrajeet Date",
+    proposal_serial_no: null,
+    notes
+  };
+
+  await saveCrmLeadLocallyAndRemote(lead);
+  closeCustomerSiteVisitModal();
+  safeAlert("Thank you! Your request for a free solar site visit has been submitted. Our Pune solar engineering team will call you shortly to confirm the appointment. 📞");
+}
+
+// ==============================================================================
+// INTERNAL SOLAR CRM & PIPELINE TRACKER
+// ==============================================================================
+const crmState = {
+  activeFilter: "all",
+  searchTerm: "",
+  repFilter: "all",
+  activeLeadIdForNotes: null,
+  leads: []
+};
+
+async function renderCrmDashboard(filterStatus = null, searchTerm = null, repFilter = null) {
+  if (filterStatus !== null) crmState.activeFilter = filterStatus;
+  if (searchTerm !== null) crmState.searchTerm = searchTerm;
+  if (repFilter !== null) crmState.repFilter = repFilter;
+
+  const leads = await fetchCrmLeads();
+  crmState.leads = leads;
+
+  // 1. Update KPI Ribbon
+  const totalLeads = leads.length;
+  const visitsDone = leads.filter(l => l.status === "site_visit_done").length;
+  const propsSent = leads.filter(l => l.status === "proposal_sent").length;
+  const wonCount = leads.filter(l => l.status === "won").length;
+  const totalPipelineVal = leads.reduce((sum, l) => sum + (Number(l.estimated_cost) || 0), 0);
+
+  if ($("crmKpiTotalLeads")) $("crmKpiTotalLeads").textContent = totalLeads;
+  if ($("crmKpiVisitsDone")) $("crmKpiVisitsDone").textContent = visitsDone;
+  if ($("crmKpiProposalsSent")) $("crmKpiProposalsSent").textContent = propsSent;
+  if ($("crmKpiWon")) $("crmKpiWon").textContent = wonCount;
+  if ($("crmKpiPipelineVal")) {
+    $("crmKpiPipelineVal").textContent = totalPipelineVal >= 10000000 
+      ? `₹${(totalPipelineVal / 10000000).toFixed(2)} Cr`
+      : totalPipelineVal >= 100000 
+        ? `₹${(totalPipelineVal / 100000).toFixed(1)} Lakh`
+        : `₹${totalPipelineVal.toLocaleString("en-IN")}`;
+  }
+
+  // 2. Update Filter Tab Badges
+  if ($("crmTabCountAll")) $("crmTabCountAll").textContent = totalLeads;
+  if ($("crmTabCountLead")) $("crmTabCountLead").textContent = leads.filter(l => l.status === "lead").length;
+  if ($("crmTabCountVisitSched")) $("crmTabCountVisitSched").textContent = leads.filter(l => l.status === "site_visit_scheduled").length;
+  if ($("crmTabCountVisitDone")) $("crmTabCountVisitDone").textContent = visitsDone;
+  if ($("crmTabCountPropSent")) $("crmTabCountPropSent").textContent = propsSent;
+  if ($("crmTabCountWon")) $("crmTabCountWon").textContent = wonCount;
+  if ($("crmTabCountLost")) $("crmTabCountLost").textContent = leads.filter(l => l.status === "lost").length;
+
+  // Count saved proposals for archive badge
+  let savedPropsCount = 0;
+  try {
+    const raw = localStorage.getItem("solar_saved_proposals");
+    if (raw) savedPropsCount = JSON.parse(raw).length;
+  } catch (_) {}
+  if ($("crmTabCountArchive")) $("crmTabCountArchive").textContent = savedPropsCount;
+
+  // Active filter tab styling
+  document.querySelectorAll(".crm-filter-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.filter === crmState.activeFilter);
+  });
+
+  // 3. Toggle between Leads Table and Proposals Archive Table
+  const leadsWrapper = $("crmLeadsTableWrapper");
+  const propsWrapper = $("crmProposalsTableWrapper");
+
+  if (crmState.activeFilter === "proposals_archive") {
+    if (leadsWrapper) leadsWrapper.style.display = "none";
+    if (propsWrapper) propsWrapper.style.display = "block";
+    await renderCrmProposalsArchive(crmState.searchTerm);
+    return;
+  }
+
+  if (leadsWrapper) leadsWrapper.style.display = "block";
+  if (propsWrapper) propsWrapper.style.display = "none";
+
+  // 4. Filter Leads
+  const q = (crmState.searchTerm || "").toLowerCase().trim();
+  const rep = crmState.repFilter;
+  const filtered = leads.filter(lead => {
+    if (crmState.activeFilter !== "all" && lead.status !== crmState.activeFilter) return false;
+    if (rep !== "all" && lead.assigned_to !== rep && lead.assigned_name !== rep) return false;
+    if (q) {
+      const matchName = (lead.customer_name || "").toLowerCase().includes(q);
+      const matchPhone = (lead.mobile_number || "").includes(q);
+      const matchAddr = (lead.customer_address || "").toLowerCase().includes(q);
+      const matchSerial = (lead.proposal_serial_no || "").toLowerCase().includes(q);
+      const matchNotes = Array.isArray(lead.notes) && lead.notes.some(n => (n.text || "").toLowerCase().includes(q));
+      if (!matchName && !matchPhone && !matchAddr && !matchSerial && !matchNotes) return false;
+    }
+    return true;
+  });
+
+  renderCrmLeadsTable(filtered);
+}
+
+function renderCrmLeadsTable(leads) {
+  const tbody = $("crmLeadsTableBody");
+  const emptyMsg = $("crmEmptyLeadsMessage");
+  if (!tbody) return;
+
+  if (!leads || leads.length === 0) {
+    tbody.innerHTML = "";
+    if (emptyMsg) emptyMsg.style.display = "block";
+    return;
+  }
+  if (emptyMsg) emptyMsg.style.display = "none";
+
+  tbody.innerHTML = leads.map(lead => {
+    const meta = CRM_STATUS_MAP[lead.status] || { label: lead.status, color: "#64748b", bg: "#f1f5f9", icon: "⚪" };
+    const notes = Array.isArray(lead.notes) ? lead.notes : [];
+    const latestNote = notes.length > 0 ? notes[0] : null;
+    const latestNoteSnippet = latestNote ? (latestNote.text.length > 55 ? latestNote.text.substring(0, 52) + "..." : latestNote.text) : "No notes yet";
+    const estValStr = lead.estimated_cost ? `₹${Math.round(lead.estimated_cost).toLocaleString("en-IN")}` : "—";
+    
+    return `
+      <tr data-lead-id="${lead.id}">
+        <td>
+          <div style="font-weight: 700; color: #0f172a; font-size: 13px;">${escapeHtml(lead.customer_name || 'Customer')}</div>
+          <div style="font-size: 12px; color: #0284c7; margin-top: 1px;">
+            <a href="tel:${escapeHtml(lead.mobile_number || '')}" style="color: inherit; text-decoration: none;">📞 ${escapeHtml(lead.mobile_number || '—')}</a>
+          </div>
+          <div style="font-size: 11.5px; color: #64748b; margin-top: 1px;">📍 ${escapeHtml(lead.customer_address || 'Pune')}</div>
+        </td>
+        <td>
+          <div style="font-size: 12.5px; font-weight: 600; color: #0f172a;">${lead.sanctioned_load ? lead.sanctioned_load + ' kW' : '—'}</div>
+          <div style="font-size: 11.5px; color: #64748b;">${lead.monthly_units ? lead.monthly_units + ' kWh/mo' : '—'}</div>
+          <div style="font-size: 11px; color: #94a3b8;">${lead.monthly_bill ? '₹' + Math.round(lead.monthly_bill).toLocaleString('en-IN') + '/mo' : ''}</div>
+        </td>
+        <td>
+          <div style="font-size: 13px; font-weight: 700; color: #166534;">${lead.system_capacity_kw ? lead.system_capacity_kw + ' kWp' : '—'}</div>
+          <div style="font-size: 12px; font-weight: 600; color: #0f172a;">${estValStr}</div>
+        </td>
+        <td>
+          <div style="font-size: 12px; font-weight: 600; color: #334155;">👤 ${escapeHtml(lead.assigned_name || lead.assigned_to || 'Unassigned')}</div>
+        </td>
+        <td>
+          <select class="crm-status-select" data-lead-id="${lead.id}" style="padding: 4px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 700; border: 1.5px solid ${meta.color}; color: ${meta.color}; background: ${meta.bg}; cursor: pointer;">
+            <option value="lead" ${lead.status === "lead" ? "selected" : ""}>🟡 New Lead</option>
+            <option value="site_visit_scheduled" ${lead.status === "site_visit_scheduled" ? "selected" : ""}>🔵 Visit Scheduled</option>
+            <option value="site_visit_done" ${lead.status === "site_visit_done" ? "selected" : ""}>🟣 Site Visit Done</option>
+            <option value="proposal_sent" ${lead.status === "proposal_sent" ? "selected" : ""}>🟢 Proposal Sent</option>
+            <option value="won" ${lead.status === "won" ? "selected" : ""}>🏆 Won / Closed</option>
+            <option value="lost" ${lead.status === "lost" ? "selected" : ""}>🔴 Lost / Dropped</option>
+          </select>
+        </td>
+        <td>
+          <div style="max-width: 200px; font-size: 11.5px; color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 4px;" title="${escapeHtml(latestNote ? latestNote.text : '')}">
+            ${escapeHtml(latestNoteSnippet)}
+          </div>
+          <button type="button" class="crm-open-notes-btn crm-btn-action" data-lead-id="${lead.id}" style="padding: 3px 8px; font-size: 11px; font-weight: 600;">
+            💬 Notes (${notes.length})
+          </button>
+        </td>
+        <td>
+          ${lead.proposal_serial_no 
+            ? `<span style="font-size: 11px; font-weight: 600; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px;">${escapeHtml(lead.proposal_serial_no)}</span>`
+            : `<span style="font-size: 11px; color: #94a3b8;">None</span>`}
+        </td>
+        <td style="text-align: right; white-space: nowrap;">
+          <button type="button" class="crm-load-lead-btn crm-btn-action crm-btn-primary" data-lead-id="${lead.id}" title="Load customer details into Proposal Maker" style="padding: 5px 10px; font-size: 11.5px; font-weight: 600;">
+            ⚡ Load Proposal
+          </button>
+          <button type="button" class="crm-delete-lead-btn crm-btn-action" data-lead-id="${lead.id}" title="Delete lead" style="padding: 5px 8px; font-size: 11.5px; color: #ef4444; border-color: #fecaca; margin-left: 4px;">
+            🗑️
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  // Attach row event listeners
+  tbody.querySelectorAll(".crm-status-select").forEach(sel => {
+    sel.addEventListener("change", (e) => {
+      const id = sel.dataset.leadId;
+      const newStatus = e.target.value;
+      handleCrmStatusChange(id, newStatus);
+    });
+  });
+
+  tbody.querySelectorAll(".crm-open-notes-btn").forEach(btn => {
+    btn.addEventListener("click", () => openCrmNotesModal(btn.dataset.leadId));
+  });
+
+  tbody.querySelectorAll(".crm-load-lead-btn").forEach(btn => {
+    btn.addEventListener("click", () => loadLeadIntoProposalMaker(btn.dataset.leadId));
+  });
+
+  tbody.querySelectorAll(".crm-delete-lead-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.leadId;
+      if (confirm("Are you sure you want to delete this lead?")) {
+        await deleteCrmLeadById(id);
+        renderCrmDashboard();
+      }
+    });
+  });
+}
+
+async function renderCrmProposalsArchive(query = "") {
+  const tbody = $("crmProposalsTableBody");
+  const emptyMsg = $("crmEmptyProposalsMessage");
+  if (!tbody) return;
+
+  // Gather local proposals
+  let localList = [];
+  try {
+    const raw = localStorage.getItem("solar_saved_proposals");
+    if (raw) localList = JSON.parse(raw);
+  } catch (_) {}
+
+  // Gather server proposals safely
+  let serverList = [];
+  try {
+    if (typeof fetch === "function") {
+      const res = await fetch("/api/load-proposals?search=" + encodeURIComponent(query || ""));
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.success && Array.isArray(json.data)) {
+          serverList = json.data;
+        }
+      }
+    }
+  } catch (_) {}
+
+  // Combine and deduplicate
+  const combined = [];
+  const seen = new Set();
+
+  for (const p of localList) {
+    const s = p.proposalSerialNo || p.id;
+    if (s && !seen.has(s)) {
+      seen.add(s);
+      combined.push({ ...p, _source: "local" });
+    }
+  }
+
+  for (const p of serverList) {
+    const s = p.proposal_serial_no || p.id;
+    if (s && !seen.has(s)) {
+      seen.add(s);
+      combined.push({
+        proposalSerialNo: p.proposal_serial_no,
+        customerName: p.customer_name,
+        mobileNumber: p.mobile_number,
+        emailAddress: p.email_address,
+        customerAddress: p.state_data?.input?.customerAddress || "Pune",
+        sanctionedLoad: p.state_data?.input?.sanctionedLoad || "",
+        systemCapacityKw: p.system_capacity_kw,
+        totalCost: p.total_cost,
+        savedAt: p.created_at,
+        stateData: p.state_data,
+        _source: "server"
+      });
+    }
+  }
+
+  const q = (query || "").toLowerCase().trim();
+  const filtered = combined.filter(p => {
+    if (!q) return true;
+    const name = (p.customerName || "").toLowerCase();
+    const phone = (p.mobileNumber || "");
+    const serial = (p.proposalSerialNo || "").toLowerCase();
+    const addr = (p.customerAddress || "").toLowerCase();
+    return name.includes(q) || phone.includes(q) || serial.includes(q) || addr.includes(q);
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = "";
+    if (emptyMsg) emptyMsg.style.display = "block";
+    return;
+  }
+  if (emptyMsg) emptyMsg.style.display = "none";
+
+  tbody.innerHTML = filtered.map((p, idx) => {
+    const serial = p.proposalSerialNo || "Draft";
+    const custName = p.customerName || p.stateData?.formValues?.customerName || "Customer";
+    const capKw = p.systemCapacityKw || p.stateData?.state?.estimates?.recommended?.dcCapacityKw || "";
+    const costVal = p.totalCost || p.stateData?.state?.estimates?.recommended?.netCost || 0;
+    const dateStr = p.savedAt ? new Date(p.savedAt).toLocaleDateString("en-IN") : "—";
+    const srcTag = p._source === "server" 
+      ? `<span style="font-size: 10px; font-weight: 700; background: #e0f2fe; color: #0369a1; padding: 2px 5px; border-radius: 4px; margin-left: 4px;">☁️ Server</span>`
+      : `<span style="font-size: 10px; font-weight: 700; background: #dcfce7; color: #166534; padding: 2px 5px; border-radius: 4px; margin-left: 4px;">💾 Local</span>`;
+
+    return `
+      <tr>
+        <td>
+          <span style="font-weight: 700; color: #0284c7; font-size: 12px; background: #e0f2fe; padding: 2px 6px; border-radius: 4px;">${escapeHtml(serial)}</span>
+          ${srcTag}
+        </td>
+        <td><strong style="color: #0f172a; font-size: 13px;">${escapeHtml(custName)}</strong></td>
+        <td>
+          <div style="font-size: 12px; color: #64748b;">${escapeHtml(p.mobileNumber || '—')}</div>
+          <div style="font-size: 11px; color: #94a3b8;">${escapeHtml(p.customerAddress || 'Pune')}</div>
+        </td>
+        <td><div style="font-size: 12px; font-weight: 600;">${p.sanctionedLoad ? p.sanctionedLoad + ' kW' : '—'}</div></td>
+        <td><span style="font-size: 12px; font-weight: 700; color: #166534; background: #dcfce7; padding: 2px 6px; border-radius: 4px;">${capKw ? capKw + ' kWp' : '—'}</span></td>
+        <td><div style="font-size: 12.5px; font-weight: 700; color: #0f172a;">${costVal ? '₹' + Math.round(costVal).toLocaleString('en-IN') : '—'}</div></td>
+        <td><span style="font-size: 11.5px; color: #64748b;">${dateStr}</span></td>
+        <td style="text-align: right; white-space: nowrap;">
+          <button type="button" class="crm-archive-load-btn crm-btn-action crm-btn-primary" data-idx="${idx}" style="padding: 5px 10px; font-size: 11.5px; font-weight: 600;">
+            📂 Load
+          </button>
+          <button type="button" class="crm-archive-pdf-btn crm-btn-action" data-idx="${idx}" style="padding: 5px 8px; font-size: 11.5px; margin-left: 4px;">
+            📄 PDF
+          </button>
+          <button type="button" class="crm-archive-delete-btn crm-btn-action" data-idx="${idx}" style="padding: 5px 7px; font-size: 11.5px; color: #ef4444; border-color: #fecaca; margin-left: 4px;">
+            🗑️
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  window._crmArchivedProposals = filtered;
+
+  tbody.querySelectorAll(".crm-archive-load-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.idx);
+      const prop = window._crmArchivedProposals[idx];
+      if (prop && (prop.stateData || prop.state_data)) {
+        if (!state.internalUnlocked) openInternal();
+        window.restoreProposalState(prop.stateData || prop.state_data, prop.proposalSerialNo);
+        switchWorkspaceTab("sizing");
+      }
+    });
+  });
+
+  tbody.querySelectorAll(".crm-archive-pdf-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.idx);
+      const prop = window._crmArchivedProposals[idx];
+      if (prop && (prop.stateData || prop.state_data)) {
+        if (!state.internalUnlocked) openInternal();
+        window.restoreProposalState(prop.stateData || prop.state_data, prop.proposalSerialNo);
+        switchWorkspaceTab("proposal");
+      }
+    });
+  });
+
+  tbody.querySelectorAll(".crm-archive-delete-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const idx = Number(btn.dataset.idx);
+      const prop = window._crmArchivedProposals[idx];
+      if (prop && confirm(`Delete proposal ${prop.proposalSerialNo || 'this proposal'}?`)) {
+        await deleteProposal(prop.proposalSerialNo, prop.id);
+        await renderCrmProposalsArchive(crmState.searchTerm);
+      }
+    });
+  });
+}
+
+function openCrmNotesModal(leadId) {
+  const lead = crmState.leads.find(l => l.id === leadId);
+  if (!lead) return;
+
+  crmState.activeLeadIdForNotes = leadId;
+  const modal = $("crmNotesModal");
+  if (!modal) return;
+
+  if ($("crmModalLeadName")) $("crmModalLeadName").textContent = lead.customer_name || "Customer";
+  if ($("crmModalLeadPhone")) $("crmModalLeadPhone").textContent = `${lead.mobile_number || "—"} | ${lead.customer_address || "Pune"}`;
+
+  const timeline = $("crmNotesTimeline");
+  const notes = Array.isArray(lead.notes) ? lead.notes : [];
+
+  if (timeline) {
+    if (notes.length === 0) {
+      timeline.innerHTML = '<div style="color: #64748b; font-size: 12px; font-style: italic; padding: 12px; text-align: center;">No activity notes recorded yet.</div>';
+    } else {
+      timeline.innerHTML = notes.map(n => {
+        const dateStr = n.created_at ? new Date(n.created_at).toLocaleString("en-IN") : "";
+        return `
+          <div class="crm-note-item" style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 11px;">
+              <strong style="color: #0284c7;">👤 ${escapeHtml(n.author || 'Agent')}</strong>
+              <span style="color: #94a3b8;">${dateStr}</span>
+            </div>
+            <div style="font-size: 12.5px; color: #1e293b; line-height: 1.45; white-space: pre-wrap;">${escapeHtml(n.text || '')}</div>
+          </div>
+        `;
+      }).join("");
+    }
+  }
+
+  if ($("crmNewNoteText")) $("crmNewNoteText").value = "";
+  if ($("crmNewNoteStatusSelect")) $("crmNewNoteStatusSelect").value = lead.status || "lead";
+
+  modal.style.display = "flex";
+}
+
+function closeCrmNotesModal() {
+  const modal = $("crmNotesModal");
+  if (modal) modal.style.display = "none";
+  crmState.activeLeadIdForNotes = null;
+}
+
+async function submitCrmNote() {
+  const leadId = crmState.activeLeadIdForNotes;
+  if (!leadId) return;
+
+  const noteText = $("crmNewNoteText")?.value?.trim();
+  const newStatus = $("crmNewNoteStatusSelect")?.value;
+  if (!noteText) {
+    safeAlert("Please enter a note before submitting.");
+    return;
+  }
+
+  const authorName = state.currentUser ? (state.currentUser.name || state.currentUser.username) : "Internal Agent";
+  const res = await addNoteToLead(leadId, noteText, authorName, newStatus);
+  if (res.success) {
+    openCrmNotesModal(leadId); // Refresh timeline
+    renderCrmDashboard();      // Refresh CRM table
+    showLoadToast("Activity note saved! 💬");
+  }
+}
+
+function openCrmNewLeadModal() {
+  const modal = $("crmNewLeadModal");
+  if (!modal) return;
+
+  if ($("newLeadName")) $("newLeadName").value = "";
+  if ($("newLeadPhone")) $("newLeadPhone").value = "";
+  if ($("newLeadEmail")) $("newLeadEmail").value = "";
+  if ($("newLeadAddress")) $("newLeadAddress").value = "Pune, Maharashtra";
+  if ($("newLeadCapacity")) $("newLeadCapacity").value = "";
+  if ($("newLeadUnits")) $("newLeadUnits").value = "";
+  if ($("newLeadNotes")) $("newLeadNotes").value = "";
+
+  if ($("newLeadAssigned")) {
+    $("newLeadAssigned").value = state.currentUser ? state.currentUser.username : "indrajeet.date@cnergy.co.in";
+  }
+
+  modal.style.display = "flex";
+}
+
+function closeCrmNewLeadModal() {
+  const modal = $("crmNewLeadModal");
+  if (modal) modal.style.display = "none";
+}
+
+async function submitCrmNewLead() {
+  const name = $("newLeadName")?.value?.trim();
+  const phone = $("newLeadPhone")?.value?.trim();
+  if (!name || !phone) {
+    safeAlert("Customer Name and Phone Number are required.");
+    return;
+  }
+
+  const email = $("newLeadEmail")?.value?.trim() || "";
+  const address = $("newLeadAddress")?.value?.trim() || "Pune";
+  const cap = Number($("newLeadCapacity")?.value) || 3.3;
+  const units = Number($("newLeadUnits")?.value) || Math.round(cap * 120);
+  const assignedTo = $("newLeadAssigned")?.value || "indrajeet.date@cnergy.co.in";
+  const matchedUser = CLONED_APP_USERS.find(u => u.username === assignedTo);
+  const assignedName = matchedUser ? matchedUser.name : "Sales Team";
+  const initialNoteText = $("newLeadNotes")?.value?.trim();
+
+  const notes = [];
+  if (initialNoteText) {
+    notes.push({
+      id: "note_" + Date.now(),
+      text: initialNoteText,
+      author: state.currentUser ? (state.currentUser.name || state.currentUser.username) : "Internal Agent",
+      created_at: new Date().toISOString()
+    });
+  }
+
+  const newLead = {
+    customer_name: name,
+    mobile_number: phone,
+    email_address: email,
+    customer_address: address,
+    monthly_units: units,
+    monthly_bill: Math.round(units * 10),
+    sanctioned_load: Math.ceil(cap),
+    system_capacity_kw: cap,
+    estimated_cost: Math.round(cap * 65000),
+    status: "lead",
+    assigned_to: assignedTo,
+    assigned_name: assignedName,
+    proposal_serial_no: null,
+    notes
+  };
+
+  await saveCrmLeadLocallyAndRemote(newLead);
+  closeCrmNewLeadModal();
+  renderCrmDashboard();
+  showLoadToast(`New lead created for ${name}! 👤`);
+}
+
+async function handleCrmStatusChange(leadId, newStatus) {
+  const authorName = state.currentUser ? (state.currentUser.name || state.currentUser.username) : "Internal Agent";
+  const meta = CRM_STATUS_MAP[newStatus] || { label: newStatus };
+  const systemNote = `Status changed to ${meta.label}`;
+  await addNoteToLead(leadId, systemNote, authorName, newStatus);
+  renderCrmDashboard();
+  showLoadToast(`Updated status to ${meta.label}`);
+}
+
+async function loadLeadIntoProposalMaker(leadId) {
+  const leads = await fetchCrmLeads();
+  const lead = leads.find(l => l.id === leadId);
+  if (!lead) return;
+
+  // Populate project inputs
+  if ($("customerName")) $("customerName").value = lead.customer_name || "";
+  if ($("internalCustomerName")) $("internalCustomerName").value = lead.customer_name || "";
+  if ($("mobileNumber")) $("mobileNumber").value = lead.mobile_number || "";
+  if ($("internalMobileNumber")) $("internalMobileNumber").value = lead.mobile_number || "";
+  if ($("emailAddress")) $("emailAddress").value = lead.email_address || "";
+  if ($("internalEmailAddress")) $("internalEmailAddress").value = lead.email_address || "";
+  if ($("customerAddress")) $("customerAddress").value = lead.customer_address || "Pune, Maharashtra";
+  if (lead.monthly_units && $("monthlyUnits")) $("monthlyUnits").value = lead.monthly_units;
+  if (lead.monthly_bill && $("monthlyBill")) $("monthlyBill").value = lead.monthly_bill;
+  if (lead.sanctioned_load && $("sanctionedLoad")) $("sanctionedLoad").value = lead.sanctioned_load;
+
+  if (lead.proposal_serial_no) {
+    state.currentProposalSerialNo = lead.proposal_serial_no;
+    if ($("proposalSerialNo")) $("proposalSerialNo").value = lead.proposal_serial_no;
+    if ($("sidebarProposalSerialNo")) $("sidebarProposalSerialNo").value = lead.proposal_serial_no;
+  }
+
+  // Ensure internal mode is unlocked
+  if (!state.internalUnlocked) {
+    openInternal();
+  }
+
+  render();
+  switchWorkspaceTab("sizing");
+  showLoadToast(`Loaded lead ${lead.customer_name} into Proposal Maker! ⚡`);
+}
+
+// Expose internal mode and CRM methods to window early
+window.openInternalDialog = openInternalDialog;
+window.closeInternalDialog = closeInternalDialog;
+window.unlockInternal = unlockInternal;
+window.lockInternal = lockInternal;
+window.openInternal = openInternal;
+window.setCustomerMode = setCustomerMode;
+window.logoutInternal = logoutInternal;
+window.saveCustomerLocalEstimate = saveCustomerLocalEstimate;
+window.loadCustomerLocalEstimate = loadCustomerLocalEstimate;
+window.openCustomerSiteVisitModal = openCustomerSiteVisitModal;
+window.closeCustomerSiteVisitModal = closeCustomerSiteVisitModal;
+window.submitCustomerSiteVisitRequest = submitCustomerSiteVisitRequest;
+window.renderCrmDashboard = renderCrmDashboard;
+window.openCrmNotesModal = openCrmNotesModal;
+window.closeCrmNotesModal = closeCrmNotesModal;
+window.submitCrmNote = submitCrmNote;
+window.openCrmNewLeadModal = openCrmNewLeadModal;
+window.closeCrmNewLeadModal = closeCrmNewLeadModal;
+window.submitCrmNewLead = submitCrmNewLead;
+window.loadLeadIntoProposalMaker = loadLeadIntoProposalMaker;
+window.handleCrmStatusChange = handleCrmStatusChange;
+
 function switchTab(tab) {
   state.activeTab = tab;
   document.querySelectorAll(".tab-button").forEach((button) => {
@@ -3522,6 +4372,9 @@ function switchWorkspaceTab(tabId) {
   }
   if (tabId === "building") {
     updateBuildingStudio();
+  }
+  if (tabId === "crm") {
+    renderCrmDashboard();
   }
   if (tabId === "cad") {
     const cad = getActiveRooftopCAD();
@@ -3917,7 +4770,7 @@ function setProposalMode(mode) {
 
   if (singleBtn) singleBtn.classList.toggle("active", !isBuilding);
   if (multiBtn) multiBtn.classList.toggle("active", isBuilding);
-  if (buildingTabBtn) buildingTabBtn.style.display = isBuilding ? "inline-flex" : "none";
+  if (buildingTabBtn) buildingTabBtn.style.display = (isBuilding && state.userMode !== "customer") ? "inline-flex" : "none";
   if (includeIndivLabel) includeIndivLabel.style.display = isBuilding ? "inline-flex" : "none";
 
   const redoDemarcationBtn = $("cadRedoDemarcationBtn");
@@ -4461,9 +5314,36 @@ function attachEvents() {
     updateProposalStatusBadge("modified", state.currentProposalSerialNo);
   });
 
-  // Mode buttons
-  $("easyModeButton")?.addEventListener("click", lockInternal);
+  // Mode & Authentication buttons
+  $("easyModeButton")?.addEventListener("click", setCustomerMode);
   $("internalModeButton")?.addEventListener("click", openInternalDialog);
+  $("logoutBtn")?.addEventListener("click", logoutInternal);
+  $("headerCrmBtn")?.addEventListener("click", () => {
+    openInternal();
+    switchWorkspaceTab("crm");
+  });
+  $("landingMakeEstimateBtn")?.addEventListener("click", setCustomerMode);
+  $("landingTeamLoginBtn")?.addEventListener("click", openInternalDialog);
+
+  // Customer local estimate save & load
+  $("customerSaveLocalBtn")?.addEventListener("click", saveCustomerLocalEstimate);
+  $("customerLoadLocalBtn")?.addEventListener("click", loadCustomerLocalEstimate);
+
+  // Customer Free Site Visit Request Modal
+  $("custReqSiteVisitBtn")?.addEventListener("click", openCustomerSiteVisitModal);
+  $("closeSiteVisitModalBtn")?.addEventListener("click", closeCustomerSiteVisitModal);
+  $("cancelSiteVisitModalBtn")?.addEventListener("click", closeCustomerSiteVisitModal);
+  $("submitSiteVisitModalBtn")?.addEventListener("click", submitCustomerSiteVisitRequest);
+
+  // Quick select user dropdown & dialog close
+  $("loginUserQuickSelect")?.addEventListener("change", (e) => {
+    const val = e.target.value;
+    if (val && $("internalUsername")) {
+      $("internalUsername").value = val;
+      $("internalPassword")?.focus();
+    }
+  });
+  $("closeLoginModalXBtn")?.addEventListener("click", closeInternalDialog);
 
   // Dialog buttons
   $("unlockButton")?.addEventListener("click", unlockInternal);
@@ -4482,6 +5362,35 @@ function attachEvents() {
       unlockInternal();
     }
   });
+
+  // CRM Buttons and Controls
+  $("crmAddNewLeadBtn")?.addEventListener("click", openCrmNewLeadModal);
+  $("crmRefreshBtn")?.addEventListener("click", () => renderCrmDashboard());
+  $("crmOpenProposalMakerBtn")?.addEventListener("click", () => switchWorkspaceTab("sizing"));
+  
+  document.querySelectorAll(".crm-filter-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      renderCrmDashboard(btn.dataset.filter);
+    });
+  });
+
+  $("crmSearchInput")?.addEventListener("input", (e) => {
+    renderCrmDashboard(null, e.target.value);
+  });
+
+  $("crmRepFilter")?.addEventListener("change", (e) => {
+    renderCrmDashboard(null, null, e.target.value);
+  });
+
+  // CRM Notes Modal
+  $("crmCloseNotesModalBtn")?.addEventListener("click", closeCrmNotesModal);
+  $("crmCancelNotesModalBtn")?.addEventListener("click", closeCrmNotesModal);
+  $("crmAddNoteSubmitBtn")?.addEventListener("click", submitCrmNote);
+
+  // CRM New Lead Modal
+  $("crmCloseNewLeadModalBtn")?.addEventListener("click", closeCrmNewLeadModal);
+  $("crmCancelNewLeadBtn")?.addEventListener("click", closeCrmNewLeadModal);
+  $("crmSaveNewLeadBtn")?.addEventListener("click", submitCrmNewLead);
 
   // Consumer category change: toggle conditional fields and update slab defaults
   $("consumerCategory")?.addEventListener("change", () => {
@@ -5506,6 +6415,19 @@ updatePresetDropdown();
 attachEvents();
 initProposalSerialNo();
 render();
+
+// Check for stored internal user session or initialize Customer Mode
+try {
+  const storedUserRaw = typeof localStorage !== "undefined" ? localStorage.getItem("solar_currentUser") : null;
+  if (storedUserRaw) {
+    const user = JSON.parse(storedUserRaw);
+    openInternal(user);
+  } else {
+    setCustomerMode();
+  }
+} catch (_) {
+  setCustomerMode();
+}
 
 function applySavingsConfig(estimate, input) {
   if (!state.savingsConfig) state.savingsConfig = {};
@@ -7032,6 +7954,22 @@ window.setProposalMode = setProposalMode;
 window.updateBuildingStudio = updateBuildingStudio;
 window.resetAndRedoDemarcation = resetAndRedoDemarcation;
 window.render = render;
+window.setCustomerMode = setCustomerMode;
+window.logoutInternal = logoutInternal;
+window.saveCustomerLocalEstimate = saveCustomerLocalEstimate;
+window.loadCustomerLocalEstimate = loadCustomerLocalEstimate;
+window.renderCrmDashboard = renderCrmDashboard;
+window.openCrmNotesModal = openCrmNotesModal;
+window.closeCrmNotesModal = closeCrmNotesModal;
+window.submitCrmNote = submitCrmNote;
+window.openCrmNewLeadModal = openCrmNewLeadModal;
+window.closeCrmNewLeadModal = closeCrmNewLeadModal;
+window.submitCrmNewLead = submitCrmNewLead;
+window.loadLeadIntoProposalMaker = loadLeadIntoProposalMaker;
+window.handleCrmStatusChange = handleCrmStatusChange;
+window.openCustomerSiteVisitModal = openCustomerSiteVisitModal;
+window.closeCustomerSiteVisitModal = closeCustomerSiteVisitModal;
+window.submitCustomerSiteVisitRequest = submitCustomerSiteVisitRequest;
 
 export {
   autoSyncLatestProposalSerial,
@@ -7053,5 +7991,21 @@ export {
   openInternal,
   setProposalMode,
   updateBuildingStudio,
-  resetAndRedoDemarcation
+  resetAndRedoDemarcation,
+  setCustomerMode,
+  logoutInternal,
+  saveCustomerLocalEstimate,
+  loadCustomerLocalEstimate,
+  renderCrmDashboard,
+  openCrmNotesModal,
+  closeCrmNotesModal,
+  submitCrmNote,
+  openCrmNewLeadModal,
+  closeCrmNewLeadModal,
+  submitCrmNewLead,
+  loadLeadIntoProposalMaker,
+  handleCrmStatusChange,
+  openCustomerSiteVisitModal,
+  closeCustomerSiteVisitModal,
+  submitCustomerSiteVisitRequest
 };

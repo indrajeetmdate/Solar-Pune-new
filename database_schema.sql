@@ -188,3 +188,46 @@ BEGIN
     RETURN 'DC/' || fy || '/PROP-' || next_num;
 END;
 $$ LANGUAGE plpgsql;
+
+-- ========================================================
+-- 4. SOLAR CRM LEADS & PIPELINE TRACKING
+-- ========================================================
+CREATE TABLE IF NOT EXISTS crm_leads (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  customer_name VARCHAR(255) NOT NULL,
+  mobile_number VARCHAR(50),
+  email_address VARCHAR(255),
+  customer_address TEXT,
+  monthly_units NUMERIC(10, 2),
+  monthly_bill NUMERIC(12, 2),
+  sanctioned_load NUMERIC(10, 2),
+  system_capacity_kw NUMERIC(10, 2),
+  estimated_cost NUMERIC(12, 2),
+  status VARCHAR(50) DEFAULT 'lead', -- 'lead', 'site_visit_scheduled', 'site_visit_done', 'proposal_sent', 'won', 'lost'
+  assigned_to VARCHAR(255),
+  assigned_name VARCHAR(255),
+  proposal_serial_no VARCHAR(100),
+  proposal_id UUID,
+  notes JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE crm_leads ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read crm_leads" ON crm_leads;
+DROP POLICY IF EXISTS "Allow public insert crm_leads" ON crm_leads;
+DROP POLICY IF EXISTS "Allow public update crm_leads" ON crm_leads;
+DROP POLICY IF EXISTS "Allow public delete crm_leads" ON crm_leads;
+
+CREATE POLICY "Allow public read crm_leads" ON crm_leads FOR SELECT USING (true);
+CREATE POLICY "Allow public insert crm_leads" ON crm_leads FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update crm_leads" ON crm_leads FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public delete crm_leads" ON crm_leads FOR DELETE USING (true);
+
+CREATE INDEX IF NOT EXISTS idx_crm_leads_status ON crm_leads(status);
+CREATE INDEX IF NOT EXISTS idx_crm_leads_assigned ON crm_leads(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_crm_leads_created ON crm_leads(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_crm_leads_customer_name ON crm_leads(customer_name);
+CREATE INDEX IF NOT EXISTS idx_crm_leads_mobile ON crm_leads(mobile_number);
+

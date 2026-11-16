@@ -24,8 +24,13 @@
         <button type="button" class="mode-pill-btn" id="modeMultiBuildingBtn" title="Multi-customer building shared rooftop proposal">🏢 Multi-Customer Building</button>
       </div>
       <div class="header-actions" aria-label="Mode selector">
-        <button class="mode-button active" id="easyModeButton" type="button" onclick="window.lockInternal && window.lockInternal()">Customer</button>
-        <button class="mode-button" id="internalModeButton" type="button" onclick="window.openInternalDialog && window.openInternalDialog()">Internal</button>
+        <button class="mode-button active" id="easyModeButton" type="button" onclick="window.setCustomerMode ? window.setCustomerMode() : (window.lockInternal && window.lockInternal())" title="Open customer estimation portal">⚡ Customer Estimate</button>
+        <button class="mode-button" id="internalModeButton" type="button" onclick="window.openInternalDialog && window.openInternalDialog()" title="Internal engineering &amp; CRM suite">🔒 Team Login</button>
+        <div id="loggedInUserBadge" style="display: none; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: #0f172a; background: #f8fafc; padding: 4px 10px; border-radius: 20px; border: 1px solid #cbd5e1;">
+          <span id="loggedInUserName">👤 User</span>
+          <button type="button" id="headerCrmBtn" class="crm-btn-action crm-btn-primary" style="padding: 2px 8px; font-size: 11px;" title="Open Solar CRM">👥 CRM</button>
+          <button type="button" id="logoutBtn" style="background: none; border: none; color: #ef4444; font-size: 11.5px; font-weight: 700; cursor: pointer; padding: 0 4px;" title="Sign out of internal account">Logout 🚪</button>
+        </div>
       </div>
     </header>
 
@@ -632,18 +637,64 @@
         <!-- Sidebar Actions Bar -->
         <div class="sidebar-footer">
           <button class="sidebar-footer-btn" id="sidebarNewProposalBtn" type="button" title="Start a fresh proposal with a new serial number" style="background: #f0fdf4; border-color: #86efac; color: #166534; font-weight: 700;">+ New</button>
-          <button class="sidebar-footer-btn" id="sidebarSaveProposalBtn" type="button" title="Save or update current proposal data">Save Data 💾</button>
-          <button class="sidebar-footer-btn" id="openLoadProposalModalButton" type="button" title="Load saved proposals or import JSON">Load Data 📂</button>
+          <!-- Internal Server Sync Save/Load (Internal Users) -->
+          <button class="sidebar-footer-btn" id="sidebarSaveProposalBtn" type="button" title="Save or update current proposal data (Server Sync)">Save Data 💾</button>
+          <button class="sidebar-footer-btn" id="openLoadProposalModalButton" type="button" title="Load saved proposals or import JSON (Server Sync)">Load Data 📂</button>
           <button class="sidebar-footer-btn" id="sidebarCloneProposalBtn" type="button" title="Clone this proposal for another customer">Clone 👥</button>
+          <!-- Customer Local Storage Save/Load (Local Only, No Server Sync) -->
+          <button class="sidebar-footer-btn" id="customerSaveLocalBtn" type="button" title="Save your estimate locally on this device" style="display: none; background: #ecfdf5; color: #047857; border-color: #a7f3d0; font-weight: 600;">Save Estimate 💾</button>
+          <button class="sidebar-footer-btn" id="customerLoadLocalBtn" type="button" title="Load your locally saved estimate from this device" style="display: none; background: #f8fafc; color: #0369a1; border-color: #bae6fd; font-weight: 600;">Load Estimate 📂</button>
           <button class="sidebar-footer-btn primary" id="sidebarCalculateBtn" type="button">Calculate ⚡</button>
         </div>
       </aside>
 
       <!-- ================= RIGHT WORKSPACE SECTION (TABBED, ZERO ENDLESS SCROLL) ================= -->
       <section class="workspace-panel results-panel" id="resultsPanel" aria-label="Recommendations & CAD Workspace">
+        
+        <!-- HOME LANDING BANNER / PORTAL SELECTOR -->
+        <div id="homeLandingBanner" class="home-landing-banner">
+          <div class="landing-welcome-row">
+            <div class="landing-welcome-col">
+              <span class="landing-badge">⚡ Pune Rooftop Solar Portal</span>
+              <h2 class="landing-title">Select Mode: Consumer Solar Estimate or Internal Engineering Suite</h2>
+              <p class="landing-subtitle">Choose below to compute quick residential/commercial solar savings, or sign in to access Rooftop CAD, Society Studio &amp; Solar CRM.</p>
+            </div>
+            <div id="landingActiveUserPill" style="display: none; font-size: 11.5px; background: rgba(255,255,255,0.15); padding: 4px 10px; border-radius: 20px; color: #e2e8f0;">
+              Active Session: <strong id="landingActiveUserName" style="color: #38bdf8;">Admin</strong>
+            </div>
+          </div>
+          <div class="landing-cards-row">
+            <div class="landing-portal-card active" id="landingCustomerCard" role="button" tabindex="0">
+              <div class="portal-card-icon">⚡</div>
+              <div class="portal-card-body">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <strong class="portal-card-title">Make Your Own Estimate</strong>
+                  <span class="portal-card-pill">Open for Customers</span>
+                </div>
+                <span class="portal-card-desc">Basic consumer inputs · Instant sizing, MSEB savings &amp; PM Surya Ghar central subsidy (local save only).</span>
+              </div>
+            </div>
+            <div class="landing-portal-card" id="landingInternalCard" role="button" tabindex="0">
+              <div class="portal-card-icon">🏢</div>
+              <div class="portal-card-body">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <strong class="portal-card-title">Internal Team Login</strong>
+                  <span class="portal-card-pill locked" id="landingInternalBadge">🔒 Team Auth</span>
+                </div>
+                <span class="portal-card-desc">For Solar Engineers &amp; Sales Staff · Rooftop CAD, Multi-Meter Society Studio, Solar CRM &amp; PDF Export.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Sticky Workspace Navigation Bar -->
         <header class="workspace-header">
           <nav class="workspace-tab-nav" id="workspaceTabNav" aria-label="Workspace sections">
+            <!-- Internal CRM Tab (Shown for logged-in internal users) -->
+            <button class="workspace-tab-btn" data-tab="crm" id="workspaceTabCrmBtn" type="button" style="display: none; border-color: #0284c7; color: #0284c7;">
+              <span class="tab-icon">👥</span>
+              <span class="tab-text">Solar CRM</span>
+            </button>
             <button class="workspace-tab-btn active" data-tab="cad" id="workspaceTabCadBtn" type="button">
               <span class="tab-icon">📐</span>
               <span class="tab-text">Rooftop CAD</span>
@@ -1147,6 +1198,15 @@
 
         <!-- PANE 2: SIZING & COMPARE -->
         <div class="workspace-tab-pane" id="paneSizing" data-pane="sizing" style="display: none;">
+          <!-- Customer Portal Estimate Call-to-Action Banner -->
+          <div class="customer-estimate-banner" id="customerEstimateCtaBanner" style="display: none;">
+            <div>
+              <strong style="font-size: 14px; color: #166534; display: block; margin-bottom: 2px;">⚡ Ready to save up to 90% on your MSEB electricity bill?</strong>
+              <span style="font-size: 12px; color: #15803d;">Get an exact on-site roof measurement, 3D shadow analysis, and official subsidy assistance.</span>
+            </div>
+            <button type="button" class="customer-cta-btn open-site-visit-modal-btn" id="custReqSiteVisitBtn">📞 Request Free Site Visit</button>
+          </div>
+
           <!-- Recommendation Header -->
           <div class="detail-card" style="margin-bottom: 12px;">
             <div class="summary-band" style="margin-bottom: 10px; align-items: center;">
@@ -1842,27 +1902,377 @@
           </div>
         </div>
 
+        <!-- PANE 8: SOLAR CRM & PIPELINE TRACKER -->
+        <div class="workspace-tab-pane" id="paneCrm" data-pane="crm" style="display: none; padding: 20px;">
+          <div class="crm-container">
+            
+            <!-- CRM Top Header -->
+            <div class="crm-header-row">
+              <div>
+                <span class="eyebrow" style="color: #0284c7; font-weight: 700; font-size: 11px;">Internal Sales &amp; Operations</span>
+                <h2 style="font-size: 18px; margin: 2px 0 0; color: #0f172a; font-weight: 800;">👥 Solar CRM &amp; Customer Pipeline Tracker</h2>
+              </div>
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <button type="button" class="crm-btn-action crm-btn-success" id="crmAddNewLeadBtn" style="padding: 7px 14px; font-size: 12.5px;">
+                  <span>+</span> <span>Add New Customer Lead</span>
+                </button>
+                <button type="button" class="crm-btn-action" id="crmRefreshBtn" title="Refresh leads from database" style="padding: 7px 12px; font-size: 12px;">
+                  <span>↻</span> <span>Refresh</span>
+                </button>
+                <button type="button" class="crm-btn-action crm-btn-primary" id="crmOpenProposalMakerBtn" style="padding: 7px 14px; font-size: 12.5px;">
+                  <span>⚡</span> <span>Open Proposal Maker</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- CRM KPI Ribbon (5 Metrics Cards) -->
+            <div class="crm-kpi-grid">
+              <div class="crm-kpi-card" style="border-left: 4px solid #0284c7;">
+                <span class="crm-kpi-label">Total Leads</span>
+                <strong class="crm-kpi-val" id="crmKpiTotalLeads">0</strong>
+                <span style="font-size: 11px; color: #64748b;">Active Pipeline</span>
+              </div>
+              <div class="crm-kpi-card" style="border-left: 4px solid #7c3aed;">
+                <span class="crm-kpi-label">Site Visits Done</span>
+                <strong class="crm-kpi-val" id="crmKpiVisitsDone" style="color: #7c3aed;">0</strong>
+                <span style="font-size: 11px; color: #64748b;">Survey &amp; Roof Inspected</span>
+              </div>
+              <div class="crm-kpi-card" style="border-left: 4px solid #059669;">
+                <span class="crm-kpi-label">Proposals Sent</span>
+                <strong class="crm-kpi-val" id="crmKpiProposalsSent" style="color: #059669;">0</strong>
+                <span style="font-size: 11px; color: #64748b;">Formal Quotations Shared</span>
+              </div>
+              <div class="crm-kpi-card" style="border-left: 4px solid #16a34a;">
+                <span class="crm-kpi-label">Deals Won / Closed</span>
+                <strong class="crm-kpi-val" id="crmKpiWon" style="color: #16a34a;">0</strong>
+                <span style="font-size: 11px; color: #64748b;">Installation Approved</span>
+              </div>
+              <div class="crm-kpi-card" style="border-left: 4px solid #f59e0b;">
+                <span class="crm-kpi-label">Pipeline Value</span>
+                <strong class="crm-kpi-val" id="crmKpiPipelineVal" style="color: #d97706;">₹0</strong>
+                <span style="font-size: 11px; color: #64748b;">Gross Project Potential</span>
+              </div>
+            </div>
+
+            <!-- Filter Navigation Tabs & Search Controls -->
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+              <div class="crm-tabs-row" id="crmFilterTabsRow">
+                <button type="button" class="crm-filter-btn active" data-filter="all">All Leads (<span id="crmTabCountAll">0</span>)</button>
+                <button type="button" class="crm-filter-btn" data-filter="lead">🟡 New Leads (<span id="crmTabCountLead">0</span>)</button>
+                <button type="button" class="crm-filter-btn" data-filter="site_visit_scheduled">🔵 Visit Scheduled (<span id="crmTabCountVisitSched">0</span>)</button>
+                <button type="button" class="crm-filter-btn" data-filter="site_visit_done">🟣 Site Visit Done (<span id="crmTabCountVisitDone">0</span>)</button>
+                <button type="button" class="crm-filter-btn" data-filter="proposal_sent">🟢 Proposal Sent (<span id="crmTabCountPropSent">0</span>)</button>
+                <button type="button" class="crm-filter-btn" data-filter="won">🏆 Won (<span id="crmTabCountWon">0</span>)</button>
+                <button type="button" class="crm-filter-btn" data-filter="lost">🔴 Lost (<span id="crmTabCountLost">0</span>)</button>
+                <button type="button" class="crm-filter-btn" data-filter="proposals_archive" style="margin-left: auto; color: #0369a1; border-color: #0284c7; font-weight: 700;">📑 Previous Proposals Archive (<span id="crmTabCountArchive">0</span>)</button>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 240px; position: relative;">
+                  <input type="text" id="crmSearchInput" placeholder="🔍 Search by customer name, phone, address, or staff..." style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12.5px; box-sizing: border-box;">
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <label style="font-size: 12px; color: #64748b; font-weight: 600;">Staff:</label>
+                  <select id="crmRepFilter" style="padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; background: white; color: #0f172a;">
+                    <option value="all">All Agents</option>
+                    <option value="indrajeet.date@cnergy.co.in">Indrajeet Date</option>
+                    <option value="milind.date@cnergy.co.in">Milind Date</option>
+                    <option value="anujmagdum@cnergy.co.in">Anuj Magdum</option>
+                    <option value="santosh@cnergy.co.in">Santosh Gore</option>
+                    <option value="pratik@cnergy.co.in">Pratik Choughule</option>
+                    <option value="sagar@cnergy.co.in">Sagar Pendse</option>
+                    <option value="ajay@cnergy.co.in">Ajay Tiwari</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Leads Table View -->
+            <div class="crm-table-container" id="crmLeadsTableWrapper">
+              <table class="crm-table" id="crmLeadsTable">
+                <thead>
+                  <tr>
+                    <th>Customer Details</th>
+                    <th>Sanction / Units</th>
+                    <th>Solar Sizing &amp; Est.</th>
+                    <th>Assigned Staff</th>
+                    <th>Current State</th>
+                    <th>Notes &amp; Activity</th>
+                    <th>Linked Proposal</th>
+                    <th style="text-align: right;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="crmLeadsTableBody">
+                  <!-- Dynamically rendered by app.js / crm.js -->
+                </tbody>
+              </table>
+              <div id="crmEmptyLeadsMessage" style="display: none; padding: 40px; text-align: center; color: #64748b; font-size: 13px;">
+                No customer leads found matching current filter. Click <strong>+ Add New Customer Lead</strong> above to create one.
+              </div>
+            </div>
+
+            <!-- Previous Proposals Archive Table View (Shown when Proposals Archive tab is active) -->
+            <div class="crm-table-container" id="crmProposalsTableWrapper" style="display: none;">
+              <table class="crm-table" id="crmProposalsTable">
+                <thead>
+                  <tr>
+                    <th>Serial Number</th>
+                    <th>Customer Name</th>
+                    <th>Contact &amp; Address</th>
+                    <th>Sanctioned Load</th>
+                    <th>Capacity (kWp)</th>
+                    <th>Gross / Net Cost</th>
+                    <th>Created Date</th>
+                    <th style="text-align: right;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="crmProposalsTableBody">
+                  <!-- Dynamically rendered by app.js / crm.js -->
+                </tbody>
+              </table>
+              <div id="crmEmptyProposalsMessage" style="display: none; padding: 40px; text-align: center; color: #64748b; font-size: 13px;">
+                No saved proposals found in archive. Save a proposal in Proposal Maker to see it archived here.
+              </div>
+            </div>
+
+          </div>
+        </div>
 
       </section>
     </main>
 
-    <!-- Master Password Dialog -->
-    <dialog id="passwordDialog" class="password-dialog">
-      <form method="dialog" class="password-box">
-        <p class="eyebrow">Internal Mode</p>
-        <h2 id="passwordDialogTitle" style="font-size: 16px;">Enter Passphrase</h2>
-        <p id="passwordHelp" class="muted small">Please enter master passphrase to unlock internal pricing.</p>
-        <label class="field">
-          <span>Passphrase</span>
-          <input id="internalPassword" type="password" autocomplete="current-password">
+    <!-- Master Password / Enterprise User Login Dialog (Cloned Database) -->
+    <dialog id="passwordDialog" class="password-dialog" style="max-width: 480px; width: 92%; border-radius: 12px; padding: 0; border: 1px solid #cbd5e1; box-shadow: 0 10px 30px rgba(0,0,0,0.25);">
+      <form method="dialog" class="password-box" style="padding: 24px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px;">
+          <div>
+            <span class="eyebrow" style="color: #0284c7; font-weight: 700; font-size: 11px;">Enterprise Access</span>
+            <h2 id="passwordDialogTitle" style="font-size: 17px; margin: 2px 0 0; color: #0f172a; font-weight: 700;">🏢 Internal Team Login</h2>
+          </div>
+          <button type="button" id="closeLoginModalXBtn" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; line-height: 1;">&times;</button>
+        </div>
+        
+        <p id="passwordHelp" class="muted small" style="margin: 0; color: #475569; font-size: 12.5px; line-height: 1.45;">
+          Select your internal employee account or enter credentials cloned from the enterprise database (<code>app_users</code>).
+        </p>
+
+        <!-- Quick Select Cloned Account Dropdown -->
+        <label class="field" style="display: flex; flex-direction: column; gap: 5px;">
+          <span style="font-size: 12px; font-weight: 600; color: #1e293b;">⚡ Quick Select Internal Account:</span>
+          <select id="loginUserQuickSelect" style="padding: 8px 10px; font-size: 13px; border: 1.5px solid #94a3b8; border-radius: 6px; background: #f8fafc; color: #0f172a; font-weight: 600;">
+            <option value="">-- Choose Account or Type Below --</option>
+            <option value="indrajeet.date@cnergy.co.in">Indrajeet Date (Admin)</option>
+            <option value="datlioncnergy@gmail.com">Datlion Admin (Admin)</option>
+            <option value="milind.date@cnergy.co.in">Milind Date (Admin)</option>
+            <option value="agneya.date@cnergy.co.in">Agneya Date (Admin)</option>
+            <option value="manoj@cnergy.co.in">Manoj Badve (Admin)</option>
+            <option value="anujmagdum@cnergy.co.in">Anuj Magdum (Billing)</option>
+            <option value="santosh@cnergy.co.in">Santosh Gore (Sales/Ops)</option>
+            <option value="pratik@cnergy.co.in">Pratik Choughule (Sales/Ops)</option>
+            <option value="sagar@cnergy.co.in">Sagar Pendse (Sales/Ops)</option>
+            <option value="ajay@cnergy.co.in">Ajay Tiwari (Sales/Ops)</option>
+            <option value="anush@cnergy.co.in">Anush Bilaye (Sales/Ops)</option>
+            <option value="swapnil2@cnergy.co.in">Swapnil Bangude (Sales/Ops)</option>
+            <option value="display@cnergy.co.in">TV Display (User)</option>
+          </select>
         </label>
-        <p id="passwordError" class="error-text hidden">Incorrect password.</p>
-        <div class="dialog-actions">
-          <button class="ghost-button" id="cancelPasswordButton" value="cancel" type="button">Cancel</button>
-          <button class="primary-button" id="unlockButton" value="default" type="button">Unlock</button>
+
+        <!-- Username / Email Input -->
+        <label class="field" style="display: flex; flex-direction: column; gap: 5px;">
+          <span style="font-size: 12px; font-weight: 600; color: #1e293b;">Username / Email Address</span>
+          <input id="internalUsername" type="text" placeholder="e.g. indrajeet.date@cnergy.co.in" autocomplete="username" style="padding: 8px 10px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px;">
+        </label>
+
+        <!-- Password Input -->
+        <label class="field" style="display: flex; flex-direction: column; gap: 5px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 12px; font-weight: 600; color: #1e293b;">Password / Passphrase</span>
+            <span style="font-size: 11px; color: #64748b;">(or solar2026)</span>
+          </div>
+          <input id="internalPassword" type="password" placeholder="Enter account password" autocomplete="current-password" style="padding: 8px 10px; font-size: 13px; border: 1.5px solid #3b82f6; border-radius: 6px;">
+        </label>
+
+        <p id="passwordError" class="error-text hidden" style="color: #ef4444; font-size: 12px; margin: 0; font-weight: 600;">Incorrect username or password. Please verify credentials.</p>
+
+        <div class="dialog-actions" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px;">
+          <button class="ghost-button" id="cancelPasswordButton" value="cancel" type="button" style="padding: 8px 16px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; cursor: pointer;">Cancel</button>
+          <button class="primary-button" id="unlockButton" value="default" type="button" style="padding: 8px 18px; font-size: 13px; font-weight: 700; background: #0284c7; border-color: #0284c7; color: white; border-radius: 6px; cursor: pointer;">Sign In &amp; Unlock Suite 🔓</button>
         </div>
       </form>
     </dialog>
+
+    <!-- CRM Lead Notes & Activity Timeline Modal -->
+    <div id="crmNotesModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1050; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+      <div style="background: white; border-radius: 12px; width: 92%; max-width: 550px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.25); overflow: hidden;">
+        <div style="padding: 16px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <span class="eyebrow" style="color: #0284c7; font-size: 10.5px; font-weight: 700;">Customer State &amp; Notes</span>
+            <h3 id="crmNotesCustomerName" style="margin: 2px 0 0; font-size: 16px; font-weight: 700; color: #0f172a;">Customer Name</h3>
+            <span id="crmNotesCustomerAddress" style="font-size: 11.5px; color: #64748b;">Address</span>
+          </div>
+          <button type="button" id="crmCloseNotesModalBtn" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b; line-height: 1;">&times;</button>
+        </div>
+
+        <div style="padding: 16px 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px;">
+          <!-- Quick Status Actions -->
+          <div>
+            <span style="font-size: 11.5px; font-weight: 700; color: #475569; display: block; margin-bottom: 6px;">QUICK STATE UPDATE:</span>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button type="button" class="crm-btn-action" data-set-status="site_visit_scheduled" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe;">🔵 Visit Scheduled</button>
+              <button type="button" class="crm-btn-action" data-set-status="site_visit_done" style="background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe;">🟣 Site Visit Done</button>
+              <button type="button" class="crm-btn-action" data-set-status="proposal_sent" style="background: #ecfdf5; color: #047857; border-color: #a7f3d0;">🟢 Proposal Sent</button>
+              <button type="button" class="crm-btn-action" data-set-status="won" style="background: #dcfce7; color: #15803d; border-color: #86efac;">🏆 Won / Closed</button>
+            </div>
+          </div>
+
+          <!-- Notes History Timeline -->
+          <div>
+            <span style="font-size: 11.5px; font-weight: 700; color: #475569; display: block; margin-bottom: 6px;">ACTIVITY &amp; NOTES TIMELINE:</span>
+            <div id="crmNotesTimeline" class="crm-notes-timeline">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
+          <!-- Add New Note Form -->
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+            <label style="font-size: 12px; font-weight: 700; color: #1e293b;">Add Update / Progress Note:</label>
+            <textarea id="crmNewNoteTextarea" rows="3" placeholder="Enter site inspection findings, shadow notes, customer feedback, quotation discussion..." style="width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; font-size: 12.5px; box-sizing: border-box; resize: vertical;"></textarea>
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 11px; color: #64748b;">Set State to:</span>
+                <select id="crmNoteNewStatusSelect" style="font-size: 11.5px; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                  <option value="">(Keep current state)</option>
+                  <option value="site_visit_scheduled">🔵 Site Visit Scheduled</option>
+                  <option value="site_visit_done">🟣 Site Visit Done</option>
+                  <option value="proposal_sent">🟢 Proposal Sent</option>
+                  <option value="won">🏆 Won / Closed</option>
+                  <option value="lost">🔴 Lost / Dropped</option>
+                </select>
+              </div>
+              <button type="button" id="crmAddNoteSubmitBtn" class="crm-btn-action crm-btn-primary" style="padding: 6px 14px; font-weight: 700;">+ Save Note</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CRM Create New Lead Modal -->
+    <div id="crmNewLeadModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1050; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+      <div style="background: white; border-radius: 12px; width: 92%; max-width: 520px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.25); overflow: hidden;">
+        <div style="padding: 16px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: #0f172a;">➕ Add New Customer Lead</h3>
+          <button type="button" id="crmCloseNewLeadModalBtn" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b; line-height: 1;">&times;</button>
+        </div>
+
+        <div style="padding: 16px 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 12px;">
+          <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-size: 12px; font-weight: 600; color: #1e293b;">Customer Name *</span>
+            <input type="text" id="newLeadName" placeholder="e.g. Ramesh Kulkarni" required style="padding: 8px 10px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px;">
+          </label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-size: 12px; font-weight: 600; color: #1e293b;">Phone / Mobile *</span>
+              <input type="text" id="newLeadPhone" placeholder="e.g. 9822012345" style="padding: 8px 10px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px;">
+            </label>
+            <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-size: 12px; font-weight: 600; color: #1e293b;">Email Address</span>
+              <input type="email" id="newLeadEmail" placeholder="e.g. ramesh@gmail.com" style="padding: 8px 10px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px;">
+            </label>
+          </div>
+          <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-size: 12px; font-weight: 600; color: #1e293b;">Site Address / Locality *</span>
+            <input type="text" id="newLeadAddress" placeholder="e.g. Baner, Pune" style="padding: 8px 10px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px;">
+          </label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+            <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-size: 12px; font-weight: 600; color: #1e293b;">Load (kW)</span>
+              <input type="number" id="newLeadLoad" value="5" min="1" step="0.5" style="padding: 8px 10px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px;">
+            </label>
+            <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-size: 12px; font-weight: 600; color: #1e293b;">Units/mo</span>
+              <input type="number" id="newLeadUnits" value="450" min="50" step="10" style="padding: 8px 10px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px;">
+            </label>
+            <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-size: 12px; font-weight: 600; color: #1e293b;">Cap (kWp)</span>
+              <input type="number" id="newLeadCapacity" value="3.3" min="0.5" step="0.1" style="padding: 8px 10px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px;">
+            </label>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-size: 12px; font-weight: 600; color: #1e293b;">Assigned Staff</span>
+              <select id="newLeadAssigned" style="padding: 8px 10px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px; background: white;">
+                <option value="indrajeet.date@cnergy.co.in">Indrajeet Date</option>
+                <option value="milind.date@cnergy.co.in">Milind Date</option>
+                <option value="anujmagdum@cnergy.co.in">Anuj Magdum</option>
+                <option value="santosh@cnergy.co.in">Santosh Gore</option>
+                <option value="pratik@cnergy.co.in">Pratik Choughule</option>
+                <option value="sagar@cnergy.co.in">Sagar Pendse</option>
+                <option value="ajay@cnergy.co.in">Ajay Tiwari</option>
+              </select>
+            </label>
+            <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-size: 12px; font-weight: 600; color: #1e293b;">Initial Status</span>
+              <select id="newLeadStatus" style="padding: 8px 10px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px; background: white;">
+                <option value="lead">🟡 New Lead</option>
+                <option value="site_visit_scheduled">🔵 Site Visit Scheduled</option>
+                <option value="site_visit_done">🟣 Site Visit Done</option>
+                <option value="proposal_sent">🟢 Proposal Sent</option>
+                <option value="won">🏆 Won / Closed</option>
+              </select>
+            </label>
+          </div>
+          <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-size: 12px; font-weight: 600; color: #1e293b;">Initial Note / Client Requirement</span>
+            <textarea id="newLeadNotes" rows="2" placeholder="e.g. Contacted via phone inquiry. Wants rooftop inspection for 3BHK bungalow." style="padding: 8px 10px; font-size: 12.5px; border: 1px solid #cbd5e1; border-radius: 6px; resize: vertical;"></textarea>
+          </label>
+        </div>
+
+        <div style="padding: 12px 20px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px; background: #f8fafc;">
+          <button type="button" id="crmCancelNewLeadBtn" class="crm-btn-action" style="padding: 8px 16px;">Cancel</button>
+          <button type="button" id="crmSaveNewLeadBtn" class="crm-btn-action crm-btn-success" style="padding: 8px 18px; font-weight: 700;">✓ Create Lead</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Customer Request Site Visit Modal -->
+    <div id="customerSiteVisitModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1050; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+      <div style="background: white; border-radius: 12px; width: 92%; max-width: 480px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.25); overflow: hidden;">
+        <div style="padding: 16px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <span class="eyebrow" style="color: #16a34a; font-size: 10.5px; font-weight: 700;">Zero Obligation</span>
+            <h3 style="margin: 2px 0 0; font-size: 16px; font-weight: 700; color: #0f172a;">📞 Request Free Site Visit &amp; Proposal</h3>
+          </div>
+          <button type="button" id="closeSiteVisitModalBtn" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b; line-height: 1;">&times;</button>
+        </div>
+
+        <div style="padding: 16px 20px; display: flex; flex-direction: column; gap: 12px;">
+          <p style="font-size: 12.5px; color: #475569; margin: 0; line-height: 1.45;">
+            Our solar engineers will visit your terrace in Pune, conduct exact shadow analysis, measure usable area, and prepare an official MSEDCL net metering proposal for you.
+          </p>
+          <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-size: 12px; font-weight: 600; color: #1e293b;">Your Full Name *</span>
+            <input type="text" id="custModalName" placeholder="e.g. Sunil Patil" style="padding: 8px 10px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px;">
+          </label>
+          <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-size: 12px; font-weight: 600; color: #1e293b;">Mobile / WhatsApp Number *</span>
+            <input type="tel" id="custModalPhone" placeholder="e.g. 9822012345" style="padding: 8px 10px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px;">
+          </label>
+          <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-size: 12px; font-weight: 600; color: #1e293b;">Building / Site Address *</span>
+            <input type="text" id="custModalAddress" placeholder="e.g. Baner / Kothrud, Pune" style="padding: 8px 10px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px;">
+          </label>
+          <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-size: 12px; font-weight: 600; color: #1e293b;">Preferred Time or Questions</span>
+            <textarea id="custModalNotes" rows="2" placeholder="e.g. Weekday evenings or Saturday morning" style="padding: 8px 10px; font-size: 12.5px; border: 1px solid #cbd5e1; border-radius: 6px; resize: vertical;"></textarea>
+          </label>
+        </div>
+
+        <div style="padding: 12px 20px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px; background: #f8fafc;">
+          <button type="button" id="cancelSiteVisitModalBtn" class="crm-btn-action" style="padding: 8px 16px;">Cancel</button>
+          <button type="button" id="submitSiteVisitModalBtn" class="crm-btn-action crm-btn-success" style="padding: 8px 18px; font-weight: 700;">Submit Request ✓</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Load Proposal Modal -->
     <div id="loadProposalModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
