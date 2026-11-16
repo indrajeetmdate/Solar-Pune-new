@@ -3550,6 +3550,8 @@ function updateBuildingStudio() {
   const buildingName = $("buildingNameInput")?.value || state.buildingConfig?.buildingName || "Shivaji Heights Co-op Housing Society";
   const buildingAddress = $("buildingAddressInput")?.value || state.buildingConfig?.buildingAddress || "Baner, Pune, Maharashtra - 411045";
   const roofAreaSqft = Number($("buildingRoofAreaInput")?.value) || state.buildingConfig?.roofArea || 2000;
+  const roofLength = Number($("cadRoofLength")?.value) || state.buildingConfig?.roofLength || 50;
+  const roofBreadth = Number($("cadRoofBreadth")?.value) || state.buildingConfig?.roofBreadth || 40;
   const panelMake = $("buildingPanelMakeInput")?.value || state.buildingConfig?.panelMake || "Tier-1 Mono PERC DCR";
   const panelWp = Number($("buildingPanelWpInput")?.value) || state.buildingConfig?.panelWp || 550;
   const panelRate = Number($("buildingPanelRateInput")?.value) || state.buildingConfig?.panelRate || 28;
@@ -3559,9 +3561,12 @@ function updateBuildingStudio() {
   const isSpecialCategoryState = Boolean($("buildingIsSpecialCategoryState")?.checked);
 
   state.buildingConfig = {
+    ...(state.buildingConfig || {}),
     buildingName,
     buildingAddress,
     roofArea: roofAreaSqft,
+    roofLength,
+    roofBreadth,
     panelMake,
     panelType: "dcr",
     panelRate,
@@ -5096,14 +5101,22 @@ function attachEvents() {
     document.body.removeChild(link);
   });
 
-  function applyConfirmedRoofArea(areaSqft) {
-    const finalArea = Math.max(100, Number(areaSqft) || 2000);
+  function applyConfirmedRoofDimensions(lengthFt, breadthFt) {
+    const l = Math.max(5, Math.round((Number(lengthFt) || 50) * 10) / 10);
+    const b = Math.max(5, Math.round((Number(breadthFt) || 40) * 10) / 10);
+    const finalArea = Math.round(l * b);
+
     if (!state.buildingConfig) state.buildingConfig = {};
+    state.buildingConfig.roofLength = l;
+    state.buildingConfig.roofBreadth = b;
     state.buildingConfig.roofArea = finalArea;
+
     if ($("buildingRoofAreaInput")) $("buildingRoofAreaInput").value = finalArea;
     if ($("roofArea")) $("roofArea").value = finalArea;
+    if ($("csvRoofLengthInput")) $("csvRoofLengthInput").value = l;
+    if ($("csvRoofBreadthInput")) $("csvRoofBreadthInput").value = b;
+    if ($("csvRoofAreaInput")) $("csvRoofAreaInput").value = finalArea;
 
-    const { l, b } = solveRoofDimensions(finalArea, 1.35);
     const cad = getActiveRooftopCAD();
     if (cad) {
       cad.panels = [];
@@ -5115,20 +5128,43 @@ function attachEvents() {
     updateBuildingStudio();
     switchWorkspaceTab("building");
   }
+  if (typeof window !== "undefined") window.applyConfirmedRoofDimensions = applyConfirmedRoofDimensions;
+
+  function applyConfirmedRoofArea(areaOrLength, breadth) {
+    if (breadth !== undefined && !isNaN(Number(breadth)) && Number(breadth) > 0) {
+      return applyConfirmedRoofDimensions(areaOrLength, breadth);
+    }
+    const finalArea = Math.max(100, Number(areaOrLength) || 2000);
+    const { l, b } = solveRoofDimensions(finalArea, 1.35);
+    return applyConfirmedRoofDimensions(l, b);
+  }
   if (typeof window !== "undefined") window.applyConfirmedRoofArea = applyConfirmedRoofArea;
 
   $("csvRoofAreaConfirmBtn")?.addEventListener("click", () => {
-    const input = $("csvRoofAreaInput");
-    const area = Number(input?.value);
-    if (!area || area <= 0) {
+    const lenInput = $("csvRoofLengthInput");
+    const brInput = $("csvRoofBreadthInput");
+    const areaInput = $("csvRoofAreaInput");
+
+    let l = Number(lenInput?.value);
+    let b = Number(brInput?.value);
+
+    // If l or b are not provided directly, fall back to area input if present
+    if ((!l || l <= 0 || !b || b <= 0) && areaInput && Number(areaInput.value) > 0) {
+      const derived = solveRoofDimensions(Number(areaInput.value), 1.35);
+      l = derived.l;
+      b = derived.b;
+    }
+
+    if (!l || l <= 0 || !b || b <= 0) {
       if (typeof window !== "undefined" && typeof window.alert === "function") {
-        window.alert("Please enter a valid rooftop area greater than 0 sq. ft.");
+        window.alert("Please enter valid base roof dimensions (length and breadth greater than 0 ft).");
       }
       return;
     }
+
     const modal = $("csvRoofAreaModal");
     if (modal) modal.style.display = "none";
-    applyConfirmedRoofArea(area);
+    applyConfirmedRoofDimensions(l, b);
   });
 
   $("csvRoofAreaCancelBtn")?.addEventListener("click", () => {
@@ -5172,32 +5208,77 @@ function attachEvents() {
           const minRecommendedArea = Math.ceil((totalPanels * 27.5) / 0.70);
           const totalKw = ((totalPanels * 550) / 1000).toFixed(1);
 
-          // Compulsory Rooftop Area Modal Display
+          const { l: recL, b: recB } = solveRoofDimensions(minRecommendedArea, 1.35);
+
+          // Compulsory Base Roof Dimensions Modal Display
           const modal = $("csvRoofAreaModal");
           if (modal) {
             if ($("csvModalFlatsCount")) $("csvModalFlatsCount").textContent = `${flatsList.length} flats`;
             if ($("csvModalPanelsCount")) $("csvModalPanelsCount").textContent = `${totalPanels} panels`;
             if ($("csvModalKwCount")) $("csvModalKwCount").textContent = `${totalKw} kWp`;
             if ($("csvModalRecommendedText")) {
-              $("csvModalRecommendedText").innerHTML = `Recommended minimum: <strong>${minRecommendedArea.toLocaleString("en-IN")} sq. ft.</strong> (based on panel footprint & 70% roof utilization factor)`;
+              $("csvModalRecommendedText").innerHTML = `Recommended minimum: <strong>${minRecommendedArea.toLocaleString("en-IN")} sq. ft. (~${recL} ft × ${recB} ft)</strong> (based on panel footprint & 70% roof utilization factor)`;
             }
-            const curVal = Math.max(minRecommendedArea, Number($("buildingRoofAreaInput")?.value) || 0);
-            const input = $("csvRoofAreaInput");
-            if (input) {
-              input.value = curVal;
-              const updateDims = (areaVal) => {
-                const { l, b } = solveRoofDimensions(areaVal, 1.35);
-                if ($("csvModalRoofDimsText")) $("csvModalRoofDimsText").textContent = `${l} ft × ${b} ft`;
+
+            const existingL = Number($("cadRoofLength")?.value) || state.buildingConfig?.roofLength;
+            const existingB = Number($("cadRoofBreadth")?.value) || state.buildingConfig?.roofBreadth;
+            const existingArea = Number($("buildingRoofAreaInput")?.value) || state.buildingConfig?.roofArea;
+
+            let initL = recL;
+            let initB = recB;
+            if (existingL && existingB && (existingL * existingB >= minRecommendedArea)) {
+              initL = existingL;
+              initB = existingB;
+            } else if (existingArea && existingArea >= minRecommendedArea) {
+              const solved = solveRoofDimensions(existingArea, 1.35);
+              initL = solved.l;
+              initB = solved.b;
+            }
+
+            const lenInput = $("csvRoofLengthInput");
+            const brInput = $("csvRoofBreadthInput");
+            const areaInput = $("csvRoofAreaInput");
+
+            if (lenInput) lenInput.value = initL;
+            if (brInput) brInput.value = initB;
+            if (areaInput) areaInput.value = Math.round(initL * initB);
+
+            const syncModalAreaDisplay = () => {
+              const curL = Number(lenInput?.value) || 0;
+              const curB = Number(brInput?.value) || 0;
+              const calcArea = Math.round(curL * curB);
+              if (areaInput) areaInput.value = calcArea;
+              if ($("csvModalCalculatedAreaText")) {
+                $("csvModalCalculatedAreaText").textContent = calcArea > 0 ? `${calcArea.toLocaleString("en-IN")} sq. ft.` : "-- sq. ft.";
+              }
+              if ($("csvModalRoofDimsText")) {
+                $("csvModalRoofDimsText").textContent = curL > 0 && curB > 0 ? `${curL} ft L × ${curB} ft B` : "--";
+              }
+            };
+
+            syncModalAreaDisplay();
+
+            if (lenInput) lenInput.oninput = syncModalAreaDisplay;
+            if (brInput) brInput.oninput = syncModalAreaDisplay;
+
+            if (areaInput) {
+              areaInput.oninput = () => {
+                const a = Number(areaInput.value);
+                if (a > 0) {
+                  const s = solveRoofDimensions(a, 1.35);
+                  if (lenInput) lenInput.value = s.l;
+                  if (brInput) brInput.value = s.b;
+                  syncModalAreaDisplay();
+                }
               };
-              updateDims(curVal);
-              input.oninput = () => updateDims(Number(input.value) || minRecommendedArea);
             }
+
             modal.style.display = "flex";
           } else {
             // Headless fallback
-            applyConfirmedRoofArea(Math.max(minRecommendedArea, Number($("buildingRoofAreaInput")?.value) || 2000));
+            applyConfirmedRoofDimensions(recL, recB);
           }
-          notify(`Successfully imported ${flatsList.length} flats from CSV! Please confirm the available rooftop area.`);
+          notify(`Successfully imported ${flatsList.length} flats from CSV! Please confirm the base roof dimensions (length & breadth).`);
         } else {
           notify("No valid flat records found in CSV. Please verify column headers.");
         }

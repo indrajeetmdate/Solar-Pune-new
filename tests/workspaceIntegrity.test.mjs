@@ -553,24 +553,43 @@ assert.equal(window.appState.buildingFlats[0].loanMode, false);
 assert.equal(window.appState.buildingFlats[4].monthlyUnits, 376);
 assert.ok(alertMessage.includes("Successfully imported 8 flats"), `Must show success alert, got: ${alertMessage}`);
 
-// Verify compulsory roof area modal upon CSV import
+// Verify compulsory base roof dimensions modal upon CSV import
 {
   const csvModal = document.getElementById("csvRoofAreaModal");
   assert.ok(csvModal, "CSV Roof Area Modal must exist in DOM");
   assert.equal(csvModal.style.display, "flex", "CSV Roof Area Modal must be displayed after CSV import");
+
+  const lenInput = document.getElementById("csvRoofLengthInput");
+  const brInput = document.getElementById("csvRoofBreadthInput");
   const csvAreaInput = document.getElementById("csvRoofAreaInput");
+
+  assert.ok(lenInput, "Roof Length input must exist in CSV import modal");
+  assert.ok(brInput, "Roof Breadth input must exist in CSV import modal");
+  assert.ok(Number(lenInput.value) > 0, "Recommended roof length must be prefilled");
+  assert.ok(Number(brInput.value) > 0, "Recommended roof breadth must be prefilled");
   assert.ok(Number(csvAreaInput.value) >= 800, "Recommended minimum roof area must be calculated and prefilled");
 
-  // Confirm roof area (2500 sq ft)
-  csvAreaInput.value = "2500";
+  // Test custom base roof dimensions (70 ft Length × 35 ft Breadth = 2,450 sq ft)
+  lenInput.value = "70";
+  brInput.value = "35";
+  lenInput.oninput();
+  assert.equal(csvAreaInput.value, "2450", "Calculated area must update to 2450 sq ft");
+  const areaText = document.getElementById("csvModalCalculatedAreaText");
+  assert.ok(areaText.textContent.includes("2,450"), "Area display text must show 2,450 sq. ft.");
+
+  // Confirm dimensions
   const confirmBtn = document.getElementById("csvRoofAreaConfirmBtn");
   assert.ok(confirmBtn, "Confirm Roof Area button must exist");
   confirmBtn.click();
   assert.equal(csvModal.style.display, "none", "CSV Roof Area Modal must close on confirmation");
-  assert.equal(window.appState.buildingConfig.roofArea, 2500, "Building config roof area must be updated to 2500 sq ft");
+  assert.equal(window.appState.buildingConfig.roofLength, 70, "Building config roof length must be updated to 70 ft");
+  assert.equal(window.appState.buildingConfig.roofBreadth, 35, "Building config roof breadth must be updated to 35 ft");
+  assert.equal(window.appState.buildingConfig.roofArea, 2450, "Building config roof area must be updated to 2450 sq ft");
 
   // Verify CAD loaded panels and all panels have strictly uniform, fixed physical dimensions
   const cadInst = getActiveRooftopCAD();
+  assert.equal(cadInst.roofLengthFt, 70, "CAD roof length in ft must match confirmed length");
+  assert.equal(cadInst.roofBreadthFt, 35, "CAD roof breadth in ft must match confirmed breadth");
   assert.ok(cadInst.panels.length > 0, "Rooftop CAD must have panels allocated for the building");
   const basePanelW = cadInst.panels[0].w;
   const basePanelH = cadInst.panels[0].h;
