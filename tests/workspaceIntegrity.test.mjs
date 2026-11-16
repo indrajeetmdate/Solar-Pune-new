@@ -281,7 +281,23 @@ window.loadProposalState(savedList[0]);
 
 assert.equal(document.getElementById("customerName").value, "Sunil Patil", "Loaded customer name must be Sunil Patil");
 assert.equal(document.getElementById("monthlyUnits").value, "550", "Loaded units must be 550");
-console.log("✓ Loading older saved data restores all fields and triggers clean re-calculation!");
+
+// Verify Left-Hand Side Project Inputs section remains visible and editable
+const contactSec = document.getElementById("catSectionContact");
+assert.ok(contactSec, "Project Inputs section (#catSectionContact) must exist");
+assert.notEqual(contactSec.style.display, "none", "Project Inputs section must NOT be hidden ('display: none') after loading saved proposal");
+assert.ok(contactSec.classList.contains("active"), "Project Inputs section must have .active class");
+const sBody = document.getElementById("sidebarBody");
+assert.ok(sBody && sBody.style.display !== "none", "Sidebar body must be visible after loading proposal");
+assert.equal(document.getElementById("customerName").disabled, false, "Customer name input must be editable");
+assert.equal(document.getElementById("monthlyUnits").disabled, false, "Monthly units input must be editable");
+
+// Test alias 'project' via switchSidebarCategory keeps Project Inputs active
+window.switchSidebarCategory?.("project");
+assert.notEqual(contactSec.style.display, "none", "Project Inputs section must remain visible with 'project' category alias");
+assert.ok(contactSec.classList.contains("active"), "Project Inputs section must remain active with 'project' category alias");
+
+console.log("✓ Loading older saved data restores all fields, keeps Project Inputs visible, and triggers clean re-calculation!");
 
 // Check Rooftop CAD Aerial Image Panning
 console.log("Testing Rooftop CAD Aerial Image Panning...");

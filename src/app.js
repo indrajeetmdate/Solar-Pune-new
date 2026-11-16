@@ -3978,27 +3978,38 @@ if (typeof window !== "undefined") {
 
 
 function switchSidebarCategory(catId) {
-  if (catId === "rates" && !state.internalUnlocked) {
+  // Support aliases: 'project' and 'inputs' map to primary Project Inputs category ('contact')
+  const targetCat = (!catId || catId === "project" || catId === "inputs" || catId === "contact") ? "contact" : catId;
+
+  if (targetCat === "rates" && !state.internalUnlocked) {
     openInternalDialog();
     return;
   }
-  state.activeSidebarCategory = catId;
+  state.activeSidebarCategory = targetCat;
   document.querySelectorAll(".sidebar-pill-btn").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.cat === catId);
+    const isMatch = btn.dataset.cat === targetCat || (targetCat === "contact" && (btn.dataset.cat === "project" || btn.dataset.cat === "contact"));
+    btn.classList.toggle("active", isMatch);
   });
   document.querySelectorAll(".rail-icon-btn").forEach((btn) => {
     if (btn.id !== "expandSidebarBtn") {
-      btn.classList.toggle("active", btn.dataset.cat === catId);
+      const isMatch = btn.dataset.cat === targetCat || (targetCat === "contact" && (btn.dataset.cat === "project" || btn.dataset.cat === "contact"));
+      btn.classList.toggle("active", isMatch);
     }
   });
   document.querySelectorAll(".cat-section").forEach((sec) => {
-    const isActive = sec.dataset.cat === catId;
+    const isContactMatch = targetCat === "contact" && (sec.dataset.cat === "contact" || sec.id === "catSectionContact");
+    const isActive = isContactMatch || sec.dataset.cat === targetCat;
     sec.classList.toggle("active", isActive);
     sec.style.display = isActive ? "block" : "none";
   });
   const layout = $("mainLayout");
   if (layout?.classList.contains("sidebar-collapsed")) {
     toggleSidebar(false);
+  } else {
+    const body = $("sidebarBody");
+    if (body) body.style.display = "block";
+    const rail = $("sidebarRail");
+    if (rail) rail.style.display = "none";
   }
 }
 
@@ -6896,12 +6907,12 @@ window.loadProposalState = function(data) {
       console.error("Render error during proposal load:", renderErr);
     }
 
-    // Switch workspace to proposal tab and sidebar to project category
+    // Switch workspace to proposal tab and sidebar to project inputs category
     if (typeof switchWorkspaceTab === "function") {
       switchWorkspaceTab("proposal");
     }
     if (typeof switchSidebarCategory === "function") {
-      switchSidebarCategory("project");
+      switchSidebarCategory("contact");
     }
 
     // Notify user with load toast
