@@ -2138,6 +2138,57 @@ function setupCadEventListeners(cad) {
     cad.defaultPathwayWidthFt = Math.max(1, Number(pwInput.value) || 2.5);
   });
 
+  // Undo & Redo Toolbar Actions
+  const undoBtn = $("cadUndoBtn");
+  const redoBtn = $("cadRedoBtn");
+
+  const syncCadInputsFromCad = () => {
+    if (lenInput && document.activeElement !== lenInput) lenInput.value = cad.roofLengthFt;
+    if (brInput && document.activeElement !== brInput) brInput.value = cad.roofBreadthFt;
+    if (pwInput && document.activeElement !== pwInput) pwInput.value = cad.defaultPathwayWidthFt;
+    const bldgHInput = $("cadBuildingHeightInput");
+    if (bldgHInput && document.activeElement !== bldgHInput) bldgHInput.value = cad.buildingHeightFt;
+    const elevBldgHInput = $("cadElevationBldgHeightInput");
+    if (elevBldgHInput && document.activeElement !== elevBldgHInput) elevBldgHInput.value = cad.buildingHeightFt;
+    const northInput = $("cadNorthAngleInput");
+    if (northInput && document.activeElement !== northInput) northInput.value = cad.northAngleDeg;
+  };
+
+  const updateUndoRedoUI = (canUndo, canRedo) => {
+    if (undoBtn) undoBtn.disabled = !canUndo;
+    if (redoBtn) redoBtn.disabled = !canRedo;
+  };
+
+  cad.onHistoryChange = (canUndo, canRedo) => {
+    updateUndoRedoUI(canUndo, canRedo);
+    syncCadInputsFromCad();
+  };
+
+  // Set initial state
+  updateUndoRedoUI(typeof cad.canUndo === "function" ? cad.canUndo() : false, typeof cad.canRedo === "function" ? cad.canRedo() : false);
+
+  undoBtn?.addEventListener("click", () => {
+    if (cad.undo()) {
+      syncCadInputsFromCad();
+      const stats = cad.getAreaStats();
+      const roofInput = $("roofArea");
+      if (roofInput && document.activeElement !== roofInput) {
+        roofInput.value = stats.netUsableSqft;
+      }
+    }
+  });
+
+  redoBtn?.addEventListener("click", () => {
+    if (cad.redo()) {
+      syncCadInputsFromCad();
+      const stats = cad.getAreaStats();
+      const roofInput = $("roofArea");
+      if (roofInput && document.activeElement !== roofInput) {
+        roofInput.value = stats.netUsableSqft;
+      }
+    }
+  });
+
   // Tool selection buttons
   const toolBtns = [
     { id: "cadToolSelectBtn", tool: "select" },
@@ -4098,6 +4149,10 @@ function createNewProposal() {
 
   updateProposalStatusBadge("new", nextSerial);
   switchSidebarCategory("contact");
+  const cad = getActiveRooftopCAD();
+  if (cad && typeof cad.clearHistory === "function") {
+    cad.clearHistory();
+  }
   render();
 
   if ($("loadProposalModal")) $("loadProposalModal").style.display = "none";
@@ -6759,6 +6814,9 @@ window.loadProposalState = function(data) {
           if ($("cadElevationBldgHeightInput") && sData.cad.buildingHeightFt !== undefined) $("cadElevationBldgHeightInput").value = sData.cad.buildingHeightFt;
           if ($("cadNorthAngleInput") && sData.cad.northAngleDeg !== undefined) $("cadNorthAngleInput").value = sData.cad.northAngleDeg;
           if ($("cadSunTimeSlider") && sData.cad.sunSim?.timeHour !== undefined) $("cadSunTimeSlider").value = sData.cad.sunSim.timeHour;
+          if (typeof cad.clearHistory === "function") {
+            cad.clearHistory();
+          }
 
           if (sData.cad.image && sData.cad.image.isLoaded) {
             const imgControls = $("cadImageControls");

@@ -1980,6 +1980,14 @@ tr:hover td {
   transform: translateY(-1px);
 }
 
+.cad-text-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  pointer-events: none;
+  filter: grayscale(0.6);
+  transform: none !important;
+}
+
 .cad-text-btn.active {
   background: #0284c7;
   border-color: #38bdf8;

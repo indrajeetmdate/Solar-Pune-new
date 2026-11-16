@@ -132,6 +132,14 @@ export class RooftopCAD {
     this.onNorthChange = options.onNorthChange || null;
     this.onBuildingHeightChange = options.onBuildingHeightChange || null;
     this.onViewportChange = options.onViewportChange || null;
+    this.onHistoryChange = options.onHistoryChange || null;
+
+    // Undo / Redo History
+    this.undoStack = [];
+    this.redoStack = [];
+    this.maxUndoStackSize = 50;
+    this.isRestoringState = false;
+    this.pointerDownSnapshot = null;
 
     // Layer Stack Ordering, Visibility & Opacity (Order from back to front)
     this.layerOrder = ["image", "roof", "pathways", "cutouts", "panels"];
@@ -155,6 +163,100 @@ export class RooftopCAD {
     this.autoFitRoof();
     this.notifyChanges();
     this.render();
+  }
+
+  // ================= UNDO / REDO HISTORY ENGINE =================
+  canUndo() {
+    return this.undoStack.length > 0;
+  }
+
+  canRedo() {
+    return this.redoStack.length > 0;
+  }
+
+  clearHistory() {
+    this.undoStack = [];
+    this.redoStack = [];
+    this.pointerDownSnapshot = null;
+    this.notifyHistoryChange();
+  }
+
+  notifyHistoryChange() {
+    if (typeof this.onHistoryChange === "function") {
+      this.onHistoryChange(this.canUndo(), this.canRedo());
+    }
+  }
+
+  pushUndoState() {
+    if (this.isRestoringState) return;
+    try {
+      const snap = JSON.stringify(this.serialize());
+      if (this.undoStack.length > 0 && this.undoStack[this.undoStack.length - 1] === snap) {
+        return;
+      }
+      this.undoStack.push(snap);
+      if (this.undoStack.length > (this.maxUndoStackSize || 50)) {
+        this.undoStack.shift();
+      }
+      this.redoStack = [];
+      this.notifyHistoryChange();
+    } catch (err) {
+      console.warn("Could not snapshot CAD state for undo:", err);
+    }
+  }
+
+  undo() {
+    if (!this.canUndo()) return false;
+    const currentSnap = JSON.stringify(this.serialize());
+    const prevSnap = this.undoStack.pop();
+    this.redoStack.push(currentSnap);
+
+    const savedViewX = this.viewX;
+    const savedViewY = this.viewY;
+    const savedViewZoom = this.viewZoom;
+
+    this.isRestoringState = true;
+    try {
+      this.loadState(JSON.parse(prevSnap));
+      this.viewX = savedViewX;
+      this.viewY = savedViewY;
+      this.viewZoom = savedViewZoom;
+    } finally {
+      this.isRestoringState = false;
+    }
+
+    this.notifyHistoryChange();
+    this.notifyChanges();
+    this.notifyLayersChange();
+    this.render();
+    return true;
+  }
+
+  redo() {
+    if (!this.canRedo()) return false;
+    const currentSnap = JSON.stringify(this.serialize());
+    const nextSnap = this.redoStack.pop();
+    this.undoStack.push(currentSnap);
+
+    const savedViewX = this.viewX;
+    const savedViewY = this.viewY;
+    const savedViewZoom = this.viewZoom;
+
+    this.isRestoringState = true;
+    try {
+      this.loadState(JSON.parse(nextSnap));
+      this.viewX = savedViewX;
+      this.viewY = savedViewY;
+      this.viewZoom = savedViewZoom;
+    } finally {
+      this.isRestoringState = false;
+    }
+
+    this.notifyHistoryChange();
+    this.notifyChanges();
+    this.notifyLayersChange();
+    this.render();
+    return true;
   }
 
   // Auto-fit roof in canvas viewport
@@ -219,6 +321,8 @@ export class RooftopCAD {
 
   setRoofDimensions(lengthFt, breadthFt) {
     if (lengthFt <= 0 || breadthFt <= 0) return;
+    if (Number(lengthFt) === this.roofLengthFt && Number(breadthFt) === this.roofBreadthFt) return;
+    this.pushUndoState();
     const oldW = this.roofW;
     const oldH = this.roofH;
     const oldX = this.roofX;
@@ -420,6 +524,7 @@ export class RooftopCAD {
   // Place a single panel from latent pool
   placePanel(orientation = "portrait", x = null, y = null) {
     if (this.panels.length >= this.requiredPanels) return null;
+    this.pushUndoState();
     const { w, h } = this.getPanelSizePx(orientation);
 
     let targetX = x;
@@ -457,6 +562,8 @@ export class RooftopCAD {
 
   // Place a 2x2 or MxN block of panels
   placePanelBlock(cols = 2, rows = 2, orientation = "portrait") {
+    if (this.panels.length >= this.requiredPanels) return;
+    this.pushUndoState();
     const { w, h } = this.getPanelSizePx(orientation);
     const gap = 3;
 
@@ -490,6 +597,7 @@ export class RooftopCAD {
     this.updateAllPanelDimensions();
     const remaining = this.requiredPanels - this.panels.length;
     if (remaining <= 0) return;
+    this.pushUndoState();
 
     if (this.roofX < 15) this.roofX = 15;
     if (this.roofY < 15) this.roofY = 15;
@@ -628,6 +736,8 @@ export class RooftopCAD {
   }
 
   clearAllPanels() {
+    if (!this.panels || this.panels.length === 0) return;
+    this.pushUndoState();
     this.panels = [];
     this.selectItem(null, null);
     this.notifyChanges();
@@ -637,6 +747,7 @@ export class RooftopCAD {
   // Add Cutout with shape support (Rectangle, Circle, L-Shape)
   addCutout(x, y, w, h, shape = "rectangle", label = null) {
     if (w <= 0 || h <= 0) return null;
+    this.pushUndoState();
     let lengthFt = w / this.scalePxPerFt;
     let breadthFt = h / this.scalePxPerFt;
     let radius = Math.min(w, h) / 2;
@@ -679,6 +790,8 @@ export class RooftopCAD {
   }
 
   clearAllCutouts() {
+    if (!this.cutouts || this.cutouts.length === 0) return;
+    this.pushUndoState();
     this.cutouts = [];
     if (this.selectedItem && this.selectedItem.type === "cutout") {
       this.selectItem(null, null);
@@ -690,6 +803,7 @@ export class RooftopCAD {
   // Add Pathway Corridor
   addPathway(x, y, w, h, label = "Walkway") {
     if (w <= 0 || h <= 0) return null;
+    this.pushUndoState();
     const pathway = {
       id: "pw_" + Date.now(),
       type: "pathway",
@@ -723,6 +837,8 @@ export class RooftopCAD {
   }
 
   clearAllPathways() {
+    if (!this.pathways || this.pathways.length === 0) return;
+    this.pushUndoState();
     this.pathways = [];
     if (this.selectedItem && this.selectedItem.type === "pathway") {
       this.selectItem(null, null);
@@ -733,6 +849,7 @@ export class RooftopCAD {
 
   // ================= EXTERNAL OBSTACLES (Trees, Poles, Buildings, Walls) =================
   addExternalObstacle(type = "tree", props = {}) {
+    this.pushUndoState();
     const id = `obs_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     let defaultObstacle = {
       id,
@@ -789,6 +906,7 @@ export class RooftopCAD {
   updateExternalObstacle(id, props = {}) {
     const obs = this.externalObstacles.find((o) => o.id === id);
     if (!obs) return;
+    this.pushUndoState();
     Object.assign(obs, props);
     if (obs.shape === "circle" && obs.diameterFt) {
       obs.lengthFt = obs.diameterFt;
@@ -799,7 +917,10 @@ export class RooftopCAD {
   }
 
   removeExternalObstacle(id) {
-    this.externalObstacles = this.externalObstacles.filter((o) => o.id !== id);
+    const idx = this.externalObstacles.findIndex((o) => o.id === id);
+    if (idx === -1) return;
+    this.pushUndoState();
+    this.externalObstacles.splice(idx, 1);
     if (this.selectedItem && this.selectedItem.item?.id === id) {
       this.selectItem(null, null);
     }
@@ -809,6 +930,8 @@ export class RooftopCAD {
   }
 
   clearAllObstacles() {
+    if (!this.externalObstacles || this.externalObstacles.length === 0) return;
+    this.pushUndoState();
     this.externalObstacles = [];
     if (this.selectedItem && this.selectedItem.type === "obstacle") {
       this.selectItem(null, null);
@@ -829,7 +952,10 @@ export class RooftopCAD {
 
   // ================= TRUE NORTH ALIGNMENT =================
   setNorthAngle(deg) {
-    this.northAngleDeg = ((Math.round(Number(deg)) % 360) + 360) % 360;
+    const newAngle = ((Math.round(Number(deg)) % 360) + 360) % 360;
+    if (newAngle === this.northAngleDeg) return;
+    this.pushUndoState();
+    this.northAngleDeg = newAngle;
     this.notifyChanges();
     this.render();
   }
@@ -849,7 +975,10 @@ export class RooftopCAD {
   }
 
   setBuildingHeight(heightFt) {
-    this.buildingHeightFt = Math.max(5, Number(heightFt) || 18);
+    const newH = Math.max(5, Number(heightFt) || 18);
+    if (newH === this.buildingHeightFt) return;
+    this.pushUndoState();
+    this.buildingHeightFt = newH;
     this.notifyChanges();
     this.render();
   }
@@ -1025,6 +1154,7 @@ export class RooftopCAD {
       panelsToRotate.push(this.selectedItem.item);
     }
     if (panelsToRotate.length === 0) return;
+    this.pushUndoState();
 
     panelsToRotate.forEach((p) => {
       const cx = p.x + p.w / 2;
@@ -1047,6 +1177,7 @@ export class RooftopCAD {
       if (this.selectedItem) this.selectedItems = [this.selectedItem];
       else return;
     }
+    this.pushUndoState();
 
     if (fromCenter && this.selectedItems.length > 1) {
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -1240,6 +1371,7 @@ export class RooftopCAD {
 
   setSelectedItemPosition(xRelFt, yRelFt) {
     if (!this.selectedItem || !this.selectedItem.item) return;
+    this.pushUndoState();
     const { type, item: it } = this.selectedItem;
     const x = xRelFt !== undefined ? Number(xRelFt) : NaN;
     const y = yRelFt !== undefined ? Number(yRelFt) : NaN;
@@ -1264,6 +1396,8 @@ export class RooftopCAD {
   }
 
   nudgeSelectedItem(dxFt = 0, dyFt = 0) {
+    if ((!this.selectedItems || this.selectedItems.length === 0) && !this.selectedItem) return;
+    this.pushUndoState();
     if (this.selectedItems && this.selectedItems.length > 1) {
       this.selectedItems.forEach((s) => {
         if (!s || !s.item) return;
@@ -1314,6 +1448,7 @@ export class RooftopCAD {
       this.selectedItems = [this.selectedItem];
     }
     if (this.selectedItems.length === 0) return;
+    this.pushUndoState();
 
     const panelIds = new Set(this.selectedItems.filter((s) => s.type === "panel").map((s) => s.item.id));
     const cutoutIds = new Set(this.selectedItems.filter((s) => s.type === "cutout").map((s) => s.item.id));
@@ -1709,6 +1844,8 @@ export class RooftopCAD {
   }
 
   removeCustomImage() {
+    if (!this.image.element && !this.image.src && !this.image.isLoaded) return;
+    this.pushUndoState();
     this.image.element = null;
     this.image.src = null;
     this.image.isLoaded = false;
@@ -1770,6 +1907,7 @@ export class RooftopCAD {
 
   resetImagePan() {
     if (!this.image.isLoaded) return;
+    this.pushUndoState();
     this.image.x = 0;
     this.image.y = 0;
     this.render();
@@ -1778,6 +1916,7 @@ export class RooftopCAD {
 
   resetImageTransform() {
     if ((!this.image.element && !this.image.isLoaded) || this.image.locked) return;
+    this.pushUndoState();
     this.image.x = 0;
     this.image.y = 0;
     const origW = this.image.origWidth || this.roofW || 1;
@@ -1827,6 +1966,7 @@ export class RooftopCAD {
     const origW = this.image.origWidth || this.roofW;
     const origH = this.image.origHeight || this.roofH;
     if (origW <= 0 || origH <= 0 || this.roofW <= 0 || this.roofH <= 0) return;
+    this.pushUndoState();
 
     const scaleX = this.roofW / origW;
     const scaleY = this.roofH / origH;
@@ -1859,6 +1999,7 @@ export class RooftopCAD {
 
   scaleImageToPercentOfRoof(percent) {
     if (!this.image.isLoaded && !this.image.element) return;
+    this.pushUndoState();
     const pct = Math.max(5, Math.min(500, Number(percent) || 100));
     const baseFit = this.getImageBaseFitScale();
     if (this.image.locked) this.setImageLocked(false);
@@ -1879,6 +2020,7 @@ export class RooftopCAD {
     if (!this.image.isLoaded && !this.image.element) return;
     const targetW = Number(targetWidthFt);
     if (targetW <= 0) return;
+    this.pushUndoState();
     const origW = this.image.origWidth || this.roofW;
     const pxPerFt = this.scalePxPerFt > 0 ? this.scalePxPerFt : 1;
     const targetScale = (targetW * pxPerFt) / origW;
@@ -1890,6 +2032,7 @@ export class RooftopCAD {
     if (!this.image.isLoaded && !this.image.element) return;
     const targetH = Number(targetHeightFt);
     if (targetH <= 0) return;
+    this.pushUndoState();
     const origH = this.image.origHeight || this.roofH;
     const pxPerFt = this.scalePxPerFt > 0 ? this.scalePxPerFt : 1;
     const targetScale = (targetH * pxPerFt) / origH;
@@ -1899,6 +2042,7 @@ export class RooftopCAD {
 
   centerImageOnRoof() {
     if (!this.image.isLoaded && !this.image.element) return;
+    this.pushUndoState();
     if (this.image.locked) this.setImageLocked(false);
     this.image.x = 0;
     this.image.y = 0;
@@ -2304,6 +2448,24 @@ export class RooftopCAD {
 
     window.addEventListener("keydown", (e) => {
       if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
+
+      // Undo: Ctrl+X (per user request) or Ctrl+Z / Cmd+Z / Cmd+X
+      if ((e.ctrlKey || e.metaKey) && (e.key === "x" || e.key === "X" || e.key === "z" || e.key === "Z") && !e.shiftKey) {
+        e.preventDefault();
+        this.undo();
+        return;
+      }
+
+      // Redo: Ctrl+Y / Cmd+Y or Ctrl+Shift+Z / Cmd+Shift+Z / Ctrl+Shift+X
+      if (
+        ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "z" || e.key === "Z" || e.key === "x" || e.key === "X"))
+      ) {
+        e.preventDefault();
+        this.redo();
+        return;
+      }
+
       if (e.code === "Space") {
         if (!this.isSpacePressed) {
           this.isSpacePressed = true;
@@ -2362,6 +2524,13 @@ export class RooftopCAD {
   }
 
   handlePointerDown(x, y, e) {
+    if (!this.isRestoringState) {
+      try {
+        this.pointerDownSnapshot = JSON.stringify(this.serialize());
+      } catch (err) {
+        this.pointerDownSnapshot = null;
+      }
+    }
     this.dragStart = { x, y };
     const logicalW = this.canvas.parentElement ? Math.max(300, this.canvas.parentElement.clientWidth) : 800;
     const logicalH = 460;
@@ -3024,6 +3193,7 @@ export class RooftopCAD {
   handlePointerUp(x, y, e) {
     if (this.dragMode === "pan_view") {
       this.dragMode = null;
+      this.pointerDownSnapshot = null;
       this.updateCursor();
       return;
     }
@@ -3032,7 +3202,6 @@ export class RooftopCAD {
       this.dragMode = null;
       this.updateCursor();
       this.notifyChanges();
-      return;
     }
 
     if (this.dragMode === "marquee_select" && this.selectionMarquee) {
@@ -3085,6 +3254,7 @@ export class RooftopCAD {
       }
       this.selectionMarquee = null;
       this.dragMode = null;
+      this.pointerDownSnapshot = null;
       this.render();
       return;
     }
@@ -3093,9 +3263,6 @@ export class RooftopCAD {
       this.dragMode = null;
       this.dragItem = null;
       this.multiDragSnapshots = null;
-      this.notifyChanges();
-      this.render();
-      return;
     }
 
     // Revert panel drop if it causes an illegal overlap with another panel or obstacle
@@ -3141,6 +3308,25 @@ export class RooftopCAD {
     this.activeSnapGuide = null;
     this.notifyChanges();
     this.render();
+
+    if (this.pointerDownSnapshot && !this.isRestoringState) {
+      try {
+        const afterSnap = JSON.stringify(this.serialize());
+        if (afterSnap !== this.pointerDownSnapshot) {
+          if (this.undoStack.length === 0 || this.undoStack[this.undoStack.length - 1] !== this.pointerDownSnapshot) {
+            this.undoStack.push(this.pointerDownSnapshot);
+            if (this.undoStack.length > (this.maxUndoStackSize || 50)) {
+              this.undoStack.shift();
+            }
+            this.redoStack = [];
+            this.notifyHistoryChange();
+          }
+        }
+      } catch (err) {
+        console.warn("Could not check pointerUp snapshot:", err);
+      }
+    }
+    this.pointerDownSnapshot = null;
   }
 
   // ================= RENDER PIPELINE =================
@@ -3248,6 +3434,7 @@ export class RooftopCAD {
       return;
     }
 
+    this.pushUndoState();
     this.multiCustomerFlats = flats;
 
     // Sort panels spatially (by y, then by x) to group contiguous panels for each flat
@@ -3284,6 +3471,8 @@ export class RooftopCAD {
   }
 
   clearMultiCustomerDemarcation() {
+    if (!this.multiCustomerFlats && !this.panels.some((p) => p.flatId)) return;
+    this.pushUndoState();
     this.multiCustomerFlats = null;
     this.panels.forEach((p) => {
       delete p.flatId;
@@ -4989,6 +5178,7 @@ export class RooftopCAD {
         latitude: this.sunSim.latitude,
         longitude: this.sunSim.longitude,
       },
+      multiCustomerFlats: this.multiCustomerFlats ? JSON.parse(JSON.stringify(this.multiCustomerFlats)) : null,
     };
   }
 
@@ -5016,6 +5206,11 @@ export class RooftopCAD {
     this.pathways = Array.isArray(savedData.pathways) ? savedData.pathways.map((p) => ({ ...p })) : [];
     this.panels = Array.isArray(savedData.panels) ? savedData.panels.map((p) => ({ ...p })) : [];
     this.externalObstacles = Array.isArray(savedData.externalObstacles) ? savedData.externalObstacles.map((o) => ({ ...o })) : [];
+    if (savedData.multiCustomerFlats && Array.isArray(savedData.multiCustomerFlats)) {
+      this.multiCustomerFlats = savedData.multiCustomerFlats.map((f) => ({ ...f }));
+    } else {
+      this.multiCustomerFlats = null;
+    }
 
     if (Array.isArray(savedData.layerOrder)) {
       this.layerOrder = [...savedData.layerOrder];

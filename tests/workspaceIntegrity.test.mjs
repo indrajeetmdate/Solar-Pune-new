@@ -307,6 +307,29 @@ const uploadBtn = document.getElementById("cadUploadImageBtn");
 assert.ok(uploadBtn, "Upload image button must exist");
 assert.ok(uploadBtn.textContent.includes("Upload Image"), "Upload button must have text 'Upload Image'");
 
+const undoBtn = document.getElementById("cadUndoBtn");
+assert.ok(undoBtn, "Undo button must exist");
+assert.ok(undoBtn.textContent.includes("Undo"), "Undo button must contain text 'Undo'");
+assert.ok(undoBtn.title.includes("Ctrl+X"), "Undo button tooltip should mention Ctrl+X");
+
+const redoBtn = document.getElementById("cadRedoBtn");
+assert.ok(redoBtn, "Redo button must exist");
+assert.ok(redoBtn.textContent.includes("Redo"), "Redo button must contain text 'Redo'");
+assert.ok(redoBtn.title.includes("Ctrl+Y"), "Redo button tooltip should mention Ctrl+Y");
+
+// Test undo / redo button interactions
+assert.equal(undoBtn.disabled, true, "Undo button should initially be disabled");
+assert.equal(redoBtn.disabled, true, "Redo button should initially be disabled");
+cad.placePanel();
+assert.equal(undoBtn.disabled, false, "Undo button should become enabled after placing panel");
+assert.equal(redoBtn.disabled, true, "Redo button should remain disabled after new action");
+undoBtn.click();
+assert.equal(undoBtn.disabled, true, "Undo button should be disabled after undoing the single action");
+assert.equal(redoBtn.disabled, false, "Redo button should become enabled after undo");
+redoBtn.click();
+assert.equal(undoBtn.disabled, false, "Undo button should be enabled after redo");
+assert.equal(redoBtn.disabled, true, "Redo button should be disabled at head of history");
+
 const selectBtn = document.getElementById("cadToolSelectBtn");
 assert.ok(selectBtn, "Select tool button must exist");
 assert.ok(selectBtn.textContent.includes("Select"), "Select tool button must have text");

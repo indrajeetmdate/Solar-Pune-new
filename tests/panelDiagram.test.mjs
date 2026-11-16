@@ -1226,5 +1226,132 @@ console.log("Running RooftopCAD tests...");
   console.log("✓ Test 19 Passed: Bottom Portion Utilization & Latent Panel Placement Across Obstacles");
 }
 
+// Test 20: Rooftop CAD Undo / Redo Engine & Keyboard Shortcuts (Ctrl+X / Ctrl+Y / Ctrl+Z)
+{
+  let undoStates = [];
+  const canvas = new MockCanvas();
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 40,
+    roofBreadthFt: 25,
+    requiredPanels: 10,
+    onHistoryChange: (canUndo, canRedo) => {
+      undoStates.push({ canUndo, canRedo });
+    },
+  });
+
+  // 1. Initial state: history empty
+  assert.equal(cad.canUndo(), false, "Initial canUndo should be false");
+  assert.equal(cad.canRedo(), false, "Initial canRedo should be false");
+
+  // 2. Panel placement creates undoable state
+  cad.placePanel("portrait", cad.roofX + 10, cad.roofY + 10);
+  assert.equal(cad.panels.length, 1, "One panel placed");
+  assert.equal(cad.canUndo(), true, "canUndo should be true after panel placement");
+  assert.equal(cad.canRedo(), false, "canRedo should be false after fresh action");
+
+  // 3. Undo panel placement
+  const undoRes = cad.undo();
+  assert.equal(undoRes, true, "cad.undo() should return true");
+  assert.equal(cad.panels.length, 0, "Panels should be reverted to 0");
+  assert.equal(cad.canUndo(), false, "canUndo should be false after undoing only action");
+  assert.equal(cad.canRedo(), true, "canRedo should be true after undo");
+
+  // 4. Redo panel placement
+  const redoRes = cad.redo();
+  assert.equal(redoRes, true, "cad.redo() should return true");
+  assert.equal(cad.panels.length, 1, "Panel should be restored by redo");
+  assert.equal(cad.canUndo(), true, "canUndo should be true after redo");
+  assert.equal(cad.canRedo(), false, "canRedo should be false at head of history");
+
+  // 5. Add cutout & undo/redo
+  cad.addCutout(cad.roofX + 30, cad.roofY + 30, 40, 40, "rectangle", "HVAC Unit");
+  assert.equal(cad.cutouts.length, 1, "Cutout added");
+  cad.undo();
+  assert.equal(cad.cutouts.length, 0, "Cutout reverted by undo");
+  cad.redo();
+  assert.equal(cad.cutouts.length, 1, "Cutout restored by redo");
+
+  // 6. Multi-Customer Flat demarcation assignment undo/redo
+  const testFlats = [
+    { id: "flat_101", flatNo: "101", panels: 1, color: "#38bdf8", customerName: "Resident 101" },
+  ];
+  cad.assignPanelsToFlats(testFlats);
+  assert.equal(cad.panels[0].flatNo, "101", "Panel should be assigned to Flat 101");
+  assert.ok(cad.multiCustomerFlats, "multiCustomerFlats should be populated");
+
+  cad.undo();
+  assert.equal(cad.panels[0].flatNo, undefined, "Flat assignment should be reverted by undo");
+  assert.equal(cad.multiCustomerFlats, null, "multiCustomerFlats should be null after undo");
+
+  cad.redo();
+  assert.equal(cad.panels[0].flatNo, "101", "Flat assignment restored by redo");
+  assert.ok(cad.multiCustomerFlats, "multiCustomerFlats restored by redo");
+
+  // 7. Clear all panels & undo
+  cad.clearAllPanels();
+  assert.equal(cad.panels.length, 0, "Panels cleared");
+  cad.undo();
+  assert.equal(cad.panels.length, 1, "Panels restored by undoing clearAllPanels");
+
+  // 8. Test Keyboard Shortcuts dispatch: Ctrl+X, Ctrl+Y, Ctrl+Z, Ctrl+Shift+Z
+  let fakeListeners = [];
+  const mockWin = {
+    addEventListener: (evt, fn) => fakeListeners.push({ evt, fn }),
+    devicePixelRatio: 1,
+  };
+  globalThis.window = mockWin;
+
+  // Dispatch helper
+  const sendKey = (key, ctrlKey, shiftKey) => {
+    let prevented = false;
+    const evt = {
+      key,
+      code: `Key${key.toUpperCase()}`,
+      ctrlKey: !!ctrlKey,
+      metaKey: false,
+      shiftKey: !!shiftKey,
+      preventDefault: () => { prevented = true; },
+    };
+    fakeListeners.filter(l => l.evt === "keydown").forEach(l => l.fn(evt));
+    return prevented;
+  };
+
+  // Attach keydown listener via cad.initEvents
+  fakeListeners = [];
+  cad.initEvents();
+
+  // Clear panels so we have an immediate 0 <-> 1 transition to verify
+  cad.clearAllPanels();
+  assert.equal(cad.panels.length, 0, "Panels cleared before keyboard test");
+
+  // Test Ctrl+X (User requested shortcut for Undo)
+  const preventedCtrlX = sendKey("x", true, false);
+  assert.equal(preventedCtrlX, true, "Ctrl+X should prevent default");
+  assert.equal(cad.panels.length, 1, "Ctrl+X should trigger Undo (restoring panel to 1)");
+
+  // Test Ctrl+Y (Standard and user requested shortcut for Redo)
+  const preventedCtrlY = sendKey("y", true, false);
+  assert.equal(preventedCtrlY, true, "Ctrl+Y should prevent default");
+  assert.equal(cad.panels.length, 0, "Ctrl+Y should trigger Redo (re-clearing panels to 0)");
+
+  // Test Ctrl+Z (Standard Undo)
+  const preventedCtrlZ = sendKey("z", true, false);
+  assert.equal(preventedCtrlZ, true, "Ctrl+Z should prevent default");
+  assert.equal(cad.panels.length, 1, "Ctrl+Z should trigger Undo (restoring panel to 1)");
+
+  // Test Ctrl+Shift+Z (Standard Redo)
+  const preventedCtrlShiftZ = sendKey("z", true, true);
+  assert.equal(preventedCtrlShiftZ, true, "Ctrl+Shift+Z should prevent default");
+  assert.equal(cad.panels.length, 0, "Ctrl+Shift+Z should trigger Redo (re-clearing panels to 0)");
+
+  // Test input field guard: typing in an input element should NOT trigger CAD undo/redo
+  globalThis.document = { activeElement: { tagName: "INPUT" } };
+  sendKey("x", true, false);
+  assert.equal(cad.panels.length, 0, "Ctrl+X inside an INPUT must NOT trigger CAD undo");
+  globalThis.document = { activeElement: { tagName: "DIV" } };
+
+  console.log("✓ Test 20 Passed: Rooftop CAD Undo / Redo Engine & Keyboard Shortcuts (Ctrl+X / Ctrl+Y / Ctrl+Z)");
+}
+
 console.log("All RooftopCAD tests passed successfully!");
 
