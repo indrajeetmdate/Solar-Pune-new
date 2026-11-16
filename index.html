@@ -751,6 +751,11 @@
                   <span>⚡</span> <span>Autofill Panels</span>
                 </button>
 
+                <!-- Reset & Redo Demarcation (Multi-Meter Mode) -->
+                <button type="button" class="cad-text-btn" id="cadRedoDemarcationBtn" style="display: none; background: #0284c7; border-color: #0284c7; color: #ffffff; font-weight: 700;" title="Reset all panels and re-run flat solar demarcation on this rooftop">
+                  <span>🔄</span> <span>Reset & Redo Demarcation</span>
+                </button>
+
                 <!-- 6. Reset All Panels (Required Text Button) -->
                 <button type="button" class="cad-text-btn danger" id="cadClearPanelsBtn" title="Reset All Panels back to Latent Pool">
                   <span>↺</span> <span>Reset All Panels</span>
@@ -990,6 +995,7 @@
                     <span style="font-size: 11px; color: #94a3b8; margin-left: 4px;">Real W:</span>
                     <input type="number" id="cadImagePhysicalWidthInput" min="5" max="500" step="0.5" style="width: 50px; height: 20px; padding: 1px 3px; font-size: 11px; background: #0f172a; border: 1px solid #475569; color: #f8fafc; border-radius: 3px; text-align: center;" title="Set Image Real-World Width in Feet">
                     <span style="font-size: 10px; color: #94a3b8;">ft</span>
+                    <button type="button" class="cad-btn-mini" id="cadImageRedoDemarcationBtn" style="display: none; background: #0284c7; color: white; font-weight: 700; border-color: #0284c7; margin-left: 6px;" title="Reset all panels and redo flat demarcation on this uploaded aerial image">🔄 Redo Demarcation</button>
                   </div>
 
                   <button type="button" class="cad-btn-mini" id="cadRemoveImageBtn" style="color: #f87171; margin-left: 4px;">✕ Remove</button>

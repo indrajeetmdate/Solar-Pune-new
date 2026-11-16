@@ -2884,9 +2884,31 @@ function setupCadEventListeners(cad) {
   // Panel placement actions
   $("cadAddSinglePanelBtn")?.addEventListener("click", () => cad.placePanel());
   $("cadAddBlockBtn")?.addEventListener("click", () => cad.placePanelBlock(2, 2));
-  $("cadAutoPlaceBtn")?.addEventListener("click", () => cad.autoPlaceRemainingPanels());
+  $("cadAutoPlaceBtn")?.addEventListener("click", () => {
+    cad.autoPlaceRemainingPanels();
+    if (typeof cad.updateAllPanelDimensions === "function") {
+      cad.updateAllPanelDimensions();
+    }
+    if ((state.proposalMode === "multi_building" || state.meteringMode === "multi") && state.buildingData?.flatLedger) {
+      if (typeof cad.assignPanelsToFlats === "function") {
+        cad.assignPanelsToFlats(state.buildingData.flatLedger);
+      }
+    }
+    if (typeof cad.render === "function") cad.render();
+  });
+  $("cadRedoDemarcationBtn")?.addEventListener("click", () => resetAndRedoDemarcation(true));
+  $("cadImageRedoDemarcationBtn")?.addEventListener("click", () => resetAndRedoDemarcation(true));
   $("cadAddHorizPathwayBtn")?.addEventListener("click", () => cad.addDefaultHorizontalPathway());
-  $("cadClearPanelsBtn")?.addEventListener("click", () => cad.clearAllPanels());
+  $("cadClearPanelsBtn")?.addEventListener("click", () => {
+    cad.clearAllPanels();
+    if (typeof cad.clearMultiCustomerDemarcation === "function") {
+      cad.clearMultiCustomerDemarcation();
+    }
+    if ($("cadInventoryCount")) {
+      const total = cad.requiredPanels || 0;
+      $("cadInventoryCount").textContent = `0 / ${total} Placed (${total} Remaining)`;
+    }
+  });
   $("cadClearCutoutsBtn")?.addEventListener("click", () => cad.clearAllCutouts());
 
   // Render initial Layers Panel
@@ -2945,6 +2967,12 @@ function setupCadEventListeners(cad) {
       updateLockBtnUI();
       syncImageRotationUI();
       syncImageScaleUI();
+      const isBldg = state.proposalMode === "multi_building" || state.meteringMode === "multi";
+      const imgRedoBtn = $("cadImageRedoDemarcationBtn");
+      if (imgRedoBtn) imgRedoBtn.style.display = isBldg ? "inline-flex" : "none";
+      if (isBldg) {
+        showLoadToast("Aerial rooftop image loaded! Align image to roof, then click 'Reset & Redo Demarcation'.");
+      }
       // Switch active tool to move image so user can immediately reposition it
       toolBtns.forEach(t => $(t.id)?.classList.remove("active"));
       $("cadToolPanBtn")?.classList.add("active");
@@ -3740,6 +3768,86 @@ function syncBuildingDataToWorkspace(buildingResult) {
 
   // 4. Trigger global render() to update Sizing, Financials, Loan, Proposal & Export, and Guide
   render();
+
+  const redoBtn = $("cadRedoDemarcationBtn");
+  if (redoBtn) redoBtn.style.display = "inline-flex";
+  const imgRedoBtn = $("cadImageRedoDemarcationBtn");
+  if (imgRedoBtn) imgRedoBtn.style.display = "inline-flex";
+}
+
+function resetAndRedoDemarcation(notifyUser = true) {
+  const cad = getActiveRooftopCAD();
+  if (!cad) return;
+
+  const isBuilding = state.proposalMode === "multi_building" || state.meteringMode === "multi";
+  if (!isBuilding) {
+    cad.clearAllPanels();
+    if (typeof cad.autoPlaceRemainingPanels === "function") {
+      cad.autoPlaceRemainingPanels("portrait");
+    }
+    if (typeof cad.updateAllPanelDimensions === "function") {
+      cad.updateAllPanelDimensions();
+    }
+    if (typeof cad.render === "function") cad.render();
+    if (notifyUser) {
+      showLoadToast("Rooftop panel array reset and auto-filled!");
+    }
+    return;
+  }
+
+  // Ensure building data is calculated and current
+  if (!state.buildingData || !state.buildingData.flatLedger) {
+    updateBuildingStudio();
+  }
+
+  const buildingResult = state.buildingData;
+  const ledger = buildingResult?.flatLedger || [];
+  const totalPanels = buildingResult?.summary?.totalBuildingPanels || (state.buildingFlats ? state.buildingFlats.reduce((sum, f) => sum + (Number(f.panels) || 0), 0) : 0);
+
+  // 1. Clear existing placed panels & selections
+  cad.panels = [];
+  if (Array.isArray(cad.selectedPanels)) cad.selectedPanels = [];
+
+  // 2. Set required panels so inventory and autoPlace know target count
+  if (typeof cad.setRequiredPanels === "function") {
+    cad.setRequiredPanels(totalPanels, 1123, 2279);
+  }
+
+  // 3. Auto-place panels collision-free onto current roof, respecting cutouts, walkways and aerial image
+  if (typeof cad.autoPlaceRemainingPanels === "function") {
+    cad.autoPlaceRemainingPanels("portrait");
+  }
+
+  // 4. Enforce uniform panel dimensions
+  if (typeof cad.updateAllPanelDimensions === "function") {
+    cad.updateAllPanelDimensions();
+  }
+
+  // 5. Re-run spatial demarcation assigning contiguous panel blocks to flats
+  if (typeof cad.assignPanelsToFlats === "function" && ledger.length > 0) {
+    cad.assignPanelsToFlats(ledger);
+  }
+
+  // 6. Update inventory pill
+  if ($("cadInventoryCount")) {
+    const remaining = Math.max(0, totalPanels - (cad.panels ? cad.panels.length : 0));
+    $("cadInventoryCount").textContent = `${cad.panels ? cad.panels.length : 0} / ${totalPanels} Placed (${remaining} Remaining)`;
+  }
+
+  // 7. Render CAD canvas
+  if (typeof cad.render === "function") {
+    cad.render();
+  }
+
+  // 8. User feedback toast
+  if (notifyUser) {
+    const placed = cad.panels ? cad.panels.length : 0;
+    if (placed >= totalPanels) {
+      showLoadToast(`Demarcation reset and redone: ${placed} panels allocated across ${ledger.length} flats!`);
+    } else {
+      showLoadToast(`Demarcation redone: ${placed} of ${totalPanels} panels placed on available rooftop area.`);
+    }
+  }
 }
 
 function setProposalMode(mode) {
@@ -3755,6 +3863,11 @@ function setProposalMode(mode) {
   if (multiBtn) multiBtn.classList.toggle("active", isBuilding);
   if (buildingTabBtn) buildingTabBtn.style.display = isBuilding ? "inline-flex" : "none";
   if (includeIndivLabel) includeIndivLabel.style.display = isBuilding ? "inline-flex" : "none";
+
+  const redoDemarcationBtn = $("cadRedoDemarcationBtn");
+  if (redoDemarcationBtn) redoDemarcationBtn.style.display = isBuilding ? "inline-flex" : "none";
+  const imgRedoDemarcationBtn = $("cadImageRedoDemarcationBtn");
+  if (imgRedoDemarcationBtn) imgRedoDemarcationBtn.style.display = isBuilding ? "inline-flex" : "none";
 
   const cad = getActiveRooftopCAD();
   if (isBuilding) {
@@ -3809,6 +3922,7 @@ function setProposalMode(mode) {
 if (typeof window !== "undefined") {
   window.setProposalMode = setProposalMode;
   window.updateBuildingStudio = updateBuildingStudio;
+  window.resetAndRedoDemarcation = resetAndRedoDemarcation;
 }
 
 
@@ -5035,6 +5149,7 @@ function attachEvents() {
 
   $("syncCadPanelsBtn")?.addEventListener("click", () => {
     updateBuildingStudio();
+    resetAndRedoDemarcation(true);
     switchWorkspaceTab("cad");
   });
 
@@ -6765,6 +6880,7 @@ window.lockInternal = lockInternal;
 window.openInternal = openInternal;
 window.setProposalMode = setProposalMode;
 window.updateBuildingStudio = updateBuildingStudio;
+window.resetAndRedoDemarcation = resetAndRedoDemarcation;
 window.render = render;
 
 export {
@@ -6786,5 +6902,6 @@ export {
   lockInternal,
   openInternal,
   setProposalMode,
-  updateBuildingStudio
+  updateBuildingStudio,
+  resetAndRedoDemarcation
 };

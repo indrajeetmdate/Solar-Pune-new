@@ -778,9 +778,91 @@ assert.ok(samplePagesContainer.textContent.includes("Shared Rooftop Layout & Dem
 assert.ok(restoredCadPages[2].textContent.includes("3. Resident-Wise Financial Allocation & Solar Ledger"), "Master ledger must be numbered as section 3 when CAD is shown");
 
 document.getElementById("closeSampleViewModalBtn")?.click();
-modeSingleBtn.click();
-assert.equal(window.appState.proposalMode, "single", "Proposal mode must restore to 'single'");
-assert.equal(bldgTabBtn.style.display, "none", "Building Studio tab must be hidden in single customer mode");
+
+// 12. Test Manual Reset & Redo Demarcation Button in Rooftop CAD (Multi-Meter Mode)
+{
+  const redoDemarcationBtn = document.getElementById("cadRedoDemarcationBtn");
+  assert.ok(redoDemarcationBtn, "cadRedoDemarcationBtn must exist in CAD toolbar");
+  assert.equal(redoDemarcationBtn.style.display, "inline-flex", "cadRedoDemarcationBtn must be visible in multi-building mode");
+
+  const imgRedoBtn = document.getElementById("cadImageRedoDemarcationBtn");
+  assert.ok(imgRedoBtn, "cadImageRedoDemarcationBtn must exist in Image Drawer");
+
+  const cadInst2 = window.cad;
+  assert.ok(cadInst2, "CAD instance must exist");
+
+  // Simulate uploaded rooftop aerial image
+  cadInst2.image = {
+    element: { width: 800, height: 600 },
+    isLoaded: true,
+    x: cadInst2.roofX || 50,
+    y: cadInst2.roofY || 50,
+    scale: 1.0,
+    rotation: 0,
+    locked: false
+  };
+
+  // Add obstacle cutout over newly identified obstacle on rooftop image
+  cadInst2.cutouts = [{
+    id: "cutout_lift_room",
+    type: "cutout",
+    shape: "rectangle",
+    x: (cadInst2.roofX || 50) + 15,
+    y: (cadInst2.roofY || 50) + 15,
+    w: 80,
+    h: 60
+  }];
+
+  // Click manual Reset & Redo Demarcation button
+  redoDemarcationBtn.click();
+
+  assert.ok(cadInst2.panels.length > 0, "Panels must be placed on roof after Reset & Redo Demarcation");
+  const liftCutout = cadInst2.cutouts[0];
+  for (const p of cadInst2.panels) {
+    // Verify no panel collides with the obstacle cutout
+    const overlaps = !(
+      p.x + p.w <= liftCutout.x ||
+      p.x >= liftCutout.x + liftCutout.w ||
+      p.y + p.h <= liftCutout.y ||
+      p.y >= liftCutout.y + liftCutout.h
+    );
+    assert.ok(!overlaps, "Panels must avoid collision with newly placed rooftop obstacle cutout");
+
+    // Verify all placed panels carry flat demarcation
+    assert.ok(p.flatColor, "Panel must have demarcated flatColor");
+    assert.ok(p.flatLabel, "Panel must have demarcated flatLabel");
+    assert.ok(p.customerName, "Panel must have demarcated customerName");
+  }
+
+  // Test clicking Reset All Panels clears both panels and demarcation
+  const clearPanelsBtn = document.getElementById("cadClearPanelsBtn");
+  clearPanelsBtn?.click();
+  assert.equal(cadInst2.panels.length, 0, "Reset All Panels must clear panels array");
+  assert.equal(cadInst2.multiCustomerFlats, null, "Reset All Panels must clear multiCustomerFlats");
+
+  // Test clicking Autofill Panels re-places and re-demarcates
+  const autoPlaceBtnElem = document.getElementById("cadAutoPlaceBtn");
+  autoPlaceBtnElem?.click();
+  assert.ok(cadInst2.panels.length > 0, "Autofill Panels must re-populate panels");
+  assert.ok(cadInst2.panels[0].flatColor, "Autofill in building mode must re-demarcate flats");
+
+  // Test clicking Image Drawer Redo Demarcation button
+  imgRedoBtn.click();
+  assert.ok(cadInst2.panels.length > 0, "Image drawer redo demarcation button must function cleanly");
+  assert.ok(cadInst2.panels[0].flatLabel, "Image drawer redo demarcation must assign flat labels");
+
+  // Test Building Studio Proportional CAD Sync button
+  const syncCadBtn = document.getElementById("syncCadPanelsBtn");
+  syncCadBtn?.click();
+  assert.ok(cadInst2.panels.length > 0, "Sync CAD Panels button must trigger reset & redo demarcation");
+  assert.ok(cadInst2.panels[0].flatColor, "Sync CAD Panels must produce demarcated panels");
+
+  modeSingleBtn.click();
+  assert.equal(window.appState.proposalMode, "single", "Proposal mode must restore to 'single'");
+  assert.equal(redoDemarcationBtn.style.display, "none", "cadRedoDemarcationBtn must be hidden in single customer mode");
+  assert.equal(imgRedoBtn.style.display, "none", "cadImageRedoDemarcationBtn must be hidden in single customer mode");
+  assert.equal(bldgTabBtn.style.display, "none", "Building Studio tab must be hidden in single customer mode");
+}
 const restoredName = document.getElementById("customerName")?.value;
 assert.notEqual(restoredName, "Shivaji Heights Co-op Housing Society", "Single customer name must be restored when switching back");
 
