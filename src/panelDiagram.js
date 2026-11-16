@@ -496,36 +496,59 @@ export class RooftopCAD {
 
     const { w, h } = this.getPanelSizePx(orientation);
     const gap = 3;
-    const margin = 10;
+    const xMargin = 10;
+    const yMargin = Math.max(2, Math.min(6, Math.round((this.scalePxPerFt || 4) * 0.5)));
+    const rightMargin = Math.max(2, Math.min(6, Math.round((this.scalePxPerFt || 4) * 0.5)));
 
-    let placedCount = 0;
-    const maxCols = Math.floor((this.roofW - margin * 2 + gap) / (w + gap));
-    const maxRows = Math.floor((this.roofH - margin * 2 + gap) / (h + gap));
+    const maxCols = Math.floor((this.roofW - xMargin - rightMargin + gap) / (w + gap));
 
-    for (let r = 0; r < maxRows && placedCount < remaining; r++) {
-      for (let c = 0; c < maxCols && placedCount < remaining; c++) {
-        const candidateX = this.roofX + margin + c * (w + gap);
-        const candidateY = this.roofY + margin + r * (h + gap);
+    // Phase 1: Search optimal vertical offset to maximize structured row capacity across obstacles
+    const defaultOffset = Math.max(0, 10 - yMargin);
+    let bestOffset = defaultOffset;
+    let maxFit = -1;
+    const maxOffset = Math.round(h + gap);
 
-        // Never place off-screen negative coordinates
-        if (candidateX < 0 || candidateY < 0) {
-          continue;
+    for (let offset = 0; offset <= maxOffset; offset += 1) {
+      let fit = 0;
+      for (let r = 0; ; r++) {
+        const candidateY = this.roofY + yMargin + offset + r * (h + gap);
+        if (candidateY + h > this.roofY + this.roofH - yMargin) break;
+
+        for (let c = 0; c < maxCols; c++) {
+          const candidateX = this.roofX + xMargin + c * (w + gap);
+          if (candidateX + w > this.roofX + this.roofW - rightMargin) continue;
+          if (!this.isAreaBlocked(candidateX, candidateY, w, h)) {
+            fit++;
+          }
         }
+      }
 
-        // Strict boundary check inside roof
+      // Prioritize placement count up to required; if fit is equal, choose offset closest to default
+      if (fit > maxFit) {
+        maxFit = fit;
+        bestOffset = offset;
+      } else if (fit === maxFit && Math.abs(offset - defaultOffset) < Math.abs(bestOffset - defaultOffset)) {
+        bestOffset = offset;
+      }
+    }
+
+    // Pass 1: Grid placement using optimal vertical offset, filling all valid rows down to the roof bottom
+    for (let r = 0; ; r++) {
+      const candidateY = this.roofY + yMargin + bestOffset + r * (h + gap);
+      if (candidateY + h > this.roofY + this.roofH - yMargin) break;
+
+      for (let c = 0; c < maxCols && this.panels.length < this.requiredPanels; c++) {
+        const candidateX = this.roofX + xMargin + c * (w + gap);
+        if (candidateX < 0 || candidateY < 0) continue;
         if (
-          candidateX < this.roofX + margin ||
-          candidateY < this.roofY + margin ||
-          candidateX + w > this.roofX + this.roofW - margin ||
-          candidateY + h > this.roofY + this.roofH - margin
+          candidateX < this.roofX + xMargin ||
+          candidateY < this.roofY + yMargin ||
+          candidateX + w > this.roofX + this.roofW - rightMargin ||
+          candidateY + h > this.roofY + this.roofH - yMargin
         ) {
           continue;
         }
 
-        // Strict non-overlapping check against:
-        // 1. All existing panels
-        // 2. All cutouts (rectangles, circles & l-shapes)
-        // 3. All pathways
         const collidesWithPanel = this.panels.some((p) =>
           this.doRectanglesOverlap(candidateX, candidateY, w, h, p.x, p.y, p.w, p.h)
         );
@@ -542,7 +565,33 @@ export class RooftopCAD {
             orientation,
             opacity: 1.0,
           });
-          placedCount++;
+        }
+      }
+    }
+
+    // Pass 2: Secondary fine slot-fill for any latent panels in open unobstructed roof pockets
+    if (this.panels.length < this.requiredPanels) {
+      const step = 2;
+      for (let y = this.roofY + yMargin; y + h <= this.roofY + this.roofH - yMargin && this.panels.length < this.requiredPanels; y += step) {
+        for (let x = this.roofX + xMargin; x + w <= this.roofX + this.roofW - rightMargin && this.panels.length < this.requiredPanels; x += step) {
+          const collidesWithPanel = this.panels.some((p) =>
+            this.doRectanglesOverlap(x, y, w, h, p.x, p.y, p.w, p.h)
+          );
+          const collidesWithObstacle = this.isAreaBlocked(x, y, w, h);
+
+          if (!collidesWithPanel && !collidesWithObstacle) {
+            this.panels.push({
+              id: "p_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+              type: "panel",
+              x,
+              y,
+              w,
+              h,
+              orientation,
+              opacity: 1.0,
+            });
+            x += Math.floor(w + gap - step);
+          }
         }
       }
     }
@@ -554,11 +603,13 @@ export class RooftopCAD {
   // Find next available open grid slot for width w and height h
   findNextAvailableSlot(w, h) {
     const gap = 3;
-    const margin = 10;
-    const step = 20;
+    const xMargin = 10;
+    const yMargin = Math.max(2, Math.min(6, Math.round((this.scalePxPerFt || 4) * 0.5)));
+    const rightMargin = Math.max(2, Math.min(6, Math.round((this.scalePxPerFt || 4) * 0.5)));
+    const step = Math.max(2, Math.min(8, Math.floor(Math.min(w, h) / 4)));
 
-    for (let y = this.roofY + margin; y + h <= this.roofY + this.roofH - margin; y += step) {
-      for (let x = this.roofX + margin; x + w <= this.roofX + this.roofW - margin; x += step) {
+    for (let y = this.roofY + yMargin; y + h <= this.roofY + this.roofH - yMargin; y += step) {
+      for (let x = this.roofX + xMargin; x + w <= this.roofX + this.roofW - rightMargin; x += step) {
         const collidesWithPanel = this.panels.some((p) =>
           this.doRectanglesOverlap(x, y, w, h, p.x, p.y, p.w, p.h)
         );

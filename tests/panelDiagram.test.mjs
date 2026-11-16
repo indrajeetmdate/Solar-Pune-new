@@ -1144,5 +1144,87 @@ console.log("Running RooftopCAD tests...");
   console.log("✓ Test 18 Passed: Scaling Uploaded Aerial Image with Respect to Base Roof & Uniform Panel Sizing");
 }
 
+// Test 19: Bottom Portion Utilization & Latent Panel Placement Across Obstacles
+{
+  const canvas = new MockCanvas();
+  // Roof matching multi-customer scenario with upper obstructions and 77 required panels
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 100,
+    roofBreadthFt: 43,
+    requiredPanels: 77,
+  });
+
+  // Precise roof boundaries
+  cad.roofX = 15;
+  cad.roofY = 15;
+  cad.roofW = 406;
+  cad.roofH = 174;
+  cad.scalePxPerFt = 4.06;
+
+  // Upper cutouts matching screenshot
+  cad.addCutout(cad.roofX + 5, cad.roofY + 2, 68, 38, "rectangle", "Obs Top Left");
+  cad.addCutout(cad.roofX + 85, cad.roofY + 2, 230, 38, "rectangle", "Obs Top Mid");
+  cad.addCutout(cad.roofX + 155, cad.roofY + 35, 86, 58, "rectangle", "Obs Top Center");
+  cad.addCutout(cad.roofX + 330, cad.roofY + 2, 70, 38, "rectangle", "Obs Top Right");
+  cad.addCutout(cad.roofX + 145, cad.roofY + 155, 20, 15, "rectangle", "Obs Bottom Left");
+  cad.addCutout(cad.roofX + 235, cad.roofY + 155, 20, 15, "rectangle", "Obs Bottom Right");
+
+  // Auto-place panels in portrait
+  cad.autoPlaceRemainingPanels("portrait");
+
+  // 1. Verify significantly more panels placed than the old 51 panels (at least 70 panels placed)
+  assert.ok(
+    cad.panels.length >= 70,
+    `Expected at least 70 panels placed (got ${cad.panels.length}) out of 77 required`
+  );
+
+  // 2. Verify bottom portion is utilized (lowest panel reaches within 8 px of roof bottom)
+  const roofBottom = cad.roofY + cad.roofH;
+  const lowestBottom = Math.max(...cad.panels.map((p) => p.y + p.h));
+  const bottomSlack = roofBottom - lowestBottom;
+  assert.ok(
+    bottomSlack <= 8,
+    `Bottom portion of the roof must be utilized: slack was ${bottomSlack.toFixed(1)} px (must be <= 8 px)`
+  );
+
+  // 3. Verify zero collisions between any panels
+  for (let i = 0; i < cad.panels.length; i++) {
+    for (let j = i + 1; j < cad.panels.length; j++) {
+      const p1 = cad.panels[i];
+      const p2 = cad.panels[j];
+      assert.ok(
+        !cad.doRectanglesOverlap(p1.x, p1.y, p1.w, p1.h, p2.x, p2.y, p2.w, p2.h),
+        `Panel ${i} and ${j} must not overlap`
+      );
+    }
+  }
+
+  // 4. Verify zero collisions with obstacles
+  cad.panels.forEach((p, idx) => {
+    assert.ok(
+      !cad.isAreaBlocked(p.x, p.y, p.w, p.h),
+      `Panel #${idx + 1} must not collide with any obstacle or cutout`
+    );
+  });
+
+  // 5. Verify all panels are strictly within roof bounds
+  cad.panels.forEach((p, idx) => {
+    assert.ok(p.x >= cad.roofX, `Panel #${idx + 1} x must be within roof bounds`);
+    assert.ok(p.y >= cad.roofY, `Panel #${idx + 1} y must be within roof bounds`);
+    assert.ok(p.x + p.w <= cad.roofX + cad.roofW + 0.1, `Panel #${idx + 1} right edge within roof`);
+    assert.ok(p.y + p.h <= cad.roofY + cad.roofH + 0.1, `Panel #${idx + 1} bottom edge within roof`);
+  });
+
+  // 6. Verify uniform dimensions across all placed panels
+  const uniformW = cad.panels[0].w;
+  const uniformH = cad.panels[0].h;
+  cad.panels.forEach((p, idx) => {
+    assert.equal(p.w, uniformW, `Panel #${idx + 1} width must be uniform`);
+    assert.equal(p.h, uniformH, `Panel #${idx + 1} height must be uniform`);
+  });
+
+  console.log("✓ Test 19 Passed: Bottom Portion Utilization & Latent Panel Placement Across Obstacles");
+}
+
 console.log("All RooftopCAD tests passed successfully!");
 
