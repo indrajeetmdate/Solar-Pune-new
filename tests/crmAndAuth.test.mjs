@@ -142,6 +142,47 @@ test("Solar Calculator - Cloned User Authentication, Customer Mode & Solar CRM S
     const sidebarTabInputs = document.getElementById("sidebarTabInputsBtn");
     assert.ok(sidebarTabInputs.classList.contains("active"), "Project Inputs button must be active in Customer Mode");
 
+    // Verify Compulsory First-Time Visitor Registration Gate in Customer Mode
+    const gateModal = document.getElementById("customerRegistrationGateModal");
+    assert.ok(gateModal, "Customer registration gate modal must exist");
+    assert.notEqual(gateModal.style.display, "none", "Customer gate modal must be displayed for first-time visitors");
+
+    const gateNameInput = document.getElementById("gateCustomerName");
+    const gatePhoneInput = document.getElementById("gateCustomerPhone");
+    const gateCityInput = document.getElementById("gateCustomerCity");
+    const gateSubmitBtn = document.getElementById("gateSubmitBtn");
+    const gateErrEl = document.getElementById("gateRegistrationError");
+
+    // Attempt submission with empty values
+    gateNameInput.value = "";
+    gatePhoneInput.value = "";
+    gateSubmitBtn.click();
+    assert.notEqual(gateErrEl.style.display, "none", "Error message must show when submitting empty gate form");
+
+    // Attempt submission with invalid phone number
+    gateNameInput.value = "Vikram Deshmukh";
+    gatePhoneInput.value = "12345";
+    gateSubmitBtn.click();
+    assert.notEqual(gateErrEl.style.display, "none", "Error message must show when phone is not a valid 10-digit number");
+
+    // Submit with valid credentials
+    gatePhoneInput.value = "9822123456";
+    gateCityInput.value = "Kothrud, Pune";
+    await window.submitCustomerVisitorGate();
+
+    assert.equal(gateModal.style.display, "none", "Gate modal must close on successful registration");
+    assert.equal(document.getElementById("customerName").value, "Vikram Deshmukh", "Gate submission must update customerName input");
+    assert.equal(document.getElementById("mobileNumber").value, "9822123456", "Gate submission must update mobileNumber input");
+
+    const storedVisitor = JSON.parse(localStorage.getItem("solar_customer_visitor"));
+    assert.ok(storedVisitor, "Visitor profile must be saved to localStorage");
+    assert.equal(storedVisitor.name, "Vikram Deshmukh");
+    assert.equal(storedVisitor.phone, "9822123456");
+
+    // Verify returning visitors do NOT get prompted with gate modal
+    window.checkCustomerVisitorGate();
+    assert.equal(gateModal.style.display, "none", "Returning registered visitors must not be blocked by gate modal");
+
     // Verify Customer estimate CTA banner is shown in Sizing
     const custBanner = document.getElementById("customerEstimateCtaBanner");
     assert.notEqual(custBanner.style.display, "none", "Customer CTA banner must be visible in Customer Mode");

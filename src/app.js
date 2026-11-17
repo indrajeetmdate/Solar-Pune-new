@@ -3483,8 +3483,152 @@ function setCustomerMode() {
   const custBanner = $("customerEstimateCtaBanner");
   if (custBanner) custBanner.style.display = "flex";
 
+  // 6. Check compulsory visitor registration gate for customer mode
+  checkCustomerVisitorGate();
+
   document.querySelectorAll('.wizard-actions').forEach(el => el.classList.remove('hidden'));
   render();
+}
+
+function checkCustomerVisitorGate() {
+  if (state.internalUnlocked || state.userMode === "internal") {
+    const gateModal = $("customerRegistrationGateModal");
+    if (gateModal) gateModal.style.display = "none";
+    return;
+  }
+
+  let visitor = null;
+  try {
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem("solar_customer_visitor") : null;
+    if (raw) visitor = JSON.parse(raw);
+  } catch (_) {}
+
+  const gateModal = $("customerRegistrationGateModal");
+
+  if (!visitor || !visitor.phone || !visitor.name) {
+    if (gateModal) {
+      gateModal.style.display = "flex";
+      const errEl = $("gateRegistrationError");
+      if (errEl) errEl.style.display = "none";
+      const nameInput = $("gateCustomerName");
+      if (nameInput) nameInput.focus();
+    }
+  } else {
+    // Visitor is already registered! Pre-fill fields if not already populated
+    if (gateModal) gateModal.style.display = "none";
+    const nameEl = $("customerName");
+    if (nameEl && (!nameEl.value || nameEl.value === "Rahul Sharma")) {
+      nameEl.value = visitor.name;
+    }
+    const phoneEl = $("mobileNumber");
+    if (phoneEl && !phoneEl.value) {
+      phoneEl.value = visitor.phone;
+    }
+    const addrEl = $("customerAddress");
+    if (addrEl && (!addrEl.value || addrEl.value === "Pune, Maharashtra") && visitor.city) {
+      addrEl.value = visitor.city;
+    }
+  }
+}
+
+async function submitCustomerVisitorGate() {
+  const nameInput = $("gateCustomerName");
+  const phoneInput = $("gateCustomerPhone");
+  const cityInput = $("gateCustomerCity");
+  const errEl = $("gateRegistrationError");
+
+  const name = (nameInput?.value || "").trim();
+  let phone = (phoneInput?.value || "").trim().replace(/\D/g, "");
+  const city = (cityInput?.value || "Pune, Maharashtra").trim();
+
+  // Strip leading 91 or 0 if user entered them
+  if (phone.startsWith("91") && phone.length === 12) {
+    phone = phone.slice(2);
+  } else if (phone.startsWith("0") && phone.length === 11) {
+    phone = phone.slice(1);
+  }
+
+  if (!name || name.length < 2) {
+    if (errEl) {
+      errEl.textContent = "Please enter your full name (minimum 2 characters).";
+      errEl.style.display = "block";
+    }
+    nameInput?.focus();
+    return false;
+  }
+
+  // Validate 10-digit Indian mobile number
+  if (!phone || phone.length !== 10 || !/^[6-9]\d{9}$/.test(phone)) {
+    if (errEl) {
+      errEl.textContent = "Please enter a valid 10-digit Indian mobile number.";
+      errEl.style.display = "block";
+    }
+    phoneInput?.focus();
+    return false;
+  }
+
+  if (errEl) errEl.style.display = "none";
+
+  // 1. Save visitor profile to localStorage
+  const visitorProfile = {
+    name,
+    phone,
+    city,
+    registeredAt: new Date().toISOString()
+  };
+
+  try {
+    localStorage.setItem("solar_customer_visitor", JSON.stringify(visitorProfile));
+  } catch (_) {}
+
+  // 2. Pre-fill customer fields in the application
+  if ($("customerName")) $("customerName").value = name;
+  if ($("mobileNumber")) $("mobileNumber").value = phone;
+  if ($("customerAddress")) $("customerAddress").value = city;
+  if ($("proposalToCustomerName")) $("proposalToCustomerName").textContent = name;
+  if ($("proposalToCustomerPhone")) $("proposalToCustomerPhone").textContent = "+91 " + phone;
+  if ($("proposalToCustomerAddress")) $("proposalToCustomerAddress").textContent = city;
+
+  // 3. Save as a lead in CRM database
+  try {
+    await saveCrmLeadLocallyAndRemote({
+      customer_name: name,
+      mobile_number: phone,
+      customer_address: city,
+      status: "lead",
+      notes: [{
+        id: "note_" + Date.now(),
+        text: "New first-time visitor registered on customer portal gate",
+        author: "Customer Portal Gate",
+        created_at: new Date().toISOString()
+      }]
+    });
+  } catch (crmErr) {
+    console.warn("Could not save visitor to CRM database:", crmErr);
+  }
+
+  // 4. Dispatch WhatsApp notification to Admin & external automations
+  try {
+    fetch("/api/whatsapp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "notify_new_visitor",
+        name,
+        phone,
+        city,
+        timestamp: new Date().toISOString()
+      })
+    }).catch(() => {});
+  } catch (_) {}
+
+  // 5. Close gate modal & re-render
+  const gateModal = $("customerRegistrationGateModal");
+  if (gateModal) gateModal.style.display = "none";
+
+  showLoadToast(`Welcome, ${name}! Your solar estimate is ready.`);
+  render();
+  return true;
 }
 
 function openInternalDialog() {
@@ -3522,6 +3666,9 @@ function closeInternalDialog() {
     }
     dialog.removeAttribute("open");
     dialog.style.display = "none";
+  }
+  if (state.userMode === "customer" && !state.internalUnlocked) {
+    checkCustomerVisitorGate();
   }
 }
 
@@ -3569,6 +3716,10 @@ async function unlockInternal() {
 function openInternal(user = null) {
   state.internalUnlocked = true;
   state.userMode = "internal";
+
+  // Hide customer registration gate modal for internal team
+  const gateModal = $("customerRegistrationGateModal");
+  if (gateModal) gateModal.style.display = "none";
 
   if (user) {
     state.currentUser = user;
@@ -5541,6 +5692,23 @@ function attachEvents() {
     if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
+  });
+
+  // Compulsory Customer Registration Gate Events
+  $("gateSubmitBtn")?.addEventListener("click", submitCustomerVisitorGate);
+  $("gateCustomerName")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submitCustomerVisitorGate();
+  });
+  $("gateCustomerPhone")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submitCustomerVisitorGate();
+  });
+  $("gateCustomerCity")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submitCustomerVisitorGate();
+  });
+  $("gateInternalLoginLinkBtn")?.addEventListener("click", () => {
+    const gateModal = $("customerRegistrationGateModal");
+    if (gateModal) gateModal.style.display = "none";
+    openInternalDialog();
   });
 
   // Consumer category change: toggle conditional fields and update slab defaults
@@ -8123,6 +8291,8 @@ window.closeCustomerSiteVisitModal = closeCustomerSiteVisitModal;
 window.submitCustomerSiteVisitRequest = submitCustomerSiteVisitRequest;
 window.switchSidebarCategory = switchSidebarCategory;
 window.applySidebarSubFilter = applySidebarSubFilter;
+window.checkCustomerVisitorGate = checkCustomerVisitorGate;
+window.submitCustomerVisitorGate = submitCustomerVisitorGate;
 
 export {
   autoSyncLatestProposalSerial,
@@ -8162,5 +8332,7 @@ export {
   closeCustomerSiteVisitModal,
   submitCustomerSiteVisitRequest,
   switchSidebarCategory,
-  applySidebarSubFilter
+  applySidebarSubFilter,
+  checkCustomerVisitorGate,
+  submitCustomerVisitorGate
 };
