@@ -52,6 +52,8 @@ test("Solar Calculator - Cloned User Authentication, Customer Mode & Solar CRM S
   global.localStorage = localStorage;
   global.alert = () => {};
   window.alert = () => {};
+  global.confirm = () => true;
+  window.confirm = () => true;
 
   // Import CRM module
   const crmModule = await import("../src/crm.js");
@@ -62,7 +64,9 @@ test("Solar Calculator - Cloned User Authentication, Customer Mode & Solar CRM S
     fetchCrmLeads,
     saveCrmLeadLocallyAndRemote,
     addNoteToLead,
-    deleteCrmLeadById
+    deleteCrmLeadById,
+    syncSavedCustomersWithLeads,
+    syncCustomerDataToSavedProposals
   } = crmModule;
 
   // Import main app module
@@ -467,5 +471,147 @@ test("Solar Calculator - Cloned User Authentication, Customer Mode & Solar CRM S
     assert.ok(siteVisitLead, "Site visit request must be recorded as a CRM lead");
     assert.equal(siteVisitLead.mobile_number, "9822334455");
     assert.ok(siteVisitLead.notes.some(n => n.text.includes("Customer requested free site survey")), "Note must record online portal request");
+  });
+
+  await t.test("7. Sync Saved Customer Proposals with CRM Leads, Edit Proposal in Proposal Screen & CRM Quick Edit Modal", async () => {
+    // 1. Unlock internal mode
+    window.openInternal();
+
+    // 2. Setup a saved customer proposal in localStorage
+    const testSavedProposal = {
+      id: "prop-sync-test-7788",
+      proposalSerialNo: "DC/2026-27/PROP-7788",
+      customerName: "Kailash Patil",
+      mobileNumber: "9822114477",
+      emailAddress: "kailash.patil@gmail.com",
+      customerAddress: "Pimple Saudagar, Pune",
+      sanctionedLoad: 8,
+      monthlyUnits: 720,
+      monthlyBill: 8600,
+      systemCapacityKw: 6.6,
+      totalCost: 395000,
+      savedAt: new Date().toISOString(),
+      stateData: {
+        formValues: {
+          customerName: "Kailash Patil",
+          mobileNumber: "9822114477",
+          emailAddress: "kailash.patil@gmail.com",
+          customerAddress: "Pimple Saudagar, Pune",
+          sanctionedLoad: 8,
+          monthlyUnits: 720,
+          monthlyBill: 8600
+        },
+        input: {
+          customerName: "Kailash Patil",
+          mobileNumber: "9822114477",
+          customerAddress: "Pimple Saudagar, Pune",
+          sanctionedLoad: 8
+        },
+        reportDisplay: {
+          proposalSerialNo: "DC/2026-27/PROP-7788"
+        }
+      }
+    };
+
+    // Store into localStorage saved proposals
+    let savedProps = [];
+    try {
+      const raw = localStorage.getItem("solar_saved_proposals");
+      if (raw) savedProps = JSON.parse(raw);
+    } catch (_) {}
+    savedProps = [testSavedProposal, ...savedProps];
+    localStorage.setItem("solar_saved_proposals", JSON.stringify(savedProps));
+
+    // 3. Render CRM Dashboard (triggers automatic proposal sync)
+    await window.renderCrmDashboard("all");
+
+    // Verify Kailash Patil was synced into CRM Leads
+    const allLeads = await fetchCrmLeads();
+    const syncedLead = allLeads.find(l => l.customer_name === "Kailash Patil" || l.proposal_serial_no === "DC/2026-27/PROP-7788");
+    assert.ok(syncedLead, "Saved customer proposal must automatically sync into CRM Leads");
+    assert.equal(syncedLead.proposal_serial_no, "DC/2026-27/PROP-7788", "Synced lead must have proposal serial number");
+    assert.equal(syncedLead.status, "proposal_sent", "Synced lead with proposal must have status 'proposal_sent'");
+    assert.equal(syncedLead.system_capacity_kw, 6.6, "System capacity must be synced from proposal");
+    assert.equal(syncedLead.estimated_cost, 395000, "Estimated cost must be synced from proposal");
+
+    // Check table row for synced lead has '✏️ Edit Proposal' button
+    const tbody = document.getElementById("crmLeadsTableBody");
+    const kailashRow = Array.from(tbody.querySelectorAll("tr")).find(r => r.innerHTML.includes("Kailash Patil"));
+    assert.ok(kailashRow, "Table must render row for synced customer");
+    const editPropBtn = kailashRow.querySelector(".crm-edit-proposal-btn");
+    assert.ok(editPropBtn, "Row must contain ✏️ Edit Proposal button");
+    assert.equal(editPropBtn.dataset.proposalSerial, "DC/2026-27/PROP-7788");
+
+    // 4. Test clicking '✏️ Edit Proposal' button: loads full proposal state and opens Proposal Screen
+    await window.openAndEditLeadProposal(syncedLead.id);
+
+    // Verify proposal screen tab is active
+    const proposalTabBtn = document.getElementById("workspaceTabProposalBtn");
+    const paneProposal = document.getElementById("paneProposal");
+    assert.ok(proposalTabBtn.classList.contains("active"), "Proposal workspace tab must be active after clicking Edit Proposal");
+    assert.ok(paneProposal.classList.contains("active"), "Proposal pane must be visible");
+
+    // Verify customer data was restored in inputs
+    assert.equal(document.getElementById("customerName").value, "Kailash Patil", "Customer name must be loaded into proposal");
+    assert.equal(document.getElementById("mobileNumber").value, "9822114477", "Mobile number must be loaded into proposal");
+
+    // 5. Test Quick Editing basic customer details directly from CRM screen
+    await window.renderCrmDashboard();
+    await window.openCrmEditLeadModal(syncedLead.id);
+
+    const editModal = document.getElementById("crmEditLeadModal");
+    assert.equal(editModal.style.display, "flex", "CRM Edit Lead modal must open");
+    assert.equal(document.getElementById("editLeadName").value, "Kailash Patil");
+    assert.equal(document.getElementById("editLeadPhone").value, "9822114477");
+    assert.equal(document.getElementById("editLeadAddress").value, "Pimple Saudagar, Pune");
+
+    const proposalBanner = document.getElementById("editLeadProposalBanner");
+    assert.equal(proposalBanner.style.display, "flex", "Proposal banner in edit modal must be visible for lead with proposal");
+    assert.equal(document.getElementById("editLeadProposalSerialText").textContent, "DC/2026-27/PROP-7788");
+
+    // Update customer basic data
+    document.getElementById("editLeadName").value = "Kailash Patil & Sons";
+    document.getElementById("editLeadPhone").value = "9822114499";
+    document.getElementById("editLeadAddress").value = "Wakad, Pune - 411057";
+    document.getElementById("editLeadStatus").value = "won";
+    document.getElementById("editLeadCapacity").value = "8.8";
+    document.getElementById("editLeadCost").value = "520000";
+
+    await window.submitCrmEditLead();
+
+    assert.equal(editModal.style.display, "none", "CRM Edit Lead modal must close after saving");
+
+    // Verify CRM lead updated
+    const leadsAfterEdit = await fetchCrmLeads();
+    const editedLead = leadsAfterEdit.find(l => l.id === syncedLead.id);
+    assert.equal(editedLead.customer_name, "Kailash Patil & Sons", "Lead customer name must be updated in CRM");
+    assert.equal(editedLead.mobile_number, "9822114499", "Lead phone must be updated in CRM");
+    assert.equal(editedLead.customer_address, "Wakad, Pune - 411057", "Lead address must be updated in CRM");
+    assert.equal(editedLead.status, "won", "Lead status must be updated to 'won' in CRM");
+    assert.equal(editedLead.system_capacity_kw, 8.8, "Lead capacity must be updated in CRM");
+
+    // Verify bi-directional sync to saved proposal in localStorage
+    const savedAfterEdit = JSON.parse(localStorage.getItem("solar_saved_proposals") || "[]");
+    const propAfterEdit = savedAfterEdit.find(p => p.proposalSerialNo === "DC/2026-27/PROP-7788");
+    assert.ok(propAfterEdit, "Saved proposal must still exist in storage");
+    assert.equal(propAfterEdit.customerName, "Kailash Patil & Sons", "Saved proposal customerName must be synchronized with CRM edit");
+    assert.equal(propAfterEdit.mobileNumber, "9822114499", "Saved proposal mobileNumber must be synchronized with CRM edit");
+    assert.equal(propAfterEdit.customerAddress, "Wakad, Pune - 411057", "Saved proposal customerAddress must be synchronized with CRM edit");
+
+    // 6. Test deleting proposal from CRM lead
+    window.confirm = () => true;
+    await window.deleteLeadProposal(editedLead.id);
+
+    // Verify proposal removed from saved proposals
+    const savedAfterDelete = JSON.parse(localStorage.getItem("solar_saved_proposals") || "[]");
+    const propAfterDelete = savedAfterDelete.find(p => p.proposalSerialNo === "DC/2026-27/PROP-7788");
+    assert.equal(propAfterDelete, undefined, "Proposal must be deleted from storage");
+
+    // Verify customer lead still exists in CRM but with proposal_serial_no detached
+    const leadsAfterPropDelete = await fetchCrmLeads();
+    const leadRetained = leadsAfterPropDelete.find(l => l.id === editedLead.id);
+    assert.ok(leadRetained, "Customer lead must remain in CRM even when proposal is deleted");
+    assert.equal(leadRetained.proposal_serial_no, null, "Proposal serial number must be cleared on lead");
+    assert.ok(leadRetained.notes.some(n => n.text.includes("deleted")), "Lead timeline must record proposal deletion");
   });
 });

@@ -20,7 +20,9 @@ import {
   fetchCrmLeads,
   saveCrmLeadLocallyAndRemote,
   addNoteToLead,
-  deleteCrmLeadById
+  deleteCrmLeadById,
+  syncSavedCustomersWithLeads,
+  syncCustomerDataToSavedProposals
 } from "./crm.js";
 
 const INTERNAL_PASSPHRASE_KEY = "puneSolarInternalPassphrase";
@@ -3860,6 +3862,15 @@ function safeAlert(msg) {
   }
 }
 
+function safeConfirm(msg) {
+  if (typeof window !== "undefined" && typeof window.confirm === "function") {
+    return window.confirm(msg);
+  } else if (typeof confirm === "function") {
+    return confirm(msg);
+  }
+  return true;
+}
+
 // Customer Local Estimate Save & Load
 function saveCustomerLocalEstimate() {
   try {
@@ -3997,6 +4008,13 @@ async function renderCrmDashboard(filterStatus = null, searchTerm = null, repFil
   if (filterStatus !== null) crmState.activeFilter = filterStatus;
   if (searchTerm !== null) crmState.searchTerm = searchTerm;
   if (repFilter !== null) crmState.repFilter = repFilter;
+
+  // Auto-sync saved customer proposals into CRM leads
+  try {
+    await syncSavedCustomersWithLeads();
+  } catch (syncErr) {
+    console.warn("Could not sync saved proposals into CRM leads:", syncErr);
+  }
 
   const leads = await fetchCrmLeads();
   crmState.leads = leads;
@@ -4136,14 +4154,28 @@ function renderCrmLeadsTable(leads) {
         </td>
         <td>
           ${lead.proposal_serial_no 
-            ? `<span style="font-size: 11px; font-weight: 600; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px;">${escapeHtml(lead.proposal_serial_no)}</span>`
+            ? `<div style="display: flex; align-items: center; gap: 4px;">
+                 <span style="font-size: 11px; font-weight: 600; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px;">${escapeHtml(lead.proposal_serial_no)}</span>
+               </div>`
             : `<span style="font-size: 11px; color: #94a3b8;">None</span>`}
         </td>
         <td style="text-align: right; white-space: nowrap;">
-          <button type="button" class="crm-load-lead-btn crm-btn-action crm-btn-primary" data-lead-id="${lead.id}" title="Load customer details into Proposal Maker" style="padding: 5px 10px; font-size: 11.5px; font-weight: 600;">
-            ⚡ Load Proposal
+          ${lead.proposal_serial_no ? `
+            <button type="button" class="crm-edit-proposal-btn crm-btn-action crm-btn-primary" data-lead-id="${lead.id}" data-proposal-serial="${escapeHtml(lead.proposal_serial_no)}" title="Open & Edit proposal in Proposal Screen" style="padding: 5px 9px; font-size: 11.5px; font-weight: 600;">
+              ✏️ Edit Proposal
+            </button>
+            <button type="button" class="crm-delete-proposal-btn crm-btn-action" data-lead-id="${lead.id}" data-proposal-serial="${escapeHtml(lead.proposal_serial_no)}" title="Delete attached proposal" style="padding: 5px 7px; font-size: 11px; color: #dc2626; border-color: #fecaca; margin-left: 2px;">
+              🗑️ Prop
+            </button>
+          ` : `
+            <button type="button" class="crm-load-lead-btn crm-btn-action crm-btn-primary" data-lead-id="${lead.id}" title="Create proposal from customer details" style="padding: 5px 9px; font-size: 11.5px; font-weight: 600;">
+              ⚡ Load Proposal
+            </button>
+          `}
+          <button type="button" class="crm-edit-lead-btn crm-btn-action" data-lead-id="${lead.id}" title="Edit customer basic details in CRM" style="padding: 5px 8px; font-size: 11.5px; margin-left: 2px;">
+            ✏️ Edit
           </button>
-          <button type="button" class="crm-delete-lead-btn crm-btn-action" data-lead-id="${lead.id}" title="Delete lead" style="padding: 5px 8px; font-size: 11.5px; color: #ef4444; border-color: #fecaca; margin-left: 4px;">
+          <button type="button" class="crm-delete-lead-btn crm-btn-action" data-lead-id="${lead.id}" title="Delete lead from CRM" style="padding: 5px 7px; font-size: 11.5px; color: #ef4444; border-color: #fecaca; margin-left: 2px;">
             🗑️
           </button>
         </td>
@@ -4164,14 +4196,26 @@ function renderCrmLeadsTable(leads) {
     btn.addEventListener("click", () => openCrmNotesModal(btn.dataset.leadId));
   });
 
+  tbody.querySelectorAll(".crm-edit-proposal-btn").forEach(btn => {
+    btn.addEventListener("click", () => openAndEditLeadProposal(btn.dataset.leadId));
+  });
+
+  tbody.querySelectorAll(".crm-delete-proposal-btn").forEach(btn => {
+    btn.addEventListener("click", () => deleteLeadProposal(btn.dataset.leadId));
+  });
+
   tbody.querySelectorAll(".crm-load-lead-btn").forEach(btn => {
     btn.addEventListener("click", () => loadLeadIntoProposalMaker(btn.dataset.leadId));
+  });
+
+  tbody.querySelectorAll(".crm-edit-lead-btn").forEach(btn => {
+    btn.addEventListener("click", () => openCrmEditLeadModal(btn.dataset.leadId));
   });
 
   tbody.querySelectorAll(".crm-delete-lead-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
       const id = btn.dataset.leadId;
-      if (confirm("Are you sure you want to delete this lead?")) {
+      if (safeConfirm("Are you sure you want to delete this lead?")) {
         await deleteCrmLeadById(id);
         renderCrmDashboard();
       }
@@ -4513,6 +4557,260 @@ async function loadLeadIntoProposalMaker(leadId) {
   showLoadToast(`Loaded lead ${lead.customer_name} into Proposal Maker! ⚡`);
 }
 
+async function openAndEditLeadProposal(leadId) {
+  const leads = await fetchCrmLeads();
+  const lead = leads.find(l => l.id === leadId);
+  if (!lead) return;
+
+  const serial = lead.proposal_serial_no;
+  let foundProposal = null;
+
+  // 1. Search localStorage proposals
+  try {
+    const raw = localStorage.getItem("solar_saved_proposals");
+    if (raw) {
+      const list = JSON.parse(raw);
+      if (serial) {
+        foundProposal = list.find(p => (
+          (p.proposalSerialNo && p.proposalSerialNo === serial) ||
+          (p.proposal_serial_no && p.proposal_serial_no === serial) ||
+          (p.stateData?.reportDisplay?.proposalSerialNo && p.stateData.reportDisplay.proposalSerialNo === serial) ||
+          (p.state_data?.reportDisplay?.proposalSerialNo && p.state_data.reportDisplay.proposalSerialNo === serial)
+        ));
+      }
+      if (!foundProposal && lead.mobile_number) {
+        const cleanPhone = String(lead.mobile_number).replace(/\D/g, '');
+        if (cleanPhone.length >= 7) {
+          foundProposal = list.find(p => p.mobileNumber && String(p.mobileNumber).replace(/\D/g, '') === cleanPhone);
+        }
+      }
+      if (!foundProposal && lead.customer_name) {
+        const cleanName = lead.customer_name.trim().toLowerCase();
+        foundProposal = list.find(p => p.customerName && p.customerName.trim().toLowerCase() === cleanName);
+      }
+    }
+  } catch (_) {}
+
+  // 2. Search server proposals if not found
+  if (!foundProposal && serial && typeof fetch === "function") {
+    try {
+      const res = await fetch("/api/load-proposals?search=" + encodeURIComponent(serial));
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.success && Array.isArray(json.data) && json.data.length > 0) {
+          foundProposal = json.data[0];
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Ensure internal mode is unlocked
+  if (!state.internalUnlocked) {
+    openInternal();
+  }
+
+  if (foundProposal && typeof window.loadProposalState === "function") {
+    window.loadProposalState(foundProposal);
+  } else {
+    // Populate form fields directly from lead details
+    if ($("customerName")) $("customerName").value = lead.customer_name || "";
+    if ($("internalCustomerName")) $("internalCustomerName").value = lead.customer_name || "";
+    if ($("mobileNumber")) $("mobileNumber").value = lead.mobile_number || "";
+    if ($("internalMobileNumber")) $("internalMobileNumber").value = lead.mobile_number || "";
+    if ($("emailAddress")) $("emailAddress").value = lead.email_address || "";
+    if ($("internalEmailAddress")) $("internalEmailAddress").value = lead.email_address || "";
+    if ($("customerAddress")) $("customerAddress").value = lead.customer_address || "Pune, Maharashtra";
+    if (lead.monthly_units && $("monthlyUnits")) $("monthlyUnits").value = lead.monthly_units;
+    if (lead.monthly_bill && $("monthlyBill")) $("monthlyBill").value = lead.monthly_bill;
+    if (lead.sanctioned_load && $("sanctionedLoad")) $("sanctionedLoad").value = lead.sanctioned_load;
+    if (serial) {
+      state.currentProposalSerialNo = serial;
+      if ($("proposalSerialNo")) $("proposalSerialNo").value = serial;
+      if ($("sidebarProposalSerialNo")) $("sidebarProposalSerialNo").value = serial;
+    }
+    render();
+  }
+
+  // Switch workspace directly to proposal screen as requested
+  switchWorkspaceTab("proposal");
+  if (typeof switchSidebarCategory === "function") {
+    switchSidebarCategory("contact");
+  }
+
+  if (typeof window.scrollTo === "function") {
+    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (_) {}
+  }
+
+  showLoadToast(`Proposal ${serial ? serial + ' ' : ''}loaded in Proposal Studio! ✏️`);
+}
+
+async function deleteLeadProposal(leadId) {
+  const leads = await fetchCrmLeads();
+  const lead = leads.find(l => l.id === leadId);
+  if (!lead) return;
+
+  const serial = lead.proposal_serial_no;
+  if (!safeConfirm(`Are you sure you want to delete proposal ${serial ? `"${serial}"` : ""} for "${lead.customer_name}"?\nCustomer details will remain in CRM.`)) {
+    return;
+  }
+
+  // Delete proposal from localStorage and server
+  if (serial) {
+    try {
+      await deleteProposal(serial);
+    } catch (e) {
+      console.warn("deleteProposal error:", e);
+    }
+  }
+
+  lead.proposal_serial_no = null;
+  if (lead.status === "proposal_sent") {
+    lead.status = "lead";
+  }
+  const authorName = state.currentUser ? (state.currentUser.name || state.currentUser.username) : "Internal Agent";
+  const deleteNote = {
+    id: "note_" + Date.now(),
+    text: `Attached proposal ${serial || ""} was deleted.`,
+    author: authorName,
+    created_at: new Date().toISOString()
+  };
+  lead.notes = [deleteNote, ...(lead.notes || [])];
+  lead.updated_at = new Date().toISOString();
+
+  await saveCrmLeadLocallyAndRemote(lead);
+  await renderCrmDashboard();
+  showLoadToast(`Proposal ${serial ? serial + ' ' : ''}deleted successfully.`);
+}
+
+async function openCrmEditLeadModal(leadId) {
+  const leads = await fetchCrmLeads();
+  const lead = leads.find(l => l.id === leadId);
+  if (!lead) return;
+
+  if ($("editLeadId")) $("editLeadId").value = lead.id;
+  if ($("editLeadName")) $("editLeadName").value = lead.customer_name || "";
+  if ($("editLeadPhone")) $("editLeadPhone").value = lead.mobile_number || "";
+  if ($("editLeadEmail")) $("editLeadEmail").value = lead.email_address || "";
+  if ($("editLeadAddress")) $("editLeadAddress").value = lead.customer_address || "";
+  if ($("editLeadLoad")) $("editLeadLoad").value = lead.sanctioned_load !== null && lead.sanctioned_load !== undefined ? lead.sanctioned_load : "";
+  if ($("editLeadUnits")) $("editLeadUnits").value = lead.monthly_units !== null && lead.monthly_units !== undefined ? lead.monthly_units : "";
+  if ($("editLeadBill")) $("editLeadBill").value = lead.monthly_bill !== null && lead.monthly_bill !== undefined ? lead.monthly_bill : "";
+  if ($("editLeadCapacity")) $("editLeadCapacity").value = lead.system_capacity_kw !== null && lead.system_capacity_kw !== undefined ? lead.system_capacity_kw : "";
+  if ($("editLeadCost")) $("editLeadCost").value = lead.estimated_cost !== null && lead.estimated_cost !== undefined ? lead.estimated_cost : "";
+  if ($("editLeadStatus")) $("editLeadStatus").value = lead.status || "lead";
+  if ($("editLeadAssigned")) $("editLeadAssigned").value = lead.assigned_to || "indrajeet.date@cnergy.co.in";
+
+  const banner = $("editLeadProposalBanner");
+  const serialText = $("editLeadProposalSerialText");
+  const openPropBtn = $("editLeadOpenProposalBtn");
+
+  if (banner && serialText) {
+    if (lead.proposal_serial_no) {
+      banner.style.display = "flex";
+      serialText.textContent = lead.proposal_serial_no;
+      if (openPropBtn) {
+        openPropBtn.onclick = () => {
+          closeCrmEditLeadModal();
+          openAndEditLeadProposal(lead.id);
+        };
+      }
+    } else {
+      banner.style.display = "none";
+    }
+  }
+
+  const deleteLeadBtn = $("crmDeleteLeadFromEditModalBtn");
+  if (deleteLeadBtn) {
+    deleteLeadBtn.onclick = async () => {
+      if (safeConfirm(`Permanently delete lead "${lead.customer_name}"?`)) {
+        await deleteCrmLeadById(lead.id);
+        closeCrmEditLeadModal();
+        await renderCrmDashboard();
+        showLoadToast(`Lead deleted.`);
+      }
+    };
+  }
+
+  if ($("crmEditLeadModal")) $("crmEditLeadModal").style.display = "flex";
+}
+
+function closeCrmEditLeadModal() {
+  if ($("crmEditLeadModal")) $("crmEditLeadModal").style.display = "none";
+}
+
+async function submitCrmEditLead() {
+  const leadId = $("editLeadId")?.value;
+  if (!leadId) return;
+
+  const leads = await fetchCrmLeads();
+  const lead = leads.find(l => l.id === leadId);
+  if (!lead) return;
+
+  const name = $("editLeadName")?.value.trim();
+  const phone = $("editLeadPhone")?.value.trim();
+  const email = $("editLeadEmail")?.value.trim();
+  const address = $("editLeadAddress")?.value.trim();
+  const load = $("editLeadLoad")?.value ? parseFloat($("editLeadLoad").value) : null;
+  const units = $("editLeadUnits")?.value ? parseFloat($("editLeadUnits").value) : null;
+  const bill = $("editLeadBill")?.value ? parseFloat($("editLeadBill").value) : null;
+  const capacity = $("editLeadCapacity")?.value ? parseFloat($("editLeadCapacity").value) : null;
+  const cost = $("editLeadCost")?.value ? parseFloat($("editLeadCost").value) : null;
+  const status = $("editLeadStatus")?.value || lead.status;
+  const assignedTo = $("editLeadAssigned")?.value || lead.assigned_to;
+
+  if (!name) {
+    safeAlert("Customer Name is required.");
+    return;
+  }
+  if (!phone) {
+    safeAlert("Phone / Mobile Number is required.");
+    return;
+  }
+
+  const assignedUser = CLONED_APP_USERS.find(u => u.username === assignedTo);
+  const assignedName = assignedUser ? assignedUser.name : assignedTo;
+
+  // Track status change note if modified
+  if (status !== lead.status) {
+    const meta = CRM_STATUS_MAP[status] || { label: status };
+    const authorName = state.currentUser ? (state.currentUser.name || state.currentUser.username) : "Internal Agent";
+    lead.notes = [
+      {
+        id: "note_" + Date.now(),
+        text: `Status changed from ${lead.status} to ${meta.label}`,
+        author: authorName,
+        created_at: new Date().toISOString()
+      },
+      ...(lead.notes || [])
+    ];
+  }
+
+  lead.customer_name = name;
+  lead.mobile_number = phone;
+  lead.email_address = email;
+  lead.customer_address = address;
+  lead.sanctioned_load = load;
+  lead.monthly_units = units;
+  lead.monthly_bill = bill;
+  lead.system_capacity_kw = capacity;
+  lead.estimated_cost = cost;
+  lead.status = status;
+  lead.assigned_to = assignedTo;
+  lead.assigned_name = assignedName;
+  lead.updated_at = new Date().toISOString();
+
+  await saveCrmLeadLocallyAndRemote(lead);
+
+  // Sync basic data updates to attached saved proposal
+  if (lead.proposal_serial_no) {
+    syncCustomerDataToSavedProposals(lead.proposal_serial_no, lead);
+  }
+
+  closeCrmEditLeadModal();
+  await renderCrmDashboard();
+  showLoadToast(`Customer details for ${name} updated! ✅`);
+}
+
 // Expose internal mode and CRM methods to window early
 window.openInternalDialog = openInternalDialog;
 window.closeInternalDialog = closeInternalDialog;
@@ -4535,6 +4833,13 @@ window.closeCrmNewLeadModal = closeCrmNewLeadModal;
 window.submitCrmNewLead = submitCrmNewLead;
 window.loadLeadIntoProposalMaker = loadLeadIntoProposalMaker;
 window.handleCrmStatusChange = handleCrmStatusChange;
+window.openAndEditLeadProposal = openAndEditLeadProposal;
+window.deleteLeadProposal = deleteLeadProposal;
+window.openCrmEditLeadModal = openCrmEditLeadModal;
+window.closeCrmEditLeadModal = closeCrmEditLeadModal;
+window.submitCrmEditLead = submitCrmEditLead;
+window.syncSavedCustomersWithLeads = syncSavedCustomersWithLeads;
+window.syncCustomerDataToSavedProposals = syncCustomerDataToSavedProposals;
 
 function switchTab(tab) {
   state.activeTab = tab;
@@ -5670,6 +5975,11 @@ function attachEvents() {
   $("crmCloseNewLeadModalBtn")?.addEventListener("click", closeCrmNewLeadModal);
   $("crmCancelNewLeadBtn")?.addEventListener("click", closeCrmNewLeadModal);
   $("crmSaveNewLeadBtn")?.addEventListener("click", submitCrmNewLead);
+
+  // CRM Edit Lead Modal
+  $("crmCloseEditLeadModalBtn")?.addEventListener("click", closeCrmEditLeadModal);
+  $("crmCancelEditLeadBtn")?.addEventListener("click", closeCrmEditLeadModal);
+  $("crmSaveEditLeadBtn")?.addEventListener("click", submitCrmEditLead);
 
   // Mode-Aware Sidebar Navigation Tabs & Sub-Filter Buttons
   $("sidebarTabInputsBtn")?.addEventListener("click", () => switchSidebarCategory("contact"));
@@ -7331,6 +7641,13 @@ async function saveProposalData() {
     console.warn("Server save skipped or offline:", e);
   }
 
+  // 3. Automatically sync saved customer proposal with CRM leads
+  try {
+    await syncSavedCustomersWithLeads();
+  } catch (syncErr) {
+    console.warn("Could not sync saved proposal to CRM leads:", syncErr);
+  }
+
   if (serverSaved) {
     setButtonsText(isNewProposal ? "Saved! ✅" : "Updated! ✅", "var(--primary-green, #10b981)");
   } else {
@@ -7424,6 +7741,7 @@ async function deleteProposal(proposalOrId) {
 
   if (typeof proposalOrId === "string") {
     id = proposalOrId;
+    serialNo = proposalOrId;
   } else if (proposalOrId && typeof proposalOrId === "object") {
     id = proposalOrId.id || proposalOrId.server_id || null;
     serialNo = proposalOrId.proposal_serial_no || proposalOrId.proposalSerialNo || proposalOrId.state_data?.reportDisplay?.proposalSerialNo || proposalOrId.stateData?.reportDisplay?.proposalSerialNo || null;
@@ -7438,7 +7756,8 @@ async function deleteProposal(proposalOrId) {
       if (Array.isArray(list)) {
         list = list.filter(item => {
           if (id && item.id === id) return false;
-          if (serialNo && item.proposalSerialNo === serialNo) return false;
+          if (serialNo && (item.proposalSerialNo === serialNo || item.proposal_serial_no === serialNo)) return false;
+          if (id && (item.proposalSerialNo === id || item.proposal_serial_no === id)) return false;
           return true;
         });
         localStorage.setItem("solar_saved_proposals", JSON.stringify(list));
@@ -7447,7 +7766,7 @@ async function deleteProposal(proposalOrId) {
     const lastRaw = localStorage.getItem("solar_proposal_last_saved");
     if (lastRaw) {
       const lastSaved = JSON.parse(lastRaw);
-      if ((id && lastSaved.id === id) || (serialNo && lastSaved.proposalSerialNo === serialNo)) {
+      if ((id && (lastSaved.id === id || lastSaved.proposalSerialNo === id)) || (serialNo && (lastSaved.proposalSerialNo === serialNo || lastSaved.proposal_serial_no === serialNo))) {
         localStorage.removeItem("solar_proposal_last_saved");
       }
     }
@@ -8286,6 +8605,13 @@ window.closeCrmNewLeadModal = closeCrmNewLeadModal;
 window.submitCrmNewLead = submitCrmNewLead;
 window.loadLeadIntoProposalMaker = loadLeadIntoProposalMaker;
 window.handleCrmStatusChange = handleCrmStatusChange;
+window.openAndEditLeadProposal = openAndEditLeadProposal;
+window.deleteLeadProposal = deleteLeadProposal;
+window.openCrmEditLeadModal = openCrmEditLeadModal;
+window.closeCrmEditLeadModal = closeCrmEditLeadModal;
+window.submitCrmEditLead = submitCrmEditLead;
+window.syncSavedCustomersWithLeads = syncSavedCustomersWithLeads;
+window.syncCustomerDataToSavedProposals = syncCustomerDataToSavedProposals;
 window.openCustomerSiteVisitModal = openCustomerSiteVisitModal;
 window.closeCustomerSiteVisitModal = closeCustomerSiteVisitModal;
 window.submitCustomerSiteVisitRequest = submitCustomerSiteVisitRequest;
@@ -8334,5 +8660,12 @@ export {
   switchSidebarCategory,
   applySidebarSubFilter,
   checkCustomerVisitorGate,
-  submitCustomerVisitorGate
+  submitCustomerVisitorGate,
+  openAndEditLeadProposal,
+  deleteLeadProposal,
+  openCrmEditLeadModal,
+  closeCrmEditLeadModal,
+  submitCrmEditLead,
+  syncSavedCustomersWithLeads,
+  syncCustomerDataToSavedProposals
 };

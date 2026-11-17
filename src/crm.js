@@ -333,3 +333,241 @@ export async function deleteCrmLeadById(leadId) {
 
   return { success: true, leads: updated };
 }
+
+/**
+ * Synchronizes saved customer proposals (from localStorage and server) into CRM Leads.
+ * Any saved proposal creates or enriches a CRM lead record with proposal details.
+ */
+export async function syncSavedCustomersWithLeads() {
+  const leads = await fetchCrmLeads();
+  let savedProposals = [];
+  try {
+    const raw = localStorage.getItem('solar_saved_proposals');
+    if (raw) savedProposals = JSON.parse(raw);
+  } catch (_) {}
+
+  // Attempt to fetch server proposals if reachable
+  if (typeof fetch === 'function') {
+    try {
+      const res = await fetch('/api/load-proposals');
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.success && Array.isArray(json.data)) {
+          const existingSerials = new Set(
+            savedProposals.map(p => p.proposalSerialNo || p.proposal_serial_no || p.id).filter(Boolean)
+          );
+          for (const sp of json.data) {
+            const serial = sp.proposal_serial_no || sp.proposalSerialNo || sp.id;
+            if (serial && !existingSerials.has(serial)) {
+              existingSerials.add(serial);
+              savedProposals.push({
+                id: sp.id,
+                proposalSerialNo: sp.proposal_serial_no,
+                customerName: sp.customer_name,
+                mobileNumber: sp.mobile_number,
+                emailAddress: sp.email_address,
+                customerAddress: sp.state_data?.input?.customerAddress || sp.customer_address,
+                sanctionedLoad: sp.sanctioned_load || sp.state_data?.input?.sanctionedLoad,
+                monthlyUnits: sp.state_data?.input?.monthlyUnits,
+                monthlyBill: sp.state_data?.input?.monthlyBill,
+                systemCapacityKw: sp.system_capacity_kw || sp.state_data?.state?.estimates?.recommended?.dcCapacityKw,
+                totalCost: sp.total_cost || sp.state_data?.state?.estimates?.recommended?.netCost,
+                savedAt: sp.created_at,
+                stateData: sp.state_data,
+              });
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (!Array.isArray(savedProposals) || savedProposals.length === 0) {
+    return leads;
+  }
+
+  let leadsChanged = false;
+  const updatedLeads = [...leads];
+
+  for (const prop of savedProposals) {
+    const serial = prop.proposalSerialNo || prop.proposal_serial_no || prop.stateData?.reportDisplay?.proposalSerialNo || prop.state_data?.reportDisplay?.proposalSerialNo || null;
+    const name = prop.customerName || prop.customer_name || prop.stateData?.input?.customerName || prop.state_data?.input?.customerName || prop.stateData?.formValues?.customerName || prop.state_data?.formValues?.customerName || null;
+    const phone = prop.mobileNumber || prop.mobile_number || prop.stateData?.input?.mobileNumber || prop.state_data?.input?.mobileNumber || prop.stateData?.formValues?.mobileNumber || prop.state_data?.formValues?.mobileNumber || null;
+    const email = prop.emailAddress || prop.email_address || prop.stateData?.input?.emailAddress || prop.state_data?.input?.emailAddress || prop.stateData?.formValues?.emailAddress || prop.state_data?.formValues?.emailAddress || '';
+    const address = prop.customerAddress || prop.customer_address || prop.stateData?.input?.customerAddress || prop.state_data?.input?.customerAddress || prop.stateData?.formValues?.customerAddress || prop.state_data?.formValues?.customerAddress || 'Pune, Maharashtra';
+    const load = prop.sanctionedLoad || prop.sanctioned_load || prop.stateData?.input?.sanctionedLoad || prop.state_data?.input?.sanctionedLoad || prop.stateData?.formValues?.sanctionedLoad || null;
+    const units = prop.monthlyUnits || prop.monthly_units || prop.stateData?.input?.monthlyUnits || prop.state_data?.input?.monthlyUnits || prop.stateData?.formValues?.monthlyUnits || null;
+    const bill = prop.monthlyBill || prop.monthly_bill || prop.stateData?.input?.monthlyBill || prop.state_data?.input?.monthlyBill || prop.stateData?.formValues?.monthlyBill || null;
+    const capacity = prop.systemCapacityKw || prop.system_capacity_kw || prop.stateData?.state?.estimates?.recommended?.dcCapacityKw || prop.state_data?.state?.estimates?.recommended?.dcCapacityKw || null;
+    const cost = prop.totalCost || prop.total_cost || prop.estimated_cost || prop.stateData?.state?.estimates?.recommended?.netCost || prop.state_data?.state?.estimates?.recommended?.netCost || null;
+    const date = prop.savedAt || prop.created_at || new Date().toISOString();
+
+    if (!name && !serial) continue;
+
+    // Match existing lead by:
+    // 1. Same proposal serial no
+    // 2. Or same non-empty phone number
+    // 3. Or same exact customer name
+    let leadIndex = -1;
+    if (serial) {
+      leadIndex = updatedLeads.findIndex((l) => l.proposal_serial_no === serial);
+    }
+    if (leadIndex === -1 && phone) {
+      const cleanPhone = String(phone).replace(/\D/g, '');
+      if (cleanPhone.length >= 7) {
+        leadIndex = updatedLeads.findIndex((l) => l.mobile_number && String(l.mobile_number).replace(/\D/g, '') === cleanPhone);
+      }
+    }
+    if (leadIndex === -1 && name) {
+      const cleanName = name.trim().toLowerCase();
+      leadIndex = updatedLeads.findIndex((l) => l.customer_name && l.customer_name.trim().toLowerCase() === cleanName);
+    }
+
+    if (leadIndex >= 0) {
+      // Enrich existing lead with proposal data if missing
+      const existing = updatedLeads[leadIndex];
+      let itemChanged = false;
+      if (serial && !existing.proposal_serial_no) {
+        existing.proposal_serial_no = serial;
+        itemChanged = true;
+      }
+      if (capacity && !existing.system_capacity_kw) {
+        existing.system_capacity_kw = Number(capacity);
+        itemChanged = true;
+      }
+      if (cost && !existing.estimated_cost) {
+        existing.estimated_cost = Number(cost);
+        itemChanged = true;
+      }
+      if (bill && !existing.monthly_bill) {
+        existing.monthly_bill = Number(bill);
+        itemChanged = true;
+      }
+      if (units && !existing.monthly_units) {
+        existing.monthly_units = Number(units);
+        itemChanged = true;
+      }
+      if (load && !existing.sanctioned_load) {
+        existing.sanctioned_load = Number(load);
+        itemChanged = true;
+      }
+      if (email && !existing.email_address) {
+        existing.email_address = email;
+        itemChanged = true;
+      }
+      if (address && (!existing.customer_address || existing.customer_address === 'Pune')) {
+        existing.customer_address = address;
+        itemChanged = true;
+      }
+      if (existing.status === 'lead' && serial) {
+        existing.status = 'proposal_sent';
+        itemChanged = true;
+      }
+      if (itemChanged) {
+        existing.updated_at = new Date().toISOString();
+        leadsChanged = true;
+      }
+    } else {
+      // Create new lead from saved proposal
+      const newLead = {
+        id: 'lead-sync-' + (serial ? serial.replace(/[^a-zA-Z0-9_-]/g, '_') : Date.now() + '-' + Math.random().toString(36).substr(2, 5)),
+        customer_name: name || 'Customer',
+        mobile_number: phone || '',
+        email_address: email || '',
+        customer_address: address,
+        sanctioned_load: load ? Number(load) : null,
+        monthly_units: units ? Number(units) : null,
+        monthly_bill: bill ? Number(bill) : null,
+        system_capacity_kw: capacity ? Number(capacity) : null,
+        estimated_cost: cost ? Number(cost) : null,
+        status: 'proposal_sent',
+        assigned_to: 'indrajeet.date@cnergy.co.in',
+        assigned_name: 'Indrajeet Date',
+        proposal_serial_no: serial,
+        source: 'saved_proposal_sync',
+        notes: [
+          {
+            id: 'note_sync_' + Date.now(),
+            text: `Proposal ${serial || 'Record'} auto-synced from saved customer database. Capacity: ${capacity ? capacity + ' kWp' : '—'}.`,
+            author: 'Proposal Sync Engine',
+            created_at: date || new Date().toISOString(),
+          },
+        ],
+        created_at: date || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      updatedLeads.unshift(newLead);
+      leadsChanged = true;
+    }
+  }
+
+  if (leadsChanged) {
+    try { localStorage.setItem('solar_crm_leads', JSON.stringify(updatedLeads)); } catch (_) {}
+  }
+  return updatedLeads;
+}
+
+/**
+ * Updates basic customer fields on any saved proposal matching a proposal serial or customer details.
+ */
+export function syncCustomerDataToSavedProposals(proposalSerialNo, updatedData) {
+  if (!proposalSerialNo && !updatedData) return;
+  try {
+    const raw = localStorage.getItem('solar_saved_proposals');
+    if (!raw) return;
+    const list = JSON.parse(raw);
+    let changed = false;
+
+    for (const p of list) {
+      const serial = p.proposalSerialNo || p.proposal_serial_no || p.stateData?.reportDisplay?.proposalSerialNo;
+      if (proposalSerialNo && serial === proposalSerialNo) {
+        if (updatedData.customer_name) {
+          p.customerName = updatedData.customer_name;
+          if (p.stateData?.input) p.stateData.input.customerName = updatedData.customer_name;
+          if (p.stateData?.formValues) p.stateData.formValues.customerName = updatedData.customer_name;
+        }
+        if (updatedData.mobile_number) {
+          p.mobileNumber = updatedData.mobile_number;
+          if (p.stateData?.input) p.stateData.input.mobileNumber = updatedData.mobile_number;
+          if (p.stateData?.formValues) p.stateData.formValues.mobileNumber = updatedData.mobile_number;
+        }
+        if (updatedData.email_address) {
+          p.emailAddress = updatedData.email_address;
+          if (p.stateData?.input) p.stateData.input.emailAddress = updatedData.email_address;
+          if (p.stateData?.formValues) p.stateData.formValues.emailAddress = updatedData.email_address;
+        }
+        if (updatedData.customer_address) {
+          p.customerAddress = updatedData.customer_address;
+          if (p.stateData?.input) p.stateData.input.customerAddress = updatedData.customer_address;
+          if (p.stateData?.formValues) p.stateData.formValues.customerAddress = updatedData.customer_address;
+        }
+        if (updatedData.sanctioned_load) {
+          p.sanctionedLoad = Number(updatedData.sanctioned_load);
+          if (p.stateData?.input) p.stateData.input.sanctionedLoad = Number(updatedData.sanctioned_load);
+          if (p.stateData?.formValues) p.stateData.formValues.sanctionedLoad = Number(updatedData.sanctioned_load);
+        }
+        if (updatedData.monthly_units) {
+          if (p.stateData?.input) p.stateData.input.monthlyUnits = Number(updatedData.monthly_units);
+          if (p.stateData?.formValues) p.stateData.formValues.monthlyUnits = Number(updatedData.monthly_units);
+        }
+        if (updatedData.monthly_bill) {
+          if (p.stateData?.input) p.stateData.input.monthlyBill = Number(updatedData.monthly_bill);
+          if (p.stateData?.formValues) p.stateData.formValues.monthlyBill = Number(updatedData.monthly_bill);
+        }
+        if (updatedData.system_capacity_kw) {
+          p.systemCapacityKw = Number(updatedData.system_capacity_kw);
+        }
+        if (updatedData.estimated_cost) {
+          p.totalCost = Number(updatedData.estimated_cost);
+        }
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      localStorage.setItem('solar_saved_proposals', JSON.stringify(list));
+    }
+  } catch (err) {
+    console.warn('syncCustomerDataToSavedProposals error:', err);
+  }
+}
