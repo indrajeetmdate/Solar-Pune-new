@@ -32,6 +32,9 @@ const state = {
   userMode: "customer", // "customer" | "internal"
   currentUser: null,
   activeTab: "system",
+  activeWorkspaceTab: "sizing",
+  activeSidebarCategory: "contact",
+  activeSidebarSubFilter: "all",
   extractedBill: null,
   ongridBackup: "none",
   selectedSystemIndex: null,
@@ -3419,7 +3422,10 @@ function setCustomerMode() {
 
   // 2. Hide Internal tabs: CAD, Proposal & Export, Building Studio, and CRM
   const cadTab = $("workspaceTabCadBtn");
-  if (cadTab) cadTab.style.display = "none";
+  if (cadTab) {
+    cadTab.style.display = "none";
+    cadTab.classList.remove("active");
+  }
   const propTab = $("workspaceTabProposalBtn");
   if (propTab) propTab.style.display = "none";
   const crmTab = $("workspaceTabCrmBtn");
@@ -3427,10 +3433,20 @@ function setCustomerMode() {
   const buildingTab = $("workspaceTabBuildingBtn");
   if (buildingTab) buildingTab.style.display = "none";
 
-  // If currently on cad, proposal, building, or crm, switch back to sizing
-  if (state.activeWorkspaceTab === "cad" || state.activeWorkspaceTab === "proposal" || state.activeWorkspaceTab === "building" || state.activeWorkspaceTab === "crm") {
-    switchWorkspaceTab("sizing");
+  // Customer Mode: Force Sizing & Compare view and strictly hide Rooftop CAD pane
+  switchWorkspaceTab("sizing");
+  const paneCad = $("paneCad");
+  if (paneCad) {
+    paneCad.classList.remove("active");
+    paneCad.style.display = "none";
   }
+  const paneSizing = $("paneSizing");
+  if (paneSizing) {
+    paneSizing.classList.add("active");
+    paneSizing.style.display = "block";
+  }
+  const sizingTab = $("workspaceTabSizingBtn");
+  if (sizingTab) sizingTab.classList.add("active");
 
   // 3. Hide server sync buttons; show local customer buttons
   const btnSave = $("sidebarSaveProposalBtn");
@@ -3445,15 +3461,23 @@ function setCustomerMode() {
   const btnCustLoad = $("customerLoadLocalBtn");
   if (btnCustLoad) btnCustLoad.style.display = "inline-flex";
 
-  // 4. In sidebar: hide rates & internal panels
+  // 4. In sidebar: hide rates & internal panels, switch to Project Inputs
   $("internalPanel")?.classList.add("hidden");
   const ratesPill = $("ratesPillBtn");
   if (ratesPill) ratesPill.style.display = "none";
   const ratesRail = $("ratesRailBtn");
   if (ratesRail) ratesRail.style.display = "none";
-  if (state.activeSidebarCategory === "rates") {
-    switchSidebarCategory("contact");
-  }
+
+  // Hide Pricing & Settings tab button in customer mode, activate Project Inputs
+  const ratesTabBtn = $("sidebarTabRatesBtn");
+  if (ratesTabBtn) ratesTabBtn.style.display = "none";
+  const inputsTabBtn = $("sidebarTabInputsBtn");
+  if (inputsTabBtn) inputsTabBtn.classList.add("active");
+  const subFilterRow = $("sidebarSubFilterRow");
+  if (subFilterRow) subFilterRow.style.display = "flex";
+
+  applySidebarSubFilter("all");
+  switchSidebarCategory("contact");
 
   // 5. Show customer CTA banner on sizing pane
   const custBanner = $("customerEstimateCtaBanner");
@@ -3622,7 +3646,17 @@ function openInternal(user = null) {
   if (ratesPill) ratesPill.style.display = "inline-flex";
   const ratesRail = $("ratesRailBtn");
   if (ratesRail) ratesRail.style.display = "flex";
-  switchSidebarCategory("rates");
+
+  // Mode-aware sidebar navigation controls (Project Inputs vs Pricing & Settings)
+  const ratesTabBtn = $("sidebarTabRatesBtn");
+  if (ratesTabBtn) ratesTabBtn.style.display = "flex";
+  const inputsTabBtn = $("sidebarTabInputsBtn");
+  if (inputsTabBtn) inputsTabBtn.classList.add("active");
+  const subFilterRow = $("sidebarSubFilterRow");
+  if (subFilterRow) subFilterRow.style.display = "flex";
+
+  switchSidebarCategory("contact");
+  applySidebarSubFilter("all");
 
   const intCustName = document.getElementById("internalCustomerName");
   const extCustName = document.getElementById("customerName");
@@ -3643,6 +3677,14 @@ function openInternal(user = null) {
   }
 
   document.querySelectorAll('.wizard-actions').forEach(el => el.classList.add('hidden'));
+
+  // Switch to CRM workspace tab as the landing home screen for internal team, scrolled to top
+  switchWorkspaceTab("crm");
+  if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  const paneCrm = $("paneCrm");
+  if (paneCrm) paneCrm.scrollTop = 0;
 
   render();
 }
@@ -4844,6 +4886,22 @@ function switchSidebarCategory(catId) {
     return;
   }
   state.activeSidebarCategory = targetCat;
+
+  // Toggle main sidebar segmented buttons
+  const inputsBtn = $("sidebarTabInputsBtn");
+  const ratesBtn = $("sidebarTabRatesBtn");
+  const subFilterRow = $("sidebarSubFilterRow");
+
+  if (targetCat === "contact") {
+    inputsBtn?.classList.add("active");
+    ratesBtn?.classList.remove("active");
+    if (subFilterRow) subFilterRow.style.display = "flex";
+  } else if (targetCat === "rates") {
+    inputsBtn?.classList.remove("active");
+    ratesBtn?.classList.add("active");
+    if (subFilterRow) subFilterRow.style.display = "none";
+  }
+
   document.querySelectorAll(".sidebar-pill-btn").forEach((btn) => {
     const isMatch = btn.dataset.cat === targetCat || (targetCat === "contact" && (btn.dataset.cat === "project" || btn.dataset.cat === "contact"));
     btn.classList.toggle("active", isMatch);
@@ -4868,6 +4926,76 @@ function switchSidebarCategory(catId) {
     if (body) body.style.display = "block";
     const rail = $("sidebarRail");
     if (rail) rail.style.display = "none";
+  }
+}
+
+function applySidebarSubFilter(subFilter = "all") {
+  state.activeSidebarSubFilter = subFilter;
+
+  const allBtn = $("subFilterAllBtn");
+  const reqBtn = $("subFilterReqBtn");
+  const notReqBtn = $("subFilterNotReqBtn");
+  const moreBtn = $("subFilterMoreBtn");
+
+  const reqGroup = $("requiredFieldsGroup");
+  const notReqGroup = $("notRequiredFieldsGroup");
+  const advDrawer = $("advancedOptionsDrawer");
+
+  const pills = [
+    { name: "all", el: allBtn },
+    { name: "required", el: reqBtn },
+    { name: "not_required", el: notReqBtn },
+    { name: "more", el: moreBtn }
+  ];
+
+  pills.forEach(({ name, el }) => {
+    if (el) {
+      if (name === subFilter) {
+        el.classList.add("active");
+        el.style.background = "#0284c7";
+        el.style.color = "#ffffff";
+        el.style.borderColor = "#0284c7";
+      } else {
+        el.classList.remove("active");
+        el.style.background = "#ffffff";
+        el.style.borderColor = "#cbd5e1";
+        if (name === "required") el.style.color = "#166534";
+        else if (name === "not_required") el.style.color = "#475569";
+        else if (name === "more") el.style.color = "#0284c7";
+        else el.style.color = "#64748b";
+      }
+    }
+  });
+
+  if (subFilter === "required") {
+    if (reqGroup) reqGroup.style.display = "block";
+    if (notReqGroup) notReqGroup.style.display = "none";
+    if (advDrawer) advDrawer.style.display = "none";
+    if (reqGroup && typeof reqGroup.scrollIntoView === "function") {
+      reqGroup.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  } else if (subFilter === "not_required") {
+    if (reqGroup) reqGroup.style.display = "none";
+    if (notReqGroup) notReqGroup.style.display = "block";
+    if (advDrawer) advDrawer.style.display = "none";
+    if (notReqGroup && typeof notReqGroup.scrollIntoView === "function") {
+      notReqGroup.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  } else if (subFilter === "more") {
+    if (reqGroup) reqGroup.style.display = "none";
+    if (notReqGroup) notReqGroup.style.display = "none";
+    if (advDrawer) {
+      advDrawer.style.display = "block";
+      advDrawer.open = true;
+      if (typeof advDrawer.scrollIntoView === "function") {
+        advDrawer.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+  } else {
+    // "all"
+    if (reqGroup) reqGroup.style.display = "block";
+    if (notReqGroup) notReqGroup.style.display = "block";
+    if (advDrawer) advDrawer.style.display = "block";
   }
 }
 
@@ -5391,6 +5519,29 @@ function attachEvents() {
   $("crmCloseNewLeadModalBtn")?.addEventListener("click", closeCrmNewLeadModal);
   $("crmCancelNewLeadBtn")?.addEventListener("click", closeCrmNewLeadModal);
   $("crmSaveNewLeadBtn")?.addEventListener("click", submitCrmNewLead);
+
+  // Mode-Aware Sidebar Navigation Tabs & Sub-Filter Buttons
+  $("sidebarTabInputsBtn")?.addEventListener("click", () => switchSidebarCategory("contact"));
+  $("sidebarTabRatesBtn")?.addEventListener("click", () => switchSidebarCategory("rates"));
+  $("subFilterAllBtn")?.addEventListener("click", () => applySidebarSubFilter("all"));
+  $("subFilterReqBtn")?.addEventListener("click", () => applySidebarSubFilter("required"));
+  $("subFilterNotReqBtn")?.addEventListener("click", () => applySidebarSubFilter("not_required"));
+  $("subFilterMoreBtn")?.addEventListener("click", () => applySidebarSubFilter("more"));
+
+  // CRM Bottom Proposal Action Card
+  $("crmBottomEnterProposalsBtn")?.addEventListener("click", () => {
+    switchWorkspaceTab("proposal");
+    if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  });
+  $("crmBottomNewProposalBtn")?.addEventListener("click", () => {
+    createNewProposal();
+    switchWorkspaceTab("sizing");
+    if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  });
 
   // Consumer category change: toggle conditional fields and update slab defaults
   $("consumerCategory")?.addEventListener("change", () => {
@@ -7970,6 +8121,8 @@ window.handleCrmStatusChange = handleCrmStatusChange;
 window.openCustomerSiteVisitModal = openCustomerSiteVisitModal;
 window.closeCustomerSiteVisitModal = closeCustomerSiteVisitModal;
 window.submitCustomerSiteVisitRequest = submitCustomerSiteVisitRequest;
+window.switchSidebarCategory = switchSidebarCategory;
+window.applySidebarSubFilter = applySidebarSubFilter;
 
 export {
   autoSyncLatestProposalSerial,
@@ -8007,5 +8160,7 @@ export {
   handleCrmStatusChange,
   openCustomerSiteVisitModal,
   closeCustomerSiteVisitModal,
-  submitCustomerSiteVisitRequest
+  submitCustomerSiteVisitRequest,
+  switchSidebarCategory,
+  applySidebarSubFilter
 };

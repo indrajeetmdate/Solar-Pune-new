@@ -128,6 +128,20 @@ test("Solar Calculator - Cloned User Authentication, Customer Mode & Solar CRM S
     assert.equal(bldgTabBtn.style.display, "none", "Society Building Studio tab MUST be hidden in Customer Mode");
     assert.equal(crmTabBtn.style.display, "none", "Solar CRM tab MUST be hidden in Customer Mode");
 
+    // Verify Rooftop CAD pane is strictly hidden and Sizing pane is active in Customer Mode
+    const paneCad = document.getElementById("paneCad");
+    const paneSizing = document.getElementById("paneSizing");
+    assert.equal(paneCad.style.display, "none", "Rooftop CAD pane MUST be display: none in Customer Mode");
+    assert.ok(!paneCad.classList.contains("active"), "Rooftop CAD pane must NOT have active class in Customer Mode");
+    assert.equal(paneSizing.style.display, "block", "Sizing pane must be visible in Customer Mode");
+    assert.ok(paneSizing.classList.contains("active"), "Sizing pane must have active class in Customer Mode");
+
+    // Verify Pricing & System Settings button is strictly hidden from customers
+    const sidebarTabRates = document.getElementById("sidebarTabRatesBtn");
+    assert.equal(sidebarTabRates.style.display, "none", "Pricing & Settings button must be hidden in Customer Mode");
+    const sidebarTabInputs = document.getElementById("sidebarTabInputsBtn");
+    assert.ok(sidebarTabInputs.classList.contains("active"), "Project Inputs button must be active in Customer Mode");
+
     // Verify Customer estimate CTA banner is shown in Sizing
     const custBanner = document.getElementById("customerEstimateCtaBanner");
     assert.notEqual(custBanner.style.display, "none", "Customer CTA banner must be visible in Customer Mode");
@@ -211,6 +225,76 @@ test("Solar Calculator - Cloned User Authentication, Customer Mode & Solar CRM S
     assert.notEqual(document.getElementById("sidebarSaveProposalBtn").style.display, "none", "Server Save button must be visible for internal team");
     assert.notEqual(document.getElementById("openLoadProposalModalButton").style.display, "none", "Server Load button must be visible for internal team");
     assert.equal(document.getElementById("customerSaveLocalBtn").style.display, "none", "Customer local save button must be hidden in internal mode");
+
+    // Verify internal login switches to CRM as landing home screen from the top
+    const paneCrm = document.getElementById("paneCrm");
+    assert.ok(paneCrm.classList.contains("active"), "CRM pane must be active on internal login");
+    assert.equal(paneCrm.style.display, "block", "CRM pane must be visible on internal login");
+
+    // Verify Pricing & System Settings button is unlocked and visible in internal mode
+    const sidebarTabRates = document.getElementById("sidebarTabRatesBtn");
+    assert.notEqual(sidebarTabRates.style.display, "none", "Pricing & Settings button must be visible in internal mode");
+    const sidebarTabInputs = document.getElementById("sidebarTabInputsBtn");
+    assert.ok(sidebarTabInputs.classList.contains("active"), "Project Inputs button must be active by default");
+
+    // Verify CRM Bottom Proposal Navigation Banner & Enter Proposals Screen button
+    const crmBottomBanner = document.getElementById("crmBottomProposalBanner");
+    assert.ok(crmBottomBanner, "CRM bottom proposal action card banner must exist");
+    const enterProposalsBtn = document.getElementById("crmBottomEnterProposalsBtn");
+    assert.ok(enterProposalsBtn, "Enter Proposals Screen button must exist");
+    enterProposalsBtn.click();
+    assert.ok(document.getElementById("paneProposal").classList.contains("active"), "Clicking Enter Proposals button must navigate to proposal screen");
+
+    // Test '+ Start New Proposal' button at bottom of CRM
+    const newProposalBtn = document.getElementById("crmBottomNewProposalBtn");
+    assert.ok(newProposalBtn, "Start New Proposal button must exist");
+    newProposalBtn.click();
+    assert.ok(document.getElementById("paneSizing").classList.contains("active"), "Clicking Start New Proposal must switch to sizing screen");
+
+    // Test Sidebar Sub-Filters for Project Inputs (1. Required, 2. Not Required, 3. More Details, All)
+    const subFilterReq = document.getElementById("subFilterReqBtn");
+    const subFilterNotReq = document.getElementById("subFilterNotReqBtn");
+    const subFilterMore = document.getElementById("subFilterMoreBtn");
+    const subFilterAll = document.getElementById("subFilterAllBtn");
+    const reqGroup = document.getElementById("requiredFieldsGroup");
+    const notReqGroup = document.getElementById("notRequiredFieldsGroup");
+    const advDrawer = document.getElementById("advancedOptionsDrawer");
+
+    // 1. Required filter
+    subFilterReq.click();
+    assert.notEqual(reqGroup.style.display, "none", "Required fields must be visible under '1. Required' filter");
+    assert.equal(notReqGroup.style.display, "none", "Not required fields must be hidden under '1. Required' filter");
+    assert.equal(advDrawer.style.display, "none", "More details must be hidden under '1. Required' filter");
+
+    // 2. Not Required filter
+    subFilterNotReq.click();
+    assert.equal(reqGroup.style.display, "none", "Required fields must be hidden under '2. Not Required' filter");
+    assert.notEqual(notReqGroup.style.display, "none", "Not required fields must be visible under '2. Not Required' filter");
+    assert.equal(advDrawer.style.display, "none", "More details must be hidden under '2. Not Required' filter");
+
+    // 3. More Details filter
+    subFilterMore.click();
+    assert.equal(reqGroup.style.display, "none", "Required fields must be hidden under '3. More Details' filter");
+    assert.equal(notReqGroup.style.display, "none", "Not required fields must be hidden under '3. More Details' filter");
+    assert.notEqual(advDrawer.style.display, "none", "Advanced drawer must be visible under '3. More Details' filter");
+    assert.equal(advDrawer.open, true, "Advanced drawer must be open under '3. More Details' filter");
+
+    // All filter
+    subFilterAll.click();
+    assert.notEqual(reqGroup.style.display, "none", "Required fields must be visible under 'All' filter");
+    assert.notEqual(notReqGroup.style.display, "none", "Not required fields must be visible under 'All' filter");
+    assert.notEqual(advDrawer.style.display, "none", "More details must be visible under 'All' filter");
+
+    // Switch between Project Inputs and Pricing & Settings
+    sidebarTabRates.click();
+    assert.equal(document.getElementById("catSectionRates").style.display, "block", "Pricing & Settings category must be visible when clicked");
+    assert.equal(document.getElementById("catSectionContact").style.display, "none", "Project Inputs category must be hidden when Pricing & Settings is active");
+    assert.equal(document.getElementById("sidebarSubFilterRow").style.display, "none", "Sub-filters must be hidden in Pricing & Settings view");
+
+    sidebarTabInputs.click();
+    assert.equal(document.getElementById("catSectionContact").style.display, "block", "Project Inputs category must be visible when clicked");
+    assert.equal(document.getElementById("catSectionRates").style.display, "none", "Pricing & Settings must be hidden when Project Inputs is active");
+    assert.notEqual(document.getElementById("sidebarSubFilterRow").style.display, "none", "Sub-filters must be visible in Project Inputs view");
   });
 
   await t.test("4. Solar CRM Leads Management, Status Workflow & Notes Timeline", async () => {
