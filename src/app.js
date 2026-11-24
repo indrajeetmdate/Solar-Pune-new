@@ -78,7 +78,7 @@ if (typeof window !== "undefined") {
 
 const ASSUMPTION_IDS = [
   "panelType", "structureType", "capacityOverride", "inverterOverride", "batteryOverride", "backupLoad", "backupHours",
-  "panelDcrRate", "panelNonDcrRate", "batteryRate",
+  "panelDcrRate", "panelNonDcrRate", "batteryRate", "inverterPriceTier",
   "hotDipStructureRate", "galvalumeStructureRate", "gpPurlinStructureRate", "wiringRate", "installationRate", "consultancyRate",
   "contingencyRate", "marginRate",
   "panelWp", "panelEfficiency",
@@ -413,6 +413,7 @@ function readConfig() {
       consultancyRatePerW: $("consultancyRate") && $("consultancyRate").value !== "" ? numberValue("consultancyRate") : DEFAULT_CONFIG.pricing.consultancyRatePerW,
       contingencyRate: $("contingencyRate") && $("contingencyRate").value !== "" ? numberValue("contingencyRate") : 0,
       marginRate: $("marginRate") && $("marginRate").value !== "" ? numberValue("marginRate") : 30,
+      inverterPriceTier: $("inverterPriceTier") ? $("inverterPriceTier").value : (DEFAULT_CONFIG.pricing.inverterPriceTier || "price1"),
     },
     performance: {
       panelWp: numberValue("panelWp") || 550,
@@ -608,7 +609,8 @@ function renderBreakup(option, input, customerView, config) {
     const structRate = pricing.structureRates?.[input.structureType] || 0;
     calcDetails['structure'] = `${structRate} Rs/W × ${dcWp.toLocaleString('en-IN')} W`;
     const invKw = option.inverterCapacityKw;
-    calcDetails['inverter'] = `${invKw} kW inverter (rate by capacity tier)`;
+    const invModel = option.inverterModel || `${invKw} kW Inverter`;
+    calcDetails['inverter'] = `${invModel} (₹${money(option.costBreakup.inverter)})`;
     if (option.costBreakup.backupInverter > 0) {
       calcDetails['backupInverter'] = `Fixed cost for backup inverter`;
     }
@@ -8254,6 +8256,7 @@ window.loadProposalState = function(data) {
       if ($("consultancyRate") && p.consultancyRatePerW !== undefined) $("consultancyRate").value = p.consultancyRatePerW;
       if ($("contingencyRate") && p.contingencyRate !== undefined) $("contingencyRate").value = p.contingencyRate;
       if ($("marginRate") && p.marginRate !== undefined) $("marginRate").value = p.marginRate;
+      if ($("inverterPriceTier") && p.inverterPriceTier !== undefined) $("inverterPriceTier").value = p.inverterPriceTier;
 
       if (sData.config.performance) {
         const perf = sData.config.performance;

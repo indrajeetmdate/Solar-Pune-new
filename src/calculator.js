@@ -1,5 +1,7 @@
-import { DEFAULT_CONFIG, TARIFF_PROFILES, getPanelSpecificationText } from "./config.js";
+import { DEFAULT_CONFIG, TARIFF_PROFILES, getPanelSpecificationText, INVERTER_PRICE_CATALOG } from "./config.js";
 import { calculateSolarFinancing } from "./loanEngine.js";
+
+export { INVERTER_PRICE_CATALOG };
 
 const round = (value, decimals = 2) => {
   const factor = 10 ** decimals;
@@ -437,46 +439,114 @@ function getPanelRate(panelType, pricing) {
   return isDcr ? pricing.panelDcrRatePerWp : pricing.panelNonDcrRatePerWp;
 }
 
-function getInverterRate(systemType, capacityKw) {
-  // FIX C3: Semi-hybrid uses On-Grid rates for the main inverter;
-  // the backup inverter cost is bundled in the fixed battery+inverter kit price.
-  let category = "";
-  if (systemType.startsWith("hybrid")) {
-    category = "Hybrid";
-  } else if (systemType === "offgrid") {
-    category = "Off-Grid & UPS";
-  } else {
-    // ongrid, ongrid_basic_backup, ongrid_standard_backup all use On-Grid rates
-    category = "On-Grid";
+export function findInverterForCapacity(capacityKw, connectionPhase = "1-phase", priceTier = "price1") {
+  const reqKw = Number(capacityKw) || 0;
+  const tier = priceTier === "price2" ? "price2" : "price1";
+
+  if (reqKw <= 0) {
+    return {
+      cost: 0,
+      modelName: "None",
+      ratingKw: 0,
+      phase: connectionPhase || "1-phase",
+      quantity: 0,
+      priceTier: tier,
+      items: [],
+    };
   }
 
-  if (capacityKw <= 3) {
-    if (category === "On-Grid") return 8.68;
-    if (category === "Off-Grid & UPS") return 9.92;
-    if (category === "Hybrid") return 25.13;
-  } else if (capacityKw <= 5) {
-    if (category === "On-Grid") return 5.97;
-    if (category === "Off-Grid & UPS") return 10.77;
-    if (category === "Hybrid") return 17.36;
-  } else if (capacityKw <= 10) {
-    if (category === "On-Grid") return 6.15;
-    if (category === "Off-Grid & UPS") return 11.49;
-    if (category === "Hybrid") return 14.65;
-  } else if (capacityKw <= 20) {
-    if (category === "On-Grid") return 4.07;
-    if (category === "Off-Grid & UPS") return 11.73;
-    if (category === "Hybrid") return 20.99;
-  } else if (capacityKw <= 50) {
-    if (category === "On-Grid") return 2.99;
-    if (category === "Off-Grid & UPS") return 12.02;
-    if (category === "Hybrid") return 10.71;
+  const isThreePhase = connectionPhase === "3-phase" || reqKw > 5.0;
+  const targetPhase = isThreePhase ? "3-phase" : "1-phase";
+
+  if (targetPhase === "1-phase") {
+    const singleCatalog = INVERTER_PRICE_CATALOG
+      .filter((it) => it.phase === "1-phase")
+      .sort((a, b) => a.capacityKw - b.capacityKw);
+
+    const match = singleCatalog.find((it) => it.capacityKw >= reqKw) || singleCatalog[singleCatalog.length - 1];
+    return {
+      cost: match[tier],
+      modelName: match.label,
+      ratingKw: match.capacityKw,
+      phase: "1-phase",
+      quantity: 1,
+      priceTier: tier,
+      items: [{ ...match, quantity: 1, cost: match[tier] }],
+    };
   } else {
-    // > 50 kW
-    if (category === "On-Grid") return 2.60;
-    if (category === "Off-Grid & UPS") return 11.18;
-    if (category === "Hybrid") return 8.30;
+    const threeCatalog = INVERTER_PRICE_CATALOG
+      .filter((it) => it.phase === "3-phase")
+      .sort((a, b) => a.capacityKw - b.capacityKw);
+
+    if (reqKw <= 136.0) {
+      const match = threeCatalog.find((it) => it.capacityKw >= reqKw) || threeCatalog[threeCatalog.length - 1];
+      return {
+        cost: match[tier],
+        modelName: match.label,
+        ratingKw: match.capacityKw,
+        phase: "3-phase",
+        quantity: 1,
+        priceTier: tier,
+        items: [{ ...match, quantity: 1, cost: match[tier] }],
+      };
+    } else {
+      // Large commercial/group systems > 136 kW: combine units of 136 kW plus smallest inverter covering remainder
+      let remaining = reqKw;
+      const selected = [];
+      const topModel = threeCatalog[threeCatalog.length - 1]; // 136 kW
+
+      const count136 = Math.floor(remaining / topModel.capacityKw);
+      if (count136 > 0) {
+        selected.push({
+          ...topModel,
+          quantity: count136,
+          cost: count136 * topModel[tier],
+        });
+        remaining = round(remaining - count136 * topModel.capacityKw, 2);
+      }
+
+      if (remaining > 0) {
+        const matchRemainder = threeCatalog.find((it) => it.capacityKw >= remaining) || topModel;
+        const existingIdx = selected.findIndex((it) => it.capacityKw === matchRemainder.capacityKw);
+        if (existingIdx !== -1) {
+          selected[existingIdx].quantity += 1;
+          selected[existingIdx].cost += matchRemainder[tier];
+        } else {
+          selected.push({
+            ...matchRemainder,
+            quantity: 1,
+            cost: matchRemainder[tier],
+          });
+        }
+      }
+
+      const totalCost = selected.reduce((sum, it) => sum + it.cost, 0);
+      const totalRating = round(selected.reduce((sum, it) => sum + it.capacityKw * it.quantity, 0), 1);
+      const modelName = selected
+        .map((it) => (it.quantity > 1 ? `${it.quantity} × ${it.label}` : it.label))
+        .join(" + ");
+
+      return {
+        cost: totalCost,
+        modelName,
+        ratingKw: totalRating,
+        phase: "3-phase",
+        quantity: selected.reduce((sum, it) => sum + it.quantity, 0),
+        priceTier: tier,
+        items: selected,
+      };
+    }
   }
-  return 8.68;
+}
+
+export function getInverterCost(capacityKw, connectionPhase = "1-phase", priceTier = "price1") {
+  return findInverterForCapacity(capacityKw, connectionPhase, priceTier).cost;
+}
+
+export function getInverterRate(systemType, capacityKw, connectionPhase = "1-phase", priceTier = "price1") {
+  const inv = findInverterForCapacity(capacityKw, connectionPhase, priceTier);
+  const capW = (Number(capacityKw) || 1) * 1000;
+  return round(inv.cost / capW, 2);
 }
 
 function getProtectionCost(capacityKw) {
@@ -740,7 +810,12 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
     ? pricing.structureRates[input.structureType]
     : 5.3;
   const structureCost = dcCapacityWp * structureRate;
-  const inverterCost = inverterCapacityW * getInverterRate(systemType, inverterCapacityKw);
+  const inverterSelection = findInverterForCapacity(
+    inverterCapacityKw,
+    input.connectionPhase,
+    pricing.inverterPriceTier || "price1"
+  );
+  const inverterCost = inverterSelection.cost;
   let batteryCost = batteryCapacityWh * pricing.batteryRatePerWh;
   let backupInverterCost = 0;
   if (batteryCapacityWh > 0) {
@@ -860,6 +935,10 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
     panelSpec: input.panelSpec || getPanelSpecificationText(panelType, input.panelSpecCustom, config.performance?.panelWp || config.system?.panelWp, input.panelMake),
     dcCapacityKw: round(dcCapacityKw, 2),
     inverterCapacityKw: round(inverterCapacityKw, 2),
+    inverterModel: inverterSelection.modelName,
+    inverterRatingKw: inverterSelection.ratingKw,
+    inverterPhase: inverterSelection.phase,
+    inverterPriceTier: inverterSelection.priceTier,
     batteryCapacityKwh: round(batteryCapacityKwh, 1),
     dailyGeneration,
     monthlyGeneration,

@@ -5,6 +5,10 @@ import {
   calculateEstimate,
   calculateSubsidy,
   recommendCapacity,
+  findInverterForCapacity,
+  getInverterCost,
+  getInverterRate,
+  INVERTER_PRICE_CATALOG,
 } from "../src/calculator.js";
 import { buildSystemIncludesText, sanitizeSystemIncludes, getScopeOfWorkItems } from "../src/reportGenerator.js";
 
@@ -681,6 +685,104 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.equal(mmSubGround.total, 0, "Multi-meter on ground mount must have 0 total subsidy");
 
   console.log("✓ All MNRE Guidelines 07.06.2024 rules verified in calculator!");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Discrete Inverter Price Catalog Tests (Single Phase, Three Phase & Tiers)
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  // 1. Catalog Integrity
+  assert.equal(INVERTER_PRICE_CATALOG.length, 27, "Catalog must contain exactly 27 inverter specifications");
+  const singlePhaseItems = INVERTER_PRICE_CATALOG.filter(it => it.phase === "1-phase");
+  const threePhaseItems = INVERTER_PRICE_CATALOG.filter(it => it.phase === "3-phase");
+  assert.equal(singlePhaseItems.length, 7, "Catalog must have 7 single-phase models (2.2 kW to 5.0 kW)");
+  assert.equal(threePhaseItems.length, 20, "Catalog must have 20 three-phase models (5.0 kW to 136.0 kW)");
+
+  // 2. Single-Phase Lookup & Sizing
+  // <= 2.2 kW -> 2.2Kw Single Phase (14,429 / 13,944)
+  const inv1_5 = findInverterForCapacity(1.5, "1-phase", "price1");
+  assert.equal(inv1_5.modelName, "2.2Kw Single Phase");
+  assert.equal(inv1_5.cost, 14429);
+  assert.equal(inv1_5.ratingKw, 2.2);
+
+  const inv1_5_p2 = findInverterForCapacity(1.5, "1-phase", "price2");
+  assert.equal(inv1_5_p2.cost, 13944);
+
+  // 3.0 kW -> 3kw Single Phase (14,862 / 14,362)
+  const inv3 = findInverterForCapacity(3.0, "1-phase", "price1");
+  assert.equal(inv3.modelName, "3kw Single Phase");
+  assert.equal(inv3.cost, 14862);
+
+  // 3.3 kW -> 3.3Kw Single Phase (15,006 / 14,502)
+  const inv3_3 = findInverterForCapacity(3.3, "1-phase", "price1");
+  assert.equal(inv3_3.modelName, "3.3Kw Single Phase");
+  assert.equal(inv3_3.cost, 15006);
+
+  // 4.4 kW -> 5kw Single Phase (25,683 / 24,820)
+  const inv4_4 = findInverterForCapacity(4.4, "1-phase", "price1");
+  assert.equal(inv4_4.modelName, "5kw Single Phase");
+  assert.equal(inv4_4.cost, 25683);
+  assert.equal(inv4_4.ratingKw, 5.0);
+
+  const inv4_4_p2 = findInverterForCapacity(4.4, "1-phase", "price2");
+  assert.equal(inv4_4_p2.cost, 24820);
+
+  // 3. Three-Phase Explicit Lookup
+  // 3.0 kW with connectionPhase: '3-phase' -> 5Kw Three Phase (40,384 / 39,059)
+  const inv3_3ph = findInverterForCapacity(3.0, "3-phase", "price1");
+  assert.equal(inv3_3ph.modelName, "5Kw Three Phase");
+  assert.equal(inv3_3ph.cost, 40384);
+  assert.equal(inv3_3ph.ratingKw, 5.0);
+
+  // 10.0 kW -> 10kw Three Phase (44,378 / 42,923)
+  const inv10 = findInverterForCapacity(10.0, "3-phase", "price1");
+  assert.equal(inv10.modelName, "10kw Three Phase");
+  assert.equal(inv10.cost, 44378);
+
+  // 50.0 kW -> 50KW Three Phase (1,08,398 / 1,04,784)
+  const inv50 = findInverterForCapacity(50.0, "3-phase", "price1");
+  assert.equal(inv50.modelName, "50KW Three Phase");
+  assert.equal(inv50.cost, 108398);
+
+  // 136.0 kW -> 136KW Three Phase (3,09,042 / 2,98,566)
+  const inv136 = findInverterForCapacity(136.0, "3-phase", "price1");
+  assert.equal(inv136.modelName, "136KW Three Phase");
+  assert.equal(inv136.cost, 309042);
+
+  // 4. Large System Combinations > 136 kW
+  // 200 kW -> 1x 136 kW + 1x 80 kW = 216 kW rating, cost: 309042 + 203700 = 512,742
+  const inv200 = findInverterForCapacity(200.0, "3-phase", "price1");
+  assert.equal(inv200.cost, 309042 + 203700, "200 kW system must combine 136 kW + 80 kW inverters");
+  assert.equal(inv200.ratingKw, 216.0);
+  assert.ok(inv200.modelName.includes("136KW Three Phase"));
+  assert.ok(inv200.modelName.includes("80KW Three Phase"));
+
+  // 300 kW -> 2x 136 kW (272 kW) + 1x 30/33 kW (33 kW) = 305 kW rating, cost: 2*309042 + 75951 = 694,035
+  const inv300 = findInverterForCapacity(300.0, "3-phase", "price1");
+  assert.equal(inv300.cost, 2 * 309042 + 75951, "300 kW system must combine 2x 136 kW + 1x 30/33 kW");
+  assert.equal(inv300.ratingKw, 305.0);
+
+  // 5. Inverter Costing in Full System Proposal
+  const estStandard = calculateEstimate(makeInput(), DEFAULT_CONFIG);
+  assert.equal(estStandard.recommended.costBreakup.inverter, 25683, "Standard 4.4 kW system must select 5kw Single Phase inverter at ₹25,683");
+  assert.equal(estStandard.recommended.inverterModel, "5kw Single Phase");
+  assert.equal(estStandard.recommended.inverterRatingKw, 5.0);
+
+  const customConfigPrice2 = {
+    ...DEFAULT_CONFIG,
+    pricing: {
+      ...DEFAULT_CONFIG.pricing,
+      inverterPriceTier: "price2",
+    },
+  };
+  const estPrice2 = calculateEstimate(makeInput(), customConfigPrice2);
+  assert.equal(estPrice2.recommended.costBreakup.inverter, 24820, "With price2 tier, 4.4 kW system must cost ₹24,820");
+
+  const est3Phase = calculateEstimate(makeInput({ connectionPhase: "3-phase" }), DEFAULT_CONFIG);
+  assert.equal(est3Phase.recommended.costBreakup.inverter, 40384, "With 3-phase connection, 4.4 kW system must select 5Kw Three Phase inverter at ₹40,384");
+  assert.equal(est3Phase.recommended.inverterModel, "5Kw Three Phase");
+
+  console.log("✓ Discrete Inverter Price Catalog and sizing logic verified successfully!");
 }
 
 console.log("calculator tests passed");

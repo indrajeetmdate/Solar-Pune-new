@@ -168,12 +168,49 @@ export const TARIFF_PROFILES = {
   },
 };
 
+// ─── Discrete Inverter Pricing Catalog ────────────────────────────────────────
+// Standard discrete string inverter price list by capacity & connection phase.
+// price1: Standard List Price, price2: Cash / Discounted Price.
+export const INVERTER_PRICE_CATALOG = [
+  // Single Phase (1-Phase)
+  { capacityKw: 2.2, phase: "1-phase", label: "2.2Kw Single Phase", price1: 14429, price2: 13944 },
+  { capacityKw: 2.7, phase: "1-phase", label: "2.7Kw Single Phase", price1: 14573, price2: 14083 },
+  { capacityKw: 3.0, phase: "1-phase", label: "3kw Single Phase",   price1: 14862, price2: 14362 },
+  { capacityKw: 3.3, phase: "1-phase", label: "3.3Kw Single Phase", price1: 15006, price2: 14502 },
+  { capacityKw: 3.6, phase: "1-phase", label: "3.6Kw Single Phase", price1: 16016, price2: 15478 },
+  { capacityKw: 4.0, phase: "1-phase", label: "4Kw Single Phase",   price1: 16449, price2: 15896 },
+  { capacityKw: 5.0, phase: "1-phase", label: "5kw Single Phase",   price1: 25683, price2: 24820 },
+
+  // Three Phase (3-Phase)
+  { capacityKw: 5.0,   phase: "3-phase", label: "5Kw Three Phase",     price1: 40384,  price2: 39059 },
+  { capacityKw: 6.0,   phase: "3-phase", label: "6kw Three Phase",     price1: 41863,  price2: 40490 },
+  { capacityKw: 8.0,   phase: "3-phase", label: "8kw Three Phase",     price1: 43490,  price2: 42064 },
+  { capacityKw: 10.0,  phase: "3-phase", label: "10kw Three Phase",    price1: 44378,  price2: 42923 },
+  { capacityKw: 12.0,  phase: "3-phase", label: "12kw Three Phase",    price1: 45117,  price2: 43638 },
+  { capacityKw: 15.0,  phase: "3-phase", label: "15kw Three Phase",    price1: 51653,  price2: 49931 },
+  { capacityKw: 18.0,  phase: "3-phase", label: "18kw Three Phase",    price1: 56745,  price2: 54854 },
+  { capacityKw: 20.0,  phase: "3-phase", label: "20kw Three Phase",    price1: 60383,  price2: 58370 },
+  { capacityKw: 25.0,  phase: "3-phase", label: "25kw Three Phase",    price1: 65475,  price2: 63293 },
+  { capacityKw: 33.0,  phase: "3-phase", label: "30/33KW Three Phase", price1: 75951,  price2: 73419 },
+  { capacityKw: 35.0,  phase: "3-phase", label: "35KW Three Phase",    price1: 80316,  price2: 77639 },
+  { capacityKw: 40.0,  phase: "3-phase", label: "40KW Three Phase",    price1: 98213,  price2: 94939 },
+  { capacityKw: 50.0,  phase: "3-phase", label: "50KW Three Phase",    price1: 108398, price2: 104784 },
+  { capacityKw: 60.0,  phase: "3-phase", label: "60KW Three Phase",    price1: 122220, price2: 118146 },
+  { capacityKw: 80.0,  phase: "3-phase", label: "80KW Three Phase",    price1: 203700, price2: 196910 },
+  { capacityKw: 90.0,  phase: "3-phase", label: "90KW Three Phase",    price1: 237505, price2: 229454 },
+  { capacityKw: 100.0, phase: "3-phase", label: "100KW Three Phase",   price1: 244658, price2: 236365 },
+  { capacityKw: 110.0, phase: "3-phase", label: "110KW Three Phase",   price1: 251812, price2: 243276 },
+  { capacityKw: 125.0, phase: "3-phase", label: "125KW Three Phase",   price1: 294735, price2: 284744 },
+  { capacityKw: 136.0, phase: "3-phase", label: "136KW Three Phase",   price1: 309042, price2: 298566 },
+];
+
 // ─── Default Config (backwards-compatible with existing LT-I Residential) ────
 
 export const DEFAULT_CONFIG = {
   pricing: {
     panelDcrRatePerWp: 25,
     panelNonDcrRatePerWp: 15,
+    inverterPriceTier: "price1", // 'price1' (Standard / List Price) or 'price2' (Cash / Discounted Price)
     batteryRatePerWh: 17.5,
     structureRates: {
       hotDip: 6,

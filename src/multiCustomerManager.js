@@ -6,6 +6,7 @@
 
 import { DEFAULT_CONFIG } from "./config.js";
 import { calculateSolarFinancing } from "./loanEngine.js";
+import { findInverterForCapacity } from "./calculator.js";
 
 // Distinct high-contrast color palette for up to 50 flats
 export const FLAT_COLOR_PALETTE = [
@@ -281,14 +282,18 @@ export function calculateBuildingLedger({
     : 6;
   const installationRate = pricing.installationRatePerW || 2.5;
   const consultancyRate = pricing.consultancyRatePerW || 1.0;
-  const inverterRate = 5.5; // Rs/W average for large scale ongrid inverters
   const safetyAndEarthingCostTotal = Math.max(15000, totalBuildingCapacityKw * 1500);
 
   // Calculate Building Gross Project Cost
   const totalDcWatts = totalBuildingCapacityKw * 1000;
   const panelCost = totalDcWatts * panelRate;
   const structureCost = totalDcWatts * structureRate;
-  const inverterCost = totalDcWatts * inverterRate;
+  const inverterSelection = findInverterForCapacity(
+    totalBuildingCapacityKw,
+    "3-phase",
+    pricing.inverterPriceTier || "price1"
+  );
+  const inverterCost = inverterSelection.cost;
   const installationCost = totalDcWatts * installationRate;
   const consultancyCost = totalDcWatts * consultancyRate;
 

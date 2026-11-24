@@ -183,7 +183,7 @@ loanDownPaymentPctInput.value = "20";
 loanDownPaymentPctInput.dispatchEvent(new window.Event("input", { bubbles: true }));
 const loanHtml20 = loanBreakdownContainer.innerHTML;
 assert.ok(loanHtml20.includes("(20%)"), "Option B table must show (20%) for Upfront Customer Payment");
-assert.ok(loanHtml20.includes("39,065"), "Option B table must reflect calculated 20% down payment amount (Rs 39,065)");
+assert.ok(loanHtml20.includes("38,900"), "Option B table must reflect calculated 20% down payment amount (Rs 38,900)");
 
 // Test 0% down payment (Zero Down Payment)
 loanDownPaymentPctInput.value = "0";
