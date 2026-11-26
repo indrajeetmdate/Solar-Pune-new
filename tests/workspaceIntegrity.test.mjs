@@ -178,12 +178,16 @@ const loanBreakdownContainer = document.getElementById("financingBreakdownConten
 paymentModeSelect.value = "loan";
 paymentModeSelect.dispatchEvent(new window.Event("change", { bubbles: true }));
 
+// Check default margin rate
+assert.equal(document.getElementById("marginRate")?.value, "25", "Default Margin (%) must be 25%");
+
 // Test 20% down payment
 loanDownPaymentPctInput.value = "20";
 loanDownPaymentPctInput.dispatchEvent(new window.Event("input", { bubbles: true }));
 const loanHtml20 = loanBreakdownContainer.innerHTML;
+const expectedDp20 = Math.round((window.appState.estimates?.recommended?.netCost || 0) * 0.2).toLocaleString("en-IN");
 assert.ok(loanHtml20.includes("(20%)"), "Option B table must show (20%) for Upfront Customer Payment");
-assert.ok(loanHtml20.includes("38,900"), "Option B table must reflect calculated 20% down payment amount (Rs 38,900)");
+assert.ok(loanHtml20.includes(expectedDp20), `Option B table must reflect calculated 20% down payment amount (Rs ${expectedDp20})`);
 
 // Test 0% down payment (Zero Down Payment)
 loanDownPaymentPctInput.value = "0";
@@ -228,8 +232,10 @@ const compRows = document.getElementById("comparisonRows")?.children;
 assert.ok(compRows && compRows.length >= 3, "Comparison table must contain system option rows");
 
 // Check Financials cost breakup has items
-const costBreakup = document.getElementById("costBreakup")?.children;
-assert.ok(costBreakup && costBreakup.length >= 5, "Cost breakup table must contain breakdown items");
+const costBreakupEl = document.getElementById("costBreakup");
+const costBreakup = costBreakupEl?.children;
+assert.ok(costBreakup && costBreakup.length >= 4, "Cost breakup container must contain Scope & cost summary items");
+assert.ok(costBreakupEl.textContent.includes("Total System Cost") && costBreakupEl.textContent.includes("Net customer cost"), "Cost breakup must show Total System Cost and Net customer cost");
 
 // Check MSEB Proposal Side-by-Side Tables
 const currentBillHtml = document.getElementById("msebCurrentBillContainer")?.innerHTML;
@@ -250,12 +256,18 @@ internalBtn.click();
 const pwdDialog = document.getElementById("passwordDialog");
 assert.ok(pwdDialog.open, "Password dialog must be opened after clicking Internal mode button");
 
-// Unlock with password
+// Test rejecting deprecated 'solar2026' password
 document.getElementById("internalPassword").value = "solar2026";
-document.getElementById("unlockButton").click();
+await window.unlockInternal();
+assert.ok(pwdDialog.open, "Password dialog must remain open when using invalid password 'solar2026'");
+
+// Unlock with valid user account credentials
+document.getElementById("internalUsername").value = "indrajeet.date@cnergy.co.in";
+document.getElementById("internalPassword").value = "thisisbusiness";
+await window.unlockInternal();
 assert.ok(!pwdDialog.open, "Password dialog must close after successful unlock");
 assert.ok(document.getElementById("internalModeButton").classList.contains("active"), "Internal mode button must be active");
-console.log("✓ Internal Mode Master Password Dialog opens, validates, and unlocks successfully!");
+console.log("✓ Internal Mode Password Dialog rejects 'solar2026' and unlocks successfully with valid credentials!");
 
 // Check Save, Load & Edit Older Saved Data
 console.log("Testing Save, Load & Edit Older Saved Proposal...");
@@ -925,5 +937,182 @@ const restoredName = document.getElementById("customerName")?.value;
 assert.notEqual(restoredName, "Shivaji Heights Co-op Housing Society", "Single customer name must be restored when switching back");
 
 console.log("✓ Multi-Customer Building Solar Proposal Studio & Cross-Workspace Synchronization verified successfully!");
+
+// 13. Regression Test: Single-Customer #showCadDiagram Tick/Untick & #cadTogglePdfReportBtn Sync
+{
+  const showCadCb = document.getElementById("showCadDiagram");
+  const cadToggleBtn = document.getElementById("cadTogglePdfReportBtn");
+  const openBtn = document.getElementById("openSampleViewBtn");
+  const pagesBox = document.getElementById("pdfSampleViewPages");
+  const closeBtn = document.getElementById("closeSampleViewModalBtn");
+  const statusStrip = document.getElementById("proposalSectionsLiveStatus");
+
+  assert.ok(showCadCb && cadToggleBtn && openBtn && pagesBox, "Proposal CAD toggle & sample preview elements must exist");
+  assert.equal(window.appState.proposalMode, "single", "Must be in single-customer mode");
+
+  // Untick Include CAD Layout Blueprint
+  showCadCb.checked = false;
+  showCadCb.dispatchEvent(new window.Event("change"));
+  assert.equal(cadToggleBtn.classList.contains("active"), false, "CAD toolbar button must reflect unticked #showCadDiagram");
+  assert.ok(statusStrip?.textContent.includes("CAD Blueprint: Hidden"), "Live status strip must indicate CAD Blueprint is hidden");
+
+  openBtn.click();
+  const singlePagesNoCad = pagesBox.querySelectorAll(".pdf-sample-page");
+  assert.ok(singlePagesNoCad.length >= 5, "Rendered pages must exist");
+  assert.ok(!pagesBox.textContent.includes("Rooftop Layout & Solar Array CAD Plan"), "Single-customer Sample PDF MUST omit CAD Blueprint page when unticked");
+  assert.ok(pagesBox.textContent.includes("2. Financial Quote & Scope of Work"), "Single-customer quote must renumber to Section 2 when CAD is hidden");
+  closeBtn?.click();
+
+  // Re-tick via CAD toolbar toggle button
+  cadToggleBtn.click();
+  assert.equal(showCadCb.checked, true, "Clicking CAD toolbar button must re-tick #showCadDiagram");
+  assert.equal(cadToggleBtn.classList.contains("active"), true, "CAD toolbar button must look active again");
+  assert.ok(statusStrip?.textContent.includes("CAD Blueprint: Included"), "Live status strip must indicate CAD Blueprint is included");
+
+  openBtn.click();
+  assert.ok(pagesBox.textContent.includes("2. Rooftop Layout & Solar Array CAD Plan"), "Single-customer Sample PDF must restore CAD Blueprint when re-ticked");
+  closeBtn?.click();
+}
+
+// 14. Regression Test: Interactive #paneLoan Controls (Custom Tenure with Bill > 0, Amortization Schedule, Reset Auto)
+{
+  const pModeEl = document.getElementById("paymentMode");
+  const monthlyBillEl = document.getElementById("monthlyBill");
+  monthlyBillEl.value = "5200";
+  pModeEl.value = "loan";
+  pModeEl.dispatchEvent(new window.Event("change"));
+
+  const tenurePill = document.querySelector('.loan-mode-pill[data-loan-mode="tenure"]');
+  const paneTenureInput = document.getElementById("paneLoanTenureMonths");
+  const paneRateInput = document.getElementById("paneLoanInterestRate");
+  const schedBox = document.getElementById("loanScheduleContainer");
+  const bannerEl = document.getElementById("paneLoanStatusBanner");
+
+  assert.ok(tenurePill && paneTenureInput && paneRateInput && schedBox, "#paneLoan interactive controls must exist");
+  assert.equal(bannerEl?.style.display, "none", "Upfront banner must be hidden when With Bank Loan is active");
+
+  tenurePill.click();
+  paneTenureInput.value = "84";
+  paneTenureInput.dispatchEvent(new window.Event("input"));
+
+  assert.equal(document.getElementById("internalLoanTenureMonths")?.value, "84", "Internal tenure field must sync from #paneLoan");
+  assert.equal(window.appState.estimates?.recommended?.financing?.tenureMonths, 84, "Fixed 84m tenure must calculate even with monthlyBill = 5200");
+  assert.ok(schedBox.textContent.includes("Year 7"), "Loan schedule must render Year 7 for 84-month tenure");
+
+  // Explicit 0% interest preservation
+  paneRateInput.value = "0";
+  paneRateInput.dispatchEvent(new window.Event("input"));
+  assert.equal(window.appState.estimates?.recommended?.financing?.totalInterest, 0, "0% bank interest rate must calculate ₹0 total interest");
+
+  // Reset Auto restores bill-matched tenure
+  document.getElementById("paneLoanResetAutoBtn")?.click();
+  assert.equal(paneTenureInput.value, "0", "Reset Auto must clear fixed tenure back to 0 (Auto)");
+  assert.equal(paneRateInput.value, "7", "Reset Auto must restore 7% default interest rate");
+  pModeEl.value = "upfront";
+  pModeEl.dispatchEvent(new window.Event("change"));
+  assert.equal(bannerEl?.style.display, "flex", "Upfront banner must show cleanly inside #paneLoan when paymentMode === 'upfront'");
+}
+
+// 15. Regression Tests: Auto Bill Breakdown Sync, LT-I Fixed Charge, Panel Rate Sync, & CRM Archive Load
+{
+  const unitsEl = document.getElementById("monthlyUnits");
+  const billEl = document.getElementById("monthlyBill");
+  const fixedEl = document.getElementById("billFixedCharges");
+  const energyEl = document.getElementById("billEnergyCharges");
+  const catEl = document.getElementById("consumerCategory");
+  const fcConfigEl = document.getElementById("fixedCharge");
+
+  // Initial hardcoded 4738 should dynamically update when units/bill change
+  unitsEl.value = "700";
+  billEl.value = "8200";
+  unitsEl.dispatchEvent(new window.Event("input"));
+  assert.notEqual(Number(energyEl.value), 4738, "billEnergyCharges must auto-recalculate when monthlyUnits/monthlyBill change");
+
+  // Switching LT-II -> LT-I must preserve LT-I connection fixed charge (130), not 0
+  catEl.value = "LT-II";
+  catEl.dispatchEvent(new window.Event("change"));
+  catEl.value = "LT-I";
+  catEl.dispatchEvent(new window.Event("change"));
+  assert.equal(Number(fcConfigEl.value), 130, "Switching back to LT-I must restore Rs 130 fixed charge instead of 0");
+  assert.equal(Number(fixedEl.value), 130, "Sidebar Current Bill Fixed Charges must reflect Rs 130");
+
+  // Panel rate family matching (#panelType toggle switches quick rate & offgrid uses nonDcrRatePerWp)
+  const pTypeEl = document.getElementById("panelType");
+  const pRateEl = document.getElementById("panelRate");
+  pTypeEl.value = "nonDcr";
+  pTypeEl.dispatchEvent(new window.Event("change"));
+  assert.equal(Number(pRateEl.value), 15, "Switching panelType to nonDcr must sync quick panelRate to 15");
+  pTypeEl.value = "dcr";
+  pTypeEl.dispatchEvent(new window.Event("change"));
+  assert.equal(Number(pRateEl.value), 25, "Switching panelType back to dcr must sync quick panelRate to 25");
+}
+
+// 16. Regression Test: Multi-Meter Separate Inverters Visible in Financials & Savings
+{
+  window.appState.proposalMode = "single";
+  document.getElementById("meteringModeMultiBtn")?.click();
+  window.appState.meters = [
+    { id: "mm_1", label: "Flat 101", consumerNumber: "111122223331", sanctionedLoad: 3, monthlyUnits: 250, monthlyBill: 2800, consumerCategory: "LT-I", connectionPhase: "1-phase", allocatedKw: 2 },
+    { id: "mm_2", label: "Flat 102", consumerNumber: "111122223332", sanctionedLoad: 4, monthlyUnits: 350, monthlyBill: 4000, consumerCategory: "LT-I", connectionPhase: "1-phase", allocatedKw: 3 },
+  ];
+  // Trigger recalculation & re-render
+  document.getElementById("mmEqualDistributeBtn")?.click();
+  const monthlyUnitsEl = document.getElementById("monthlyUnits");
+  monthlyUnitsEl?.dispatchEvent(new window.Event("change"));
+  document.getElementById("workspaceTabFinancialsBtn")?.click();
+
+  const costBreakupHtml = document.getElementById("costBreakup")?.innerHTML || "";
+  const multiSubHtml = document.getElementById("financialMultiSubsidyList")?.innerHTML || "";
+  const multiSubCard = document.getElementById("financialMultiSubsidyCard");
+
+  assert.equal(multiSubCard?.style.display, "block", "Multi-Flat card in Financials & Savings must be visible in multi-meter mode");
+  assert.ok(costBreakupHtml.includes("Separate On-grid Inverters (2 Flats)"), "Itemized Cost Breakup must label Separate Inverters for multi-meter flats");
+  assert.ok(costBreakupHtml.includes("multi-inverter-breakup-box"), "Itemized Cost Breakup must render the per-flat inverter breakdown box");
+  assert.ok(costBreakupHtml.includes("Flat 101") && costBreakupHtml.includes("Flat 102"), "Per-flat inverter breakdown must list each flat");
+  assert.ok(multiSubHtml.includes("⚡"), "Multi-Flat Subsidy/Allocation cards in Financials & Savings must show each flat's dedicated inverter");
+
+  // Switch back to single meter mode so following tests are clean
+  document.getElementById("meteringModeSingleBtn")?.click();
+}
+
+// 17. Regression Test: CAD Roof Dimensions, Walkway Size & Panel Positions Preserved Across Tab Switches
+{
+  const cad = getActiveRooftopCAD();
+  cad.setRoofDimensions(40, 30);
+  cad.addDefaultHorizontalPathway();
+  cad.panels = [];
+  cad.setRequiredPanels(8, 1123, 2279);
+  cad.autoPlaceRemainingPanels("portrait");
+
+  const origRoofL = cad.roofLengthFt;
+  const origRoofB = cad.roofBreadthFt;
+  const origPwLen = cad.pathways[0].lengthFt;
+  const origPwBreadth = cad.pathways[0].breadthFt;
+  const origPanelOffsets = cad.panels.map((p) => ({
+    dxFt: (p.x - cad.roofX) / cad.scalePxPerFt,
+    dyFt: (p.y - cad.roofY) / cad.scalePxPerFt,
+  }));
+
+  // Switch from CAD -> Financials -> CRM -> back to CAD
+  document.getElementById("workspaceTabFinancialsBtn")?.click();
+  document.getElementById("workspaceTabCrmBtn")?.click();
+  document.getElementById("workspaceTabCadBtn")?.click();
+
+  // Trigger a global render (e.g. changing margin or clicking an input) after adding walkway
+  document.getElementById("monthlyBill").dispatchEvent(new window.Event("input"));
+
+  assert.equal(cad.roofLengthFt, origRoofL, "CAD base roof length must NOT change after adding walkway and switching tabs");
+  assert.equal(cad.roofBreadthFt, origRoofB, "CAD base roof breadth must NOT change after adding walkway and switching tabs");
+  assert.equal(document.getElementById("cadRoofLength")?.value, String(origRoofL), "CAD Length UI input must preserve base roof length");
+  assert.equal(document.getElementById("cadRoofBreadth")?.value, String(origRoofB), "CAD Breadth UI input must preserve base roof breadth");
+  assert.equal(cad.pathways[0].lengthFt, origPwLen, "CAD walkway lengthFt must NOT change across tab switches");
+  assert.equal(cad.pathways[0].breadthFt, origPwBreadth, "CAD walkway breadthFt must NOT change across tab switches");
+  cad.panels.forEach((p, i) => {
+    const newDx = (p.x - cad.roofX) / cad.scalePxPerFt;
+    const newDy = (p.y - cad.roofY) / cad.scalePxPerFt;
+    assert.ok(Math.abs(newDx - origPanelOffsets[i].dxFt) < 0.05, `Panel ${i} X position in feet must stay fixed across tab switches`);
+    assert.ok(Math.abs(newDy - origPanelOffsets[i].dyFt) < 0.05, `Panel ${i} Y position in feet must stay fixed across tab switches`);
+  });
+}
 
 console.log("\nALL END-TO-END WORKSPACE & AUTO-CALCULATION TESTS PASSED! 🚀🎉");

@@ -256,6 +256,11 @@ RETURNS TRIGGER AS $$
 DECLARE
     matched_lead_id UUID;
 BEGIN
+    -- Prevent recursive trigger cascades with trg_sync_crm_lead_to_proposal
+    IF pg_trigger_depth() > 1 THEN
+        RETURN NEW;
+    END IF;
+
     -- Check if lead exists by proposal_serial_no, proposal_id, or mobile_number
     SELECT id INTO matched_lead_id
     FROM crm_leads
@@ -265,7 +270,7 @@ BEGIN
     LIMIT 1;
 
     IF matched_lead_id IS NOT NULL THEN
-        -- Update existing CRM Lead
+        -- Only promote 'lead' -> 'proposal_sent' the first time a proposal is attached
         UPDATE crm_leads
         SET
             customer_name = COALESCE(NEW.customer_name, customer_name),
@@ -277,7 +282,13 @@ BEGIN
             estimated_cost = COALESCE(NEW.total_cost, estimated_cost),
             proposal_serial_no = NEW.proposal_serial_no,
             proposal_id = NEW.id,
-            status = CASE WHEN status = 'lead' THEN 'proposal_sent' ELSE status END,
+            status = CASE
+                WHEN status = 'lead'
+                 AND COALESCE(proposal_serial_no, '') = ''
+                 AND proposal_id IS NULL
+                THEN 'proposal_sent'
+                ELSE status
+            END,
             updated_at = NOW()
         WHERE id = matched_lead_id;
     ELSE
@@ -371,7 +382,19 @@ FOR EACH ROW EXECUTE PROCEDURE sync_proposal_deletion_to_crm();
 CREATE OR REPLACE FUNCTION sync_crm_lead_to_proposal()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF NEW.proposal_serial_no IS NOT NULL THEN
+    IF pg_trigger_depth() > 1 THEN
+        RETURN NEW;
+    END IF;
+
+    IF NEW.proposal_serial_no IS NOT NULL AND (
+        OLD.customer_name IS DISTINCT FROM NEW.customer_name OR
+        OLD.mobile_number IS DISTINCT FROM NEW.mobile_number OR
+        OLD.email_address IS DISTINCT FROM NEW.email_address OR
+        OLD.customer_address IS DISTINCT FROM NEW.customer_address OR
+        OLD.sanctioned_load IS DISTINCT FROM NEW.sanctioned_load OR
+        OLD.system_capacity_kw IS DISTINCT FROM NEW.system_capacity_kw OR
+        OLD.estimated_cost IS DISTINCT FROM NEW.estimated_cost
+    ) THEN
         UPDATE proposals
         SET
             customer_name = NEW.customer_name,

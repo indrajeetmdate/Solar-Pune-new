@@ -411,7 +411,7 @@ export async function generateBuildingProposalPDF({
   const techRows = [
     ["Solar PV Modules", `${buildingData.panelMake || "Tier-1 Mono PERC DCR"} (${buildingData.panelWp || 550} Wp High-efficiency modules)`],
     ["Mounting Structure", "Elevated Hot-dip Galvanized (HDG 80-120 micron, 25+ yr structural durability)"],
-    ["Inverter Architecture", "High-efficiency Multi-MPPT Grid-Tied Inverters with IP65 weatherproofing"],
+    ["Inverter Architecture", summary.inverterModelSummary ? `${summary.inverterModelSummary} (Dedicated Inverter for Each Flat)` : "High-efficiency Multi-MPPT Grid-Tied Inverters with IP65 weatherproofing (Separate inverter per flat)"],
     ["Safety & Earthing", "Dedicated dual copper bonded earthing electrode rods (16mm & 14mm) + Type-2 SPDs"],
     ["Metering & Grid Interconnection", "Individual bi-directional net meters / Group Net Metering under MSEDCL Solar Regulations"],
     ["Turnkey Inclusions", "Supply, structural fabrication, DC/AC cabling, statutory MSEDCL approvals & commissioning"]
@@ -563,6 +563,7 @@ export async function generateBuildingProposalPDF({
     "Units\n/mo",
     "Panels",
     "kWp",
+    "Inverter",
     "Gross\nShare (Rs)",
     "PM Surya\nSubsidy (Rs)",
     "Net Cost\n(Rs)",
@@ -581,6 +582,7 @@ export async function generateBuildingProposalPDF({
     String(f.monthlyUnits || 0),
     String(f.panels || 0),
     Number(f.allocatedKw || 0).toFixed(2),
+    f.inverterModel || `${f.allocatedKw || 0} kW Inv`,
     Number(f.grossCost || 0).toLocaleString("en-IN"),
     Number(f.subsidy || 0).toLocaleString("en-IN"),
     Number(f.netCost || 0).toLocaleString("en-IN"),
@@ -599,6 +601,7 @@ export async function generateBuildingProposalPDF({
     `${(summary.totalMonthlyUnits || 0).toLocaleString("en-IN")}`,
     `${summary.totalBuildingPanels || 0}`,
     `${(summary.totalBuildingCapacityKw || 0).toFixed(2)}`,
+    `${summary.totalInverters || flatLedger.length} Inverters`,
     Number(summary.totalBuildingGrossCost || 0).toLocaleString("en-IN"),
     Number(summary.totalSubsidy || 0).toLocaleString("en-IN"),
     Number(summary.totalNetCost || 0).toLocaleString("en-IN"),
@@ -640,29 +643,30 @@ export async function generateBuildingProposalPDF({
         halign: "center"
       },
       columnStyles: {
-        0: { cellWidth: 7 },
-        1: { cellWidth: 12 },
-        2: { cellWidth: 24, halign: "left" },
-        3: { cellWidth: 10 },
-        4: { cellWidth: 11 },
-        5: { cellWidth: 10 },
-        6: { cellWidth: 10 },
-        7: { cellWidth: 16, halign: "right" },
-        8: { cellWidth: 16, halign: "right", textColor: [21, 128, 61], fontStyle: "bold" },
-        9: { cellWidth: 16, halign: "right", textColor: [2, 132, 199], fontStyle: "bold" },
-        10: { cellWidth: 11 },
-        11: { cellWidth: 14, halign: "right", textColor: [21, 128, 61] },
-        12: { cellWidth: 12, halign: "right" },
-        13: { cellWidth: 11 },
-        14: { cellWidth: 9 }
+        0: { cellWidth: 6 },
+        1: { cellWidth: 11 },
+        2: { cellWidth: 20, halign: "left" },
+        3: { cellWidth: 9 },
+        4: { cellWidth: 10 },
+        5: { cellWidth: 8 },
+        6: { cellWidth: 9 },
+        7: { cellWidth: 16, halign: "left", fontSize: 5.8 },
+        8: { cellWidth: 15, halign: "right" },
+        9: { cellWidth: 15, halign: "right", textColor: [21, 128, 61], fontStyle: "bold" },
+        10: { cellWidth: 15, halign: "right", textColor: [2, 132, 199], fontStyle: "bold" },
+        11: { cellWidth: 10 },
+        12: { cellWidth: 13, halign: "right", textColor: [21, 128, 61] },
+        13: { cellWidth: 11, halign: "right" },
+        14: { cellWidth: 9 },
+        15: { cellWidth: 8 }
       },
       margin: { left: margin, right: margin },
       didParseCell: function (data) {
         if (data.section === "body") {
-          if (data.column.index === 8) {
+          if (data.column.index === 9) {
             data.cell.styles.fillColor = [240, 253, 244];
           }
-          if (data.column.index === 9) {
+          if (data.column.index === 10) {
             data.cell.styles.fillColor = [240, 249, 255];
           }
         }
@@ -707,6 +711,11 @@ export async function generateBuildingProposalPDF({
           { content: "Allocated Solar PV System", styles: { fontStyle: "bold", textColor: [2, 132, 199] } },
           { content: `${(flat.allocatedKw || 0).toFixed(2)} kWp (${flat.panels} Modules @ ${buildingData.panelWp || 550} Wp)`, styles: { fontStyle: "bold", textColor: [2, 132, 199] } },
           { content: "Estimated Monthly Solar Gen", styles: { fontStyle: "bold" } }, `${flat.monthlyGeneration} kWh / month`
+        ],
+        [
+          { content: "Dedicated Solar Inverter", styles: { fontStyle: "bold", textColor: [2, 132, 199] } },
+          { content: `${flat.inverterModel || "Dedicated Solar Inverter"} (${flat.inverterPhase || flat.phase || "1-phase"})`, styles: { fontStyle: "bold", textColor: [2, 132, 199] } },
+          { content: "Inverter Warranty", styles: { fontStyle: "bold" } }, "8-Year Comprehensive Replacement Warranty"
         ]
       ];
 
@@ -862,7 +871,7 @@ export async function generateBuildingProposalPDF({
 
       const warranties = [
         ["Solar Modules", "25-Year Linear Performance Warranty (≥ 84.8% output at 25 yrs)"],
-        ["Grid-Tied Inverter", "8-Year Comprehensive Manufacturer Replacement Warranty"],
+        ["Dedicated Inverter", `${flat.inverterModel || "Dedicated Grid-Tied Inverter"} — 8-Year Comprehensive Replacement Warranty`],
         ["Mounting Structure", "25-Year Galvanization & Structural Integrity Warranty (HDG)"],
         ["Safety & Earthing Rods", "Dedicated 16 mm and 14 mm chemical copper bonded earthing electrode rods"],
         ["Turnkey Scope", "Includes Design, Procurement, Structural mounting, Electrical safety, Net Metering & Commissioning"]
@@ -1195,15 +1204,18 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.text("Multi-Meter Breakdown & Subsidy Allocation", margin, yPos);
     yPos += 6;
 
-    const mmHeaders = [["Flat / Name", "Consumer No.", "Load", "Units/Mo", "Solar (kWp)", "PM Surya Ghar Subsidy"]];
+    const mmHeaders = [["Flat / Name", "Consumer No.", "Load", "Units/Mo", "Solar (kWp)", "Dedicated Inverter", "PM Surya Ghar Subsidy"]];
     const mmRows = input.meters.map((m) => {
-      const sub = option.meterBreakdown?.find(b => b.id === m.id || b.consumerNumber === m.consumerNumber)?.subsidy ?? 0;
+      const match = option.meterBreakdown?.find(b => b.id === m.id || b.consumerNumber === m.consumerNumber);
+      const sub = match?.subsidy ?? 0;
+      const invModel = match?.inverterModel || `${m.allocatedKw || 0} kW Inverter`;
       return [
         m.label || m.consumerName || "Flat",
         m.consumerNumber || "N/A",
         `${m.sanctionedLoad || 0} kW`,
         `${m.monthlyUnits || 0}`,
         `${m.allocatedKw || 0} kWp`,
+        invModel,
         formatCurrency(sub),
       ];
     });
@@ -1216,6 +1228,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
       `${input.sanctionedLoad || 0} kW`,
       `${input.monthlyUnits || 0}`,
       `${totalAlloc} kWp`,
+      `${input.meters.length} Separate Inverters`,
       formatCurrency(totalSub),
     ]);
 
@@ -1337,8 +1350,11 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
   if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
   if (option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
 
+  const invCapStr = option.inverterModel
+    ? `${option.inverterCapacityKw} kW (${option.inverterModel})`
+    : `${option.inverterCapacityKw} kW`;
   const inverterSpecs = [
-    [`${mainInverterPrefix} Inverter Capacity`, `${option.inverterCapacityKw} kW`],
+    [`${mainInverterPrefix} Inverter Capacity`, invCapStr],
   ];
   
   if (option.systemType === "ongrid_basic_backup") {
@@ -1842,7 +1858,7 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
       ["Energy Charges", formatCurrency(energyCharge)],
       ["Wheeling Charges (@ 1.60/U)", formatCurrency(wheelingCharge)],
       ["Fuel Adjustment (FAC)", formatCurrency(facCharge)],
-      ["Electricity Duty (16%)", formatCurrency(duty)],
+      ["Electricity Duty", formatCurrency(duty)],
       ["Other Charges / Tax", formatCurrency(0)]
     );
   }
@@ -1930,7 +1946,10 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
     doc.setFontSize(10);
     doc.text("Estimated Payback Period: ", margin, yPos);
     doc.setFont("helvetica", "normal");
-    doc.text(`${option.paybackYears.toFixed(1)} Years`, margin + 50, yPos);
+    const safePaybackYears = Number.isFinite(Number(option.paybackYears))
+      ? Number(option.paybackYears).toFixed(1)
+      : "2.0";
+    doc.text(`${safePaybackYears} Years`, margin + 50, yPos);
     yPos += 5.5;
   }
 
@@ -2199,13 +2218,22 @@ export async function generateProposalPDF(estimates, selectedOption, hideFlags =
 
   const warrantyPanelSpec = option.panelSpec || input.panelSpec || getPanelSpecificationText(option.panelType, input.panelSpecCustom, estimates.panelLayout?.panelWp);
 
+  const warrantyInverterLabel = option.systemType === "hybrid"
+    ? "HYBRID INVERTER"
+    : option.systemType === "offgrid"
+      ? "OFF-GRID INVERTER"
+      : "ONGRID INVERTER";
+  const warrantyInverterSpec = option.inverterModel
+    ? `${option.inverterModel} (Grid-Tied IP65)`
+    : "Grid-Tied Solar Inverter (IP65)";
+
   const warrantyData = [
     ["1", "SOLAR PANEL", warrantyPanelSpec, "12 Year Warranty /\n30 Year Performance Warranty"],
     ["2", "DCDB", "HAVELLS 1 IN 1 OUT 600 V", "5 Year"],
     ["3", "EARTHING", "16 MM EARTHING ALU. CONDUCTOR ROD;\n14 MM × 1 MTR COPPER ROD", "—"],
     ["4", "DC CABLE", "4 SQ MM COPPER TIN", "20 Year"],
     ["5", "CIVIL CHAMBER", "ISI STANDARD", "10 Year"],
-    ["6", "ONGRID INVERTER", "Grid-Tied Solar Inverter (IP65)", "10 Year Warranty"],
+    ["6", warrantyInverterLabel, warrantyInverterSpec, "10 Year Warranty"],
   ];
 
   doc.autoTable({

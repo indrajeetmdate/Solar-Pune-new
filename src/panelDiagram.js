@@ -260,11 +260,22 @@ export class RooftopCAD {
   }
 
   // Auto-fit roof in canvas viewport
-  autoFitRoof() {
+  autoFitRoof(options = {}) {
     if (!this.canvas) return;
-    const rect = this.canvas.parentElement ? this.canvas.parentElement.getBoundingClientRect() : { width: 800, height: 460 };
-    const logicalW = rect.width > 100 ? rect.width : 800;
+    const rect = this.canvas.parentElement ? this.canvas.parentElement.getBoundingClientRect() : null;
+    if (rect && rect.width > 100) {
+      this.lastLogicalW = rect.width;
+    }
+    const logicalW = (rect && rect.width > 100)
+      ? rect.width
+      : (this.lastLogicalW > 100 ? this.lastLogicalW : 800);
     const logicalH = 460;
+
+    const oldScale = this.scalePxPerFt;
+    const oldX = this.roofX;
+    const oldY = this.roofY;
+    const oldW = this.roofW;
+    const oldH = this.roofH;
 
     const padX = 65;
     const padY = 55;
@@ -315,14 +326,54 @@ export class RooftopCAD {
       this.roofY = Math.max(padY, (logicalH - bboxPxH) / 2 - minYFt * this.scalePxPerFt);
     }
 
+    if (!options.skipTransform && oldScale > 0 && oldW > 0 && oldH > 0) {
+      const scaleRatio = this.scalePxPerFt / oldScale;
+      const movedOrScaled =
+        Math.abs(scaleRatio - 1) > 1e-6 ||
+        Math.abs(this.roofX - oldX) > 1e-6 ||
+        Math.abs(this.roofY - oldY) > 1e-6;
+      if (movedOrScaled) {
+        this._transformItemsRelativeToRoof(oldX, oldY, scaleRatio);
+      }
+    }
+
     this.updateAllPanelDimensions();
-    this.clampItemsToRoof();
+    if (!options.skipClamp) {
+      this.clampItemsToRoof();
+    }
+  }
+
+  _transformItemsRelativeToRoof(oldX, oldY, scaleRatio) {
+    this.cutouts.forEach((c) => {
+      c.x = this.roofX + (c.x - oldX) * scaleRatio;
+      c.y = this.roofY + (c.y - oldY) * scaleRatio;
+      c.w *= scaleRatio;
+      c.h *= scaleRatio;
+      if (c.radius) c.radius *= scaleRatio;
+    });
+    this.pathways.forEach((p) => {
+      p.x = this.roofX + (p.x - oldX) * scaleRatio;
+      p.y = this.roofY + (p.y - oldY) * scaleRatio;
+      p.w *= scaleRatio;
+      p.h *= scaleRatio;
+    });
+    this.panels.forEach((p) => {
+      p.x = this.roofX + (p.x - oldX) * scaleRatio;
+      p.y = this.roofY + (p.y - oldY) * scaleRatio;
+    });
+    if (this.image && this.image.isLoaded) {
+      this.image.x = this.roofX + (this.image.x - oldX) * scaleRatio;
+      this.image.y = this.roofY + (this.image.y - oldY) * scaleRatio;
+      this.image.origWidth *= scaleRatio;
+      this.image.origHeight *= scaleRatio;
+    }
   }
 
   setRoofDimensions(lengthFt, breadthFt) {
     if (lengthFt <= 0 || breadthFt <= 0) return;
     if (Number(lengthFt) === this.roofLengthFt && Number(breadthFt) === this.roofBreadthFt) return;
     this.pushUndoState();
+    const oldScale = this.scalePxPerFt;
     const oldW = this.roofW;
     const oldH = this.roofH;
     const oldX = this.roofX;
@@ -330,34 +381,12 @@ export class RooftopCAD {
 
     this.roofLengthFt = Number(lengthFt);
     this.roofBreadthFt = Number(breadthFt);
-    this.autoFitRoof();
+    this.autoFitRoof({ skipTransform: true, skipClamp: true });
 
-    // Scale items proportionally
-    if (oldW > 0 && oldH > 0) {
-      const rx = this.roofW / oldW;
-      const ry = this.roofH / oldH;
-      this.cutouts.forEach((c) => {
-        c.x = this.roofX + (c.x - oldX) * rx;
-        c.y = this.roofY + (c.y - oldY) * ry;
-        c.w *= rx;
-        c.h *= ry;
-        if (c.radius) c.radius *= (rx + ry) / 2;
-        c.lengthFt = c.w / this.scalePxPerFt;
-        c.breadthFt = c.h / this.scalePxPerFt;
-        if (c.diameterFt) c.diameterFt = (c.radius * 2) / this.scalePxPerFt;
-      });
-      this.pathways.forEach((p) => {
-        p.x = this.roofX + (p.x - oldX) * rx;
-        p.y = this.roofY + (p.y - oldY) * ry;
-        p.w *= rx;
-        p.h *= ry;
-        p.lengthFt = p.w / this.scalePxPerFt;
-        p.breadthFt = p.h / this.scalePxPerFt;
-      });
-      this.panels.forEach((p) => {
-        p.x = this.roofX + (p.x - oldX) * rx;
-        p.y = this.roofY + (p.y - oldY) * ry;
-      });
+    // Preserve physical dimensions (feet) and physical offsets of items when roof resizes
+    if (oldScale > 0 && oldW > 0 && oldH > 0) {
+      const scaleRatio = this.scalePxPerFt / oldScale;
+      this._transformItemsRelativeToRoof(oldX, oldY, scaleRatio);
       this.updateAllPanelDimensions();
     }
 
@@ -2115,9 +2144,12 @@ export class RooftopCAD {
 
   // Keep items bounded inside roof
   clampItemsToRoof() {
+    const eps = 0.05;
     this.panels.forEach((p) => {
-      p.x = Math.max(this.roofX, Math.min(this.roofX + this.roofW - p.w, p.x));
-      p.y = Math.max(this.roofY, Math.min(this.roofY + this.roofH - p.h, p.y));
+      if (p.x < this.roofX - eps) p.x = this.roofX;
+      else if (p.x + p.w > this.roofX + this.roofW + eps) p.x = Math.max(this.roofX, this.roofX + this.roofW - p.w);
+      if (p.y < this.roofY - eps) p.y = this.roofY;
+      else if (p.y + p.h > this.roofY + this.roofH + eps) p.y = Math.max(this.roofY, this.roofY + this.roofH - p.h);
     });
   }
 
@@ -2447,7 +2479,38 @@ export class RooftopCAD {
     }
 
     window.addEventListener("keydown", (e) => {
-      if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
+      const activeEl = typeof document !== "undefined" ? document.activeElement : null;
+      const activeTag = activeEl?.tagName;
+      if (
+        ["INPUT", "TEXTAREA", "SELECT", "OPTION"].includes(activeTag) ||
+        activeEl?.isContentEditable ||
+        (typeof activeEl?.closest === "function" && activeEl.closest('[contenteditable="true"]'))
+      ) {
+        return;
+      }
+
+      if (typeof document !== "undefined" && typeof document.getElementById === "function") {
+        const paneCad = document.getElementById("paneCad");
+        if (paneCad && paneCad.classList?.contains("hidden")) {
+          return;
+        }
+        const blockingModals = [
+          "pdfSampleViewModal",
+          "loadProposalModal",
+          "saveProposalModal",
+          "customerGateModal",
+          "internalLoginModal",
+          "siteVisitModal",
+        ];
+        const modalOpen = blockingModals.some((id) => {
+          const el = document.getElementById(id);
+          if (!el) return false;
+          const hiddenByClass = el.classList?.contains("hidden");
+          const hiddenByStyle = el.style?.display === "none" || el.style?.display === "";
+          return !hiddenByClass && el.style?.display && el.style.display !== "none";
+        });
+        if (modalOpen) return;
+      }
 
       // Undo: Ctrl+X (per user request) or Ctrl+Z / Cmd+Z / Cmd+X
       if ((e.ctrlKey || e.metaKey) && (e.key === "x" || e.key === "X" || e.key === "z" || e.key === "Z") && !e.shiftKey) {
@@ -2513,12 +2576,13 @@ export class RooftopCAD {
     });
 
     window.addEventListener("resize", () => {
-      this.autoFitRoof();
-      this.render();
+      this.resizeCanvas();
     });
   }
 
   resizeCanvas() {
+    const rect = this.canvas?.parentElement ? this.canvas.parentElement.getBoundingClientRect() : null;
+    if (rect && rect.width <= 100) return; // Hidden tab: preserve last valid scale & layout
     this.autoFitRoof();
     this.render();
   }
@@ -5141,6 +5205,9 @@ export class RooftopCAD {
       unit: this.unit,
       roofLengthFt: this.roofLengthFt,
       roofBreadthFt: this.roofBreadthFt,
+      roofX: this.roofX,
+      roofY: this.roofY,
+      scalePxPerFt: this.scalePxPerFt,
       buildingHeightFt: this.buildingHeightFt,
       northAngleDeg: this.northAngleDeg,
       activeView: this.activeView,
@@ -5200,12 +5267,21 @@ export class RooftopCAD {
     if (savedData.panelHeightMm !== undefined) this.panelHeightMm = Number(savedData.panelHeightMm);
     if (savedData.requiredPanels !== undefined) this.requiredPanels = Number(savedData.requiredPanels);
 
-    this.autoFitRoof();
-
     this.cutouts = Array.isArray(savedData.cutouts) ? savedData.cutouts.map((c) => ({ ...c })) : [];
     this.pathways = Array.isArray(savedData.pathways) ? savedData.pathways.map((p) => ({ ...p })) : [];
     this.panels = Array.isArray(savedData.panels) ? savedData.panels.map((p) => ({ ...p })) : [];
     this.externalObstacles = Array.isArray(savedData.externalObstacles) ? savedData.externalObstacles.map((o) => ({ ...o })) : [];
+
+    if (savedData.scalePxPerFt > 0 && savedData.roofX !== undefined && savedData.roofY !== undefined) {
+      this.scalePxPerFt = Number(savedData.scalePxPerFt);
+      this.roofX = Number(savedData.roofX);
+      this.roofY = Number(savedData.roofY);
+      this.roofW = this.roofLengthFt * this.scalePxPerFt;
+      this.roofH = this.roofBreadthFt * this.scalePxPerFt;
+      this.autoFitRoof();
+    } else {
+      this.autoFitRoof({ skipTransform: true });
+    }
     if (savedData.multiCustomerFlats && Array.isArray(savedData.multiCustomerFlats)) {
       this.multiCustomerFlats = savedData.multiCustomerFlats.map((f) => ({ ...f }));
     } else {

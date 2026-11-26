@@ -138,4 +138,28 @@ assert.equal(est.recommended.meterBreakdown[5].subsidy, 78000);
 assert.ok(est.recommended.netCost < est.recommended.totalPreSubsidy);
 
 console.log("✓ calculateEstimate multi-meter integration verified successfully.");
+
+// 6. Test Separate Inverter for Separate Flats in Multi-Meter / Multi-Bill Mode
+console.log("Testing Separate Inverters for Separate Flats in Multi-Bill mode...");
+assert.ok(est.recommended.inverterSelection.isSeparateFlatInverters, "Inverter selection must indicate separate flat inverters");
+assert.ok(est.recommended.inverterSelection.modelName.includes("Separate Flat Inverters"), "Summary model name must indicate separate inverters");
+
+// Each meter must have its own dedicated inverter sized to its allocated capacity
+const meter0 = est.recommended.meterBreakdown[0]; // Flat 101, 2 kW
+assert.equal(meter0.inverterModel, "2.2Kw Single Phase", "Flat 101 (2 kW) must receive a 2.2Kw Single Phase inverter");
+assert.equal(meter0.inverterRatingKw, 2.2);
+assert.equal(meter0.inverterPhase, "1-phase");
+assert.equal(meter0.inverterCost, 14429);
+
+const meter5 = est.recommended.meterBreakdown[5]; // Flat 302, 3 kW
+assert.equal(meter5.inverterModel, "3kw Single Phase", "Flat 302 (3 kW) must receive a 3kw Single Phase inverter");
+assert.equal(meter5.inverterRatingKw, 3.0);
+assert.equal(meter5.inverterPhase, "1-phase");
+assert.equal(meter5.inverterCost, 14862);
+
+// Total inverter cost is sum of separate inverters (5 * 14429 + 14862 = 87007)
+const expectedTotalInvCost = 5 * 14429 + 14862;
+assert.equal(est.recommended.costBreakup.inverter, expectedTotalInvCost, "Total inverter cost in BOM must equal sum of separate flat inverters");
+console.log("✓ Separate inverters for separate flats in multi-bill calculateEstimate verified!");
+
 console.log("ALL MULTI-METER TESTS PASSED! 🎉");

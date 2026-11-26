@@ -430,13 +430,31 @@ export function recommendCapacity(input, config = DEFAULT_CONFIG) {
   };
 }
 
-function getPanelRate(panelType, pricing) {
-  if (pricing && pricing.panelRate !== undefined && pricing.panelRate !== null && !isNaN(pricing.panelRate) && Number(pricing.panelRate) > 0) {
-    return Number(pricing.panelRate);
-  }
+function isDcrPanelType(panelType) {
   const pLower = typeof panelType === "string" ? panelType.toLowerCase() : "";
-  const isDcr = pLower && !pLower.includes("nondcr") && !pLower.includes("non_dcr") && (pLower.startsWith("dcr") || pLower.includes("_dcr"));
-  return isDcr ? pricing.panelDcrRatePerWp : pricing.panelNonDcrRatePerWp;
+  return Boolean(
+    pLower &&
+    !pLower.includes("nondcr") &&
+    !pLower.includes("non_dcr") &&
+    (pLower.startsWith("dcr") || pLower.includes("_dcr"))
+  );
+}
+
+function getPanelRate(panelType, pricing, inputPanelType = null) {
+  const optionIsDcr = isDcrPanelType(panelType);
+  if (
+    pricing &&
+    pricing.panelRate !== undefined &&
+    pricing.panelRate !== null &&
+    !isNaN(pricing.panelRate) &&
+    Number(pricing.panelRate) > 0
+  ) {
+    // Only apply panelRate override if it matches the panel family selected in inputs (or no input family given)
+    if (!inputPanelType || isDcrPanelType(inputPanelType) === optionIsDcr) {
+      return Number(pricing.panelRate);
+    }
+  }
+  return optionIsDcr ? pricing.panelDcrRatePerWp : pricing.panelNonDcrRatePerWp;
 }
 
 export function findInverterForCapacity(capacityKw, connectionPhase = "1-phase", priceTier = "price1") {
@@ -805,17 +823,83 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
 
   // Cost breakup
   const pricing = config.pricing;
-  const panelCost = dcCapacityWp * getPanelRate(panelType, pricing);
+  const appliedPanelRate = getPanelRate(panelType, pricing, input?.panelType);
+  const panelCost = dcCapacityWp * appliedPanelRate;
   const structureRate = (pricing.structureRates && pricing.structureRates[input.structureType] !== undefined)
     ? pricing.structureRates[input.structureType]
     : 5.3;
   const structureCost = dcCapacityWp * structureRate;
-  const inverterSelection = findInverterForCapacity(
-    inverterCapacityKw,
-    input.connectionPhase,
-    pricing.inverterPriceTier || "price1"
-  );
-  const inverterCost = inverterSelection.cost;
+
+  const isMultiMeter = input.meters && Array.isArray(input.meters) && input.meters.length > 1;
+  let inverterSelection;
+  let inverterCost = 0;
+
+  if (isMultiMeter) {
+    // Multi-bill mode: Separate inverter for separate flats/meters
+    let metersToUse = input.meters;
+    const totalAllocated = metersToUse.reduce((s, m) => s + (Number(m.allocatedKw) || 0), 0);
+    if (totalAllocated === 0 && dcCapacityKw > 0) {
+      metersToUse = distributeCapacityAcrossMeters(dcCapacityKw, metersToUse, input.allocationStrategy || "proportional");
+    }
+
+    const meterInverterDetails = metersToUse.map((m) => {
+      const kw = Number(m.allocatedKw) || 0;
+      const ph = m.phase || m.connectionPhase || (kw > 5.0 ? "3-phase" : "1-phase");
+      const inv = findInverterForCapacity(kw, ph, pricing.inverterPriceTier || "price1");
+      return {
+        id: m.id,
+        label: m.label || `Flat ${m.consumerNumber || ""}`,
+        allocatedKw: kw,
+        inverter: inv,
+      };
+    });
+
+    inverterCost = meterInverterDetails.reduce((sum, it) => sum + (it.inverter?.cost || 0), 0);
+
+    const groupedModels = {};
+    meterInverterDetails.forEach((it) => {
+      const name = it.inverter?.modelName || "Inverter";
+      if (!groupedModels[name]) {
+        groupedModels[name] = {
+          modelName: name,
+          label: name,
+          ratingKw: it.inverter?.ratingKw || 0,
+          phase: it.inverter?.phase || "1-phase",
+          count: 0,
+          unitCost: it.inverter?.cost || 0,
+          totalCost: 0,
+        };
+      }
+      groupedModels[name].count += (it.inverter?.quantity || 1);
+      groupedModels[name].totalCost += (it.inverter?.cost || 0);
+    });
+
+    const modelNameParts = Object.values(groupedModels).map((g) =>
+      g.count > 1 ? `${g.count} × ${g.label}` : g.label
+    );
+
+    const totalInvRating = round(meterInverterDetails.reduce((sum, it) => sum + (it.inverter?.ratingKw || it.allocatedKw || 0), 0), 1);
+    const totalInvQty = meterInverterDetails.reduce((sum, it) => sum + (it.inverter?.quantity || 1), 0);
+
+    inverterSelection = {
+      cost: inverterCost,
+      modelName: modelNameParts.length > 0 ? `Separate Flat Inverters: ${modelNameParts.join(" + ")}` : "Separate Flat Inverters",
+      ratingKw: totalInvRating,
+      phase: meterInverterDetails.some((it) => it.inverter?.phase === "3-phase") ? "Multi (1-Ph & 3-Ph)" : "1-phase",
+      quantity: totalInvQty,
+      priceTier: pricing.inverterPriceTier || "price1",
+      perMeterInverters: meterInverterDetails,
+      items: Object.values(groupedModels),
+      isSeparateFlatInverters: true,
+    };
+  } else {
+    inverterSelection = findInverterForCapacity(
+      inverterCapacityKw,
+      input.connectionPhase,
+      pricing.inverterPriceTier || "price1"
+    );
+    inverterCost = inverterSelection.cost;
+  }
   let batteryCost = batteryCapacityWh * pricing.batteryRatePerWh;
   let backupInverterCost = 0;
   if (batteryCapacityWh > 0) {
@@ -851,7 +935,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
   const gst = preTaxSubtotal * (effectiveGstRate / 100);
   const contingency = preTaxSubtotal * ((pricing.contingencyRate || 0) / 100);
   const baseCostInclGst = round(preTaxSubtotal + gst + contingency, 0);
-  const marginRate = pricing.marginRate !== undefined ? pricing.marginRate : (input.marginRate !== undefined ? input.marginRate : 30);
+  const marginRate = pricing.marginRate !== undefined ? pricing.marginRate : (input.marginRate !== undefined ? input.marginRate : 25);
   const margin = round(baseCostInclGst * (marginRate / 100), 0);
   const totalPreSubsidy = baseCostInclGst + margin;
   const subsidyResult = calculateSubsidy(systemType, panelType, dcCapacityKw, input, config.policy);
@@ -897,6 +981,10 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
         const meterBill = Number(origMeter.monthlyBill) || 0;
         const meterOffset = Math.min(meterGen, meterUnits);
         const meterSavings = meterUnits > 0 ? round((meterOffset / meterUnits) * (meterBill * 0.85), 0) : 0;
+
+        const ph = origMeter.phase || origMeter.connectionPhase || (meterKw > 5.0 ? "3-phase" : "1-phase");
+        const flatInv = findInverterForCapacity(meterKw, ph, pricing.inverterPriceTier || "price1");
+
         return {
           ...m,
           monthlyUnits: meterUnits,
@@ -904,6 +992,12 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
           sanctionedLoad: Number(origMeter.sanctionedLoad) || 0,
           monthlyGeneration: meterGen,
           estimatedMonthlySavings: meterSavings,
+          phase: ph,
+          inverterModel: flatInv.modelName,
+          inverterRatingKw: flatInv.ratingKw,
+          inverterPhase: flatInv.phase,
+          inverterCost: flatInv.cost,
+          inverterQuantity: flatInv.quantity || 1,
         };
       })
     : null;
@@ -939,6 +1033,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
     inverterRatingKw: inverterSelection.ratingKw,
     inverterPhase: inverterSelection.phase,
     inverterPriceTier: inverterSelection.priceTier,
+    inverterSelection,
     batteryCapacityKwh: round(batteryCapacityKwh, 1),
     dailyGeneration,
     monthlyGeneration,
@@ -970,6 +1065,7 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
     },
     costBreakup: {
       panels: round(panelCost, 0),
+      appliedPanelRate: round(appliedPanelRate, 2),
       structure: round(structureCost, 0),
       inverter: round(inverterCost, 0),
       backupInverter: round(backupInverterCost, 0),

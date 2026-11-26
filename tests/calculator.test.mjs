@@ -141,16 +141,24 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   const opt = est.recommended;
   const cb = opt.costBreakup;
 
-  // Margin percentage defaults to 30%
-  assert.equal(cb.marginRate, 30, "Default margin must be 30%");
+  // Margin percentage defaults to 25%
+  assert.equal(cb.marginRate, 25, "Default margin must be 25%");
   assert.ok(cb.baseCostInclGst > 0, "Base cost incl. GST must be calculated");
-  assert.equal(cb.margin, Math.round(cb.baseCostInclGst * 0.3), "Margin must be 30% of base cost incl. GST");
+  assert.equal(cb.margin, Math.round(cb.baseCostInclGst * 0.25), "Margin must be 25% of base cost incl. GST");
   assert.equal(opt.totalPreSubsidy, cb.baseCostInclGst + cb.margin, "Total cost must include margin");
   assert.equal(opt.netCost, opt.totalPreSubsidy - opt.subsidy, "Net cost must equal total pre-subsidy minus subsidy");
 
-  // Warning benchmark: check if rate/W exceeds 60 Rs/W
-  const costPerWatt = opt.totalPreSubsidy / (opt.dcCapacityKw * 1000);
-  assert.ok(costPerWatt > 60, "With 30% margin, standard system exceeds 60 Rs/W triggering warning");
+  // Warning benchmark: high margin (> 60 Rs/W triggers warning)
+  const highMarginConfig = {
+    ...DEFAULT_CONFIG,
+    pricing: {
+      ...DEFAULT_CONFIG.pricing,
+      marginRate: 30,
+    }
+  };
+  const highMarginEst = calculateEstimate(testInput, highMarginConfig);
+  const costPerWatt = highMarginEst.recommended.totalPreSubsidy / (highMarginEst.recommended.dcCapacityKw * 1000);
+  assert.ok(costPerWatt > 60, "With 30% margin override, standard system exceeds 60 Rs/W triggering warning");
 
   // Test custom margin override (e.g. 0%)
   const customConfig = {
@@ -392,7 +400,7 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   assert.equal(DEFAULT_CONFIG.pricing.installationRatePerW, 2.5, "Default Installation rate should be ₹2.5/W");
   assert.equal(DEFAULT_CONFIG.pricing.consultancyRatePerW, 1, "Default Consultancy rate should be ₹1/W");
   assert.equal(DEFAULT_CONFIG.pricing.contingencyRate, 0, "Default Contingency rate should be 0%");
-  assert.equal(DEFAULT_CONFIG.pricing.marginRate, 30, "Default Margin rate should be 30%");
+  assert.equal(DEFAULT_CONFIG.pricing.marginRate, 25, "Default Margin rate should be 25%");
 
   // 2. Verify separation of safetyAndEarthing and wiringExcludingCable
   const testInput = makeInput({ capacityOverride: 10 });

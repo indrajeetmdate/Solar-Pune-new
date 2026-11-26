@@ -284,23 +284,80 @@ export function calculateBuildingLedger({
   const consultancyRate = pricing.consultancyRatePerW || 1.0;
   const safetyAndEarthingCostTotal = Math.max(15000, totalBuildingCapacityKw * 1500);
 
-  // Calculate Building Gross Project Cost
+  // Calculate Building Gross Project Cost with Separate Inverters per Flat
   const totalDcWatts = totalBuildingCapacityKw * 1000;
   const panelCost = totalDcWatts * panelRate;
   const structureCost = totalDcWatts * structureRate;
-  const inverterSelection = findInverterForCapacity(
-    totalBuildingCapacityKw,
-    "3-phase",
-    pricing.inverterPriceTier || "price1"
+
+  // Separate inverter sizing for each separate flat
+  const flatInverterDetails = finalFlats.map((flat) => {
+    const flatCapKw = flat.allocatedKw || (flat.panels * panelWp / 1000);
+    const ph = flat.phase || (flatCapKw > 5.0 ? "3-phase" : "1-phase");
+    const inv = findInverterForCapacity(
+      flatCapKw,
+      ph,
+      pricing.inverterPriceTier || "price1"
+    );
+    return {
+      flatId: flat.id,
+      flatNo: flat.flatNo,
+      allocatedKw: flatCapKw,
+      inverter: inv,
+    };
+  });
+
+  const totalBuildingInverterCost = flatInverterDetails.reduce((sum, it) => sum + (it.inverter?.cost || 0), 0);
+  const inverterCost = totalBuildingInverterCost;
+
+  // Group building inverters by model for technical specifications and summaries
+  const groupedBuildingInverters = {};
+  flatInverterDetails.forEach((it) => {
+    const name = it.inverter?.modelName || "Inverter";
+    if (!groupedBuildingInverters[name]) {
+      groupedBuildingInverters[name] = {
+        modelName: name,
+        label: name,
+        ratingKw: it.inverter?.ratingKw || 0,
+        phase: it.inverter?.phase || "1-phase",
+        count: 0,
+        unitCost: it.inverter?.cost || 0,
+        totalCost: 0,
+      };
+    }
+    groupedBuildingInverters[name].count += (it.inverter?.quantity || 1);
+    groupedBuildingInverters[name].totalCost += (it.inverter?.cost || 0);
+  });
+
+  const invSummaryParts = Object.values(groupedBuildingInverters).map((g) =>
+    g.count > 1 ? `${g.count} × ${g.label}` : g.label
   );
-  const inverterCost = inverterSelection.cost;
+  const buildingInverterModelSummary = invSummaryParts.length > 0
+    ? `Separate Inverters: ${invSummaryParts.join(" + ")}`
+    : "Separate Flat Inverters";
+
+  const buildingInverterRatingKw = Math.round(
+    flatInverterDetails.reduce((sum, it) => sum + (it.inverter?.ratingKw || it.allocatedKw || 0), 0) * 10
+  ) / 10;
+
+  const inverterSelection = {
+    cost: totalBuildingInverterCost,
+    modelName: buildingInverterModelSummary,
+    ratingKw: buildingInverterRatingKw,
+    phase: flatInverterDetails.some((it) => it.inverter?.phase === "3-phase") ? "Multi (1-Ph & 3-Ph)" : "1-phase",
+    quantity: flatInverterDetails.reduce((sum, it) => sum + (it.inverter?.quantity || 1), 0),
+    priceTier: pricing.inverterPriceTier || "price1",
+    items: Object.values(groupedBuildingInverters),
+    isSeparateFlatInverters: true,
+  };
+
   const installationCost = totalDcWatts * installationRate;
   const consultancyCost = totalDcWatts * consultancyRate;
 
   const preTaxSubtotal = panelCost + structureCost + inverterCost + installationCost + consultancyCost + safetyAndEarthingCostTotal;
   const gst = preTaxSubtotal * 0.089; // 8.9% effective GST
   const baseCostInclGst = preTaxSubtotal + gst;
-  const margin = baseCostInclGst * 0.30; // 30% margin
+  const marginRatePct = pricing.marginRate !== undefined ? Number(pricing.marginRate) : DEFAULT_CONFIG.pricing.marginRate;
+  const margin = baseCostInclGst * (marginRatePct / 100); // Default 25% margin
   const totalBuildingGrossCost = Math.round(baseCostInclGst + margin);
 
   // Gross cost per kWp
@@ -365,9 +422,13 @@ export function calculateBuildingLedger({
     const roiPercent = netCost > 0 ? Math.round((annualSavings / netCost) * 1000) / 10 : 0;
 
     // Loan calculations per flat (Option B)
-    const isLoan = flat.paymentMode === "loan";
-    const downPaymentPct = Number.isFinite(Number(flat.loanDownPaymentPct)) ? Number(flat.loanDownPaymentPct) : loanDownPaymentPct;
-    const interestRate = Number.isFinite(Number(flat.loanInterestRate)) ? Number(flat.loanInterestRate) : loanInterestRate;
+    const isLoan = flat.loanMode !== undefined
+      ? Boolean(flat.loanMode)
+      : (flat.paymentMode === "loan");
+    const hasDpPct = flat.loanDownPaymentPct !== undefined && flat.loanDownPaymentPct !== null && flat.loanDownPaymentPct !== "" && Number.isFinite(Number(flat.loanDownPaymentPct));
+    const downPaymentPct = hasDpPct ? Number(flat.loanDownPaymentPct) : loanDownPaymentPct;
+    const hasIntRate = flat.loanInterestRate !== undefined && flat.loanInterestRate !== null && flat.loanInterestRate !== "" && Number.isFinite(Number(flat.loanInterestRate));
+    const interestRate = hasIntRate ? Number(flat.loanInterestRate) : loanInterestRate;
 
     const financing = calculateSolarFinancing({
       netCost,
@@ -380,6 +441,13 @@ export function calculateBuildingLedger({
       downPaymentPct,
       interestRatePct: interestRate,
     });
+
+    // Dedicated separate inverter for this individual flat
+    const flatInv = flatInverterDetails[idx]?.inverter || findInverterForCapacity(
+      flatCapKw,
+      flat.phase || "1-phase",
+      pricing.inverterPriceTier || "price1"
+    );
 
     return {
       index: idx + 1,
@@ -394,6 +462,12 @@ export function calculateBuildingLedger({
       monthlyBill: flatMonthlyBill,
       panels: flat.panels || 0,
       allocatedKw: flatCapKw,
+      inverterModel: flatInv?.modelName || "Inverter",
+      inverterRatingKw: flatInv?.ratingKw || 0,
+      inverterPhase: flatInv?.phase || "1-phase",
+      inverterCost: flatInv?.cost || 0,
+      inverterQuantity: flatInv?.quantity || 1,
+      inverterSelection: flatInv,
       grossCost,
       subsidy,
       netCost,
@@ -425,6 +499,9 @@ export function calculateBuildingLedger({
 
   const totals = {
     totalFlats: flatLedger.length,
+    totalInverters: flatLedger.length,
+    inverterModelSummary: buildingInverterModelSummary,
+    inverterSelection,
     totalSanctionedLoad,
     totalMonthlyUnits,
     totalCurrentBill,

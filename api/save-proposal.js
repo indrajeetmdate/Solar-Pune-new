@@ -244,7 +244,8 @@ export default async function handler(req, res) {
     return res.status(200).json({ 
       success: true, 
       id: result.data.id,
-      proposal_serial_no: proposalSerialNo,
+      proposalSerialNo: finalSerialNo,
+      proposal_serial_no: finalSerialNo,
       message: 'Proposal saved successfully'
     });
   } catch (error) {

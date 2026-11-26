@@ -1164,7 +1164,7 @@ function testLockInternal() {
 }
 
 function testUnlockInternal() {
-  if (mockPasswordInput.value === "solar2026") {
+  if (mockPasswordInput.value === "thisisbusiness") {
     mockPasswordError.classList.add("hidden");
     testCloseInternalDialog();
     testOpenInternal();
@@ -1191,16 +1191,16 @@ assert.equal(testState.internalUnlocked, false);
 testCloseInternalDialog();
 assert.equal(mockPasswordDialog.open, false);
 
-// 9c: Entering wrong password keeps dialog open and shows error
+// 9c: Entering wrong or deprecated password ('solar2026') keeps dialog open and shows error
 testOpenInternalDialog();
-mockPasswordInput.value = "wrong_password";
+mockPasswordInput.value = "solar2026";
 testUnlockInternal();
 assert.equal(mockPasswordDialog.open, true);
 assert.equal(testState.internalUnlocked, false);
-assert.equal(mockPasswordError.classList.contains("hidden"), false, "Error message must be displayed on wrong password");
+assert.equal(mockPasswordError.classList.contains("hidden"), false, "Error message must be displayed on invalid 'solar2026' password");
 
-// 9d: Entering correct master password 'solar2026' unlocks internal mode
-mockPasswordInput.value = "solar2026";
+// 9d: Entering correct account password ('thisisbusiness') unlocks internal mode
+mockPasswordInput.value = "thisisbusiness";
 testUnlockInternal();
 assert.equal(mockPasswordDialog.open, false, "Dialog must close on successful unlock");
 assert.equal(testState.internalUnlocked, true, "Internal mode must be unlocked");

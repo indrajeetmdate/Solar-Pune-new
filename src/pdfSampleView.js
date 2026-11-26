@@ -18,6 +18,32 @@ const formatSysType = (t) => {
   return "On-Grid";
 };
 
+function captureCadSnapshotForSample() {
+  let cad = null;
+  let dataUrl = null;
+  if (typeof window !== "undefined") {
+    cad = window.cad || (typeof window.getActiveRooftopCAD === "function" ? window.getActiveRooftopCAD() : null);
+  }
+  if (cad && typeof cad.getReportSnapshot === "function") {
+    try {
+      dataUrl = cad.getReportSnapshot();
+    } catch (e) {
+      console.warn("Could not capture CAD snapshot:", e);
+    }
+  }
+  if (!dataUrl && typeof document !== "undefined") {
+    try {
+      const canvas = document.getElementById("panelDiagramCanvas");
+      if (canvas && canvas.width > 0 && canvas.height > 0 && typeof canvas.toDataURL === "function") {
+        dataUrl = canvas.toDataURL("image/png");
+      }
+    } catch (e) {
+      console.warn("Could not capture CAD canvas:", e);
+    }
+  }
+  return { cad, dataUrl };
+}
+
 /**
  * Build Multi-Customer Building Sample PDF Pages
  * Generates interactive HTML pages matching official building proposal with password 'editprop' editing.
@@ -49,17 +75,7 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
     year: "numeric",
   });
 
-  let cadCanvasDataUrl = null;
-  if (typeof document !== "undefined") {
-    try {
-      const canvas = document.getElementById("panelDiagramCanvas");
-      if (canvas && canvas.width > 0 && canvas.height > 0) {
-        cadCanvasDataUrl = canvas.toDataURL("image/png");
-      }
-    } catch (e) {
-      console.warn("Could not capture CAD canvas:", e);
-    }
-  }
+  const { dataUrl: cadCanvasDataUrl } = captureCadSnapshotForSample();
 
   const createPageHeader = (pageTitle = "Building Solar Proposal") => `
     <div class="pdf-page-header">
@@ -183,7 +199,7 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
             <tbody>
               <tr><td style="width: 32%; font-weight: 700; padding: 1mm 0; color: #0f172a;">Solar PV Modules</td><td style="padding: 1mm 0; color: #334155;"><span class="editable-field">${buildingData.panelMake || "Tier-1 Mono PERC DCR"} (${buildingData.panelWp || 550} Wp High-efficiency modules)</span></td></tr>
               <tr><td style="font-weight: 700; padding: 1mm 0; color: #0f172a;">Mounting Structure</td><td style="padding: 1mm 0; color: #334155;"><span class="editable-field">Elevated Hot-dip Galvanized (HDG 80-120 micron, 25+ yr structural durability)</span></td></tr>
-              <tr><td style="font-weight: 700; padding: 1mm 0; color: #0f172a;">Inverter Architecture</td><td style="padding: 1mm 0; color: #334155;"><span class="editable-field">High-efficiency Multi-MPPT Grid-Tied Inverters with IP65 weatherproofing</span></td></tr>
+              <tr><td style="font-weight: 700; padding: 1mm 0; color: #0f172a;">Inverter Architecture</td><td style="padding: 1mm 0; color: #334155;"><span class="editable-field">${summary.inverterModelSummary ? `${summary.inverterModelSummary} (Dedicated Inverter for Each Flat)` : "High-efficiency Multi-MPPT Grid-Tied Inverters with IP65 weatherproofing (Separate inverter per flat)"}</span></td></tr>
               <tr><td style="font-weight: 700; padding: 1mm 0; color: #0f172a;">Safety &amp; Earthing</td><td style="padding: 1mm 0; color: #334155;"><span class="editable-field">Dedicated dual copper bonded earthing electrode rods (16mm &amp; 14mm) + Type-2 SPDs</span></td></tr>
               <tr><td style="font-weight: 700; padding: 1mm 0; color: #0f172a;">Grid Interconnection</td><td style="padding: 1mm 0; color: #334155;"><span class="editable-field">Individual bi-directional net meters / Group Net Metering under MSEDCL Solar Regulations</span></td></tr>
               <tr><td style="font-weight: 700; padding: 1mm 0; color: #0f172a;">Turnkey Inclusions</td><td style="padding: 1mm 0; color: #334155;"><span class="editable-field">Supply, structural fabrication, DC/AC cabling, statutory MSEDCL approvals &amp; commissioning</span></td></tr>
@@ -328,6 +344,7 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
                 <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 1px; border-color: #0f172a;">Units<br>/mo</th>
                 <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 1px; border-color: #0f172a;">Panels</th>
                 <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 1px; border-color: #0f172a;">kWp</th>
+                <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 2px; text-align: left; border-color: #0f172a;">Inverter</th>
                 <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 2px; border-color: #0f172a;">Gross (Rs)</th>
                 <th style="background-color: #064e3b !important; color: #a7f3d0 !important; padding: 2px 2px; border-color: #0f172a;">Subsidy (Rs)</th>
                 <th style="background-color: #0c4a6e !important; color: #bae6fd !important; padding: 2px 2px; border-color: #0f172a;">Net Cost (Rs)</th>
@@ -347,6 +364,7 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
                   <td style="padding: 2px 1px;"><span class="editable-field">${f.monthlyUnits}</span></td>
                   <td style="padding: 2px 1px;"><strong><span class="editable-field">${f.panels}</span></strong></td>
                   <td style="padding: 2px 1px;"><span class="editable-field">${(f.allocatedKw || 0).toFixed(2)}</span></td>
+                  <td style="padding: 2px 2px; text-align: left; font-size: 6.5pt; color: #0284c7; white-space: nowrap;"><span class="editable-field">${f.inverterModel || "—"}</span></td>
                   <td style="padding: 2px 2px; text-align: right;"><span class="editable-field">${Number(f.grossCost || 0).toLocaleString("en-IN")}</span></td>
                   <td style="padding: 2px 2px; text-align: right; background: #f0fdf4; color: #15803d; font-weight: bold;"><span class="editable-field">${Number(f.subsidy || 0).toLocaleString("en-IN")}</span></td>
                   <td style="padding: 2px 2px; text-align: right; background: #f0f9ff; color: #0284c7; font-weight: bold;"><span class="editable-field">${Number(f.netCost || 0).toLocaleString("en-IN")}</span></td>
@@ -365,6 +383,7 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
                   <td>${(summary.totalMonthlyUnits || 0).toLocaleString("en-IN")}</td>
                   <td>${summary.totalBuildingPanels || 0}</td>
                   <td>${(summary.totalBuildingCapacityKw || 0).toFixed(2)}</td>
+                  <td style="font-size: 6.5pt; color: #0369a1; text-align: left;">${summary.totalInverters || flatLedger.length} Inverters</td>
                   <td style="text-align: right;">${Number(summary.totalBuildingGrossCost || 0).toLocaleString("en-IN")}</td>
                   <td style="text-align: right; color: #15803d;">${Number(summary.totalSubsidy || 0).toLocaleString("en-IN")}</td>
                   <td style="text-align: right; color: #0284c7;">${Number(summary.totalNetCost || 0).toLocaleString("en-IN")}</td>
@@ -442,6 +461,10 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
                   <td style="font-weight: 700; color: #0284c7;"><span class="editable-field">${(flat.allocatedKw || 0).toFixed(2)} kWp</span> (${flat.panels} Modules)</td>
                   <td style="font-weight: 700;">Monthly Solar Gen</td>
                   <td><span class="editable-field">${flat.monthlyGeneration}</span> kWh / mo</td>
+                </tr>
+                <tr>
+                  <td style="background: #f8fafc; font-weight: 700;">Dedicated Inverter</td>
+                  <td colspan="3"><span class="editable-field" style="color: #0284c7; font-weight: 700;">${flat.inverterModel || "Dedicated Solar Inverter"}</span> (${flat.inverterPhase || flat.phase || "1-phase"}) — 8-Year Replacement Warranty</td>
                 </tr>
               </tbody>
             </table>
@@ -611,18 +634,22 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
     year: "numeric",
   });
 
-  // CAD Blueprint canvas snapshot
-  let cadCanvasDataUrl = null;
-  if (typeof document !== "undefined") {
-    try {
-      const canvas = document.getElementById("panelDiagramCanvas");
-      if (canvas && canvas.width > 0 && canvas.height > 0) {
-        cadCanvasDataUrl = canvas.toDataURL("image/png");
-      }
-    } catch (e) {
-      console.warn("Could not capture CAD canvas:", e);
-    }
-  }
+  const showCadDiagram = hideFlags.showCadDiagram !== undefined
+    ? Boolean(hideFlags.showCadDiagram)
+    : (hideFlags.hideCadDiagram !== undefined
+        ? !hideFlags.hideCadDiagram
+        : (typeof document !== "undefined" ? document.getElementById("showCadDiagram")?.checked !== false : true));
+  const hidePayback = Boolean(hideFlags.hidePayback || hideFlags.hideCost);
+  const hideAreaFit = Boolean(hideFlags.hideAreaFit);
+  const hideSubsidy = Boolean(hideFlags.hideSubsidy);
+  const hideCost = Boolean(hideFlags.hideCost);
+  const solarInstalled = Boolean(hideFlags.solarInstalled);
+  const effectiveIsLoan = isLoan && !hideCost;
+
+  // CAD Blueprint canvas snapshot & live CAD metrics (capture only when CAD section is included)
+  const cadSnapshot = showCadDiagram ? captureCadSnapshotForSample() : { cad: null, dataUrl: null };
+  const cad = cadSnapshot.cad;
+  const cadCanvasDataUrl = cadSnapshot.dataUrl;
 
   // Active panel specification text
   const panelLayout = estimates?.panelLayout || {};
@@ -638,10 +665,23 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
   const numPanels = panelLayout.numPanels || Math.round(((option.dcCapacityKw || 4.4) * 1000) / (panelLayout.panelWp || 550));
   const panelAreaSqft = panelLayout.totalAreaSqft || Math.round(numPanels * 27.5);
   const roofArea = input.roofArea || 2856;
-  const roofL = input.roofLength || (typeof document !== "undefined" && document.getElementById("roofLength")?.value) || 68;
-  const roofB = input.roofBreadth || (typeof document !== "undefined" && document.getElementById("roofBreadth")?.value) || 42;
-  const bldgHeight = input.buildingHeight || (typeof document !== "undefined" && document.getElementById("buildingHeight")?.value) || 18;
-  const northAngle = input.northAngle || (typeof document !== "undefined" && document.getElementById("northAngle")?.value) || 0;
+  const roofL = input.roofLength || (typeof document !== "undefined" && document.getElementById("roofLength")?.value) || (typeof document !== "undefined" && document.getElementById("cadRoofLength")?.value) || 68;
+  const roofB = input.roofBreadth || (typeof document !== "undefined" && document.getElementById("roofBreadth")?.value) || (typeof document !== "undefined" && document.getElementById("cadRoofBreadth")?.value) || 42;
+  const bldgHeight = input.buildingHeight || (typeof document !== "undefined" && document.getElementById("buildingHeight")?.value) || (typeof document !== "undefined" && document.getElementById("cadBuildingHeightInput")?.value) || 18;
+  const northAngle = input.northAngle || (typeof document !== "undefined" && document.getElementById("northAngle")?.value) || (typeof document !== "undefined" && document.getElementById("cadNorthAngleInput")?.value) || 0;
+
+  const cadStats = cad && typeof cad.getAreaStats === "function" ? cad.getAreaStats() : null;
+  const cadRoofL = (cad && cad.roofLengthFt) || roofL;
+  const cadRoofB = (cad && cad.roofBreadthFt) || roofB;
+  const cadGrossSqft = cadStats ? cadStats.grossSqft : Math.round(Number(cadRoofL) * Number(cadRoofB));
+  const cadNetSqft = cadStats ? cadStats.netUsableSqft : roofArea;
+  const placedPanelsCount = cad && Array.isArray(cad.panels) ? cad.panels.length : numPanels;
+  const reqPanelsCount = (cad && cad.requiredPanels) ? cad.requiredPanels : numPanels;
+  const cadNorthAngle = (cad && cad.northAngleDeg !== undefined) ? cad.northAngleDeg : northAngle;
+  const cadBldgHeight = (cad && cad.buildingHeightFt !== undefined) ? cad.buildingHeightFt : bldgHeight;
+  const cadShadingStr = (cad && cad.sunSim?.enabled && typeof cad.getShadingLossStats === "function")
+    ? `${(cad.getShadingLossStats()?.lossPercent || 0).toFixed(1)}% Solar Shading Loss`
+    : "0.0% Solar Shading Loss";
 
   // Bill comparison figures
   const curBill = option.currentBillBreakdown || {};
@@ -671,8 +711,23 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
   if (option.systemType === "hybrid") mainInverterPrefix = "Hybrid";
   if (option.systemType === "offgrid") mainInverterPrefix = "Off-grid";
 
-  // Total pages: exactly 8 if financing active; 6 if financing omitted
-  const totalPages = isLoan ? 8 : 6;
+  const inverterCapacityDisplay = option.inverterModel
+    ? `${option.inverterCapacityKw || option.dcCapacityKw || 2.36} kW (${option.inverterModel})`
+    : `${option.inverterCapacityKw || option.dcCapacityKw || 2.36} kW`;
+  const inverterWarrantySpec = option.inverterModel
+    ? `${option.inverterModel} (Grid-Tied IP65)`
+    : "Grid-Tied Solar Inverter (IP65)";
+
+  // Dynamic section numbers & page counts (CAD Layout optional, Financing optional)
+  let nextSectionNum = 2;
+  const cadSectionNum = showCadDiagram ? nextSectionNum++ : null;
+  const quoteSectionNum = nextSectionNum++;
+  const loanSectionNum = effectiveIsLoan ? nextSectionNum++ : null;
+  const warrantySectionNum = nextSectionNum++;
+  const sysTypesSectionNum = nextSectionNum++;
+
+  const totalPages = 5 + (showCadDiagram ? 1 : 0) + (effectiveIsLoan ? 2 : 0);
+  let currentPageNum = 1;
   const pages = [];
 
   const createPageHeader = (pageTitle = "Solar System Proposal", subTitle = "") => `
@@ -706,8 +761,12 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
   // ==========================================
   // PAGE 1: 1. System Design Considerations
   // ==========================================
+  const areaFitLabel = panelLayout.fitsInArea === false
+    ? `No - needs ${Math.max(0, (panelAreaSqft || 0) - (roofArea || 0))} sq ft more`
+    : `Yes - fits in ${roofArea} sq ft`;
+  const page1Num = currentPageNum++;
   const page1Content = `
-    <div class="pdf-sample-page" data-page-index="1">
+    <div class="pdf-sample-page" data-page-index="${page1Num}">
       ${createPageHeader("Solar System Proposal", "Turnkey Solar PV Installation Proposal")}
       <div class="pdf-page-body">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2mm; font-size: 8pt;">
@@ -758,7 +817,7 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
             <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Required by Consumption</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${option.sizing?.byConsumptionKw || 2.2} kW</span></td></tr>
             <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Supported by Roof Area</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${option.sizing?.byAreaKw || 40.7} kW</span></td></tr>
             <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Sanctioned Load Limit</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${option.sizing?.byLoadKw ? `${option.sizing.byLoadKw} kW` : (input.sanctionedLoad ? `${input.sanctionedLoad} kW` : "N/A")}</span></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Recommended Solar Capacity</td><td style="padding: 1.8mm 2.5mm;"><strong><span class="editable-field">${option.dcCapacityKw || 2.36} kWp</span></strong></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">${solarInstalled ? "Installed Solar Capacity" : "Recommended Solar Capacity"}</td><td style="padding: 1.8mm 2.5mm;"><strong><span class="editable-field">${option.dcCapacityKw || 2.36} kWp</span></strong></td></tr>
             <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Daily Solar Generation</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${dailyGenKwh} kWh (${dailyPerKw} kWh/kW)</span></td></tr>
             <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Monthly Solar Generation</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${monthlyGenKwh} kWh (${monthlyPerKw} kWh/kW)</span></td></tr>
             <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Sanction Status</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${sanctionedStatus.label || "Within sanctioned load"}</span></td></tr>
@@ -777,7 +836,7 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
             <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Number of Panels</td><td style="padding: 1.8mm 2.5mm;"><strong><span class="editable-field">${numPanels} panels</span></strong></td></tr>
             <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Total Area Required</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${panelAreaSqft} sq ft (${Math.round(panelAreaSqft * 0.0929)} sq m)</span></td></tr>
             <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Available Installation Area</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${roofArea} sq ft</span></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Fits in Available Area</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">Yes - fits in ${roofArea} sq ft</span></td></tr>
+            ${!hideAreaFit ? `<tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Fits in Available Area</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${areaFitLabel}</span></td></tr>` : ""}
           </tbody>
         </table>
 
@@ -789,7 +848,7 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
             <col style="width: 55%;">
           </colgroup>
           <tbody>
-            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">${mainInverterPrefix} Inverter Capacity</td><td style="padding: 1.8mm 2.5mm;"><strong><span class="editable-field">${option.inverterCapacityKw || option.dcCapacityKw || 2.36} kW</span></strong></td></tr>
+            <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">${mainInverterPrefix} Inverter Capacity</td><td style="padding: 1.8mm 2.5mm;"><strong><span class="editable-field">${inverterCapacityDisplay}</span></strong></td></tr>
             <tr><td style="background: #eef3ec; font-weight: 700; padding: 1.8mm 2.5mm;">Battery Capacity</td><td style="padding: 1.8mm 2.5mm;"><span class="editable-field">${option.batteryCapacityKwh > 0 ? `${option.batteryCapacityKwh} kWh` : "No battery (Grid-tied system)"}</span></td></tr>
           </tbody>
         </table>
@@ -799,67 +858,70 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
           • <strong>Design &amp; Generation Note:</strong> Simulated yield based on NASA/Meteonorm irradiance data. Actual output varies with weather, grid uptime, and routine soft-water module washing.
         </div>
       </div>
-      ${createPageFooter(1, totalPages)}
+      ${createPageFooter(page1Num, totalPages)}
     </div>
   `;
   pages.push(page1Content);
 
   // ==========================================
-  // PAGE 2: 2. Rooftop Layout & Solar Array CAD Plan
+  // OPTIONAL PAGE: Rooftop Layout & Solar Array CAD Plan
   // ==========================================
-  const page2Content = `
-    <div class="pdf-sample-page" data-page-index="2">
-      ${createPageHeader("Rooftop Layout & CAD Blueprint")}
-      <div class="pdf-page-body">
-        <div class="pdf-section-title">2. Rooftop Layout &amp; Solar Array CAD Plan</div>
-        <p class="pdf-paragraph" style="font-size: 8pt; color: #475569; margin-bottom: 2mm;">
-          Dimensioned rooftop architectural layout, module placement, maintenance pathways, and shadow obstruction analysis.
-        </p>
+  if (showCadDiagram) {
+    const cadPageNum = currentPageNum++;
+    const page2Content = `
+      <div class="pdf-sample-page" data-page-index="${cadPageNum}">
+        ${createPageHeader("Rooftop Layout & CAD Blueprint")}
+        <div class="pdf-page-body">
+          <div class="pdf-section-title">${cadSectionNum}. Rooftop Layout &amp; Solar Array CAD Plan</div>
+          <p class="pdf-paragraph" style="font-size: 8pt; color: #475569; margin-bottom: 2mm;">
+            Dimensioned rooftop architectural layout, module placement, maintenance pathways, and shadow obstruction analysis.
+          </p>
 
-        <!-- CAD Graphic Container -->
-        <div style="text-align: center; margin-bottom: 4mm; background: #0f172a; border-radius: 4px; padding: 3mm; height: 125mm; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">
-          ${cadCanvasDataUrl ? `<img src="${cadCanvasDataUrl}" alt="CAD Rooftop Layout Blueprint" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 2px;">` : `<div style="color: #94a3b8; font-size: 9pt;">CAD Aerial Blueprint Diagram (Active in Canvas)</div>`}
+          <!-- CAD Graphic Container -->
+          <div style="text-align: center; margin-bottom: 4mm; background: #0f172a; border-radius: 4px; padding: 3mm; height: 125mm; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">
+            ${cadCanvasDataUrl ? `<img src="${cadCanvasDataUrl}" alt="CAD Rooftop Layout Blueprint" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 2px;">` : `<div style="color: #94a3b8; font-size: 9pt;">CAD Aerial Blueprint Diagram (Active in Canvas)</div>`}
+          </div>
+
+          <!-- CAD Specifications Table -->
+          <table class="pdf-table" style="margin-bottom: 4mm; font-size: 7.8pt; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
+            <colgroup>
+              <col style="width: 40%;">
+              <col style="width: 60%;">
+            </colgroup>
+            <tbody>
+              <tr><td style="background: #eef3ec; font-weight: 700; padding: 2mm 3mm;">Roof Dimensions</td><td style="padding: 2mm 3mm;"><span class="editable-field">${cadRoofL} ft × ${cadRoofB} ft (${cadGrossSqft} sq ft)</span></td></tr>
+              <tr><td style="background: #eef3ec; font-weight: 700; padding: 2mm 3mm;">Net Usable Roof Space</td><td style="padding: 2mm 3mm;"><span class="editable-field">${cadNetSqft} sq ft (${(cadNetSqft * 0.0929).toFixed(1)} sq m)</span></td></tr>
+              <tr><td style="background: #eef3ec; font-weight: 700; padding: 2mm 3mm;">Solar Module Placement</td><td style="padding: 2mm 3mm;"><strong><span class="editable-field">${placedPanelsCount} / ${reqPanelsCount} Modules Placed (${placedPanelsCount >= reqPanelsCount ? "Complete Array" : `${reqPanelsCount - placedPanelsCount} Latent`})</span></strong></td></tr>
+              <tr><td style="background: #eef3ec; font-weight: 700; padding: 2mm 3mm;">Orientation &amp; True North</td><td style="padding: 2mm 3mm;"><span class="editable-field">${cadNorthAngle}° Azimuth (${cadNorthAngle === 0 ? "True North Aligned" : `${cadNorthAngle}° from North`}) | Height: ${cadBldgHeight} ft</span></td></tr>
+              <tr><td style="background: #eef3ec; font-weight: 700; padding: 2mm 3mm;">Simulated Shading Impact</td><td style="padding: 2mm 3mm;"><span class="editable-field">${cadShadingStr} (Astronomical solar trajectory &amp; obstacle model)</span></td></tr>
+            </tbody>
+          </table>
+
+          <!-- Pill Note -->
+          <div class="pdf-highlight-box green" style="padding: 3mm 4mm; font-size: 7.5pt; line-height: 1.45; margin-bottom: 0;">
+            • <strong>Structural &amp; Layout Note:</strong> Rooftop CAD array layout is preliminary and subject to minor adjustments during physical installation. The client warrants that the roof slab possesses adequate structural load-bearing capacity; roof waterproofing and sealing integrity remain the client's sole responsibility.
+          </div>
         </div>
-
-        <!-- CAD Specifications Table -->
-        <table class="pdf-table" style="margin-bottom: 4mm; font-size: 7.8pt; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
-          <colgroup>
-            <col style="width: 40%;">
-            <col style="width: 60%;">
-          </colgroup>
-          <tbody>
-            <tr><td style="background: #eef3ec; font-weight: 700; padding: 2mm 3mm;">Roof Dimensions</td><td style="padding: 2mm 3mm;"><span class="editable-field">${roofL} ft × ${roofB} ft (${roofArea} sq ft)</span></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700; padding: 2mm 3mm;">Net Usable Roof Space</td><td style="padding: 2mm 3mm;"><span class="editable-field">${roofArea} sq ft (${(roofArea * 0.0929).toFixed(1)} sq m)</span></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700; padding: 2mm 3mm;">Solar Module Placement</td><td style="padding: 2mm 3mm;"><strong><span class="editable-field">${numPanels} / ${numPanels} Modules Placed (Complete Array)</span></strong></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700; padding: 2mm 3mm;">Orientation &amp; True North</td><td style="padding: 2mm 3mm;"><span class="editable-field">${northAngle}° Azimuth (${northAngle === 0 ? "True North Aligned" : `${northAngle}° from North`}) | Height: ${bldgHeight} ft</span></td></tr>
-            <tr><td style="background: #eef3ec; font-weight: 700; padding: 2mm 3mm;">Simulated Shading Impact</td><td style="padding: 2mm 3mm;"><span class="editable-field">0.0% Solar Shading Loss (Astronomical solar trajectory &amp; obstacle model)</span></td></tr>
-          </tbody>
-        </table>
-
-        <!-- Pill Note -->
-        <div class="pdf-highlight-box green" style="padding: 3mm 4mm; font-size: 7.5pt; line-height: 1.45; margin-bottom: 0;">
-          • <strong>Structural &amp; Layout Note:</strong> Rooftop CAD array layout is preliminary and subject to minor adjustments during physical installation. The client warrants that the roof slab possesses adequate structural load-bearing capacity; roof waterproofing and sealing integrity remain the client's sole responsibility.
-        </div>
+        ${createPageFooter(cadPageNum, totalPages)}
       </div>
-      ${createPageFooter(2, totalPages)}
-    </div>
-  `;
-  pages.push(page2Content);
+    `;
+    pages.push(page2Content);
+  }
 
   // ==========================================
-  // PAGE 3: 3. Financial Quote & Scope of Work
-  // (NO "Commercial Project Investment Breakup"!)
+  // PAGE: Financial Quote & Scope of Work (or Scope Only if hideCost)
   // ==========================================
   const sowItems = getScopeOfWorkItems(option, input);
   const midPoint = Math.ceil(sowItems.length / 2);
   const sowCol1 = sowItems.slice(0, midPoint);
   const sowCol2 = sowItems.slice(midPoint);
+  const quotePageNum = currentPageNum++;
 
   const page3Content = `
-    <div class="pdf-sample-page" data-page-index="3">
-      ${createPageHeader("Financial Quote & Scope of Work")}
+    <div class="pdf-sample-page" data-page-index="${quotePageNum}">
+      ${createPageHeader(hideCost ? "Scope of Work & System Inclusions" : "Financial Quote & Scope of Work")}
       <div class="pdf-page-body">
-        <div class="pdf-section-title">3. Financial Quote &amp; Scope of Work</div>
+        <div class="pdf-section-title">${quoteSectionNum}. ${hideCost ? "Scope of Work &amp; System Inclusions" : "Financial Quote &amp; Scope of Work"}</div>
         <div style="font-size: 9.5pt; font-weight: 700; color: #63923e; margin-bottom: 2mm;">
           Selected Option: <span class="editable-field">${formatSysType(option.systemType)} (${option.dcCapacityKw || 2.36} kWp)</span>
         </div>
@@ -880,6 +942,7 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
           <div class="pdf-highlight-box blue" style="padding: 1.5mm 3mm; margin: 0; font-size: 7.2pt; font-weight: 700;">• Note: MSEDCL Net Metering Liaisoning &amp; Discom Documentation Support charges at actuals (Systems ≤ 10 kW enjoy deemed feasibility).</div>
         </div>
 
+        ${!hideCost ? `
         <!-- Commercial Summary Plain Lines -->
         <table class="pdf-plain-table" style="width: 100%; margin-bottom: 1.5mm; font-size: 7.8pt; border-collapse: collapse;">
           <tbody>
@@ -887,21 +950,21 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
               <td style="padding: 1mm 0;"><strong>Total System Cost (Inc. GST) (as payable to Datlion Cnergy Pvt. Ltd.)</strong></td>
               <td style="text-align: right; font-weight: 700;"><span class="editable-field">${formatCurrency(option.totalPreSubsidy)}</span></td>
             </tr>
-            ${!hideFlags.hideSubsidy && (option.subsidy || 0) > 0 ? `
+            ${!hideSubsidy && (option.subsidy || 0) > 0 ? `
             <tr>
               <td style="padding: 1mm 0; color: #15803d; font-weight: 700;">${(input.meters && Array.isArray(input.meters) && input.meters.length > 1) ? `Expected Subsidy (PM Surya Ghar Direct bank transfer to Customers bank account across ${input.meters.length} flats)` : "Expected Subsidy (PM Surya Ghar Direct bank transfer to Customers bank account)"}</td>
               <td style="text-align: right; color: #15803d; font-weight: 700;"><span class="editable-field">- ${formatCurrency(option.subsidy)}</span></td>
             </tr>` : ""}
             <tr style="border-top: 1px solid #cbd5e1;">
               <td style="padding: 1.5mm 0; font-weight: 800; font-size: 8.5pt;">Net Payable Cost to customer</td>
-              <td style="text-align: right; font-weight: 800; font-size: 8.5pt;"><span class="editable-field">${formatCurrency((hideFlags.hideSubsidy || !(option.subsidy > 0)) ? option.totalPreSubsidy : Math.max(0, (option.totalPreSubsidy || 0) - (option.subsidy || 0)))}</span></td>
+              <td style="text-align: right; font-weight: 800; font-size: 8.5pt;"><span class="editable-field">${formatCurrency((hideSubsidy || !(option.subsidy > 0)) ? option.totalPreSubsidy : Math.max(0, (option.totalPreSubsidy || 0) - (option.subsidy || 0)))}</span></td>
             </tr>
           </tbody>
         </table>
         <div style="font-size: 6.8pt; font-style: italic; color: #64748b; line-height: 1.35; margin-bottom: 2.5mm;">
           <div>* GST: 70% goods @ 5% + 30% services @ 18% = 8.9% effective rate.</div>
           <div>* Quotation validity: 15 days. Full contract value is payable to Datlion Cnergy Pvt. Ltd. regardless of central subsidy disbursement.</div>
-        </div>
+        </div>` : ""}
 
         <!-- Side-by-Side MSEDCL Electricity Bill Comparison -->
         <div style="font-weight: 700; font-size: 8.2pt; color: #0f172a; margin-bottom: 1.5mm;">MSEDCL Electricity Bill Comparison &amp; Projected Savings:</div>
@@ -960,28 +1023,29 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
         </div>
 
         <div style="display: flex; gap: 8mm; margin-bottom: 1.5mm; font-size: 8.5pt;">
-          <div><strong>Estimated Payback Period:</strong> <span class="editable-field">${Number(option.paybackYears || 2.0).toFixed(1)} Years</span></div>
+          ${!hidePayback ? `<div><strong>Estimated Payback Period:</strong> <span class="editable-field">${Number.isFinite(Number(option.paybackYears)) ? Number(option.paybackYears).toFixed(1) : "2.0"} Years</span></div>` : ""}
           <div><strong>25-Year Lifetime Savings:</strong> <strong class="editable-field" style="color: #63923e;">${formatCurrency(option.lifetimeSavings)}</strong></div>
         </div>
         <div style="font-size: 6.8pt; font-style: italic; color: #64748b;">
           * Note: Financial payback and bill savings projections are modeled on prevailing MSEDCL tariffs and MERC net metering regulations; subject to customer consumption patterns and grid availability.
         </div>
       </div>
-      ${createPageFooter(3, totalPages)}
+      ${createPageFooter(quotePageNum, totalPages)}
     </div>
   `;
   pages.push(page3Content);
 
   // ==========================================
-  // PAGE 4 & 5: Bank Partner Loan Proposal (Only if loan active)
+  // OPTIONAL PAGES: Bank Partner Loan Proposal (Only if loan active & cost visible)
   // ==========================================
-  if (isLoan) {
+  if (effectiveIsLoan) {
+    const loanPage1Num = currentPageNum++;
     const downPaymentLabel = `Upfront Customer Payment (${fin.downPaymentPct !== undefined ? fin.downPaymentPct : 10}% Down Payment)`;
     const page4Content = `
-      <div class="pdf-sample-page" data-page-index="4">
+      <div class="pdf-sample-page" data-page-index="${loanPage1Num}">
         ${createPageHeader("Bank Partner Loan Proposal")}
         <div class="pdf-page-body">
-          <div class="pdf-section-title">4. Bank Partner Loan Proposal (For illustrative purposes only actual cost depends on actual loan rates)</div>
+          <div class="pdf-section-title">${loanSectionNum}. Bank Partner Loan Proposal (For illustrative purposes only actual cost depends on actual loan rates)</div>
           <p class="pdf-paragraph" style="font-size: 8pt; color: #475569; margin-bottom: 2mm;">
             Convert your monthly electricity bill into an appreciating rooftop solar asset with zero incremental budget.
           </p>
@@ -1053,16 +1117,18 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
             <div style="font-size: 7pt; color: #334155; line-height: 1.35;">
               Save upfront cash (${formatCurrency(fin.totalPreSubsidy)}) and invest it in your business or high-yield assets (opportunity cost advantage). Keeping capital liquid for business expansion or working capital while letting your existing utility bill budget pay off the solar plant is the smartest financial leverage.
             </div>
+            ${fin.isFallback ? `<div style="font-size: 6.8pt; color: #92400e; margin-top: 1.5mm; font-weight: 600;">* Note: Requested monthly bill budget (${formatCurrency(fin.requestedEmi || fin.targetBillAmount)}/mo) does not cover monthly interest (${formatCurrency(fin.monthlyInterest || 0)}/mo); structured on a standard 60-month EMI schedule.</div>` : ""}
           </div>
         </div>
-        ${createPageFooter(4, totalPages)}
+        ${createPageFooter(loanPage1Num, totalPages)}
       </div>
     `;
     pages.push(page4Content);
 
-    // PAGE 5: Bank Partner Loan Proposal (Contd.)
+    // Bank Partner Loan Proposal (Contd.)
+    const loanPage2Num = currentPageNum++;
     const page5Content = `
-      <div class="pdf-sample-page" data-page-index="5">
+      <div class="pdf-sample-page" data-page-index="${loanPage2Num}">
         ${createPageHeader("Bank Partner Loan Proposal (Contd.)")}
         <div class="pdf-page-body">
           <div class="pdf-section-title" style="margin-top: 2mm; margin-bottom: 3mm;">Key Advantages of Bank Partner Solar Financing:</div>
@@ -1077,21 +1143,21 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
             * Note: Loan approval, interest rates, and final terms are governed exclusively by the lending bank. Financing delays or rejections do not alter payment milestone obligations to Datlion Cnergy Pvt. Ltd.
           </div>
         </div>
-        ${createPageFooter(5, totalPages)}
+        ${createPageFooter(loanPage2Num, totalPages)}
       </div>
     `;
     pages.push(page5Content);
   }
 
   // ==========================================
-  // PAGE 6: 5. Terms & Conditions, Warranty and Details
+  // PAGE: Terms & Conditions, Warranty and Details
   // ==========================================
-  const warrantyPageNum = isLoan ? 6 : 4;
+  const warrantyPageNum = currentPageNum++;
   const page6Content = `
     <div class="pdf-sample-page" data-page-index="${warrantyPageNum}">
       ${createPageHeader("Warranty and Details")}
       <div class="pdf-page-body">
-        <div class="pdf-section-title">${isLoan ? "5" : "4"}. Terms &amp; Conditions, Warranty and Details</div>
+        <div class="pdf-section-title">${warrantySectionNum}. Terms &amp; Conditions, Warranty and Details</div>
         <p class="pdf-paragraph" style="font-size: 8pt; color: #475569; margin-bottom: 2mm;">
           Comprehensive component warranties, manufacturer guarantees, and contractual terms governing this EPC proposal.
         </p>
@@ -1118,7 +1184,7 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
             <tr><td style="text-align: center; font-weight: 700;">3</td><td><strong>EARTHING</strong></td><td>16 MM EARTHING ALU. CONDUCTOR ROD; 14 MM × 1 MTR COPPER ROD</td><td style="text-align: center; color: #64748b;">—</td></tr>
             <tr><td style="text-align: center; font-weight: 700;">4</td><td><strong>DC CABLE</strong></td><td>4 SQ MM COPPER TIN</td><td style="text-align: center; color: #16a34a; font-weight: 700;">20 Year</td></tr>
             <tr><td style="text-align: center; font-weight: 700;">5</td><td><strong>CIVIL CHAMBER</strong></td><td>ISI STANDARD</td><td style="text-align: center; color: #16a34a; font-weight: 700;">10 Year</td></tr>
-            <tr><td style="text-align: center; font-weight: 700;">6</td><td><strong>ONGRID INVERTER</strong></td><td>Grid-Tied Solar Inverter (IP65)</td><td style="text-align: center; color: #16a34a; font-weight: 700;">10 Year Warranty</td></tr>
+            <tr><td style="text-align: center; font-weight: 700;">6</td><td><strong>${mainInverterPrefix.toUpperCase()} INVERTER</strong></td><td>${inverterWarrantySpec}</td><td style="text-align: center; color: #16a34a; font-weight: 700;">10 Year Warranty</td></tr>
           </tbody>
         </table>
         <div style="font-size: 6.8pt; font-style: italic; color: #64748b; margin-bottom: 3mm;">
@@ -1159,9 +1225,9 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
   pages.push(page6Content);
 
   // ==========================================
-  // PAGE 7: Terms and Conditions (Contd.)
+  // PAGE: Terms and Conditions (Contd.)
   // ==========================================
-  const tcContdPageNum = isLoan ? 7 : 5;
+  const tcContdPageNum = currentPageNum++;
   const page7Content = `
     <div class="pdf-sample-page" data-page-index="${tcContdPageNum}">
       ${createPageHeader("Terms and Conditions (Contd.)")}
@@ -1221,14 +1287,14 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
   pages.push(page7Content);
 
   // ==========================================
-  // PAGE 8: 6. Solar System Types
+  // PAGE: Solar System Types
   // ==========================================
-  const sysTypesPageNum = isLoan ? 8 : 6;
+  const sysTypesPageNum = currentPageNum++;
   const page8Content = `
     <div class="pdf-sample-page" data-page-index="${sysTypesPageNum}">
       ${createPageHeader("Solar System Types")}
       <div class="pdf-page-body">
-        <div class="pdf-section-title">${isLoan ? "6" : "5"}. Solar System Types</div>
+        <div class="pdf-section-title">${sysTypesSectionNum}. Solar System Types</div>
         <p class="pdf-paragraph" style="font-size: 8.5pt; color: #475569; margin-bottom: 3mm;">
           Understanding the different solar system configurations to choose the right solution for your needs.
         </p>
@@ -1249,25 +1315,36 @@ export function buildSingleSamplePdfPages(estimates, selectedOption, hideFlags =
  * Generate high-fidelity HTML pages representing the PDF document.
  */
 export function buildSamplePdfPages(estimates, selectedOption, hideFlags = {}) {
+  const resolvedFlags = { ...hideFlags };
+  if (typeof document !== "undefined") {
+    if (resolvedFlags.showCadDiagram === undefined) {
+      const cadEl = document.getElementById("showCadDiagram");
+      resolvedFlags.showCadDiagram = cadEl ? cadEl.checked : true;
+    }
+    if (resolvedFlags.hidePayback === undefined) resolvedFlags.hidePayback = Boolean(document.getElementById("hidePayback")?.checked);
+    if (resolvedFlags.hideAreaFit === undefined) resolvedFlags.hideAreaFit = Boolean(document.getElementById("hideAreaFit")?.checked);
+    if (resolvedFlags.hideSubsidy === undefined) resolvedFlags.hideSubsidy = Boolean(document.getElementById("hideSubsidy")?.checked);
+    if (resolvedFlags.hideCost === undefined) resolvedFlags.hideCost = Boolean(document.getElementById("hideCost")?.checked);
+    if (resolvedFlags.hideFinancing === undefined) resolvedFlags.hideFinancing = Boolean(document.getElementById("hideFinancing")?.checked);
+    if (resolvedFlags.solarInstalled === undefined) resolvedFlags.solarInstalled = Boolean(document.getElementById("solarInstalled")?.checked);
+  }
+
   // If Multi-Customer Building Proposal, use dedicated building generator
-  const isBuilding = hideFlags.isBuildingProposal || 
-                     estimates?.isBuildingProposal || 
+  const isBuilding = resolvedFlags.isBuildingProposal ||
+                     estimates?.isBuildingProposal ||
                      (typeof window !== "undefined" && window.appState?.proposalMode === "multi_building");
 
   if (isBuilding) {
-    if (!hideFlags.buildingData && typeof window !== "undefined" && window.appState?.buildingData) {
-      hideFlags.buildingData = window.appState.buildingData;
+    if (!resolvedFlags.buildingData && typeof window !== "undefined" && window.appState?.buildingData) {
+      resolvedFlags.buildingData = window.appState.buildingData;
     }
-    if (hideFlags.includeIndividualSheets === undefined && typeof document !== "undefined") {
-      hideFlags.includeIndividualSheets = document.getElementById("includeIndividualSheets")?.checked || false;
+    if (resolvedFlags.includeIndividualSheets === undefined && typeof document !== "undefined") {
+      resolvedFlags.includeIndividualSheets = document.getElementById("includeIndividualSheets")?.checked || false;
     }
-    if (hideFlags.showCadDiagram === undefined && typeof document !== "undefined") {
-      hideFlags.showCadDiagram = document.getElementById("showCadDiagram")?.checked !== false;
-    }
-    return buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags);
+    return buildBuildingSamplePdfPages(estimates, selectedOption, resolvedFlags);
   }
 
-  return buildSingleSamplePdfPages(estimates, selectedOption, hideFlags);
+  return buildSingleSamplePdfPages(estimates, selectedOption, resolvedFlags);
 }
 
 /**
@@ -1496,24 +1573,37 @@ export function initPdfSampleView() {
   // Print button
   document.getElementById("sampleViewPrintBtn")?.addEventListener("click", printPdfSampleView);
 
-  // Open Sample View button from Proposal tab
-  document.getElementById("openSampleViewBtn")?.addEventListener("click", () => {
-    if (window.appState) {
-      const isBuilding = window.appState.proposalMode === "multi_building";
-      const est = window.appState.estimates || { input: {}, options: [], recommended: {} };
-      const opt =
-        (window.appState.selectedSystemIndex !== null &&
-          window.appState.selectedSystemIndex >= 0 &&
-          est.options &&
-          est.options[window.appState.selectedSystemIndex]) ||
-        (est.recommended || {});
-      const hideFlags = {
-        isBuildingProposal: isBuilding,
-        buildingData: isBuilding ? window.appState.buildingData : null,
-        includeIndividualSheets: isBuilding ? (document.getElementById("includeIndividualSheets")?.checked || false) : false,
-        proposalSerialNo: document.getElementById("proposalSerialNo")?.value || "DC/2026-27/PROP-1140",
-      };
-      openPdfSampleView(est, opt, hideFlags);
-    }
-  });
+  // Open Sample View button from Proposal tab (skip if app.js already owns the click binding)
+  const openBtn = document.getElementById("openSampleViewBtn");
+  if (openBtn && openBtn.dataset.boundByApp !== "1") {
+    openBtn.addEventListener("click", () => {
+      if (window.appState) {
+        const isBuilding = window.appState.proposalMode === "multi_building";
+        const est = window.appState.estimates || { input: {}, options: [], recommended: {} };
+        const opt =
+          (window.appState.selectedSystemIndex !== null &&
+            window.appState.selectedSystemIndex >= 0 &&
+            est.options &&
+            est.options[window.appState.selectedSystemIndex]) ||
+          (est.recommended || {});
+        const paymentMode = document.getElementById("paymentMode")?.value || "upfront";
+        const hideCost = Boolean(document.getElementById("hideCost")?.checked);
+        const hideFlags = {
+          isBuildingProposal: isBuilding,
+          buildingData: isBuilding ? window.appState.buildingData : null,
+          includeIndividualSheets: isBuilding ? (document.getElementById("includeIndividualSheets")?.checked || false) : false,
+          showCadDiagram: document.getElementById("showCadDiagram") ? document.getElementById("showCadDiagram").checked : true,
+          hidePayback: Boolean(document.getElementById("hidePayback")?.checked),
+          hideAreaFit: Boolean(document.getElementById("hideAreaFit")?.checked),
+          hideSubsidy: Boolean(document.getElementById("hideSubsidy")?.checked),
+          hideCost,
+          hideFinancing: paymentMode !== "loan" || hideCost || Boolean(document.getElementById("hideFinancing")?.checked),
+          solarInstalled: Boolean(document.getElementById("solarAlreadyInstalled")?.checked),
+          customerAddress: (document.getElementById("customerAddress")?.value || "").trim(),
+          proposalSerialNo: document.getElementById("proposalSerialNo")?.value || "DC/2026-27/PROP-1140",
+        };
+        openPdfSampleView(est, opt, hideFlags);
+      }
+    });
+  }
 }

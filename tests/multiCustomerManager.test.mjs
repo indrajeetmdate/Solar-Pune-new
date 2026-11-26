@@ -244,6 +244,27 @@ assert.equal(nonDcrBuildingRes.totals.totalSubsidies, 0, "Non-DCR building solar
 assert.equal(buildingRes.totals.sharedBuildingCapKw, 9, "3 flats * 3 kW = 9 kW cap");
 assert.ok(buildingRes.totals.cfaCategory.includes("Category B"));
 
+// 7. Test Separate Inverters for Separate Flats in Building Ledger
+console.log("Testing Separate Inverters for Separate Flats in Building Ledger...");
+assert.equal(buildingRes.summary.totalInverters, 3, "Building must have 3 separate inverters for 3 flats");
+assert.ok(buildingRes.summary.inverterModelSummary.includes("Separate Inverters"));
+
+const flat1 = buildingRes.flatLedger[0];
+assert.ok(flat1.inverterModel, "Each flat must have a separate inverter model");
+assert.ok(flat1.inverterRatingKw >= flat1.allocatedKw, "Flat inverter rating must meet allocated capacity");
+assert.ok(flat1.inverterCost > 0, "Flat inverter must have discrete cost");
+
+// Test Flat 202 in 27 flats
+const flat202Ledger = bldg27Res.flatLedger.find(f => f.flatNo === "202");
+assert.equal(flat202Ledger.allocatedKw, 3.3);
+assert.equal(flat202Ledger.inverterModel, "3.3Kw Single Phase", "Flat 202 (3.3 kW) must receive dedicated 3.3Kw Single Phase inverter");
+assert.equal(flat202Ledger.inverterRatingKw, 3.3);
+assert.equal(flat202Ledger.inverterCost, 15006);
+
+// Verify total building inverters count equals total flats
+assert.equal(bldg27Res.summary.totalInverters, 27, "Large society must have 27 separate inverters for 27 flats");
+console.log("✓ Separate inverters for separate flats in Building Ledger verified!");
+
 console.log("✓ MNRE Guidelines 07.06.2024 Multi-Customer Building constraints verified!");
 
 console.log("✓ CSV template, parsing, and export verified.");

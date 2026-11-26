@@ -38,22 +38,7 @@ export default async function handler(req, res) {
   const cleanUser = String(username).trim().toLowerCase();
   const cleanPass = String(password).trim();
 
-  // 1. Support legacy / test passkey
-  if (cleanPass === 'solar2026') {
-    const defaultAdmin = CLONED_APP_USERS[0];
-    return res.status(200).json({
-      success: true,
-      user: {
-        username: defaultAdmin.username,
-        name: defaultAdmin.name,
-        role: defaultAdmin.role,
-        permission_level: defaultAdmin.permission_level,
-      },
-      source: 'legacy_passphrase',
-    });
-  }
-
-  // 2. Query live database if available
+  // 1. Query live database if available
   try {
     const supabase = getSupabase();
     if (supabase) {

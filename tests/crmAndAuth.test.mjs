@@ -104,9 +104,11 @@ test("Solar Calculator - Cloned User Authentication, Customer Mode & Solar CRM S
     const authInvalid = await authenticateInternalUser("indrajeet.date@cnergy.co.in", "wrongPassword");
     assert.equal(authInvalid.success, false, "Invalid password must be rejected");
 
-    // Test legacy passphrase shortcut for backward compatibility
+    // Test that deprecated passphrase 'solar2026' is strictly rejected
     const authLegacy = await authenticateInternalUser("solar2026", "solar2026");
-    assert.equal(authLegacy.success, true, "Legacy passphrase 'solar2026' must unlock session");
+    assert.equal(authLegacy.success, false, "Legacy passphrase 'solar2026' must be rejected");
+    const authLegacy2 = await authenticateInternalUser("indrajeet.date@cnergy.co.in", "solar2026");
+    assert.equal(authLegacy2.success, false, "'solar2026' must be invalid as account password");
   });
 
   await t.test("2. Customer Mode ('Make Your Own Estimate') Isolation & Local-Only Persistence", async () => {
@@ -446,6 +448,21 @@ test("Solar Calculator - Cloned User Authentication, Customer Mode & Solar CRM S
     assert.ok(archiveBody.children.length >= 1, "Archive table must list saved proposals");
     assert.ok(archiveBody.innerHTML.includes("DC/2026-27/PROP-9999"), "Archive table must display proposal serial number");
     assert.ok(archiveBody.innerHTML.includes("Sanjay Kulkarni"), "Archive table must display customer name");
+
+    // Regression: Clicking Archive Load button must load proposal without restoreProposalState error
+    const archiveLoadBtn = archiveBody.querySelector(".crm-archive-load-btn");
+    assert.ok(archiveLoadBtn, "Archive row must include Load button");
+    archiveLoadBtn.click();
+    assert.equal(document.getElementById("customerName")?.value, "Sanjay Kulkarni", "Archive Load button must restore customer name into workspace");
+
+    // Switch back to archive and test Archive PDF button
+    window.renderCrmDashboard();
+    archiveTab.click();
+    await new Promise(r => setTimeout(r, 30));
+    const archivePdfBtn = document.getElementById("crmProposalsTableBody")?.querySelector(".crm-archive-pdf-btn");
+    assert.ok(archivePdfBtn, "Archive row must include PDF button");
+    archivePdfBtn.click();
+    assert.ok(document.getElementById("paneProposal")?.classList.contains("active"), "Archive PDF button must open proposal pane");
   });
 
   await t.test("6. Customer Free Site Visit Request Submission", async () => {
@@ -466,11 +483,21 @@ test("Solar Calculator - Cloned User Authentication, Customer Mode & Solar CRM S
 
     assert.equal(modal.style.display, "none", "Site visit modal must close after submission");
 
-    const leads = await fetchCrmLeads();
+    let leads = await fetchCrmLeads();
     const siteVisitLead = leads.find(l => l.customer_name === "Deepak Gokhale");
     assert.ok(siteVisitLead, "Site visit request must be recorded as a CRM lead");
     assert.equal(siteVisitLead.mobile_number, "9822334455");
     assert.ok(siteVisitLead.notes.some(n => n.text.includes("Customer requested free site survey")), "Note must record online portal request");
+
+    // Regression: Re-submitting with the same phone number must deduplicate & append note rather than duplicate lead
+    document.getElementById("custModalName").value = "Deepak Gokhale";
+    document.getElementById("custModalPhone").value = "9822334455";
+    document.getElementById("custModalNotes").value = "Follow-up morning slot works too.";
+    await window.submitCustomerSiteVisitRequest();
+    leads = await fetchCrmLeads();
+    const matching = leads.filter(l => (l.mobile_number || "").replace(/\D/g, "").slice(-10) === "9822334455");
+    assert.equal(matching.length, 1, "Repeat site visit request for same phone must update existing CRM lead instead of duplicating");
+    assert.ok(matching[0].notes.some(n => n.text.includes("Follow-up morning slot works too.")), "Second note must be appended to same CRM lead");
   });
 
   await t.test("7. Sync Saved Customer Proposals with CRM Leads, Edit Proposal in Proposal Screen & CRM Quick Edit Modal", async () => {
@@ -613,5 +640,124 @@ test("Solar Calculator - Cloned User Authentication, Customer Mode & Solar CRM S
     assert.ok(leadRetained, "Customer lead must remain in CRM even when proposal is deleted");
     assert.equal(leadRetained.proposal_serial_no, null, "Proposal serial number must be cleared on lead");
     assert.ok(leadRetained.notes.some(n => n.text.includes("deleted")), "Lead timeline must record proposal deletion");
+  });
+
+  await t.test("8. CRM Status Persistence: No Reset Back to 'proposal_sent' & Server Race Guard", async () => {
+    window.openInternal();
+
+    // Seed a saved proposal so syncSavedCustomersWithLeads creates an attached record
+    const propSerial = "DC/2026-27/PROP-8811";
+    const savedProposal = {
+      id: "prop-state-8811",
+      proposalSerialNo: propSerial,
+      customerName: "Rohan Joshi",
+      mobileNumber: "9822776655",
+      customerAddress: "Kothrud, Pune",
+      sanctionedLoad: 5,
+      systemCapacityKw: 4.4,
+      totalCost: 250000,
+      savedAt: new Date().toISOString(),
+      stateData: {
+        formValues: { customerName: "Rohan Joshi", mobileNumber: "9822776655" },
+        input: { customerName: "Rohan Joshi", mobileNumber: "9822776655" },
+        reportDisplay: { proposalSerialNo: propSerial }
+      }
+    };
+    const existingSaved = JSON.parse(localStorage.getItem("solar_saved_proposals") || "[]");
+    localStorage.setItem("solar_saved_proposals", JSON.stringify([savedProposal, ...existingSaved]));
+
+    await window.renderCrmDashboard();
+    let leads = await fetchCrmLeads();
+    let rohan = leads.find(l => l.proposal_serial_no === propSerial);
+    assert.ok(rohan, "Synced proposal lead must exist");
+    assert.equal(rohan.status, "proposal_sent", "Brand-new synced proposal starts as 'proposal_sent'");
+
+    // 1. User changes state back to 'lead' (New Lead) -> re-sync MUST NOT snap back to 'proposal_sent'
+    await window.handleCrmStatusChange(rohan.id, "lead");
+    await syncSavedCustomersWithLeads();
+    await window.renderCrmDashboard();
+    leads = await fetchCrmLeads();
+    rohan = leads.find(l => l.proposal_serial_no === propSerial);
+    assert.equal(rohan.status, "lead", "Changing attached lead to 'lead' must NOT reset back to 'proposal_sent' on CRM re-render");
+
+    // 2. User updates state via Notes Modal (#crmNewNoteTextarea & #crmNoteNewStatusSelect) and Quick State button
+    await window.openCrmNotesModal(rohan.id);
+    assert.equal(document.getElementById("crmNotesCustomerName")?.textContent, "Rohan Joshi", "Notes modal must populate customer name");
+    const quickDoneBtn = document.querySelector('#crmNotesModal [data-set-status="site_visit_done"]');
+    assert.ok(quickDoneBtn, "Quick Site Visit Done button must exist in Notes modal");
+    quickDoneBtn.click();
+    await new Promise(r => setTimeout(r, 40));
+    await syncSavedCustomersWithLeads();
+    leads = await fetchCrmLeads();
+    rohan = leads.find(l => l.proposal_serial_no === propSerial);
+    assert.equal(rohan.status, "site_visit_done", "Quick state update must persist 'site_visit_done'");
+
+    document.getElementById("crmNewNoteTextarea").value = "Negotiation completed";
+    document.getElementById("crmNoteNewStatusSelect").value = "won";
+    document.getElementById("crmAddNoteSubmitBtn").click();
+    await new Promise(r => setTimeout(r, 40));
+    leads = await fetchCrmLeads();
+    rohan = leads.find(l => l.proposal_serial_no === propSerial);
+    assert.equal(rohan.status, "won", "Submitting note with status select must persist 'won'");
+
+    // 3. Simulate live Supabase /api/crm round-trip delay & non-UUID -> UUID promotion
+    const origFetch = globalThis.fetch;
+    const serverUuid = "11111111-2222-4333-8444-555555555555";
+    let serverDbRow = {
+      id: serverUuid,
+      customer_name: "Meera Nair",
+      mobile_number: "9822889900",
+      customer_address: "Baner, Pune",
+      status: "proposal_sent",
+      proposal_serial_no: "DC/2026-27/PROP-8812",
+      notes: [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    const syntheticId = "lead-sync-DC_2026-27_PROP-8812";
+    const curLocal = JSON.parse(localStorage.getItem("solar_crm_leads") || "[]");
+    localStorage.setItem("solar_crm_leads", JSON.stringify([{ ...serverDbRow, id: syntheticId }, ...curLocal]));
+
+    try {
+      globalThis.fetch = async (url, opts = {}) => {
+        const u = String(url);
+        if (u.startsWith("/api/crm")) {
+          if (!opts.method || opts.method === "GET") {
+            return {
+              ok: true,
+              json: async () => ({ success: true, data: [serverDbRow] })
+            };
+          }
+          if (opts.method === "POST") {
+            const payload = JSON.parse(opts.body || "{}");
+            // Simulate slower server write (35ms) — previously GET ran BEFORE POST completed!
+            await new Promise(r => setTimeout(r, 35));
+            if (payload.action === "add_note" && payload.newStatus) {
+              serverDbRow = {
+                ...serverDbRow,
+                status: payload.newStatus,
+                notes: [{ id: "n_srv", text: payload.noteText, author: payload.authorName, created_at: new Date().toISOString() }, ...serverDbRow.notes],
+                updated_at: new Date().toISOString()
+              };
+            }
+            return {
+              ok: true,
+              json: async () => ({ success: true, data: serverDbRow })
+            };
+          }
+        }
+        return { ok: false, json: async () => ({ success: false }) };
+      };
+
+      // Trigger status change using synthetic ID -> must await POST and NOT be clobbered by GET returning old proposal_sent
+      await window.handleCrmStatusChange(syntheticId, "site_visit_done");
+      const postServerLeads = await fetchCrmLeads();
+      const meera = postServerLeads.find(l => l.proposal_serial_no === "DC/2026-27/PROP-8812");
+      assert.ok(meera, "Meera Nair lead must exist after server sync");
+      assert.equal(meera.id, serverUuid, "Synthetic local ID must promote to server UUID");
+      assert.equal(meera.status, "site_visit_done", "Status MUST remain 'site_visit_done' on server and not reset to 'proposal_sent'");
+    } finally {
+      globalThis.fetch = origFetch;
+    }
   });
 });

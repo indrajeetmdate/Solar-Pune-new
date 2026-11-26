@@ -1353,5 +1353,69 @@ console.log("Running RooftopCAD tests...");
   console.log("✓ Test 20 Passed: Rooftop CAD Undo / Redo Engine & Keyboard Shortcuts (Ctrl+X / Ctrl+Y / Ctrl+Z)");
 }
 
+// Test 21: Base Roof, Walkway Sizes & Panel Coordinates Preserved Across Tab Switches & Resizes
+{
+  const canvas = new MockCanvas();
+  let containerWidth = 800;
+  canvas.parentElement = {
+    get clientWidth() { return containerWidth; },
+    getBoundingClientRect: () => ({ width: containerWidth, height: 460 }),
+  };
+
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 35,
+    roofBreadthFt: 25,
+    requiredPanels: 8,
+  });
+
+  cad.addDefaultHorizontalPathway();
+  cad.autoPlaceRemainingPanels("portrait");
+  assert.equal(cad.pathways.length, 1, "Walkway must be added");
+  assert.ok(cad.panels.length >= 6, "Panels must be placed");
+
+  const origPwLenFt = cad.pathways[0].lengthFt;
+  const origPwBreadthFt = cad.pathways[0].breadthFt;
+  const origPanelOffsetsFt = cad.panels.map((p) => ({
+    dxFt: (p.x - cad.roofX) / cad.scalePxPerFt,
+    dyFt: (p.y - cad.roofY) / cad.scalePxPerFt,
+  }));
+
+  // 1. Simulate switching to another tab (parent width becomes 0 while hidden)
+  containerWidth = 0;
+  cad.resizeCanvas();
+  assert.equal(cad.roofLengthFt, 35, "Base roof length must not change when hidden");
+  assert.equal(cad.roofBreadthFt, 25, "Base roof breadth must not change when hidden");
+
+  // 2. Simulate returning to CAD tab at a wider viewport (1150px)
+  containerWidth = 1150;
+  cad.resizeCanvas();
+
+  assert.equal(cad.roofLengthFt, 35, "Base roof length must stay 35 ft");
+  assert.equal(cad.roofBreadthFt, 25, "Base roof breadth must stay 25 ft");
+  assert.equal(cad.pathways[0].lengthFt, origPwLenFt, "Walkway lengthFt must stay exact");
+  assert.equal(cad.pathways[0].breadthFt, origPwBreadthFt, "Walkway breadthFt must stay exact");
+  assert.ok(
+    Math.abs((cad.pathways[0].w / cad.scalePxPerFt) - origPwLenFt) < 0.05,
+    "Walkway pixel width must match its physical lengthFt after resize"
+  );
+  assert.ok(
+    Math.abs((cad.pathways[0].h / cad.scalePxPerFt) - origPwBreadthFt) < 0.05,
+    "Walkway pixel height must match its physical breadthFt after resize"
+  );
+
+  cad.panels.forEach((p, idx) => {
+    const newDxFt = (p.x - cad.roofX) / cad.scalePxPerFt;
+    const newDyFt = (p.y - cad.roofY) / cad.scalePxPerFt;
+    assert.ok(Math.abs(newDxFt - origPanelOffsetsFt[idx].dxFt) < 0.05, `Panel ${idx} X offset in feet must not drift on resize`);
+    assert.ok(Math.abs(newDyFt - origPanelOffsetsFt[idx].dyFt) < 0.05, `Panel ${idx} Y offset in feet must not drift on resize`);
+  });
+
+  // 3. Verify explicit setRoofDimensions keeps walkway's physical breadthFt (2.5 ft) intact
+  cad.setRoofDimensions(45, 25);
+  assert.equal(cad.pathways[0].breadthFt, origPwBreadthFt, "Changing roof length must not stretch walkway physical breadthFt");
+
+  console.log("✓ Test 21 Passed: Base Roof, Walkway Sizes & Panel Positions Preserved Across Tab Switches & Resizes");
+}
+
 console.log("All RooftopCAD tests passed successfully!");
 

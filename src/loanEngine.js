@@ -168,19 +168,21 @@ export function calculateSolarFinancing({
   const cleanSubsidy = Math.round(Math.max(Number(subsidy) || 0, 0));
   const cleanMonthlyBill = Math.round(Math.max(Number(monthlyBill) || 0, 0));
   const cleanMonthlySavings = Math.round(Math.max(Number(monthlySavings) || 0, 0));
-  const cleanRate = Number.isFinite(Number(interestRatePct)) ? Number(interestRatePct) : 7;
+  const hasExplicitRate = interestRatePct !== null && interestRatePct !== undefined && interestRatePct !== "" && Number.isFinite(Number(interestRatePct));
+  const cleanRate = hasExplicitRate ? Math.max(0, Number(interestRatePct)) : 7;
 
   // Loan Principal & Down Payment calculation
   let loanPrincipal = cleanNetCost;
   let downPayment = 0;
-  if (loanAmountOverride !== null && loanAmountOverride !== undefined && !isNaN(loanAmountOverride) && Number(loanAmountOverride) > 0) {
+  if (loanAmountOverride !== null && loanAmountOverride !== undefined && loanAmountOverride !== "" && !isNaN(loanAmountOverride) && Number(loanAmountOverride) > 0) {
     loanPrincipal = Math.round(Math.max(0, Number(loanAmountOverride)));
     downPayment = Math.max(0, cleanNetCost - loanPrincipal);
-  } else if (downPaymentOverride !== null && downPaymentOverride !== undefined && !isNaN(downPaymentOverride) && Number(downPaymentOverride) >= 0) {
-    downPayment = Math.round(Number(downPaymentOverride));
+  } else if (downPaymentOverride !== null && downPaymentOverride !== undefined && downPaymentOverride !== "" && !isNaN(downPaymentOverride) && Number(downPaymentOverride) >= 0) {
+    downPayment = Math.round(Math.min(cleanNetCost, Math.max(0, Number(downPaymentOverride))));
     loanPrincipal = Math.max(0, cleanNetCost - downPayment);
-  } else if (downPaymentPct !== null && downPaymentPct !== undefined && !isNaN(downPaymentPct) && Number(downPaymentPct) >= 0) {
-    downPayment = Math.round(cleanNetCost * (Number(downPaymentPct) / 100));
+  } else if (downPaymentPct !== null && downPaymentPct !== undefined && downPaymentPct !== "" && !isNaN(downPaymentPct) && Number(downPaymentPct) >= 0) {
+    const clampedPct = Math.min(100, Math.max(0, Number(downPaymentPct)));
+    downPayment = Math.round(cleanNetCost * (clampedPct / 100));
     loanPrincipal = Math.max(0, cleanNetCost - downPayment);
   } else {
     downPayment = 0;
@@ -188,26 +190,42 @@ export function calculateSolarFinancing({
   }
 
   let loanResult;
+  const hasCustomEmi = loanMonthlyEmiOverride !== null && loanMonthlyEmiOverride !== undefined && loanMonthlyEmiOverride !== "" && Number(loanMonthlyEmiOverride) > 0;
+  const hasCustomTenure = loanTenureMonthsOverride !== null && loanTenureMonthsOverride !== undefined && loanTenureMonthsOverride !== "" && Number(loanTenureMonthsOverride) > 0;
 
-  // Target EMI: defaults to monthly electricity bill amount (zero out-of-pocket match)
+  // Target EMI: custom EMI or monthly electricity bill amount (zero out-of-pocket match)
   let targetEmi = cleanMonthlyBill > 0 ? cleanMonthlyBill : cleanMonthlySavings;
-  if (loanMonthlyEmiOverride !== null && loanMonthlyEmiOverride !== undefined && Number(loanMonthlyEmiOverride) > 0) {
+  if (hasCustomEmi) {
     targetEmi = Number(loanMonthlyEmiOverride);
   }
 
-  if (loanTenureMonthsOverride !== null && loanTenureMonthsOverride !== undefined && Number(loanTenureMonthsOverride) > 0 && (!loanMonthlyEmiOverride || Number(loanMonthlyEmiOverride) <= 0) && cleanMonthlyBill <= 0) {
-    // Calculate EMI from custom tenure only when monthly bill is unknown and tenure is explicitly requested
+  let loanModeType = "auto_bill";
+  if (loanPrincipal <= 0) {
+    loanModeType = "zero_principal";
+    loanResult = {
+      tenureMonths: 0,
+      tenureYears: 0,
+      monthlyEmi: 0,
+      principal: 0,
+      totalInterest: 0,
+      totalRepayment: 0,
+      valid: true,
+    };
+  } else if (hasCustomTenure && !hasCustomEmi) {
+    // Explicit loan tenure always computes the required EMI
+    loanModeType = "custom_tenure";
     loanResult = calculateLoanEmiFromTenure(loanPrincipal, cleanRate, Number(loanTenureMonthsOverride));
   } else {
+    loanModeType = hasCustomEmi ? "custom_emi" : "auto_bill";
     if (targetEmi <= 0) {
-      // Fallback: 5-year loan EMI
+      // Fallback: 5-year loan EMI when neither bill nor custom EMI is provided
       targetEmi = calculateLoanEmiFromTenure(loanPrincipal, cleanRate, 60).monthlyEmi;
     }
 
     loanResult = calculateLoanTenureFromEmi(loanPrincipal, cleanRate, targetEmi);
   }
 
-  // Handle invalid/infinite tenure fallback
+  // Handle invalid/infinite tenure fallback only when loan principal is positive
   let tenureMonths = loanResult.tenureMonths;
   let tenureYears = loanResult.tenureYears;
   let monthlyEmi = loanResult.monthlyEmi;
@@ -215,8 +233,8 @@ export function calculateSolarFinancing({
   let totalRepayment = loanResult.totalRepayment;
   let isFallback = false;
 
-  if (!loanResult.valid || !Number.isFinite(tenureMonths) || tenureMonths <= 0) {
-    // Default to 5-year (60 mo) standard solar loan
+  if (loanPrincipal > 0 && (!loanResult.valid || !Number.isFinite(tenureMonths) || tenureMonths <= 0)) {
+    // Default to 5-year (60 mo) standard solar loan when EMI cannot service monthly interest
     isFallback = true;
     const fallback = calculateLoanEmiFromTenure(loanPrincipal, cleanRate, 60);
     tenureMonths = fallback.tenureMonths;
@@ -228,7 +246,7 @@ export function calculateSolarFinancing({
 
   // Post-solar residual bill during loan
   const postSolarResidualBill = Math.max(0, cleanMonthlyBill - cleanMonthlySavings);
-  const monthlyOutflowDuringLoan = monthlyEmi + postSolarResidualBill;
+  const monthlyOutflowDuringLoan = loanPrincipal > 0 ? (monthlyEmi + postSolarResidualBill) : postSolarResidualBill;
 
   // Value proposition metrics
   const freeElectricityYears = Math.max(0, round(25 - tenureYears, 1));
@@ -241,22 +259,29 @@ export function calculateSolarFinancing({
 
   // Determine if it qualifies as "Zero Out-of-Pocket" (monthly EMI is close to or less than current bill)
   const isZeroOutOfPocket = cleanMonthlyBill > 0 && monthlyOutflowDuringLoan <= (cleanMonthlyBill * 1.08);
+  const isLongTenure = tenureMonths > 120; // > 10 years exceeds standard solar loan tenures
 
-  const tenureFormatted = tenureYears >= 1 
-    ? `${tenureYears} yrs (${tenureMonths} mos)` 
-    : `${tenureMonths} mos`;
+  const tenureFormatted = tenureMonths <= 0
+    ? "Immediate (0 mos)"
+    : (tenureYears >= 1
+        ? `${tenureYears} yrs (${tenureMonths} mos)`
+        : `${tenureMonths} mos`);
 
-  const effectiveDownPaymentPct = (downPaymentPct !== null && downPaymentPct !== undefined && !isNaN(downPaymentPct) && Number(downPaymentPct) >= 0)
-    ? Number(downPaymentPct)
+  const effectiveDownPaymentPct = (downPaymentPct !== null && downPaymentPct !== undefined && downPaymentPct !== "" && !isNaN(downPaymentPct) && Number(downPaymentPct) >= 0)
+    ? Math.min(100, Math.max(0, Number(downPaymentPct)))
     : (cleanNetCost > 0 ? Math.round((downPayment / cleanNetCost) * 100) : 0);
 
   return {
     paymentMode, // 'upfront' | 'loan'
+    loanModeType,
     principal: loanPrincipal,
     downPayment,
     downPaymentPct: effectiveDownPaymentPct,
     interestRatePct: cleanRate,
     monthlyEmi,
+    requestedEmi: targetEmi,
+    monthlyInterest: loanResult.monthlyInterest || Math.round(loanPrincipal * (cleanRate / (12 * 100))),
+    suggestedMinEmi: loanResult.suggestedMinEmi || null,
     targetBillAmount: cleanMonthlyBill,
     tenureMonths,
     tenureYears,
@@ -276,6 +301,59 @@ export function calculateSolarFinancing({
     lifetimeNetGainUpfront,
     isZeroOutOfPocket,
     isFallback,
+    isLongTenure,
     error: loanResult.error || null,
   };
+}
+
+/**
+ * Generates a compact year-by-year amortization and solar cashflow schedule.
+ */
+export function buildLoanScheduleSummary(principal, annualRatePct, tenureMonths, monthlyEmi, monthlySavings = 0) {
+  const P = Math.max(Number(principal) || 0, 0);
+  const r = Math.max(Number(annualRatePct) || 0, 0);
+  const n = Math.max(Math.round(Number(tenureMonths) || 0), 0);
+  const E = Math.max(Number(monthlyEmi) || 0, 0);
+  const sav = Math.max(Number(monthlySavings) || 0, 0);
+
+  if (P <= 0 || n <= 0 || E <= 0) return [];
+
+  const monthlyRate = r / (12 * 100);
+  const totalYears = Math.ceil(n / 12);
+  let balance = P;
+  const rows = [];
+
+  for (let yr = 1; yr <= totalYears; yr++) {
+    const startBal = Math.round(balance);
+    let yrInterest = 0;
+    let yrPrincipal = 0;
+    let yrPaid = 0;
+    const startMonth = (yr - 1) * 12 + 1;
+    const endMonth = Math.min(yr * 12, n);
+
+    for (let m = startMonth; m <= endMonth; m++) {
+      if (balance <= 0) break;
+      const interest = balance * monthlyRate;
+      const payment = Math.min(E, balance + interest);
+      const prin = Math.max(0, payment - interest);
+      yrInterest += interest;
+      yrPrincipal += prin;
+      yrPaid += payment;
+      balance = Math.max(0, balance - prin);
+    }
+
+    const yrMonths = Math.max(0, endMonth - startMonth + 1);
+    rows.push({
+      year: yr,
+      openingBalance: startBal,
+      emiPaid: Math.round(yrPaid),
+      principalPaid: Math.round(yrPrincipal),
+      interestPaid: Math.round(yrInterest),
+      closingBalance: Math.round(balance),
+      solarSavings: Math.round(sav * 12),
+      monthsActive: yrMonths,
+    });
+  }
+
+  return rows;
 }

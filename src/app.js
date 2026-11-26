@@ -1,5 +1,6 @@
 import { DEFAULT_CONFIG, TARIFF_PROFILES, PANEL_LABELS, STRUCTURE_LABELS, SYSTEM_LABELS, getPanelSpecificationText } from "./config.js";
 import { calculateEstimate, calculateSolarFinancing, getPanelConfigurations, calculateSingleMeterSubsidy, distributeCapacityAcrossMeters, calculateLifetimeSavings } from "./calculator.js";
+import { buildLoanScheduleSummary } from "./loanEngine.js";
 import { parseMsebBillFile, parseMultipleMsebBillFiles } from "./billParser.js";
 import { isSupportedBillFile } from "./ocrExtractor.js";
 import { drawPanelArray, initRooftopCAD, getActiveRooftopCAD } from "./panelDiagram.js";
@@ -69,6 +70,8 @@ const state = {
     { id: "flat-4", flatNo: "202", customerName: "Sunita Patil", sanctionedLoad: 3, category: "LT-I", phase: "1-phase", monthlyUnits: 290, monthlyBill: 3100, loanMode: true },
   ],
   buildingData: null,
+  billBreakdownManualOverride: false,
+  loanSimMode: "auto",
 };
 
 if (typeof window !== "undefined") {
@@ -351,9 +354,9 @@ function readInput() {
     structureType: safeStr("structureType"),
     capacityOverride: numberValue("capacityOverride"),
     inverterOverride: numberValue("inverterOverride"),
-    billFixedCharges: $("billFixedCharges") && $("billFixedCharges").value !== "" ? numberValue("billFixedCharges") : null,
-    billEnergyCharges: $("billEnergyCharges") && $("billEnergyCharges").value !== "" ? numberValue("billEnergyCharges") : null,
-    billElectricityDuty: $("billElectricityDuty") && $("billElectricityDuty").value !== "" ? numberValue("billElectricityDuty") : null,
+    billFixedCharges: state.billBreakdownManualOverride && $("billFixedCharges") && $("billFixedCharges").value !== "" ? numberValue("billFixedCharges") : null,
+    billEnergyCharges: state.billBreakdownManualOverride && $("billEnergyCharges") && $("billEnergyCharges").value !== "" ? numberValue("billEnergyCharges") : null,
+    billElectricityDuty: state.billBreakdownManualOverride && $("billElectricityDuty") && $("billElectricityDuty").value !== "" ? numberValue("billElectricityDuty") : null,
     costOverrides: state.costOverrides || {},
     batteryOverride: numberValue("batteryOverride"),
     backupLoadPercent: numberValue("backupLoad"),
@@ -366,9 +369,14 @@ function readInput() {
     loanAmount: state.internalUnlocked
       ? (numberValue("internalLoanAmount") || numberValue("loanAmount"))
       : numberValue("loanAmount"),
-    loanInterestRate: state.internalUnlocked
-      ? (numberValue("internalLoanInterestRate") || numberValue("loanInterestRate") || 7)
-      : (numberValue("loanInterestRate") || 7),
+    loanInterestRate: (() => {
+      const primEl = state.internalUnlocked ? $("internalLoanInterestRate") : $("loanInterestRate");
+      const altEl = state.internalUnlocked ? $("loanInterestRate") : $("internalLoanInterestRate");
+      const raw = (primEl && primEl.value !== "")
+        ? parseFloat(primEl.value)
+        : ((altEl && altEl.value !== "") ? parseFloat(altEl.value) : NaN);
+      return Number.isFinite(raw) ? raw : 7;
+    })(),
     loanDownPaymentPct: (() => {
       const el = $("loanDownPaymentPct");
       const val = el ? parseFloat(el.value) : NaN;
@@ -377,9 +385,11 @@ function readInput() {
     loanMonthlyEmi: state.internalUnlocked
       ? (numberValue("internalLoanMonthlyEmi") || numberValue("loanMonthlyEmi"))
       : numberValue("loanMonthlyEmi"),
-    loanTenureMonths: state.internalUnlocked
-      ? numberValue("internalLoanTenureMonths")
-      : 0,
+    loanTenureMonths: (() => {
+      const intVal = numberValue("internalLoanTenureMonths");
+      const custVal = numberValue("loanTenureMonths");
+      return (state.internalUnlocked ? (intVal || custVal) : (custVal || intVal)) || 0;
+    })(),
   };
 }
 
@@ -412,7 +422,7 @@ function readConfig() {
       installationRatePerW: $("installationRate") && $("installationRate").value !== "" ? numberValue("installationRate") : DEFAULT_CONFIG.pricing.installationRatePerW,
       consultancyRatePerW: $("consultancyRate") && $("consultancyRate").value !== "" ? numberValue("consultancyRate") : DEFAULT_CONFIG.pricing.consultancyRatePerW,
       contingencyRate: $("contingencyRate") && $("contingencyRate").value !== "" ? numberValue("contingencyRate") : 0,
-      marginRate: $("marginRate") && $("marginRate").value !== "" ? numberValue("marginRate") : 30,
+      marginRate: $("marginRate") && $("marginRate").value !== "" ? numberValue("marginRate") : 25,
       inverterPriceTier: $("inverterPriceTier") ? $("inverterPriceTier").value : (DEFAULT_CONFIG.pricing.inverterPriceTier || "price1"),
     },
     performance: {
@@ -568,12 +578,47 @@ function renderComparison(options, recommended) {
   });
 }
 
+function getMultiFlatInverterList(option) {
+  if (option?.inverterSelection?.isSeparateFlatInverters && Array.isArray(option.inverterSelection.perMeterInverters)) {
+    return option.inverterSelection.perMeterInverters.map((it, idx) => ({
+      flatLabel: it.label || `Flat ${idx + 1}`,
+      allocatedKw: Number(it.allocatedKw) || 0,
+      modelName: it.inverter?.modelName || "Grid-Tied Inverter",
+      phase: it.inverter?.phase || "1-phase",
+      ratingKw: it.inverter?.ratingKw || 0,
+      cost: Number(it.inverter?.cost) || 0,
+    }));
+  }
+  if (state.proposalMode === "multi_building" && Array.isArray(state.buildingData?.flatLedger) && state.buildingData.flatLedger.length > 1) {
+    return state.buildingData.flatLedger.map((f, idx) => ({
+      flatLabel: `${f.flatNo || `Flat ${idx + 1}`}${f.customerName ? ` (${f.customerName})` : ""}`,
+      allocatedKw: Number(f.allocatedKw) || 0,
+      modelName: f.inverterModel || "Grid-Tied Inverter",
+      phase: f.inverterPhase || f.phase || "1-phase",
+      ratingKw: f.inverterRatingKw || 0,
+      cost: Number(f.inverterCost) || 0,
+    }));
+  }
+  if (Array.isArray(option?.meterBreakdown) && option.meterBreakdown.length > 1) {
+    return option.meterBreakdown.map((m, idx) => ({
+      flatLabel: m.label || m.consumerName || `Flat ${idx + 1}`,
+      allocatedKw: Number(m.allocatedKw) || 0,
+      modelName: m.inverterModel || "Grid-Tied Inverter",
+      phase: m.inverterPhase || m.phase || "1-phase",
+      ratingKw: m.inverterRatingKw || 0,
+      cost: Number(m.inverterCost) || 0,
+    }));
+  }
+  return [];
+}
+
 function renderBreakup(option, input, customerView, config) {
   const isInternal = state.internalUnlocked;
   const sysType = option.systemType;
   const dcWp = option.dcCapacityKw * 1000;
   const costPerWatt = dcWp > 0 ? (option.totalPreSubsidy / dcWp) : 0;
   const exceeds60 = costPerWatt > 60;
+  const flatInvList = getMultiFlatInverterList(option);
 
   let itemsHtml = "";
   
@@ -604,13 +649,28 @@ function renderBreakup(option, input, customerView, config) {
     // Build calculation detail map for each cost item
     const pricing = config?.pricing || {};
     const calcDetails = {};
-    const panelRate = input.panelType === 'nonDcr' ? pricing.panelNonDcrRatePerWp : pricing.panelDcrRatePerWp;
+    const panelRate = option.costBreakup?.appliedPanelRate ?? (input.panelType === 'nonDcr' ? pricing.panelNonDcrRatePerWp : pricing.panelDcrRatePerWp);
     calcDetails['panels'] = `${panelRate} Rs/Wp × ${dcWp.toLocaleString('en-IN')} Wp`;
     const structRate = pricing.structureRates?.[input.structureType] || 0;
     calcDetails['structure'] = `${structRate} Rs/W × ${dcWp.toLocaleString('en-IN')} W`;
     const invKw = option.inverterCapacityKw;
     const invModel = option.inverterModel || `${invKw} kW Inverter`;
-    calcDetails['inverter'] = `${invModel} (₹${money(option.costBreakup.inverter)})`;
+    if (flatInvList.length > 1) {
+      const totalInvSum = flatInvList.reduce((s, it) => s + (Number(it.cost) || 0), 0);
+      calcDetails['inverter'] = `
+        <div>${escapeHtml(invModel)} (Total ₹${money(option.costBreakup.inverter || totalInvSum)})</div>
+        <div class="multi-inverter-breakup-box" style="margin-top: 5px; padding: 6px 8px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 5px; font-style: normal; display: flex; flex-direction: column; gap: 3px;">
+          <div style="font-weight: 700; color: #0369a1; font-size: 10.5px;">⚡ Separate Inverters for ${flatInvList.length} Flats:</div>
+          ${flatInvList.map((fi) => `
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 10.5px; color: #0f172a; border-bottom: 1px dashed #e0f2fe; padding-bottom: 2px;">
+              <span>• <strong>${escapeHtml(fi.flatLabel)}</strong> (${fi.allocatedKw.toFixed(2)} kWp): <span style="color: #0284c7; font-weight: 600;">${escapeHtml(fi.modelName)}</span></span>
+              <span style="font-weight: 700; color: #0369a1; white-space: nowrap;">₹${money(fi.cost)}</span>
+            </div>
+          `).join("")}
+        </div>`;
+    } else {
+      calcDetails['inverter'] = `${invModel} (₹${money(option.costBreakup.inverter)})`;
+    }
     if (option.costBreakup.backupInverter > 0) {
       calcDetails['backupInverter'] = `Fixed cost for backup inverter`;
     }
@@ -662,7 +722,7 @@ function renderBreakup(option, input, customerView, config) {
 
     let gstVal = state.breakupConfigGst && state.breakupConfigGst[sysType] !== undefined ? state.breakupConfigGst[sysType] : option.costBreakup.gst;
     let contVal = state.breakupConfigContingency && state.breakupConfigContingency[sysType] !== undefined ? state.breakupConfigContingency[sysType] : option.costBreakup.contingency;
-    let defaultMarginRate = (config && config.pricing && config.pricing.marginRate !== undefined) ? config.pricing.marginRate : 30;
+    let defaultMarginRate = (config && config.pricing && config.pricing.marginRate !== undefined) ? config.pricing.marginRate : 25;
     let marginPct = (state.breakupConfigMarginPct && state.breakupConfigMarginPct[sysType] !== undefined)
       ? state.breakupConfigMarginPct[sysType]
       : (option.costBreakup.marginRate !== undefined ? option.costBreakup.marginRate : defaultMarginRate);
@@ -752,6 +812,21 @@ function renderBreakup(option, input, customerView, config) {
         <div style="font-size: 12px; font-weight: 700; color: #1e40af; background: #eff6ff; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #3b82f6;">• Note: MSEDCL Net Metering Liaisoning & Discom Documentation Support charges at actuals.</div>
       </div>
     </div>`;
+
+    if (flatInvList.length > 1) {
+      itemsHtml += `
+      <div class="multi-inverter-breakup-box" style="margin: 8px 0 12px; padding: 8px 10px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px;">
+        <div style="font-size: 12px; font-weight: 700; color: #0369a1; margin-bottom: 5px;">⚡ Dedicated Inverter per Flat (${flatInvList.length} Separate Inverters)</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 5px;">
+          ${flatInvList.map((fi) => `
+            <div style="background: #fff; border: 1px solid #e0f2fe; border-radius: 4px; padding: 4px 8px; font-size: 11px; display: flex; justify-content: space-between; gap: 6px;">
+              <strong>${escapeHtml(fi.flatLabel)}</strong>
+              <span style="color: #0284c7; font-weight: 600;">${escapeHtml(fi.modelName)}</span>
+            </div>
+          `).join("")}
+        </div>
+      </div>`;
+    }
 
     itemsHtml += `<div><dt style="font-weight: bold; color: var(--text);">Total System Cost (Inc. GST)</dt><dd style="font-weight: bold;">${money(option.totalPreSubsidy)}</dd></div>`;
     
@@ -843,18 +918,90 @@ function renderBreakup(option, input, customerView, config) {
 function renderFinancing(option, input) {
   const fin = option.financing;
   const container = $("financingBreakdownContent");
+  const scheduleContainer = $("loanScheduleContainer");
   const badge = $("financingStatusBadge");
   const card = $("financingProposalCard");
-  const hideFin = $("hideFinancing")?.checked || $("hideCost")?.checked;
+  const statusBanner = $("paneLoanStatusBanner");
+  const togglePdfBtn = $("paneLoanTogglePdfBtn");
+  const hideFinCheckbox = Boolean($("hideFinancing")?.checked);
+  const hideCostCheckbox = Boolean($("hideCost")?.checked);
+  const pdfLoanIncluded = (input.paymentMode === "loan") && !hideFinCheckbox && !hideCostCheckbox;
 
   if (card) {
-    card.style.display = hideFin ? "none" : "";
+    card.style.display = "";
   }
+  if (statusBanner) {
+    statusBanner.style.display = pdfLoanIncluded ? "none" : "flex";
+    const bannerSpan = statusBanner.querySelector("span");
+    const enableBtn = $("paneLoanEnableBtn");
+    if (bannerSpan) {
+      if (hideCostCheckbox) {
+        bannerSpan.innerHTML = `<strong>Hide Cost Breakup</strong> is enabled in Proposal Export — Bank Loan pages are hidden in PDF until Cost Breakup is shown.`;
+        if (enableBtn) enableBtn.style.display = "none";
+      } else if (hideFinCheckbox && input.paymentMode === "loan") {
+        bannerSpan.innerHTML = `<strong>Hide Loan Options</strong> is checked in Proposal Export — uncheck it or click below to include Bank Loan pages in PDF.`;
+        if (enableBtn) {
+          enableBtn.textContent = "Include Loan in PDF";
+          enableBtn.style.display = "inline-block";
+        }
+      } else {
+        bannerSpan.innerHTML = `<strong>Upfront Cash Mode</strong> is selected in Project Inputs. Preview bank financing scenarios below or switch to With Bank Loan for your Proposal PDF.`;
+        if (enableBtn) {
+          enableBtn.textContent = "Switch to With Bank Loan";
+          enableBtn.style.display = "inline-block";
+        }
+      }
+    }
+  }
+  if (togglePdfBtn) {
+    togglePdfBtn.textContent = pdfLoanIncluded ? "Include in PDF: On ✓" : "Include in PDF: Off";
+    togglePdfBtn.style.borderColor = pdfLoanIncluded ? "#16a34a" : "#cbd5e1";
+    togglePdfBtn.style.color = pdfLoanIncluded ? "#166534" : "#64748b";
+    togglePdfBtn.style.background = pdfLoanIncluded ? "#f0fdf4" : "#fff";
+  }
+
+  // Sync interactive controls inside #paneLoan without stomping focused fields
+  const setIfIdle = (id, val) => {
+    const el = $(id);
+    if (el && document.activeElement !== el) {
+      el.value = val;
+    }
+  };
+  setIfIdle("paneLoanInterestRate", input.loanInterestRate ?? 7);
+  setIfIdle("paneLoanDownPaymentPct", input.loanDownPaymentPct ?? 10);
+  setIfIdle("paneLoanTenureMonths", input.loanTenureMonths > 0 ? input.loanTenureMonths : 0);
+  setIfIdle("paneLoanMonthlyEmi", input.loanMonthlyEmi > 0 ? input.loanMonthlyEmi : "");
+
+  const derivedMode = (input.loanTenureMonths > 0) ? "tenure" : (input.loanMonthlyEmi > 0 ? "emi" : "auto");
+  state.loanSimMode = derivedMode;
+  document.querySelectorAll(".loan-mode-pill").forEach((pill) => {
+    const isAct = pill.dataset.loanMode === derivedMode;
+    pill.classList.toggle("active", isAct);
+    pill.style.background = isAct ? "#16a34a" : "#fff";
+    pill.style.borderColor = isAct ? "#16a34a" : "#cbd5e1";
+    pill.style.color = isAct ? "#fff" : "#334155";
+  });
+
   if (!fin || !container) return;
 
+  if ($("paneLoanAmountPreview")) {
+    $("paneLoanAmountPreview").textContent = `Loan Principal: ${money(fin.principal)} (Upfront: ${money(fin.downPayment)})`;
+  }
+
   if (badge) {
-    badge.textContent = fin.isZeroOutOfPocket ? "Zero Out-of-Pocket" : "Bank Partner Loan";
-    badge.className = fin.isZeroOutOfPocket ? "status-pill" : "status-pill review";
+    if (fin.principal === 0) {
+      badge.textContent = "100% Upfront (₹0 Loan)";
+      badge.className = "status-pill";
+    } else if (fin.loanModeType === "custom_tenure") {
+      badge.textContent = `Fixed Tenure (${fin.tenureMonths}m)`;
+      badge.className = "status-pill";
+    } else if (fin.isZeroOutOfPocket) {
+      badge.textContent = "Zero Out-of-Pocket";
+      badge.className = "status-pill";
+    } else {
+      badge.textContent = "Bank Partner Loan";
+      badge.className = "status-pill review";
+    }
   }
 
   // Update customer live preview badge in Step 2 if present
@@ -867,16 +1014,31 @@ function renderFinancing(option, input) {
     custLivePreview.innerHTML = `<span>✨ Upfront: <strong>${money(fin.downPayment)} (${fin.downPaymentPct}%)</strong> | EMI: <strong>${money(fin.monthlyEmi)}/mo</strong> → System free in <strong id="customerLoanTenurePreview">${fin.tenureFormatted}</strong>!</span>`;
   }
 
+  let alertHtml = "";
+  if (fin.isFallback) {
+    alertHtml += `
+    <div style="margin-bottom: 10px; padding: 9px 12px; border-radius: 8px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; font-size: 12px; line-height: 1.45;">
+      <strong>⚠️ EMI Fallback Applied (60 Months):</strong> Requested EMI of <strong>${money(fin.requestedEmi)}/mo</strong> does not exceed first-month bank interest (<strong>${money(fin.monthlyInterest)}/mo</strong>), so loan tenure cannot converge on that EMI. Increase EMI to at least <strong>${money(fin.suggestedMinEmi)}/mo</strong>, raise Down Payment %, or select Fixed Tenure.
+    </div>`;
+  } else if (fin.isLongTenure) {
+    alertHtml += `
+    <div style="margin-bottom: 10px; padding: 9px 12px; border-radius: 8px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; font-size: 12px; line-height: 1.45;">
+      <strong>ℹ️ Extended Payoff Horizon (${fin.tenureFormatted}):</strong> Matching the EMI strictly to the current bill yields a payoff period over 10 years. Increasing down payment % or adding ₹1,000–₹2,000/mo to EMI cuts total interest sharply.
+    </div>`;
+  }
+
   // Value proposition hero box
-  let html = `
+  let html = `${alertHtml}
   <div style="background: var(--surface-soft, #eef3ec); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px;">
     <div style="font-weight: 700; color: var(--brand-green, #63923E); font-size: 14px; margin-bottom: 4px;">
-      💡 Pay Your Electricity Bill to the Bank &rarr; Free Solar in ${fin.tenureFormatted}
+      💡 ${fin.principal === 0 ? "100% Self-Funded System (Zero Bank Loan Required)" : `Pay Your Electricity Bill to the Bank &rarr; Free Solar in ${fin.tenureFormatted}`}
     </div>
     <div style="font-size: 12px; color: var(--ink); line-height: 1.5;">
-      ${fin.isZeroOutOfPocket 
-        ? `Your regular monthly electricity bill of <strong>${money(fin.targetBillAmount)}/mo</strong> is redirected to pay the loan installment (<strong>${money(fin.monthlyEmi)}/mo</strong>). You incur <strong>₹0 extra monthly burden</strong>, and after <strong>${fin.tenureFormatted}</strong>, the system is 100% paid off, generating pure free electricity for the remaining <strong>${fin.freeElectricityYears} years</strong> of system life!`
-        : `Pay <strong>${money(fin.monthlyEmi)}/mo</strong> EMI for <strong>${fin.tenureFormatted}</strong>, after which you enjoy 100% free solar power for the remaining <strong>${fin.freeElectricityYears} years</strong> of system life.`}
+      ${fin.principal === 0
+        ? `At 100% upfront payment (<strong>${money(fin.downPayment)}</strong>), no bank loan is drawn, total interest paid is <strong>₹0</strong>, and you enjoy 100% free solar power for the entire <strong>25.0 years</strong>.`
+        : (fin.isZeroOutOfPocket
+            ? `Your regular monthly electricity bill of <strong>${money(fin.targetBillAmount)}/mo</strong> is redirected to pay the loan installment (<strong>${money(fin.monthlyEmi)}/mo</strong>). You incur <strong>₹0 extra monthly burden</strong>, and after <strong>${fin.tenureFormatted}</strong>, the system is 100% paid off, generating pure free electricity for the remaining <strong>${fin.freeElectricityYears} years</strong> of system life!`
+            : `Pay <strong>${money(fin.monthlyEmi)}/mo</strong> EMI for <strong>${fin.tenureFormatted}</strong>, after which you enjoy 100% free solar power for the remaining <strong>${fin.freeElectricityYears} years</strong> of system life.`)}
     </div>
   </div>`;
 
@@ -991,7 +1153,137 @@ function renderFinancing(option, input) {
     </div>`;
   }
 
+  const residualBill = option.postSolarBillBreakdown?.netPayable ?? 0;
+  const curBillAmt = option.currentBillBreakdown?.total ?? input.monthlyBill ?? 0;
+  const netOutflowDuringLoan = Math.round((fin.monthlyEmi || 0) + residualBill);
+  const netDelta = netOutflowDuringLoan - curBillAmt;
+
+  html += `
+  <div style="margin-top: 10px; padding: 9px 12px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; font-size: 12px; color: #334155;">
+    <span><strong>Monthly Loan Cashflow Check:</strong> EMI (${money(fin.monthlyEmi)}) + Residual Bill (${money(residualBill)}) = <strong>${money(netOutflowDuringLoan)}/mo</strong></span>
+    <span style="font-weight: 700; color: ${netDelta <= 50 ? "#15803d" : "#b45309"};">
+      ${netDelta <= 0 ? `Saving ${money(Math.abs(netDelta))}/mo even during loan` : `+${money(netDelta)}/mo vs current ₹${curBillAmt.toLocaleString("en-IN")} bill`}
+    </span>
+  </div>`;
+
   container.innerHTML = html;
+
+  if (scheduleContainer) {
+    if (fin.principal > 0 && fin.tenureMonths > 0) {
+      const yearlyRows = buildLoanScheduleSummary(
+        fin.principal,
+        fin.interestRatePct,
+        fin.tenureMonths,
+        fin.monthlyEmi,
+        fin.monthlySavings
+      );
+      scheduleContainer.innerHTML = `
+      <details style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; background: #fff;">
+        <summary style="cursor: pointer; font-size: 12.5px; font-weight: 600; color: #0f172a;">📅 View Year-by-Year Loan Amortization Schedule (${yearlyRows.length} Year${yearlyRows.length === 1 ? "" : "s"}, ${fin.tenureMonths} EMIs)</summary>
+        <div style="margin-top: 8px; max-height: 240px; overflow-y: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+            <thead>
+              <tr style="border-bottom: 1.5px solid #cbd5e1; background: #f8fafc;">
+                <th style="padding: 5px 6px; text-align: left;">Year</th>
+                <th style="padding: 5px 6px; text-align: right;">Opening Balance</th>
+                <th style="padding: 5px 6px; text-align: right;">Principal Paid</th>
+                <th style="padding: 5px 6px; text-align: right;">Interest Paid</th>
+                <th style="padding: 5px 6px; text-align: right;">Closing Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${yearlyRows.map((row, idx) => `
+              <tr style="border-bottom: 1px solid #e2e8f0; ${idx % 2 === 1 ? "background: #fafafa;" : ""}">
+                <td style="padding: 4px 6px; font-weight: 600;">Year ${row.year}</td>
+                <td style="padding: 4px 6px; text-align: right;">${money(row.openingBalance)}</td>
+                <td style="padding: 4px 6px; text-align: right; color: #15803d; font-weight: 600;">${money(row.principalPaid)}</td>
+                <td style="padding: 4px 6px; text-align: right; color: #b45309;">${money(row.interestPaid)}</td>
+                <td style="padding: 4px 6px; text-align: right; font-weight: 600;">${money(row.closingBalance)}</td>
+              </tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
+      </details>`;
+    } else {
+      scheduleContainer.innerHTML = "";
+    }
+  }
+}
+
+function syncCadPdfBtnVisual() {
+  const cadTogglePdfBtn = $("cadTogglePdfReportBtn");
+  const showCadCb = $("showCadDiagram");
+  if (!cadTogglePdfBtn || !showCadCb) return;
+  if (showCadCb.checked) {
+    cadTogglePdfBtn.classList.add("active");
+    cadTogglePdfBtn.title = "Blueprint will appear in PDF report (Click to hide)";
+    cadTogglePdfBtn.style.borderColor = "var(--primary-green, #16a34a)";
+    cadTogglePdfBtn.style.color = "var(--primary-green, #16a34a)";
+  } else {
+    cadTogglePdfBtn.classList.remove("active");
+    cadTogglePdfBtn.title = "Blueprint hidden from PDF report (Click to include)";
+    cadTogglePdfBtn.style.borderColor = "var(--line, #cbd5e1)";
+    cadTogglePdfBtn.style.color = "var(--text-muted, #64748b)";
+  }
+}
+
+function updateProposalSectionsStatus(option, input) {
+  const statusEl = $("proposalSectionsLiveStatus");
+  if (statusEl) {
+    const isBuilding = state.proposalMode === "multi_building";
+    const showCad = $("showCadDiagram") ? $("showCadDiagram").checked : true;
+    const hideCost = Boolean($("hideCost")?.checked);
+    const hideSubsidy = Boolean($("hideSubsidy")?.checked);
+    const hidePayback = Boolean($("hidePayback")?.checked || hideCost);
+    const hideFin = (input?.paymentMode !== "loan") || Boolean($("hideFinancing")?.checked) || hideCost;
+    const indSheets = isBuilding && Boolean($("includeIndividualSheets")?.checked);
+
+    const pills = [
+      { label: isBuilding ? "1. Society Summary" : "1. System Design", active: true },
+      { label: `CAD Blueprint: ${showCad ? "Included" : "Hidden"}`, active: showCad },
+      { label: hideCost ? "Scope Only (Cost Hidden)" : "Quote & Bill Savings", active: !hideCost },
+      { label: hideSubsidy ? "Subsidy: Hidden" : "Subsidy: Shown", active: !hideSubsidy },
+      { label: hidePayback ? "Payback: Hidden" : "Payback: Shown", active: !hidePayback },
+      { label: hideFin ? "Loan Pages: Off" : "Loan Pages: Included", active: !hideFin },
+    ];
+    if (isBuilding && indSheets) {
+      pills.push({ label: "Resident Sheets: Included", active: true });
+    }
+
+    statusEl.innerHTML = `<span style="font-weight: 700; color: #0f172a;">Active PDF Sections:</span> ` +
+      pills.map((p) =>
+        `<span style="padding: 2px 7px; border-radius: 999px; font-weight: 600; background: ${p.active ? "#dcfce7" : "#f1f5f9"}; color: ${p.active ? "#166534" : "#64748b"}; border: 1px solid ${p.active ? "#bbf7d0" : "#e2e8f0"};">${p.active ? "✓" : "✕"} ${p.label}</span>`
+      ).join("");
+  }
+
+  const scopeEl = $("proposalScopePillsContainer");
+  if (scopeEl && option) {
+    let invLabel = "On-grid Inverter";
+    if (option.systemType === "hybrid") invLabel = "Hybrid Inverter";
+    else if (option.systemType === "offgrid") invLabel = "Off-grid Inverter";
+    else if (option.systemType === "ongrid_basic_backup") invLabel = "On-grid Inverter + 1.1 kVA Backup";
+    else if (option.systemType === "ongrid_standard_backup") invLabel = "On-grid Inverter + 2.1 kVA Backup";
+    if (option.inverterModel) invLabel += ` (${option.inverterModel})`;
+
+    const items = [
+      { text: "Solar Panels", green: false },
+      { text: `Mounting (${STRUCTURE_LABELS[input?.structureType] || "Hot-dip galvanized"})`, green: false },
+      { text: invLabel, green: false },
+    ];
+    if ((option.batteryCapacityKwh || 0) > 0) {
+      items.push({ text: `Battery Bank (${option.batteryCapacityKwh} kWh)`, green: false });
+    }
+    items.push(
+      { text: "Safety & Earthing", green: false },
+      { text: "Wiring (excluding extra cable)", green: false },
+      { text: "Installation & Commissioning", green: false },
+      { text: "Consultancy & Liaisoning", green: false },
+      { text: "GST (8.9% Composite)", green: true }
+    );
+    scopeEl.innerHTML = items.map((it) =>
+      `<span style="background: ${it.green ? "#dcfce7" : "#e0f2fe"}; color: ${it.green ? "#166534" : "#0369a1"}; padding: 3px 8px; border-radius: 4px; font-weight: ${it.green ? "700" : "600"};">✓ ${escapeHtml(it.text)}</span>`
+    ).join("");
+  }
 }
 
 function renderNotes(option, input) {
@@ -1111,13 +1403,25 @@ function applyExtractedBill() {
   // Reset billConfig so newly extracted bill items take effect
   state.billConfig = {};
 
-  if (fields.name) $("customerName").value = fields.name;
-  
+  if (fields.name) {
+    if ($("customerName")) $("customerName").value = fields.name;
+    if ($("internalCustomerName")) $("internalCustomerName").value = fields.name;
+    if ($("proposalToCustomerName")) $("proposalToCustomerName").textContent = fields.name;
+  }
+  if (fields.address) {
+    if ($("customerAddress")) $("customerAddress").value = fields.address;
+    if ($("proposalToCustomerAddress")) $("proposalToCustomerAddress").textContent = fields.address;
+  }
+  if (fields.connectionPhase && $("connectionPhase")) {
+    const rawPhase = String(fields.connectionPhase).toLowerCase();
+    $("connectionPhase").value = (rawPhase.includes("3") || rawPhase.includes("three")) ? "3-phase" : "1-phase";
+  }
+
   // Prefer the calculated yearly average, fallback to the current month's consumption
   const targetUnits = fields.yearlyAvgUnitsKwh || fields.unitsConsumedKwh;
-  if (targetUnits) $("monthlyUnits").value = Math.round(targetUnits);
-  if (fields.billAmountRs) $("monthlyBill").value = Math.round(fields.billAmountRs);
-  if (fields.sanctionedLoadKw) $("sanctionedLoad").value = fields.sanctionedLoadKw;
+  if (targetUnits && $("monthlyUnits")) $("monthlyUnits").value = Math.round(targetUnits);
+  if (fields.billAmountRs && $("monthlyBill")) $("monthlyBill").value = Math.round(fields.billAmountRs);
+  if (fields.sanctionedLoadKw && $("sanctionedLoad")) $("sanctionedLoad").value = fields.sanctionedLoadKw;
 
   // Auto-set category from extracted tariff
   if (fields.tariffCategory) {
@@ -1141,15 +1445,26 @@ function applyExtractedBill() {
     if (pfEl) pfEl.value = fields.powerFactor;
   }
 
-  // Auto-fill Current Bill Breakdown if charges were detected
+  // Auto-fill Current Bill Breakdown if charges were detected; otherwise re-enable auto-sync
+  let hasExplicitBreakdown = false;
   if (result.charges && Array.isArray(result.charges)) {
     const fc = result.charges.find(c => /fixed|स्थिर/i.test(c.label || c.desc));
     const ec = result.charges.find(c => /energy|वीज आकार/i.test(c.label || c.desc));
     const dt = result.charges.find(c => /duty|शुल्क/i.test(c.label || c.desc));
-    if (fc && $("billFixedCharges")) $("billFixedCharges").value = Math.round(fc.amount || 0);
-    if (ec && $("billEnergyCharges")) $("billEnergyCharges").value = Math.round(ec.amount || 0);
-    if (dt && $("billElectricityDuty")) $("billElectricityDuty").value = Math.round(dt.amount || 0);
+    if (fc && $("billFixedCharges")) {
+      $("billFixedCharges").value = Math.round(fc.amount || 0);
+      hasExplicitBreakdown = true;
+    }
+    if (ec && $("billEnergyCharges")) {
+      $("billEnergyCharges").value = Math.round(ec.amount || 0);
+      hasExplicitBreakdown = true;
+    }
+    if (dt && $("billElectricityDuty")) {
+      $("billElectricityDuty").value = Math.round(dt.amount || 0);
+      hasExplicitBreakdown = true;
+    }
   }
+  state.billBreakdownManualOverride = hasExplicitBreakdown;
 
   render();
 }
@@ -1168,9 +1483,10 @@ function updateMultiMeterKPIs() {
   const totalLoad = state.meters.reduce((s, m) => s + (Number(m.sanctionedLoad) || 0), 0);
   const totalUnits = state.meters.reduce((s, m) => s + (Number(m.monthlyUnits) || 0), 0);
   const totalAllocatedKw = round(state.meters.reduce((s, m) => s + (Number(m.allocatedKw) || 0), 0), 2);
+  const isSpecialState = Boolean($("isSpecialCategoryState")?.checked);
   let totalSubsidies = 0;
   state.meters.forEach((m) => {
-    totalSubsidies += calculateSingleMeterSubsidy(Number(m.allocatedKw) || 0, m.consumerCategory || "LT-I");
+    totalSubsidies += calculateSingleMeterSubsidy(Number(m.allocatedKw) || 0, m.consumerCategory || "LT-I", { isSpecialCategoryState: isSpecialState });
   });
 
   if ($("mmTotalMetersCount")) $("mmTotalMetersCount").textContent = `${totalMeters} Flats`;
@@ -1219,13 +1535,18 @@ function renderMultiMeterTable() {
 
   const totalMeters = state.meters.length;
 
+  const isSpecialState = Boolean($("isSpecialCategoryState")?.checked);
+  const activeBreakdown = state.estimates?.recommended?.meterBreakdown || [];
   let totalSubsidies = 0;
   const rowsHtml = state.meters.map((meter) => {
     const isMissingNo = !meter.consumerNumber;
     const isMissingLabel = !meter.label;
     const isMissingLoad = !(Number(meter.sanctionedLoad) > 0);
-    const sub = calculateSingleMeterSubsidy(Number(meter.allocatedKw) || 0, meter.consumerCategory || "LT-I");
+    const breakdownMatch = activeBreakdown.find((b) => b.id === meter.id || (meter.consumerNumber && b.consumerNumber === meter.consumerNumber));
+    const effectiveAllocKw = Number(meter.allocatedKw) > 0 ? Number(meter.allocatedKw) : (Number(breakdownMatch?.allocatedKw) || 0);
+    const sub = calculateSingleMeterSubsidy(effectiveAllocKw, meter.consumerCategory || "LT-I", { isSpecialCategoryState: isSpecialState });
     totalSubsidies += sub;
+    const inv = findInverterForCapacity(effectiveAllocKw, meter.phase || meter.connectionPhase || (effectiveAllocKw > 5.0 ? "3-phase" : "1-phase"));
 
     return `
       <tr data-meter-id="${meter.id}" style="border-bottom: 1px solid #e2e8f0; transition: background 0.15s;">
@@ -1248,6 +1569,9 @@ function renderMultiMeterTable() {
           <input type="number" class="mm-input mm-field-alloc" data-id="${meter.id}" data-field="allocatedKw" min="0" max="500" step="0.1" value="${meter.allocatedKw || 0}" style="width: 58px; font-size: 11px; padding: 3px 4px; border: 1px solid #38bdf8; border-radius: 4px; font-weight: 600; color: #0284c7;">
         </td>
         <td style="padding: 4px 6px; white-space: nowrap;">
+          <span class="mm-inverter-badge" style="font-size: 10px; font-weight: 600; color: #0369a1; background: #e0f2fe; padding: 2px 5px; border-radius: 4px;" title="Dedicated Inverter for this flat">${inv.modelName}</span>
+        </td>
+        <td style="padding: 4px 6px; white-space: nowrap;">
           <span class="mm-subsidy-badge" style="font-size: 10.5px; font-weight: 600; color: #16a34a; background: #dcfce7; padding: 2px 5px; border-radius: 4px;">₹${sub.toLocaleString('en-IN')}</span>
         </td>
         <td style="padding: 4px 4px; text-align: center;">
@@ -1257,7 +1581,7 @@ function renderMultiMeterTable() {
     `;
   }).join("");
 
-  tbody.innerHTML = rowsHtml || `<tr><td colspan="8" style="padding: 14px; text-align: center; color: var(--muted); font-style: italic;">No meters added yet. Click "+ Add Flat / Meter" or upload bills above.</td></tr>`;
+  tbody.innerHTML = rowsHtml || `<tr><td colspan="9" style="padding: 14px; text-align: center; color: var(--muted); font-style: italic;">No meters added yet. Click "+ Add Flat / Meter" or upload bills above.</td></tr>`;
 
   updateMultiMeterKPIs();
 
@@ -1273,12 +1597,15 @@ function renderMultiMeterTable() {
         } else {
           meter[field] = e.target.value;
         }
-        // If editing allocatedKw, update subsidy badge immediately without losing focus
+        // If editing allocatedKw, update subsidy & inverter badges immediately without losing focus
         if (field === "allocatedKw") {
           const row = e.target.closest("tr");
           const subBadge = row?.querySelector(".mm-subsidy-badge");
+          const invBadge = row?.querySelector(".mm-inverter-badge");
           const newSub = calculateSingleMeterSubsidy(meter.allocatedKw, meter.consumerCategory || "LT-I");
+          const newInv = findInverterForCapacity(Number(meter.allocatedKw) || 0, meter.phase || meter.connectionPhase || (Number(meter.allocatedKw) > 5.0 ? "3-phase" : "1-phase"));
           if (subBadge) subBadge.textContent = `₹${newSub.toLocaleString('en-IN')}`;
+          if (invBadge) invBadge.textContent = newInv.modelName;
           updateMultiMeterKPIs();
         }
       }
@@ -1458,7 +1785,7 @@ function render() {
       multiSubCard.style.display = "block";
       if (multiSubCount) {
         const eligibleCount = state.buildingData.flatLedger.filter((f) => f.subsidy > 0).length;
-        multiSubCount.textContent = `${eligibleCount} of ${state.buildingData.flatLedger.length} Flats Eligible for PM Surya Ghar (Category B)`;
+        multiSubCount.textContent = `${eligibleCount} of ${state.buildingData.flatLedger.length} Flats · ${state.buildingData.flatLedger.length} Separate Inverters`;
       }
       multiSubList.innerHTML = state.buildingData.flatLedger
         .map((f) => `
@@ -1471,6 +1798,10 @@ function render() {
               <span>${f.panels} Panels · ${Number(f.allocatedKw || 0).toFixed(2)} kWp</span>
               <span>${f.monthlyUnits} kWh/mo</span>
             </div>
+            <div style="font-size: 10.5px; color: #0369a1; font-weight: 600; margin-top: 3px; padding-top: 3px; border-top: 1px dashed #dcfce7; display: flex; justify-content: space-between;">
+              <span>⚡ ${escapeHtml(f.inverterModel || "Grid-Tied Inverter")}</span>
+              ${state.internalUnlocked && f.inverterCost ? `<span>₹${Number(f.inverterCost).toLocaleString('en-IN')}</span>` : ''}
+            </div>
           </div>
         `)
         .join("");
@@ -1478,7 +1809,7 @@ function render() {
       multiSubCard.style.display = "block";
       if (multiSubCount) {
         const eligibleCount = option.meterBreakdown.filter((m) => m.subsidy > 0).length;
-        multiSubCount.textContent = `${eligibleCount} of ${option.meterBreakdown.length} Flats Eligible for PM Surya Ghar`;
+        multiSubCount.textContent = `${eligibleCount} of ${option.meterBreakdown.length} Flats · ${option.meterBreakdown.length} Separate Inverters`;
       }
       multiSubList.innerHTML = option.meterBreakdown
         .map((m) => `
@@ -1491,6 +1822,10 @@ function render() {
               <span>${m.allocatedKw} kWp Allocated</span>
               <span>${m.monthlyUnits} kWh/mo</span>
             </div>
+            <div style="font-size: 10.5px; color: #0369a1; font-weight: 600; margin-top: 3px; padding-top: 3px; border-top: 1px dashed #dcfce7; display: flex; justify-content: space-between;">
+              <span>⚡ ${escapeHtml(m.inverterModel || "Grid-Tied Inverter")}</span>
+              ${state.internalUnlocked && m.inverterCost ? `<span>₹${Number(m.inverterCost).toLocaleString('en-IN')}</span>` : ''}
+            </div>
           </div>
         `)
         .join("");
@@ -1499,9 +1834,22 @@ function render() {
     }
   }
 
-  // Update allocation bar targets in multi-meter panel
+  // Update allocation bar targets and live inverter badges in multi-meter panel
   if (state.meteringMode === "multi") {
     updateMultiMeterKPIs();
+    const tbody = $("mmMetersTableBody");
+    const bdList = option.meterBreakdown || [];
+    if (tbody && bdList.length > 0 && !tbody.contains(document.activeElement)) {
+      bdList.forEach((bm) => {
+        const tr = Array.from(tbody.querySelectorAll("tr")).find((row) => row.getAttribute("data-meter-id") === String(bm.id));
+        if (tr) {
+          const invBadge = tr.querySelector(".mm-inverter-badge");
+          const subBadge = tr.querySelector(".mm-subsidy-badge");
+          if (invBadge && bm.inverterModel) invBadge.textContent = bm.inverterModel;
+          if (subBadge && bm.subsidy !== undefined) subBadge.textContent = `₹${Number(bm.subsidy).toLocaleString('en-IN')}`;
+        }
+      });
+    }
   }
 
   $("sanctionStatus").textContent = estimate.sanctionedStatus.label;
@@ -1543,6 +1891,8 @@ function render() {
   renderBreakup(option, input, input.customerView, config);
   renderFinancing(option, input);
   renderNotes(option, input);
+  updateProposalSectionsStatus(option, input);
+  syncCadPdfBtnVisual();
   renderExtractedBill(state.extractedBill);
   renderDiagram(pl, input);
 
@@ -1817,20 +2167,24 @@ function render() {
       </table>`;
   }
 
-  // Sync sidebar current bill breakdown values if not actively being typed
+  // Sync sidebar current bill breakdown values whenever auto-synced or cleared
+  const syncCb = option.currentBillBreakdown || {};
+  const syncFixed = syncCb.fixedCharge !== undefined ? syncCb.fixedCharge : 130;
+  const syncEnergy = syncCb.energyCharge || 0;
+  const syncDuty = syncCb.duty || 0;
   if ($("billFixedCharges") && document.activeElement !== $("billFixedCharges")) {
-    if (!$("billFixedCharges").value || !input.billFixedCharges) {
-      $("billFixedCharges").value = fixedCharge;
+    if (!state.billBreakdownManualOverride || !$("billFixedCharges").value || !input.billFixedCharges) {
+      $("billFixedCharges").value = Math.round(syncFixed);
     }
   }
   if ($("billEnergyCharges") && document.activeElement !== $("billEnergyCharges")) {
-    if (!$("billEnergyCharges").value || !input.billEnergyCharges) {
-      $("billEnergyCharges").value = energyCharge;
+    if (!state.billBreakdownManualOverride || !$("billEnergyCharges").value || !input.billEnergyCharges) {
+      $("billEnergyCharges").value = Math.round(syncEnergy);
     }
   }
   if ($("billElectricityDuty") && document.activeElement !== $("billElectricityDuty")) {
-    if (!$("billElectricityDuty").value || !input.billElectricityDuty) {
-      $("billElectricityDuty").value = duty;
+    if (!state.billBreakdownManualOverride || !$("billElectricityDuty").value || !input.billElectricityDuty) {
+      $("billElectricityDuty").value = Math.round(syncDuty);
     }
   }
 
@@ -1838,14 +2192,9 @@ function render() {
   const hidePayback = $("hidePayback")?.checked || $("hideCost")?.checked;
   const hideAreaFit = $("hideAreaFit")?.checked;
   const hideSubsidy = $("hideSubsidy")?.checked;
-  const hideFinancing = (input.paymentMode !== "loan") || $("hideFinancing")?.checked || $("hideCost")?.checked;
-  
+
   if ($("costBreakup")?.closest("details")) {
     $("costBreakup").closest("details").style.display = $("hideCost")?.checked ? "none" : "";
-  }
-
-  if ($("financingProposalCard")) {
-    $("financingProposalCard").style.display = hideFinancing ? "none" : "";
   }
 
   // Payback card in summary metrics
@@ -2147,6 +2496,7 @@ function setupCadEventListeners(cad) {
     const roofInput = $("roofArea");
     if (roofInput && document.activeElement !== roofInput) {
       roofInput.value = stats.netUsableSqft;
+      state.lastCadSyncedRoofArea = stats.netUsableSqft;
       render();
     }
   };
@@ -2193,7 +2543,9 @@ function setupCadEventListeners(cad) {
       const roofInput = $("roofArea");
       if (roofInput && document.activeElement !== roofInput) {
         roofInput.value = stats.netUsableSqft;
+        state.lastCadSyncedRoofArea = stats.netUsableSqft;
       }
+      render();
     }
   });
 
@@ -2204,7 +2556,9 @@ function setupCadEventListeners(cad) {
       const roofInput = $("roofArea");
       if (roofInput && document.activeElement !== roofInput) {
         roofInput.value = stats.netUsableSqft;
+        state.lastCadSyncedRoofArea = stats.netUsableSqft;
       }
+      render();
     }
   });
 
@@ -3227,6 +3581,7 @@ function setupCadEventListeners(cad) {
     const stats = cad.getAreaStats();
     const roofInput = $("roofArea");
     if (roofInput) {
+      state.lastCadSyncedRoofArea = stats.netUsableSqft;
       roofInput.value = stats.netUsableSqft;
       roofInput.dispatchEvent(new Event("input", { bubbles: true }));
       roofInput.dispatchEvent(new Event("change", { bubbles: true }));
@@ -3345,17 +3700,20 @@ function renderDiagram(pl, input) {
       cad.loadState(state.pendingCadState);
       state.pendingCadState = null;
     }
+    state.lastCadSyncedRoofArea = targetUsableArea;
   } else {
     cad.setRequiredPanels(effectiveReqPanels, pl.panelWidthMm, pl.panelHeightMm);
     if (state.pendingCadState) {
       cad.loadState(state.pendingCadState);
       state.pendingCadState = null;
+      state.lastCadSyncedRoofArea = targetUsableArea;
     } else if (!state.isRestoringProposal) {
       const currentStats = cad.getAreaStats();
       const isEditingCadDirectly = document.activeElement === $("cadRoofLength") || document.activeElement === $("cadRoofBreadth");
+      const roofInputChanged = state.lastCadSyncedRoofArea !== undefined && Math.abs(targetUsableArea - state.lastCadSyncedRoofArea) >= 1;
 
-      // When Usable Roof Area changes in input, reflect it as it is in Rooftop CAD
-      if (!isEditingCadDirectly && Math.abs(currentStats.netUsableSqft - targetUsableArea) >= 1) {
+      // Only resize CAD base roof when the Usable Roof Area input itself was changed (not on tab switches or walkway edits)
+      if (!isEditingCadDirectly && !isBuildingMode && roofInputChanged && Math.abs(currentStats.netUsableSqft - targetUsableArea) >= 1) {
         const deductions = (currentStats.cutoutSqft || 0) + (currentStats.pathwaySqft || 0);
         const targetGross = targetUsableArea + deductions;
         let preferredRatio = 1.35;
@@ -3366,6 +3724,7 @@ function renderDiagram(pl, input) {
         const { l, b } = solveRoofDimensions(targetGross, preferredRatio);
         cad.setRoofDimensions(l, b);
       }
+      state.lastCadSyncedRoofArea = targetUsableArea;
     }
   }
 
@@ -3382,12 +3741,13 @@ function renderDiagram(pl, input) {
   // Update initial UI stats
   const stats = cad.getAreaStats();
   const isEditingCad = document.activeElement === $("cadRoofLength") || document.activeElement === $("cadRoofBreadth");
+  const isEditingPathwayWidth = document.activeElement === $("cadPathwayWidth");
   if ($("cadGrossArea")) $("cadGrossArea").textContent = stats.grossSqft;
   if ($("cadCutoutArea")) $("cadCutoutArea").textContent = stats.cutoutSqft + stats.pathwaySqft;
   if ($("cadNetArea")) $("cadNetArea").textContent = stats.netUsableSqft;
   if ($("cadRoofLength") && !isEditingCad) $("cadRoofLength").value = cad.roofLengthFt;
   if ($("cadRoofBreadth") && !isEditingCad) $("cadRoofBreadth").value = cad.roofBreadthFt;
-  if ($("cadPathwayWidth")) $("cadPathwayWidth").value = cad.defaultPathwayWidthFt;
+  if ($("cadPathwayWidth") && !isEditingPathwayWidth) $("cadPathwayWidth").value = cad.defaultPathwayWidthFt;
   if ($("cadNorthAngleInput")) $("cadNorthAngleInput").value = cad.northAngleDeg;
   if ($("cadBuildingHeightInput")) $("cadBuildingHeightInput").value = cad.buildingHeightFt;
   if ($("cadElevationBldgHeightInput")) $("cadElevationBldgHeightInput").value = cad.buildingHeightFt;
@@ -3685,14 +4045,6 @@ async function unlockInternal() {
   const pwd = (pwdInput?.value || "").trim();
   const username = (userInput?.value || userSelect?.value || "").trim();
 
-  // 1. Backward compatibility check for test suites and emergency passphrase
-  if (pwd === "solar2026") {
-    errEl?.classList.add("hidden");
-    closeInternalDialog();
-    openInternal(CLONED_APP_USERS[0]);
-    return;
-  }
-
   if (!pwd) {
     if (errEl) {
       errEl.textContent = "Please enter your password.";
@@ -3702,7 +4054,7 @@ async function unlockInternal() {
     return;
   }
 
-  // 2. Cloned user credentials verification
+  // 1. Cloned user credentials verification
   const authRes = await authenticateInternalUser(username, pwd);
   if (authRes && authRes.success && authRes.user) {
     errEl?.classList.add("hidden");
@@ -3881,12 +4233,20 @@ function saveCustomerLocalEstimate() {
       mobileNumber: $("mobileNumber")?.value || "",
       emailAddress: $("emailAddress")?.value || "",
       customerAddress: $("customerAddress")?.value || "Pune, Maharashtra",
-      consumerCategory: $("consumerCategory")?.value || "residential",
+      consumerCategory: $("consumerCategory")?.value || "LT-I",
+      connectionPhase: $("connectionPhase")?.value || "1-phase",
       monthlyBill: $("monthlyBill")?.value || "",
       monthlyUnits: $("monthlyUnits")?.value || "",
       sanctionedLoad: $("sanctionedLoad")?.value || "",
       roofArea: $("roofArea")?.value || "",
-      powerGoal: state.powerGoal || "ongrid",
+      goal: $("goal")?.value || "savings",
+      structureType: $("structureType")?.value || "hotDip",
+      panelType: $("panelType")?.value || "dcr",
+      paymentMode: $("paymentMode")?.value || "upfront",
+      loanInterestRate: $("loanInterestRate")?.value || "7",
+      loanDownPaymentPct: $("loanDownPaymentPct")?.value || "10",
+      loanTenureMonths: $("loanTenureMonths")?.value || "0",
+      loanMonthlyEmi: $("loanMonthlyEmi")?.value || "",
       batteryHours: $("batteryHours")?.value || "2",
       savedAt: new Date().toISOString()
     };
@@ -3910,17 +4270,28 @@ function loadCustomerLocalEstimate() {
     if ($("mobileNumber")) $("mobileNumber").value = data.mobileNumber || "";
     if ($("emailAddress")) $("emailAddress").value = data.emailAddress || "";
     if ($("customerAddress")) $("customerAddress").value = data.customerAddress || "Pune, Maharashtra";
-    if ($("consumerCategory")) $("consumerCategory").value = data.consumerCategory || "residential";
+    if ($("consumerCategory")) {
+      const cat = data.consumerCategory === "residential" ? "LT-I" : (data.consumerCategory || "LT-I");
+      $("consumerCategory").value = cat;
+    }
+    if ($("connectionPhase") && data.connectionPhase) $("connectionPhase").value = data.connectionPhase;
     if ($("monthlyBill")) $("monthlyBill").value = data.monthlyBill || "";
     if ($("monthlyUnits")) $("monthlyUnits").value = data.monthlyUnits || "";
     if ($("sanctionedLoad")) $("sanctionedLoad").value = data.sanctionedLoad || "";
     if ($("roofArea")) $("roofArea").value = data.roofArea || "";
-    if (data.powerGoal) {
-      state.powerGoal = data.powerGoal;
-      document.querySelectorAll(".power-goal-pill").forEach(btn => {
-        btn.classList.toggle("active", btn.dataset.goal === data.powerGoal);
-      });
+    if ($("goal") && (data.goal || data.powerGoal)) $("goal").value = data.goal || data.powerGoal;
+    if ($("structureType") && data.structureType) $("structureType").value = data.structureType;
+    if ($("panelType") && data.panelType) $("panelType").value = data.panelType;
+    if ($("paymentMode") && data.paymentMode) {
+      $("paymentMode").value = data.paymentMode;
+      $("customerLoanFields")?.classList.toggle("hidden", data.paymentMode !== "loan");
     }
+    if ($("loanInterestRate") && data.loanInterestRate !== undefined) $("loanInterestRate").value = data.loanInterestRate;
+    if ($("loanDownPaymentPct") && data.loanDownPaymentPct !== undefined) $("loanDownPaymentPct").value = data.loanDownPaymentPct;
+    if ($("loanTenureMonths") && data.loanTenureMonths !== undefined) $("loanTenureMonths").value = data.loanTenureMonths;
+    if ($("loanMonthlyEmi") && data.loanMonthlyEmi !== undefined) $("loanMonthlyEmi").value = data.loanMonthlyEmi;
+    if ($("batteryHours") && data.batteryHours !== undefined) $("batteryHours").value = data.batteryHours;
+    state.billBreakdownManualOverride = false;
     render();
     showLoadToast("Locally saved estimate loaded! 📂");
   } catch (err) {
@@ -3964,30 +4335,42 @@ async function submitCustomerSiteVisitRequest() {
   const cap = state.estimates?.recommended?.dcCapacityKw || 3.3;
   const cost = state.estimates?.recommended?.netCost || 200000;
 
-  const notes = [
-    {
-      id: "note_" + Date.now(),
-      text: `Customer requested free site survey via online estimate portal. ${notesText ? "Client note: " + notesText : ""}`,
-      author: "Customer Portal",
-      created_at: new Date().toISOString()
-    }
-  ];
+  const newNote = {
+    id: "note_" + Date.now(),
+    text: `Customer requested free site survey via online estimate portal. ${notesText ? "Client note: " + notesText : ""}`,
+    author: "Customer Portal",
+    created_at: new Date().toISOString()
+  };
 
+  // Deduplicate against an existing lead with the same phone number (e.g. from first-time visitor gate)
+  let existingLead = null;
+  try {
+    const leads = await fetchCrmLeads();
+    const normPhone = phone.replace(/\D/g, "").slice(-10);
+    if (normPhone) {
+      existingLead = leads.find((l) => (l.mobile_number || "").replace(/\D/g, "").slice(-10) === normPhone) || null;
+    }
+  } catch (_) {}
+
+  const existingNotes = Array.isArray(existingLead?.notes) ? existingLead.notes : [];
   const lead = {
+    ...(existingLead || {}),
     customer_name: name,
     mobile_number: phone,
-    email_address: $("emailAddress")?.value || "",
-    customer_address: address || "Pune, Maharashtra",
+    email_address: $("emailAddress")?.value || existingLead?.email_address || "",
+    customer_address: address || existingLead?.customer_address || "Pune, Maharashtra",
     monthly_units: units,
     monthly_bill: bill,
     sanctioned_load: load,
     system_capacity_kw: cap,
     estimated_cost: cost,
-    status: "lead",
-    assigned_to: "indrajeet.date@cnergy.co.in",
-    assigned_name: "Indrajeet Date",
-    proposal_serial_no: null,
-    notes
+    status: existingLead?.status && existingLead.status !== "lead" ? existingLead.status : "lead",
+    assigned_to: existingLead?.assigned_to || "indrajeet.date@cnergy.co.in",
+    assigned_name: existingLead?.assigned_name || "Indrajeet Date",
+    proposal_serial_no: existingLead?.proposal_serial_no || null,
+    notes: [...existingNotes, newNote],
+    site_visit_requested: true,
+    site_visit_requested_at: new Date().toISOString()
   };
 
   await saveCrmLeadLocallyAndRemote(lead);
@@ -4187,10 +4570,15 @@ function renderCrmLeadsTable(leads) {
 
   // Attach row event listeners
   tbody.querySelectorAll(".crm-status-select").forEach(sel => {
-    sel.addEventListener("change", (e) => {
+    sel.addEventListener("change", async (e) => {
       const id = sel.dataset.leadId;
       const newStatus = e.target.value;
-      handleCrmStatusChange(id, newStatus);
+      sel.disabled = true;
+      try {
+        await handleCrmStatusChange(id, newStatus);
+      } finally {
+        sel.disabled = false;
+      }
     });
   });
 
@@ -4348,7 +4736,9 @@ async function renderCrmProposalsArchive(query = "") {
       const prop = window._crmArchivedProposals[idx];
       if (prop && (prop.stateData || prop.state_data)) {
         if (!state.internalUnlocked) openInternal();
-        window.restoreProposalState(prop.stateData || prop.state_data, prop.proposalSerialNo);
+        if (typeof window.loadProposalState === "function") {
+          window.loadProposalState(prop);
+        }
         switchWorkspaceTab("sizing");
       }
     });
@@ -4360,7 +4750,9 @@ async function renderCrmProposalsArchive(query = "") {
       const prop = window._crmArchivedProposals[idx];
       if (prop && (prop.stateData || prop.state_data)) {
         if (!state.internalUnlocked) openInternal();
-        window.restoreProposalState(prop.stateData || prop.state_data, prop.proposalSerialNo);
+        if (typeof window.loadProposalState === "function") {
+          window.loadProposalState(prop);
+        }
         switchWorkspaceTab("proposal");
       }
     });
@@ -4370,8 +4762,9 @@ async function renderCrmProposalsArchive(query = "") {
     btn.addEventListener("click", async () => {
       const idx = Number(btn.dataset.idx);
       const prop = window._crmArchivedProposals[idx];
-      if (prop && confirm(`Delete proposal ${prop.proposalSerialNo || 'this proposal'}?`)) {
-        await deleteProposal(prop.proposalSerialNo, prop.id);
+      const serialLabel = prop?.proposal_serial_no || prop?.proposalSerialNo || "this proposal";
+      if (prop && safeConfirm(`Delete proposal ${serialLabel}?`)) {
+        await deleteProposal(prop);
         await renderCrmProposalsArchive(crmState.searchTerm);
       }
     });
@@ -4386,6 +4779,8 @@ function openCrmNotesModal(leadId) {
   const modal = $("crmNotesModal");
   if (!modal) return;
 
+  if ($("crmNotesCustomerName")) $("crmNotesCustomerName").textContent = lead.customer_name || "Customer";
+  if ($("crmNotesCustomerAddress")) $("crmNotesCustomerAddress").textContent = `${lead.mobile_number || "—"} | ${lead.customer_address || "Pune"}`;
   if ($("crmModalLeadName")) $("crmModalLeadName").textContent = lead.customer_name || "Customer";
   if ($("crmModalLeadPhone")) $("crmModalLeadPhone").textContent = `${lead.mobile_number || "—"} | ${lead.customer_address || "Pune"}`;
 
@@ -4411,8 +4806,10 @@ function openCrmNotesModal(leadId) {
     }
   }
 
-  if ($("crmNewNoteText")) $("crmNewNoteText").value = "";
-  if ($("crmNewNoteStatusSelect")) $("crmNewNoteStatusSelect").value = lead.status || "lead";
+  const noteInput = $("crmNewNoteTextarea") || $("crmNewNoteText");
+  if (noteInput) noteInput.value = "";
+  const statusSelect = $("crmNoteNewStatusSelect") || $("crmNewNoteStatusSelect");
+  if (statusSelect) statusSelect.value = lead.status || "lead";
 
   modal.style.display = "flex";
 }
@@ -4427,19 +4824,20 @@ async function submitCrmNote() {
   const leadId = crmState.activeLeadIdForNotes;
   if (!leadId) return;
 
-  const noteText = $("crmNewNoteText")?.value?.trim();
-  const newStatus = $("crmNewNoteStatusSelect")?.value;
-  if (!noteText) {
-    safeAlert("Please enter a note before submitting.");
+  const noteText = ($("crmNewNoteTextarea") || $("crmNewNoteText"))?.value?.trim();
+  const newStatus = ($("crmNoteNewStatusSelect") || $("crmNewNoteStatusSelect"))?.value;
+  if (!noteText && !newStatus) {
+    safeAlert("Please enter a note or select a new state before submitting.");
     return;
   }
 
   const authorName = state.currentUser ? (state.currentUser.name || state.currentUser.username) : "Internal Agent";
   const res = await addNoteToLead(leadId, noteText, authorName, newStatus);
   if (res.success) {
-    openCrmNotesModal(leadId); // Refresh timeline
-    renderCrmDashboard();      // Refresh CRM table
-    showLoadToast("Activity note saved! 💬");
+    if (res.lead?.id) crmState.activeLeadIdForNotes = res.lead.id;
+    openCrmNotesModal(crmState.activeLeadIdForNotes); // Refresh timeline
+    await renderCrmDashboard();      // Refresh CRM table
+    showLoadToast("Activity note & state saved! 💬");
   }
 }
 
@@ -4521,8 +4919,14 @@ async function handleCrmStatusChange(leadId, newStatus) {
   const authorName = state.currentUser ? (state.currentUser.name || state.currentUser.username) : "Internal Agent";
   const meta = CRM_STATUS_MAP[newStatus] || { label: newStatus };
   const systemNote = `Status changed to ${meta.label}`;
-  await addNoteToLead(leadId, systemNote, authorName, newStatus);
-  renderCrmDashboard();
+  const res = await addNoteToLead(leadId, systemNote, authorName, newStatus);
+  if (res?.lead?.id && crmState.activeLeadIdForNotes === leadId) {
+    crmState.activeLeadIdForNotes = res.lead.id;
+  }
+  await renderCrmDashboard();
+  if ($("crmNotesModal")?.style.display === "flex" && crmState.activeLeadIdForNotes) {
+    openCrmNotesModal(crmState.activeLeadIdForNotes);
+  }
   showLoadToast(`Updated status to ${meta.label}`);
 }
 
@@ -4668,6 +5072,7 @@ async function deleteLeadProposal(leadId) {
   lead.proposal_serial_no = null;
   if (lead.status === "proposal_sent") {
     lead.status = "lead";
+    lead.status_locked = true;
   }
   const authorName = state.currentUser ? (state.currentUser.name || state.currentUser.username) : "Internal Agent";
   const deleteNote = {
@@ -4796,6 +5201,9 @@ async function submitCrmEditLead() {
   lead.monthly_bill = bill;
   lead.system_capacity_kw = capacity;
   lead.estimated_cost = cost;
+  if (status !== lead.status) {
+    lead.status_locked = true;
+  }
   lead.status = status;
   lead.assigned_to = assignedTo;
   lead.assigned_name = assignedName;
@@ -4908,8 +5316,16 @@ function updateBuildingStudio() {
   const panelMake = $("buildingPanelMakeInput")?.value || state.buildingConfig?.panelMake || "Tier-1 Mono PERC DCR";
   const panelWp = Number($("buildingPanelWpInput")?.value) || state.buildingConfig?.panelWp || 550;
   const panelRate = Number($("buildingPanelRateInput")?.value) || state.buildingConfig?.panelRate || 28;
-  const loanInterestRate = Number($("buildingLoanRateInput")?.value) || state.buildingConfig?.loanRate || 7.0;
-  const loanDownPaymentPct = Number($("buildingLoanUpfrontInput")?.value) || state.buildingConfig?.loanUpfront || 10;
+  const rawLoanRate = $("buildingLoanRateInput")?.value;
+  const parsedLoanRate = (rawLoanRate !== undefined && rawLoanRate !== "") ? Number(rawLoanRate) : NaN;
+  const loanInterestRate = Number.isFinite(parsedLoanRate)
+    ? parsedLoanRate
+    : (Number.isFinite(Number(state.buildingConfig?.loanRate)) ? Number(state.buildingConfig.loanRate) : 7.0);
+  const rawLoanUpfront = $("buildingLoanUpfrontInput")?.value;
+  const parsedLoanUpfront = (rawLoanUpfront !== undefined && rawLoanUpfront !== "") ? Number(rawLoanUpfront) : NaN;
+  const loanDownPaymentPct = Number.isFinite(parsedLoanUpfront)
+    ? parsedLoanUpfront
+    : (Number.isFinite(Number(state.buildingConfig?.loanUpfront)) ? Number(state.buildingConfig.loanUpfront) : 10);
   const structureType = $("buildingStructureType")?.value || state.buildingConfig?.structureType || "hotDip";
   const isSpecialCategoryState = Boolean($("buildingIsSpecialCategoryState")?.checked);
 
@@ -5005,6 +5421,7 @@ function updateBuildingStudio() {
         </td>
         <td style="text-align: center; font-weight: 700; color: #0f172a;">${f.panels}</td>
         <td style="text-align: right; font-weight: 600;">${(f.allocatedKw || 0).toFixed(2)}</td>
+        <td style="text-align: left; font-size: 10px; font-weight: 600; color: #0284c7; white-space: nowrap;">${f.inverterModel || "—"}</td>
         <td style="text-align: right; font-weight: 700; color: #15803d; background: #f0fdf4;">₹${Number(f.subsidy || 0).toLocaleString("en-IN")}</td>
         <td style="text-align: right;">₹${Number(f.grossCost || 0).toLocaleString("en-IN")}</td>
         <td style="text-align: right; font-weight: 700; color: #0284c7; background: #f0f9ff;">₹${Number(f.netCost || 0).toLocaleString("en-IN")}</td>
@@ -5087,6 +5504,7 @@ function updateBuildingStudio() {
   if ($("footBills")) $("footBills").textContent = `₹${summary.totalCurrentBill.toLocaleString("en-IN")}`;
   if ($("footPanels")) $("footPanels").textContent = String(summary.totalBuildingPanels);
   if ($("footKw")) $("footKw").textContent = `${summary.totalBuildingCapacityKw.toFixed(2)} kWp`;
+  if ($("footInverters")) $("footInverters").textContent = `${summary.totalInverters || summary.totalFlats} Inverters`;
   if ($("footSubsidy")) $("footSubsidy").textContent = `₹${summary.totalSubsidy.toLocaleString("en-IN")}`;
   if ($("footGross")) $("footGross").textContent = `₹${summary.totalBuildingGrossCost.toLocaleString("en-IN")}`;
   if ($("footNet")) $("footNet").textContent = `₹${summary.totalNetCost.toLocaleString("en-IN")}`;
@@ -5117,8 +5535,8 @@ function syncBuildingDataToWorkspace(buildingResult) {
   if ($("structureType")) $("structureType").value = cfg.structureType || "hotDip";
   if ($("panelType")) $("panelType").value = "dcr";
   if ($("isSpecialCategoryState")) $("isSpecialCategoryState").checked = Boolean(cfg.isSpecialCategoryState);
-  if ($("loanInterestRate")) $("loanInterestRate").value = cfg.loanRate || 7.0;
-  if ($("loanDownPaymentPct")) $("loanDownPaymentPct").value = cfg.loanUpfront || 10;
+  if ($("loanInterestRate")) $("loanInterestRate").value = Number.isFinite(Number(cfg.loanRate)) ? cfg.loanRate : 7.0;
+  if ($("loanDownPaymentPct")) $("loanDownPaymentPct").value = Number.isFinite(Number(cfg.loanUpfront)) ? cfg.loanUpfront : 10;
   if ($("consumerCategory")) $("consumerCategory").value = "LT-I";
 
   // 2. Sync state.meters and meteringMode
@@ -5586,9 +6004,21 @@ function createNewProposal() {
   state.currentServerId = null;
   state.currentProposalSerialNo = nextSerial;
   state.extractedBill = null;
+  state.billBreakdownManualOverride = false;
+  state.selectedSystemIndex = null;
 
   if ($("proposalSerialNo")) $("proposalSerialNo").value = nextSerial;
   if ($("sidebarProposalSerialNo")) $("sidebarProposalSerialNo").value = nextSerial;
+
+  if ($("showCadDiagram")) $("showCadDiagram").checked = true;
+  if ($("hidePayback")) $("hidePayback").checked = false;
+  if ($("hideAreaFit")) $("hideAreaFit").checked = false;
+  if ($("hideSubsidy")) $("hideSubsidy").checked = false;
+  if ($("hideCost")) $("hideCost").checked = false;
+  if ($("hideFinancing")) $("hideFinancing").checked = false;
+  if ($("solarInstalled")) $("solarInstalled").checked = false;
+  if ($("includeIndividualSheets")) $("includeIndividualSheets").checked = false;
+  syncCadPdfBtnVisual();
 
   if ($("customerName")) $("customerName").value = "";
   if ($("internalCustomerName")) $("internalCustomerName").value = "";
@@ -5678,8 +6108,18 @@ function attachEvents() {
   ids.forEach((id) => {
     const element = $(id);
     if (!element) return;
-    element.addEventListener("input", render);
-    element.addEventListener("change", render);
+    element.addEventListener("input", () => {
+      if (id === "monthlyUnits" || id === "monthlyBill" || id === "sanctionedLoad") {
+        state.billBreakdownManualOverride = false;
+      }
+      render();
+    });
+    element.addEventListener("change", () => {
+      if (id === "monthlyUnits" || id === "monthlyBill" || id === "sanctionedLoad") {
+        state.billBreakdownManualOverride = false;
+      }
+      render();
+    });
   });
 
   $("resetButton")?.addEventListener("click", resetForm);
@@ -5709,7 +6149,7 @@ function attachEvents() {
   });
 
   // Report Display hide toggles
-  ["hidePayback", "hideAreaFit", "hideSubsidy", "hideCost", "hideFinancing", "solarInstalled", "showCadDiagram"].forEach(id => {
+  ["hidePayback", "hideAreaFit", "hideSubsidy", "hideCost", "hideFinancing", "solarInstalled", "showCadDiagram", "includeIndividualSheets"].forEach(id => {
     $(id)?.addEventListener("change", render);
   });
 
@@ -5787,15 +6227,18 @@ function attachEvents() {
   });
   $("loanInterestRate")?.addEventListener("input", (e) => {
     if ($("internalLoanInterestRate")) $("internalLoanInterestRate").value = e.target.value;
+    if ($("paneLoanInterestRate")) $("paneLoanInterestRate").value = e.target.value;
     render();
   });
   $("internalLoanInterestRate")?.addEventListener("input", (e) => {
     if ($("loanInterestRate")) $("loanInterestRate").value = e.target.value;
+    if ($("paneLoanInterestRate")) $("paneLoanInterestRate").value = e.target.value;
     render();
   });
-  $("loanDownPaymentPct")?.addEventListener("input", () => {
+  $("loanDownPaymentPct")?.addEventListener("input", (e) => {
     if ($("loanAmount")) $("loanAmount").value = "";
     if ($("internalLoanAmount")) $("internalLoanAmount").value = "";
+    if ($("paneLoanDownPaymentPct")) $("paneLoanDownPaymentPct").value = e.target.value;
     render();
   });
   $("loanAmount")?.addEventListener("input", (e) => {
@@ -5808,29 +6251,181 @@ function attachEvents() {
   });
   $("loanMonthlyEmi")?.addEventListener("input", (e) => {
     if ($("internalLoanMonthlyEmi")) $("internalLoanMonthlyEmi").value = e.target.value;
+    if ($("paneLoanMonthlyEmi")) $("paneLoanMonthlyEmi").value = e.target.value;
     render();
   });
   $("internalLoanMonthlyEmi")?.addEventListener("input", (e) => {
     if ($("loanMonthlyEmi")) $("loanMonthlyEmi").value = e.target.value;
+    if ($("paneLoanMonthlyEmi")) $("paneLoanMonthlyEmi").value = e.target.value;
+    render();
+  });
+  $("loanTenureMonths")?.addEventListener("input", (e) => {
+    if ($("internalLoanTenureMonths")) $("internalLoanTenureMonths").value = e.target.value;
+    if ($("paneLoanTenureMonths")) $("paneLoanTenureMonths").value = e.target.value;
+    render();
+  });
+  $("internalLoanTenureMonths")?.addEventListener("input", (e) => {
+    if ($("loanTenureMonths")) $("loanTenureMonths").value = e.target.value;
+    if ($("paneLoanTenureMonths")) $("paneLoanTenureMonths").value = e.target.value;
     render();
   });
 
-  // Panel rate and specification listeners
+  // Interactive #paneLoan simulator controls (two-way synced with sidebar/internal loan inputs)
+  const syncLoanRate = (val) => {
+    if ($("loanInterestRate")) $("loanInterestRate").value = val;
+    if ($("internalLoanInterestRate")) $("internalLoanInterestRate").value = val;
+    if ($("paneLoanInterestRate") && document.activeElement !== $("paneLoanInterestRate")) $("paneLoanInterestRate").value = val;
+    render();
+  };
+  const syncLoanDp = (val) => {
+    if ($("loanAmount")) $("loanAmount").value = "";
+    if ($("internalLoanAmount")) $("internalLoanAmount").value = "";
+    if ($("loanDownPaymentPct")) $("loanDownPaymentPct").value = val;
+    if ($("paneLoanDownPaymentPct") && document.activeElement !== $("paneLoanDownPaymentPct")) $("paneLoanDownPaymentPct").value = val;
+    render();
+  };
+  const syncLoanTenure = (val) => {
+    if ($("loanTenureMonths")) $("loanTenureMonths").value = val;
+    if ($("internalLoanTenureMonths")) $("internalLoanTenureMonths").value = val;
+    if ($("paneLoanTenureMonths") && document.activeElement !== $("paneLoanTenureMonths")) $("paneLoanTenureMonths").value = val;
+    render();
+  };
+  const syncLoanEmi = (val) => {
+    if ($("loanMonthlyEmi")) $("loanMonthlyEmi").value = val;
+    if ($("internalLoanMonthlyEmi")) $("internalLoanMonthlyEmi").value = val;
+    if ($("paneLoanMonthlyEmi") && document.activeElement !== $("paneLoanMonthlyEmi")) $("paneLoanMonthlyEmi").value = val;
+    render();
+  };
+
+  $("paneLoanInterestRate")?.addEventListener("input", (e) => syncLoanRate(e.target.value));
+  $("paneLoanDownPaymentPct")?.addEventListener("input", (e) => syncLoanDp(e.target.value));
+  $("paneLoanTenureMonths")?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    if (Number(val) > 0) {
+      if ($("loanMonthlyEmi")) $("loanMonthlyEmi").value = "";
+      if ($("internalLoanMonthlyEmi")) $("internalLoanMonthlyEmi").value = "";
+    }
+    syncLoanTenure(val);
+  });
+  $("paneLoanMonthlyEmi")?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    if (Number(val) > 0) {
+      if ($("loanTenureMonths")) $("loanTenureMonths").value = "0";
+      if ($("internalLoanTenureMonths")) $("internalLoanTenureMonths").value = "0";
+    }
+    syncLoanEmi(val);
+  });
+
+  document.querySelectorAll(".loan-rate-preset").forEach((btn) => {
+    btn.addEventListener("click", () => syncLoanRate(btn.dataset.rate || "7"));
+  });
+  document.querySelectorAll(".loan-dp-preset").forEach((btn) => {
+    btn.addEventListener("click", () => syncLoanDp(btn.dataset.dp || "10"));
+  });
+  document.querySelectorAll(".loan-tenure-preset").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if ($("loanMonthlyEmi")) $("loanMonthlyEmi").value = "";
+      if ($("internalLoanMonthlyEmi")) $("internalLoanMonthlyEmi").value = "";
+      syncLoanTenure(btn.dataset.months || "60");
+    });
+  });
+  document.querySelectorAll(".loan-mode-pill").forEach((pill) => {
+    pill.addEventListener("click", () => {
+      const mode = pill.dataset.loanMode;
+      if (mode === "auto") {
+        if ($("loanTenureMonths")) $("loanTenureMonths").value = "0";
+        if ($("internalLoanTenureMonths")) $("internalLoanTenureMonths").value = "0";
+        if ($("loanMonthlyEmi")) $("loanMonthlyEmi").value = "";
+        if ($("internalLoanMonthlyEmi")) $("internalLoanMonthlyEmi").value = "";
+        render();
+      } else if (mode === "tenure") {
+        if ($("loanMonthlyEmi")) $("loanMonthlyEmi").value = "";
+        if ($("internalLoanMonthlyEmi")) $("internalLoanMonthlyEmi").value = "";
+        const curT = Number($("paneLoanTenureMonths")?.value || $("internalLoanTenureMonths")?.value || 0);
+        syncLoanTenure(curT > 0 ? String(curT) : "60");
+      } else if (mode === "emi") {
+        if ($("loanTenureMonths")) $("loanTenureMonths").value = "0";
+        if ($("internalLoanTenureMonths")) $("internalLoanTenureMonths").value = "0";
+        const curBill = Math.round(numberValue("monthlyBill") || 5000);
+        const curEmi = Number($("paneLoanMonthlyEmi")?.value || $("loanMonthlyEmi")?.value || 0);
+        syncLoanEmi(curEmi > 0 ? String(curEmi) : String(curBill));
+        $("paneLoanMonthlyEmi")?.focus();
+      }
+    });
+  });
+  $("paneLoanResetAutoBtn")?.addEventListener("click", () => {
+    if ($("loanTenureMonths")) $("loanTenureMonths").value = "0";
+    if ($("internalLoanTenureMonths")) $("internalLoanTenureMonths").value = "0";
+    if ($("loanMonthlyEmi")) $("loanMonthlyEmi").value = "";
+    if ($("internalLoanMonthlyEmi")) $("internalLoanMonthlyEmi").value = "";
+    if ($("loanAmount")) $("loanAmount").value = "";
+    if ($("internalLoanAmount")) $("internalLoanAmount").value = "";
+    syncLoanRate("7");
+    syncLoanDp("10");
+  });
+  const enableLoanPdf = () => {
+    if ($("paymentMode")) $("paymentMode").value = "loan";
+    if ($("internalPaymentMode")) $("internalPaymentMode").value = "loan";
+    $("customerLoanFields")?.classList.remove("hidden");
+    if ($("hideFinancing")) $("hideFinancing").checked = false;
+    render();
+  };
+  $("paneLoanEnableBtn")?.addEventListener("click", enableLoanPdf);
+  $("paneLoanTogglePdfBtn")?.addEventListener("click", () => {
+    const pMode = $("paymentMode")?.value || "upfront";
+    const hideFin = Boolean($("hideFinancing")?.checked);
+    if (pMode !== "loan" || hideFin) {
+      enableLoanPdf();
+    } else {
+      if ($("hideFinancing")) $("hideFinancing").checked = true;
+      render();
+    }
+  });
+
+  // Panel rate and specification listeners (two-way synced between Quick Panel Rate & Detailed DCR/Non-DCR rates)
   $("panelType")?.addEventListener("change", (e) => {
-    const pType = e.target.value;
-    const isDcr = pType.startsWith("dcr");
-    const currentRate = numberValue("panelRate");
-    if (!currentRate || currentRate === 25 || currentRate === 15) {
-      if ($("panelRate")) $("panelRate").value = isDcr ? "25" : "15";
+    const pType = e.target.value || "dcr";
+    const isDcr = pType.startsWith("dcr") || pType === "mono_dcr" || pType === "topcon_dcr";
+    if ($("panelRate")) {
+      const targetRate = isDcr
+        ? (numberValue("panelDcrRate") || DEFAULT_CONFIG.pricing.panelDcrRatePerWp)
+        : (numberValue("panelNonDcrRate") || DEFAULT_CONFIG.pricing.panelNonDcrRatePerWp);
+      $("panelRate").value = targetRate;
     }
     render();
   });
   $("panelMake")?.addEventListener("input", () => render());
-  $("panelRate")?.addEventListener("input", () => render());
+  $("panelRate")?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    const pType = $("panelType")?.value || "dcr";
+    const isDcr = pType.startsWith("dcr") || pType === "mono_dcr" || pType === "topcon_dcr";
+    if (val !== "" && Number.isFinite(parseFloat(val))) {
+      if (isDcr && $("panelDcrRate")) $("panelDcrRate").value = val;
+      if (!isDcr && $("panelNonDcrRate")) $("panelNonDcrRate").value = val;
+    }
+    render();
+  });
+  $("panelDcrRate")?.addEventListener("input", (e) => {
+    const pType = $("panelType")?.value || "dcr";
+    const isDcr = pType.startsWith("dcr") || pType === "mono_dcr" || pType === "topcon_dcr";
+    if (isDcr && $("panelRate") && e.target.value !== "") {
+      $("panelRate").value = e.target.value;
+    }
+    render();
+  });
+  $("panelNonDcrRate")?.addEventListener("input", (e) => {
+    const pType = $("panelType")?.value || "dcr";
+    const isDcr = pType.startsWith("dcr") || pType === "mono_dcr" || pType === "topcon_dcr";
+    if (!isDcr && $("panelRate") && e.target.value !== "") {
+      $("panelRate").value = e.target.value;
+    }
+    render();
+  });
   $("panelWp")?.addEventListener("input", () => render());
 
   // Current Bill Breakdown listeners with auto-sync to total monthly bill
   const onBillBreakdownInput = () => {
+    state.billBreakdownManualOverride = true;
     const f = numberValue("billFixedCharges");
     const e = numberValue("billEnergyCharges");
     const d = numberValue("billElectricityDuty");
@@ -5972,6 +6567,15 @@ function attachEvents() {
   $("crmCloseNotesModalBtn")?.addEventListener("click", closeCrmNotesModal);
   $("crmCancelNotesModalBtn")?.addEventListener("click", closeCrmNotesModal);
   $("crmAddNoteSubmitBtn")?.addEventListener("click", submitCrmNote);
+  document.querySelectorAll("#crmNotesModal [data-set-status]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const targetLeadId = crmState.activeLeadIdForNotes;
+      const nextStatus = btn.dataset.setStatus;
+      if (targetLeadId && nextStatus) {
+        await handleCrmStatusChange(targetLeadId, nextStatus);
+      }
+    });
+  });
 
   // CRM New Lead Modal
   $("crmCloseNewLeadModalBtn")?.addEventListener("click", closeCrmNewLeadModal);
@@ -6052,9 +6656,12 @@ function attachEvents() {
 
     // Update fixed charge and duty defaults
     const fcEl = $("fixedCharge");
-    if (fcEl) fcEl.value = Math.round(profile.fixedChargePerKw * (numberValue("sanctionedLoad") || 5));
+    if (fcEl) {
+      fcEl.value = profile.fixedChargePerConn || Math.round((profile.fixedChargePerKw || 0) * (numberValue("sanctionedLoad") || 5));
+    }
     const dutyEl = $("electricityDuty");
     if (dutyEl) dutyEl.value = profile.dutyRate || 7;
+    state.billBreakdownManualOverride = false;
 
     render();
   });
@@ -6233,75 +6840,6 @@ function attachEvents() {
       statusEl.className = "upload-status-error";
       statusEl.textContent = `✗ ${file.name}: ${error.message}`;
       render();
-    }
-  });
-
-  $("downloadProposalButton")?.addEventListener("click", () => {
-    if (state.estimates) {
-      // Validate compulsory multi-meter fields before generating PDF
-      if (state.meteringMode === "multi" && state.meters.length > 0) {
-        const invalidMeters = state.meters.filter(m => !m.consumerNumber?.trim() || !m.label?.trim() || !(Number(m.sanctionedLoad) > 0));
-        if (invalidMeters.length > 0) {
-          alert(`Cannot generate proposal: ${invalidMeters.length} flat/meter(s) are missing compulsory details.\n\nEvery meter must have at minimum:\n1. Consumer Number\n2. Consumer Name / Flat Identifier\n3. Sanctioned Load (kW)\n\nPlease complete these in the Multi-Meter panel before downloading.`);
-          const warningEl = $("mmCompulsoryWarning");
-          if (warningEl) {
-            warningEl.style.display = "block";
-            warningEl.scrollIntoView({ behavior: "smooth", block: "center" });
-          }
-          return;
-        }
-      }
-
-      saveProposalData(); // Automatically save data when downloading report
-      const btn = $("downloadProposalButton");
-      const origText = btn?.textContent;
-      btn.textContent = "Generating PDF...";
-      btn.disabled = true;
-
-      // Determine the selected option (user pick or auto-recommended)
-      const est = state.estimates;
-      const selectedOption = (state.selectedSystemIndex !== null && state.selectedSystemIndex >= 0 && state.selectedSystemIndex < est.options.length)
-        ? est.options[state.selectedSystemIndex]
-        : est.recommended;
-        
-      if (state.internalUnlocked && state.costBreakupList) {
-        selectedOption.costBreakupList = state.costBreakupList;
-      }
-      if (state.systemIncludesText && state.systemIncludesText[selectedOption.systemType]) {
-        selectedOption.systemIncludesText = state.systemIncludesText[selectedOption.systemType];
-      }
-      const hideFlags = {
-        showCadDiagram: $("showCadDiagram")?.checked !== false,
-        hidePayback: $("hidePayback")?.checked || false,
-        hideAreaFit: $("hideAreaFit")?.checked || false,
-        hideSubsidy: $("hideSubsidy")?.checked || false,
-        hideCost: $("hideCost")?.checked || false,
-        hideFinancing: ($("paymentMode")?.value !== "loan") || ($("hideFinancing")?.checked || false),
-        solarInstalled: $("solarInstalled")?.checked || false,
-        proposalSerialNo: $("proposalSerialNo")?.value || getNextProposalSerialNo(),
-        customerAddress: $("customerAddress")?.value || "Pune, Maharashtra",
-        saveEnergyCharges: $("saveEnergyCharges")?.checked !== false,
-        saveElectricityDuty: $("saveElectricityDuty")?.checked !== false,
-        saveWheelingFac: $("saveWheelingFac")?.checked !== false,
-        saveTodRebate: $("saveTodRebate")?.checked !== false,
-      };
-
-      setTimeout(() => {
-        import(`./reportGenerator.js?v=${Date.now()}`).then((module) => {
-          if (module && module.generateProposalPDF) {
-            module.generateProposalPDF(est, selectedOption, hideFlags);
-          } else if (window.generateProposalPDF) {
-            window.generateProposalPDF(est, selectedOption, hideFlags);
-          }
-        }).catch(err => {
-          console.error("Failed to load PDF generator", err);
-          alert("Failed to generate PDF: " + err.message);
-        }).finally(() => {
-          if (btn) { btn.textContent = origText; btn.disabled = false; }
-        });
-      }, 100);
-    } else {
-      alert("Please ensure all inputs are filled to calculate the estimate before downloading.");
     }
   });
 
@@ -6492,13 +7030,16 @@ function attachEvents() {
       if (state.systemIncludesText && state.systemIncludesText[selectedOption.systemType]) {
         selectedOption.systemIncludesText = state.systemIncludesText[selectedOption.systemType];
       }
+      const activePayMode = state.internalUnlocked
+        ? ($("internalPaymentMode")?.value || $("paymentMode")?.value || "upfront")
+        : ($("paymentMode")?.value || "upfront");
       const hideFlags = {
         showCadDiagram: $("showCadDiagram")?.checked !== false,
         hidePayback: $("hidePayback")?.checked || false,
         hideAreaFit: $("hideAreaFit")?.checked || false,
         hideSubsidy: $("hideSubsidy")?.checked || false,
         hideCost: $("hideCost")?.checked || false,
-        hideFinancing: ($("paymentMode")?.value !== "loan") || ($("hideFinancing")?.checked || false),
+        hideFinancing: (activePayMode !== "loan") || ($("hideFinancing")?.checked || false) || ($("hideCost")?.checked || false),
         solarInstalled: $("solarInstalled")?.checked || false,
         proposalSerialNo: $("proposalSerialNo")?.value || getNextProposalSerialNo(),
         customerAddress: isBuilding ? (state.buildingConfig?.buildingAddress || "Pune, Maharashtra") : ($("customerAddress")?.value || "Pune, Maharashtra"),
@@ -6520,7 +7061,10 @@ function attachEvents() {
 
   $("downloadProposalButtonInternal")?.addEventListener("click", handleOpenPdfProposal);
   $("downloadProposalButton")?.addEventListener("click", handleOpenPdfProposal);
-  $("openSampleViewBtn")?.addEventListener("click", handleOpenPdfProposal);
+  if ($("openSampleViewBtn")) {
+    $("openSampleViewBtn").dataset.boundByApp = "1";
+    $("openSampleViewBtn").addEventListener("click", handleOpenPdfProposal);
+  }
   $("ribbonDownloadPdfBtn")?.addEventListener("click", handleOpenPdfProposal);
 
   // Wire Direct jsPDF Download button inside Sample View Modal
@@ -6537,16 +7081,29 @@ function attachEvents() {
       const selectedOption = (state.selectedSystemIndex !== null && state.selectedSystemIndex >= 0 && est.options && state.selectedSystemIndex < est.options.length)
         ? est.options[state.selectedSystemIndex]
         : (est.recommended || {});
+      if (state.internalUnlocked && state.costBreakupList) {
+        selectedOption.costBreakupList = state.costBreakupList;
+      }
+      if (state.systemIncludesText && state.systemIncludesText[selectedOption.systemType]) {
+        selectedOption.systemIncludesText = state.systemIncludesText[selectedOption.systemType];
+      }
+      const activePayMode = state.internalUnlocked
+        ? ($("internalPaymentMode")?.value || $("paymentMode")?.value || "upfront")
+        : ($("paymentMode")?.value || "upfront");
       const hideFlags = {
         showCadDiagram: $("showCadDiagram")?.checked !== false,
         hidePayback: $("hidePayback")?.checked || false,
         hideAreaFit: $("hideAreaFit")?.checked || false,
         hideSubsidy: $("hideSubsidy")?.checked || false,
         hideCost: $("hideCost")?.checked || false,
-        hideFinancing: ($("paymentMode")?.value !== "loan") || ($("hideFinancing")?.checked || false),
+        hideFinancing: (activePayMode !== "loan") || ($("hideFinancing")?.checked || false) || ($("hideCost")?.checked || false),
         solarInstalled: $("solarInstalled")?.checked || false,
         proposalSerialNo: $("proposalSerialNo")?.value || getNextProposalSerialNo(),
         customerAddress: isBuilding ? (state.buildingConfig?.buildingAddress || "Pune, Maharashtra") : ($("customerAddress")?.value || "Pune, Maharashtra"),
+        saveEnergyCharges: $("saveEnergyCharges")?.checked !== false,
+        saveElectricityDuty: $("saveElectricityDuty")?.checked !== false,
+        saveWheelingFac: $("saveWheelingFac")?.checked !== false,
+        saveTodRebate: $("saveTodRebate")?.checked !== false,
         isBuildingProposal: isBuilding,
         buildingData: isBuilding ? state.buildingData : null,
         includeIndividualSheets: isBuilding ? ($("includeIndividualSheets")?.checked || false) : false,
@@ -6923,26 +7480,13 @@ function attachEvents() {
   const cadTogglePdfBtn = $("cadTogglePdfReportBtn");
   const showCadCb = $("showCadDiagram");
   if (cadTogglePdfBtn && showCadCb) {
-    const updateCadPdfBtnVisual = () => {
-      if (showCadCb.checked) {
-        cadTogglePdfBtn.classList.add("active");
-        cadTogglePdfBtn.title = "Blueprint will appear in PDF report (Click to hide)";
-        cadTogglePdfBtn.style.borderColor = "var(--primary-green, #16a34a)";
-        cadTogglePdfBtn.style.color = "var(--primary-green, #16a34a)";
-      } else {
-        cadTogglePdfBtn.classList.remove("active");
-        cadTogglePdfBtn.title = "Blueprint hidden from PDF report (Click to include)";
-        cadTogglePdfBtn.style.borderColor = "var(--line, #cbd5e1)";
-        cadTogglePdfBtn.style.color = "var(--text-muted, #64748b)";
-      }
-    };
     cadTogglePdfBtn.addEventListener("click", () => {
       showCadCb.checked = !showCadCb.checked;
-      updateCadPdfBtnVisual();
+      syncCadPdfBtnVisual();
       render();
     });
-    showCadCb.addEventListener("change", updateCadPdfBtnVisual);
-    updateCadPdfBtnVisual();
+    showCadCb.addEventListener("change", syncCadPdfBtnVisual);
+    syncCadPdfBtnVisual();
   }
 
   $("panelConfigSelect")?.addEventListener("change", () => {
@@ -7171,11 +7715,15 @@ function applyBreakupConfig(estimate, input, config = readConfig()) {
   estimate.options.forEach(option => {
     let sysType = option.systemType;
     let mainInverterPrefix = sysType === "hybrid" ? "Hybrid" : (sysType === "offgrid" ? "Off-grid" : "On-grid");
+    const flatInvList = getMultiFlatInverterList(option);
+    const inverterLabel = flatInvList.length > 1
+      ? `Separate ${mainInverterPrefix} Inverters (${flatInvList.length} Flats)`
+      : `${mainInverterPrefix} Inverter`;
 
     let defaultItems = [
       { id: 'panels', label: 'Solar Panels', value: option.costBreakup.panels },
       { id: 'structure', label: `Mounting Structure (${STRUCTURE_LABELS[input.structureType]})`, value: option.costBreakup.structure },
-      { id: 'inverter', label: `${mainInverterPrefix} Inverter`, value: option.costBreakup.inverter },
+      { id: 'inverter', label: inverterLabel, value: option.costBreakup.inverter },
     ];
     if (option.costBreakup.backupInverter > 0) {
       defaultItems.push({ id: 'backupInverter', label: 'Backup Off-grid Inverter', value: option.costBreakup.backupInverter });
@@ -7234,6 +7782,10 @@ function applyBreakupConfig(estimate, input, config = readConfig()) {
       let item = { ...c };
       if (!c.isHeader) {
         let di = defaultItems.find(x => x.id === c.id);
+        if (c.id === 'inverter' && di && (/^(On-grid|Hybrid|Off-grid) Inverter$/i.test(c.label || '') || /^Separate (On-grid|Hybrid|Off-grid) Inverters/i.test(c.label || ''))) {
+          item.label = di.label;
+          c.label = di.label;
+        }
         let computedValue = di ? di.value : 0;
         item.value = c.isOverride ? c.overrideValue : computedValue;
         if (!c.isHidden) {
@@ -7257,8 +7809,8 @@ function applyBreakupConfig(estimate, input, config = readConfig()) {
 
     const baseCostInclGst = preTaxSubtotal + gst + contingency;
 
-    // Margin (default 30% of total component costs incl. of GST)
-    let defaultMarginRate = (config && config.pricing && config.pricing.marginRate !== undefined) ? config.pricing.marginRate : 30;
+    // Margin (default 25% of total component costs incl. of GST)
+    let defaultMarginRate = (config && config.pricing && config.pricing.marginRate !== undefined) ? config.pricing.marginRate : 25;
     let marginRate = (state.breakupConfigMarginPct && state.breakupConfigMarginPct[sysType] !== undefined)
       ? state.breakupConfigMarginPct[sysType]
       : defaultMarginRate;
@@ -7365,21 +7917,30 @@ function buildProposalSnapshot() {
     slabRate4: numberValue("slabRate4"),
   };
 
-  // Structured Loans snapshot
+  // Structured Loans snapshot (preserve 0% rates / down payments accurately)
+  const finiteField = (id, fallback) => {
+    const el = $(id);
+    if (!el || el.value === "") return fallback;
+    const v = parseFloat(el.value);
+    return Number.isFinite(v) ? v : fallback;
+  };
   const loans = {
     paymentMode: $("paymentMode")?.value || "upfront",
-    loanInterestRate: numberValue("loanInterestRate") || 9.5,
+    loanInterestRate: finiteField("loanInterestRate", 7),
+    loanDownPaymentPct: finiteField("loanDownPaymentPct", 10),
     loanAmount: numberValue("loanAmount") || 0,
     loanMonthlyEmi: numberValue("loanMonthlyEmi") || 0,
+    loanTenureMonths: finiteField("loanTenureMonths", 0),
     internalPaymentMode: $("internalPaymentMode")?.value || "upfront",
-    internalLoanInterestRate: numberValue("internalLoanInterestRate") || 9.5,
+    internalLoanInterestRate: finiteField("internalLoanInterestRate", 7),
     internalLoanAmount: numberValue("internalLoanAmount") || 0,
     internalLoanMonthlyEmi: numberValue("internalLoanMonthlyEmi") || 0,
-    internalLoanTenureMonths: numberValue("internalLoanTenureMonths") || 60,
+    internalLoanTenureMonths: finiteField("internalLoanTenureMonths", 0),
   };
 
   // Structured Sizing & Overrides snapshot
   const sizing = {
+    billBreakdownManualOverride: Boolean(state.billBreakdownManualOverride),
     capacityOverride: numberValue("capacityOverride"),
     inverterOverride: numberValue("inverterOverride"),
     batteryOverride: numberValue("batteryOverride"),
@@ -8356,6 +8917,7 @@ window.loadProposalState = function(data) {
         }
       });
     }
+    syncCadPdfBtnVisual();
 
     // Top-level server column fallbacks (sanctioned_load, system_capacity_kw)
     if (data.sanctioned_load !== undefined && data.sanctioned_load !== null && $("sanctionedLoad")) {
@@ -8440,10 +9002,23 @@ window.loadProposalState = function(data) {
     if ($("internalPaymentMode")) $("internalPaymentMode").value = pMode;
     $("customerLoanFields")?.classList.toggle("hidden", pMode !== "loan");
 
-    // Synchronize loan values between customer and internal views
-    const lRate = sData.formValues?.loanInterestRate || sData.loans?.loanInterestRate || $("loanInterestRate")?.value || $("internalLoanInterestRate")?.value || 9.5;
+    // Synchronize loan values between customer, internal, and #paneLoan views (preserving explicit 0 values)
+    const firstFinite = (...candidates) => {
+      for (const c of candidates) {
+        if (c === undefined || c === null || c === "") continue;
+        const n = parseFloat(c);
+        if (Number.isFinite(n)) return n;
+      }
+      return undefined;
+    };
+    const lRate = firstFinite(sData.formValues?.loanInterestRate, sData.loans?.loanInterestRate, sData.input?.loanInterestRate, $("loanInterestRate")?.value, $("internalLoanInterestRate")?.value) ?? 7;
     if ($("loanInterestRate")) $("loanInterestRate").value = lRate;
     if ($("internalLoanInterestRate")) $("internalLoanInterestRate").value = lRate;
+    if ($("paneLoanInterestRate")) $("paneLoanInterestRate").value = lRate;
+
+    const lDp = firstFinite(sData.formValues?.loanDownPaymentPct, sData.loans?.loanDownPaymentPct, sData.input?.loanDownPaymentPct, $("loanDownPaymentPct")?.value) ?? 10;
+    if ($("loanDownPaymentPct")) $("loanDownPaymentPct").value = lDp;
+    if ($("paneLoanDownPaymentPct")) $("paneLoanDownPaymentPct").value = lDp;
 
     const lAmt = sData.formValues?.loanAmount !== undefined ? sData.formValues.loanAmount : (sData.loans?.loanAmount !== undefined ? sData.loans.loanAmount : ($("loanAmount")?.value || ""));
     if ($("loanAmount")) $("loanAmount").value = lAmt;
@@ -8452,6 +9027,14 @@ window.loadProposalState = function(data) {
     const lEmi = sData.formValues?.loanMonthlyEmi !== undefined ? sData.formValues.loanMonthlyEmi : (sData.loans?.loanMonthlyEmi !== undefined ? sData.loans.loanMonthlyEmi : ($("loanMonthlyEmi")?.value || ""));
     if ($("loanMonthlyEmi")) $("loanMonthlyEmi").value = lEmi;
     if ($("internalLoanMonthlyEmi")) $("internalLoanMonthlyEmi").value = lEmi;
+    if ($("paneLoanMonthlyEmi")) $("paneLoanMonthlyEmi").value = lEmi;
+
+    const lTenure = firstFinite(sData.formValues?.internalLoanTenureMonths, sData.formValues?.loanTenureMonths, sData.loans?.internalLoanTenureMonths, sData.loans?.loanTenureMonths, sData.input?.loanTenureMonths) ?? 0;
+    if ($("loanTenureMonths")) $("loanTenureMonths").value = lTenure;
+    if ($("internalLoanTenureMonths")) $("internalLoanTenureMonths").value = lTenure;
+    if ($("paneLoanTenureMonths")) $("paneLoanTenureMonths").value = lTenure;
+
+    state.billBreakdownManualOverride = Boolean(sData.sizing?.billBreakdownManualOverride);
 
     // 4. Restore Rooftop CAD state
     if (sData.cad) {

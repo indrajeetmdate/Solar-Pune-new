@@ -181,4 +181,60 @@ const htmlHideSubsidy = buildSingleSamplePdfPages(estBifacial, sampleOpt, { hide
 assert.ok(!htmlHideSubsidy.includes("Expected Subsidy (PM Surya Ghar Direct bank transfer to Customers bank account)"), "Expected subsidy row must be hidden when hideSubsidy is true");
 assert.ok(htmlHideSubsidy.includes("Net Payable Cost to customer"), "Net Payable Cost row must be present");
 
+// Test 8: Single-Customer Sample View honors showCadDiagram: false (hides Page 2 & renumbers sections + Page N of M)
+const htmlNoCad = buildSingleSamplePdfPages(estBifacial, sampleOpt, { showCadDiagram: false });
+assert.ok(!htmlNoCad.includes("Rooftop Layout &amp; Solar Array CAD Plan"), "CAD section must be omitted when showCadDiagram is false");
+assert.ok(htmlNoCad.includes("2. Financial Quote &amp; Scope of Work"), "Financial Quote must be renumbered to Section 2 when CAD is hidden");
+assert.ok(htmlNoCad.includes("3. Terms &amp; Conditions, Warranty and Details"), "Warranty & T&C must be renumbered to Section 3 when CAD is hidden");
+assert.ok(htmlNoCad.includes("4. Solar System Types"), "Solar System Types must be renumbered to Section 4 when CAD is hidden");
+assert.ok(htmlNoCad.includes("Page 5 of 5"), "Total page count must reflect 5 pages when CAD and Loan are omitted");
+assert.ok(!htmlNoCad.includes("Page 6 of 6"), "Should not contain Page 6 of 6 when CAD is omitted");
+
+// Test 9: Single-Customer Sample View with showCadDiagram: true & Loan active numbers sections 1..6 and 8 pages
+const sampleLoanOpt = {
+  ...sampleOpt,
+  inverterModel: "5kw Single Phase",
+  financing: {
+    paymentMode: "loan",
+    downPaymentPct: 10,
+    downPayment: 19278,
+    principal: 173498,
+    interestRatePct: 7,
+    monthlyEmi: 5200,
+    targetBillAmount: 5200,
+    tenureFormatted: "3.2 yrs (38 mos)",
+    totalInterest: 24102,
+    upfrontNetCost: 132776,
+    totalLoanCost: 216878,
+    totalPreSubsidy: 192776,
+    freeElectricityYears: 21.8,
+    lifetimeNetGainUpfront: 1800000,
+    lifetimeNetGainWithLoan: 1750000,
+    isZeroOutOfPocket: true,
+  },
+};
+const htmlCadLoan = buildSingleSamplePdfPages(estBifacial, sampleLoanOpt, { showCadDiagram: true });
+assert.ok(htmlCadLoan.includes("2. Rooftop Layout &amp; Solar Array CAD Plan"), "CAD section must appear as Section 2 when showCadDiagram is true");
+assert.ok(htmlCadLoan.includes("3. Financial Quote &amp; Scope of Work"), "Financial Quote must be Section 3 when CAD is shown");
+assert.ok(htmlCadLoan.includes("4. Bank Partner Loan Proposal"), "Bank Loan Proposal must be Section 4");
+assert.ok(htmlCadLoan.includes("5. Terms &amp; Conditions, Warranty and Details"), "Warranty must be Section 5");
+assert.ok(htmlCadLoan.includes("6. Solar System Types"), "Solar System Types must be Section 6");
+assert.ok(htmlCadLoan.includes("Page 8 of 8"), "Total pages must be 8 with both CAD and Loan enabled");
+
+// Test 10: Single-Customer Sample View honors hidePayback, hideAreaFit, hideCost, solarInstalled, and inverterModel
+const htmlHiddenFlags = buildSingleSamplePdfPages(estBifacial, sampleLoanOpt, {
+  showCadDiagram: false,
+  hidePayback: true,
+  hideAreaFit: true,
+  hideCost: true,
+  solarInstalled: true,
+});
+assert.ok(!htmlHiddenFlags.includes("Estimated Payback Period:"), "Payback line must be omitted when hidePayback is true");
+assert.ok(!htmlHiddenFlags.includes("Fits in Available Area"), "Fits in Available Area row must be omitted when hideAreaFit is true");
+assert.ok(!htmlHiddenFlags.includes("Total System Cost (Inc. GST)"), "Cost summary table must be hidden when hideCost is true");
+assert.ok(htmlHiddenFlags.includes("Scope of Work (Turnkey EPC Delivery):"), "Scope of Work must remain visible when hideCost is true");
+assert.ok(!htmlHiddenFlags.includes("Bank Partner Loan Proposal"), "Loan pages must be hidden when hideCost is true");
+assert.ok(htmlHiddenFlags.includes("Installed Solar Capacity"), "Capacity label must switch to Installed Solar Capacity when solarInstalled is true");
+assert.ok(htmlHiddenFlags.includes("5kw Single Phase"), "Actual inverter model from tier matrix must appear in single Sample PDF");
+
 console.log("All MSEB Proposal Rendering, Panel Selection, and Loan Omission tests passed successfully! 🎉");

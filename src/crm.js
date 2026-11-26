@@ -153,22 +153,7 @@ export async function authenticateInternalUser(username, password) {
   const cleanUser = String(username || '').trim().toLowerCase();
   const cleanPass = String(password || '').trim();
 
-  // 1. Backward compatibility check for legacy passphrase
-  if (cleanPass === 'solar2026' || cleanUser === 'solar2026') {
-    const admin = CLONED_APP_USERS[0];
-    return {
-      success: true,
-      user: {
-        username: admin.username,
-        name: admin.name,
-        role: admin.role,
-        permission_level: admin.permission_level,
-      },
-      source: 'legacy_passphrase',
-    };
-  }
-
-  // 2. Try server authentication if available
+  // 1. Try server authentication if available
   if (typeof fetch === 'function') {
     try {
       const resp = await fetch('/api/auth-login', {
@@ -201,25 +186,104 @@ export async function authenticateInternalUser(username, password) {
   return { success: false, error: 'Invalid username or password. Please verify credentials.' };
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuid(val) {
+  return typeof val === 'string' && UUID_REGEX.test(val.trim());
+}
+
+function normalizePhone10(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.length > 10 ? digits.slice(-10) : digits;
+}
+
+function statusWasManuallyUpdated(lead) {
+  if (!lead) return false;
+  if (lead.status_locked === true) return true;
+  if (lead.status && lead.status !== 'lead' && lead.status !== 'proposal_sent') return true;
+  if (Array.isArray(lead.notes)) {
+    return lead.notes.some((n) => /status (changed|updated) to|updated state to/i.test(n?.text || ''));
+  }
+  return false;
+}
+
+function upsertLeadInList(list, serverLead, previousLocalId = null, extraProps = {}) {
+  const merged = { ...serverLead, ...extraProps };
+  const idx = list.findIndex(
+    (l) => l.id === serverLead.id || (previousLocalId && l.id === previousLocalId)
+  );
+  const next = [...list];
+  if (idx >= 0) {
+    next[idx] = { ...next[idx], ...merged };
+  } else {
+    next.unshift(merged);
+  }
+  return next;
+}
+
+function readLocalLeadsCache() {
+  try {
+    const saved = localStorage.getItem('solar_crm_leads');
+    const parsed = saved ? JSON.parse(saved) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function findLeadByIdOrHint(leads, leadId, hint = null) {
+  let found = leads.find((l) => l.id === leadId);
+  if (found) return found;
+  if (hint?.proposal_serial_no) {
+    found = leads.find((l) => l.proposal_serial_no === hint.proposal_serial_no);
+    if (found) return found;
+  }
+  const phone10 = normalizePhone10(hint?.mobile_number);
+  if (phone10.length >= 7) {
+    found = leads.find((l) => normalizePhone10(l.mobile_number) === phone10);
+    if (found) return found;
+  }
+  if (hint?.customer_name) {
+    const cleanName = hint.customer_name.trim().toLowerCase();
+    found = leads.find((l) => l.customer_name && l.customer_name.trim().toLowerCase() === cleanName);
+    if (found) return found;
+  }
+  return null;
+}
+
 /**
  * Loads leads from local storage or remote database.
  */
 export async function fetchCrmLeads() {
-  let localLeads = [];
-  try {
-    const saved = localStorage.getItem('solar_crm_leads');
-    if (saved) localLeads = JSON.parse(saved);
-  } catch (_) {}
+  const localLeads = readLocalLeadsCache();
 
-  // Attempt server fetch
+  // Attempt server fetch (bypass cache so latest status edits are always reflected)
   if (typeof fetch === 'function') {
     try {
-      const res = await fetch('/api/crm');
+      const res = await fetch('/api/crm', { cache: 'no-store' });
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-          try { localStorage.setItem('solar_crm_leads', JSON.stringify(json.data)); } catch (_) {}
-          return json.data;
+          const serverLeads = json.data;
+          // Preserve any local leads that have not yet been assigned a server UUID
+          const matchedIds = new Set(serverLeads.map((l) => l.id));
+          const matchedSerials = new Set(serverLeads.map((l) => l.proposal_serial_no).filter(Boolean));
+          const matchedPhones = new Set(serverLeads.map((l) => normalizePhone10(l.mobile_number)).filter((p) => p.length >= 7));
+
+          const unsyncedLocals = (Array.isArray(localLeads) ? localLeads : []).filter((loc) => {
+            if (!loc || isUuid(loc.id) || matchedIds.has(loc.id)) return false;
+            if (loc.proposal_serial_no && matchedSerials.has(loc.proposal_serial_no)) return false;
+            const p10 = normalizePhone10(loc.mobile_number);
+            if (p10.length >= 7 && matchedPhones.has(p10)) return false;
+            // Do not keep untouched static demo fixtures when live server rows exist
+            if (loc.id && /^lead-00[1-4]$/.test(loc.id) && !loc.status_locked) return false;
+            return true;
+          });
+
+          const combined = [...serverLeads, ...unsyncedLocals];
+          try { localStorage.setItem('solar_crm_leads', JSON.stringify(combined)); } catch (_) {}
+          return combined;
         }
       }
     } catch (_) {}
@@ -235,16 +299,19 @@ export async function fetchCrmLeads() {
 }
 
 /**
- * Saves a lead locally and attempts server synchronization.
+ * Saves a lead locally and synchronizes with server before returning.
  */
 export async function saveCrmLeadLocallyAndRemote(leadData) {
   const leads = await fetchCrmLeads();
   let updatedList = [];
   let finalLead = { ...leadData };
 
+  const existing = finalLead.id ? findLeadByIdOrHint(leads, finalLead.id, finalLead) : null;
   if (!finalLead.id) {
     finalLead.id = 'lead-' + Date.now();
     finalLead.created_at = new Date().toISOString();
+  } else if (existing && isUuid(existing.id) && !isUuid(finalLead.id)) {
+    finalLead.id = existing.id;
   }
   finalLead.updated_at = new Date().toISOString();
 
@@ -258,14 +325,25 @@ export async function saveCrmLeadLocallyAndRemote(leadData) {
 
   try { localStorage.setItem('solar_crm_leads', JSON.stringify(updatedList)); } catch (_) {}
 
-  // Asynchronously attempt server sync
+  // Await server sync so subsequent renders/fetches see the committed state and UUID
   if (typeof fetch === 'function') {
     try {
-      fetch('/api/crm', {
+      const resp = await fetch('/api/crm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(finalLead),
-      }).catch(() => {});
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        if (json?.success && json.data?.id) {
+          const prevId = finalLead.id;
+          updatedList = upsertLeadInList(updatedList, json.data, prevId, {
+            status_locked: finalLead.status_locked,
+          });
+          finalLead = updatedList.find((l) => l.id === json.data.id) || finalLead;
+          try { localStorage.setItem('solar_crm_leads', JSON.stringify(updatedList)); } catch (_) {}
+        }
+      }
     } catch (_) {}
   }
 
@@ -273,61 +351,91 @@ export async function saveCrmLeadLocallyAndRemote(leadData) {
 }
 
 /**
- * Adds a note to a CRM lead and updates its status.
+ * Adds a note to a CRM lead and updates its status (persisted to server before returning).
  */
 export async function addNoteToLead(leadId, noteText, authorName, newStatus) {
+  const localBeforeFetch = readLocalLeadsCache();
+  const localHint = localBeforeFetch.find((l) => l.id === leadId) || null;
   const leads = await fetchCrmLeads();
-  const lead = leads.find((l) => l.id === leadId);
+  let lead = findLeadByIdOrHint(leads, leadId, localHint);
+  if (!lead && localHint) {
+    lead = { ...localHint };
+    leads.unshift(lead);
+  }
   if (!lead) return { success: false, error: 'Lead not found' };
 
   const currentNotes = Array.isArray(lead.notes) ? lead.notes : [];
+  const metaLabel = newStatus ? (CRM_STATUS_MAP[newStatus]?.label || newStatus) : '';
+  const cleanNote = String(noteText || '').trim() || (metaLabel ? `Status changed to ${metaLabel}` : 'Note updated');
   const newNote = {
     id: 'note_' + Date.now(),
-    text: noteText,
+    text: cleanNote,
     author: authorName || 'Internal Agent',
     created_at: new Date().toISOString(),
   };
 
   lead.notes = [newNote, ...currentNotes];
-  if (newStatus) lead.status = newStatus;
+  if (newStatus) {
+    lead.status = newStatus;
+    lead.status_locked = true;
+  }
   lead.updated_at = new Date().toISOString();
 
-  try { localStorage.setItem('solar_crm_leads', JSON.stringify(leads)); } catch (_) {}
+  let updatedLeads = [...leads];
+  try { localStorage.setItem('solar_crm_leads', JSON.stringify(updatedLeads)); } catch (_) {}
 
   if (typeof fetch === 'function') {
     try {
-      fetch('/api/crm', {
+      const resp = await fetch('/api/crm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'add_note',
-          id: leadId,
-          noteText,
+          id: lead.id,
+          noteText: cleanNote,
           authorName,
           newStatus,
+          leadSnapshot: lead,
         }),
-      }).catch(() => {});
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        if (json?.success && json.data?.id) {
+          updatedLeads = upsertLeadInList(updatedLeads, json.data, lead.id, {
+            status: newStatus || json.data.status,
+            status_locked: Boolean(newStatus) || lead.status_locked,
+          });
+          try { localStorage.setItem('solar_crm_leads', JSON.stringify(updatedLeads)); } catch (_) {}
+        }
+      }
     } catch (_) {}
   }
 
-  return { success: true, lead, leads };
+  const finalLead = findLeadByIdOrHint(updatedLeads, lead.id, lead) || lead;
+  return { success: true, lead: finalLead, leads: updatedLeads };
 }
 
 /**
- * Deletes a lead by ID.
+ * Deletes a lead by ID (locally and on server).
  */
 export async function deleteCrmLeadById(leadId) {
+  const localBeforeFetch = readLocalLeadsCache();
+  const localHint = localBeforeFetch.find((l) => l.id === leadId) || null;
   const leads = await fetchCrmLeads();
-  const updated = leads.filter((l) => l.id !== leadId);
+  const target = findLeadByIdOrHint(leads, leadId, localHint) || localHint;
+  const updated = leads.filter((l) => l.id !== leadId && (!target || l.id !== target.id));
   try { localStorage.setItem('solar_crm_leads', JSON.stringify(updated)); } catch (_) {}
 
   if (typeof fetch === 'function') {
     try {
-      fetch('/api/crm', {
+      await fetch('/api/crm', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: leadId }),
-      }).catch(() => {});
+        body: JSON.stringify({
+          id: target?.id || leadId,
+          proposalSerialNo: target?.proposal_serial_no || null,
+        }),
+      });
     } catch (_) {}
   }
 
@@ -406,16 +514,16 @@ export async function syncSavedCustomersWithLeads() {
 
     // Match existing lead by:
     // 1. Same proposal serial no
-    // 2. Or same non-empty phone number
+    // 2. Or same normalized last-10-digit phone number
     // 3. Or same exact customer name
     let leadIndex = -1;
     if (serial) {
       leadIndex = updatedLeads.findIndex((l) => l.proposal_serial_no === serial);
     }
     if (leadIndex === -1 && phone) {
-      const cleanPhone = String(phone).replace(/\D/g, '');
-      if (cleanPhone.length >= 7) {
-        leadIndex = updatedLeads.findIndex((l) => l.mobile_number && String(l.mobile_number).replace(/\D/g, '') === cleanPhone);
+      const cleanPhone10 = normalizePhone10(phone);
+      if (cleanPhone10.length >= 7) {
+        leadIndex = updatedLeads.findIndex((l) => normalizePhone10(l.mobile_number) === cleanPhone10);
       }
     }
     if (leadIndex === -1 && name) {
@@ -424,8 +532,9 @@ export async function syncSavedCustomersWithLeads() {
     }
 
     if (leadIndex >= 0) {
-      // Enrich existing lead with proposal data if missing
+      // Enrich existing lead with missing metadata; never reset manually updated or previously linked lead statuses
       const existing = updatedLeads[leadIndex];
+      const hadSerialBefore = Boolean(existing.proposal_serial_no);
       let itemChanged = false;
       if (serial && !existing.proposal_serial_no) {
         existing.proposal_serial_no = serial;
@@ -459,7 +568,7 @@ export async function syncSavedCustomersWithLeads() {
         existing.customer_address = address;
         itemChanged = true;
       }
-      if (existing.status === 'lead' && serial) {
+      if (!hadSerialBefore && serial && existing.status === 'lead' && !statusWasManuallyUpdated(existing)) {
         existing.status = 'proposal_sent';
         itemChanged = true;
       }
