@@ -112,7 +112,8 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
   const FLATS_PER_LEDGER_PAGE = 32;
   const ledgerPagesCount = Math.max(1, Math.ceil(flatLedger.length / FLATS_PER_LEDGER_PAGE));
   const cadPagesCount = showCadDiagram ? 1 : 0;
-  const basePagesCount = 1 + cadPagesCount + ledgerPagesCount; // Page 1 (Exec Summary), [Page 2 (CAD Map)], Page 2/3.. (Master Ledger)
+  const termsPagesCount = 2; // Warranty and Details (Page 1) + Terms & Conditions Contd. (Page 2)
+  const basePagesCount = 1 + cadPagesCount + ledgerPagesCount + termsPagesCount; // Page 1 (Exec Summary), [Page 2 (CAD Map)], Page 3.. (Master Ledger), Page 4.. (Warranty & Terms)
   const totalPagesCount = includeIndividualSheets ? (basePagesCount + flatLedger.length) : basePagesCount;
 
   const pages = [];
@@ -318,22 +319,24 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
             Comprehensive allocation of solar capacity, PM Surya Ghar subsidy, gross investment share, monthly generation, and net bills.
           </div>
 
-          <table class="pdf-table pdf-ledger-table" style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 5.8pt; line-height: 1.15; box-sizing: border-box;">
+          <table class="pdf-table pdf-ledger-table" style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 5.4pt; line-height: 1.15; box-sizing: border-box;">
             <colgroup>
-              <col style="width: 3.5%;">
-              <col style="width: 6.5%;">
-              <col style="width: 14%;">
-              <col style="width: 5%;">
-              <col style="width: 6%;">
-              <col style="width: 5%;">
+              <col style="width: 2.8%;">
+              <col style="width: 5.2%;">
+              <col style="width: 12.5%;">
+              <col style="width: 4.5%;">
+              <col style="width: 5.0%;">
+              <col style="width: 4.2%;">
+              <col style="width: 4.8%;">
+              <col style="width: 9.0%;">
+              <col style="width: 8.5%;">
+              <col style="width: 8.0%;">
+              <col style="width: 8.0%;">
               <col style="width: 5.5%;">
-              <col style="width: 10%;">
-              <col style="width: 9.5%;">
-              <col style="width: 9.5%;">
-              <col style="width: 6%;">
               <col style="width: 7.5%;">
-              <col style="width: 6%;">
               <col style="width: 5.5%;">
+              <col style="width: 4.8%;">
+              <col style="width: 4.2%;">
             </colgroup>
             <thead>
               <tr style="background-color: #1e293b; color: white; text-align: center;">
@@ -352,6 +355,7 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
                 <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 2px; border-color: #0f172a;">Savings<br>/mo (Rs)</th>
                 <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 2px; border-color: #0f172a;">Post Bill<br>(Rs)</th>
                 <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 1px; border-color: #0f172a;">Payback</th>
+                <th style="background-color: #1e293b !important; color: #ffffff !important; padding: 2px 1px; border-color: #0f172a;">Loan</th>
               </tr>
             </thead>
             <tbody>
@@ -364,7 +368,7 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
                   <td style="padding: 2px 1px;"><span class="editable-field">${f.monthlyUnits}</span></td>
                   <td style="padding: 2px 1px;"><strong><span class="editable-field">${f.panels}</span></strong></td>
                   <td style="padding: 2px 1px;"><span class="editable-field">${(f.allocatedKw || 0).toFixed(2)}</span></td>
-                  <td style="padding: 2px 2px; text-align: left; font-size: 6.5pt; color: #0284c7; white-space: nowrap;"><span class="editable-field">${f.inverterModel || "—"}</span></td>
+                  <td style="padding: 2px 2px; text-align: left; font-size: 5.2pt; color: #0284c7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span class="editable-field">${f.inverterModel || "—"}</span></td>
                   <td style="padding: 2px 2px; text-align: right;"><span class="editable-field">${Number(f.grossCost || 0).toLocaleString("en-IN")}</span></td>
                   <td style="padding: 2px 2px; text-align: right; background: #f0fdf4; color: #15803d; font-weight: bold;"><span class="editable-field">${Number(f.subsidy || 0).toLocaleString("en-IN")}</span></td>
                   <td style="padding: 2px 2px; text-align: right; background: #f0f9ff; color: #0284c7; font-weight: bold;"><span class="editable-field">${Number(f.netCost || 0).toLocaleString("en-IN")}</span></td>
@@ -372,25 +376,27 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
                   <td style="padding: 2px 2px; text-align: right; color: #15803d;"><span class="editable-field">${Number(f.monthlySavings || 0).toLocaleString("en-IN")}</span></td>
                   <td style="padding: 2px 2px; text-align: right;"><span class="editable-field">${Number(f.postSolarBill || 0).toLocaleString("en-IN")}</span></td>
                   <td style="padding: 2px 1px;"><span class="editable-field">${Number(f.paybackYears || 0).toFixed(1)}</span> y</td>
+                  <td style="padding: 2px 1px;"><span class="editable-field">${f.loanMode ? "Yes" : "No"}</span></td>
                 </tr>
               `).join("")}
             </tbody>
             ${isLastLedgerPage ? `
               <tfoot>
                 <tr style="background: #f1f5f9; font-weight: bold; text-align: center; border-top: 1px solid #94a3b8;">
-                  <td colspan="3" style="text-align: left; padding: 2.5px 3px;">BUILDING TOTALS (${summary.totalFlats || flatLedger.length} FLATS)</td>
-                  <td>${summary.totalSanctionedLoad || 0}</td>
-                  <td>${(summary.totalMonthlyUnits || 0).toLocaleString("en-IN")}</td>
-                  <td>${summary.totalBuildingPanels || 0}</td>
-                  <td>${(summary.totalBuildingCapacityKw || 0).toFixed(2)}</td>
-                  <td style="font-size: 6.5pt; color: #0369a1; text-align: left;">${summary.totalInverters || flatLedger.length} Inverters</td>
-                  <td style="text-align: right;">${Number(summary.totalBuildingGrossCost || 0).toLocaleString("en-IN")}</td>
-                  <td style="text-align: right; color: #15803d;">${Number(summary.totalSubsidy || 0).toLocaleString("en-IN")}</td>
-                  <td style="text-align: right; color: #0284c7;">${Number(summary.totalNetCost || 0).toLocaleString("en-IN")}</td>
-                  <td>${(summary.monthlyGenerationTotal || 0).toLocaleString("en-IN")}</td>
-                  <td style="text-align: right; color: #15803d;">${Number(summary.totalMonthlySavings || 0).toLocaleString("en-IN")}</td>
-                  <td>—</td>
-                  <td>${Number(summary.buildingPaybackYears || 0).toFixed(1)} y</td>
+                  <td colspan="3" style="text-align: left; padding: 2px 2px;">BUILDING TOTALS (${summary.totalFlats || flatLedger.length} FLATS)</td>
+                  <td style="padding: 2px 1px;">${summary.totalSanctionedLoad || 0}</td>
+                  <td style="padding: 2px 1px;">${(summary.totalMonthlyUnits || 0).toLocaleString("en-IN")}</td>
+                  <td style="padding: 2px 1px;">${summary.totalBuildingPanels || 0}</td>
+                  <td style="padding: 2px 1px;">${(summary.totalBuildingCapacityKw || 0).toFixed(2)}</td>
+                  <td style="font-size: 5.2pt; color: #0369a1; text-align: left; padding: 2px 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${summary.totalInverters || flatLedger.length} Inverters</td>
+                  <td style="text-align: right; padding: 2px 1px;">${Number(summary.totalBuildingGrossCost || 0).toLocaleString("en-IN")}</td>
+                  <td style="text-align: right; color: #15803d; padding: 2px 1px;">${Number(summary.totalSubsidy || 0).toLocaleString("en-IN")}</td>
+                  <td style="text-align: right; color: #0284c7; padding: 2px 1px;">${Number(summary.totalNetCost || 0).toLocaleString("en-IN")}</td>
+                  <td style="padding: 2px 1px;">${(summary.monthlyGenerationTotal || 0).toLocaleString("en-IN")}</td>
+                  <td style="text-align: right; color: #15803d; padding: 2px 1px;">${Number(summary.totalMonthlySavings || 0).toLocaleString("en-IN")}</td>
+                  <td style="padding: 2px 1px;">—</td>
+                  <td style="padding: 2px 1px;">${Number(summary.buildingPaybackYears || 0).toFixed(1)} y</td>
+                  <td style="padding: 2px 1px;">—</td>
                 </tr>
               </tfoot>
             ` : ""}
@@ -401,6 +407,151 @@ export function buildBuildingSamplePdfPages(estimates, selectedOption, hideFlags
     `;
     pages.push(pageLedger);
   }
+
+  // ==========================================
+  // PAGE: Building Terms & Conditions, Warranty and Details
+  // ==========================================
+  const termsSectionNum = showCadDiagram ? "4" : "3";
+  const warrantyPageNum = 1 + cadPagesCount + ledgerPagesCount + 1;
+  const warrantyPanelSpec = `${buildingData.panelMake || "Tier-1 Mono PERC DCR"} (${buildingData.panelWp || 550} Wp High-efficiency modules)`;
+  const warrantyInverterSpec = summary.inverterModelSummary 
+    ? `${summary.inverterModelSummary} (Dedicated Inverter for Each Flat)`
+    : "High-efficiency Multi-MPPT Grid-Tied Inverters with IP65 weatherproofing (Separate inverter per flat)";
+
+  const pageWarranty = `
+    <div class="pdf-sample-page" data-page-index="${warrantyPageNum}">
+      ${createPageHeader("Warranty and Details")}
+      <div class="pdf-page-body">
+        <div class="pdf-section-title">${termsSectionNum}. Terms &amp; Conditions, Warranty and Details</div>
+        <p class="pdf-paragraph" style="font-size: 8pt; color: #475569; margin-bottom: 2mm;">
+          Comprehensive component warranties, manufacturer guarantees, and contractual terms governing this society solar EPC proposal.
+        </p>
+
+        <!-- Product Warranty Table -->
+        <table class="pdf-table" style="margin-bottom: 2mm; font-size: 7.5pt; width: 100% !important; min-width: 0 !important; table-layout: fixed;">
+          <colgroup>
+            <col style="width: 8%;">
+            <col style="width: 22%;">
+            <col style="width: 45%;">
+            <col style="width: 25%;">
+          </colgroup>
+          <thead>
+            <tr style="background-color: #63923e; color: white;">
+              <th style="background-color: #63923e !important; color: #ffffff !important; text-align: center; padding: 1.5mm; border-color: #4d7c2a;">Sr. No.</th>
+              <th style="background-color: #63923e !important; color: #ffffff !important; padding: 1.5mm; border-color: #4d7c2a;">Product</th>
+              <th style="background-color: #63923e !important; color: #ffffff !important; padding: 1.5mm; border-color: #4d7c2a;">Make &amp; Specification</th>
+              <th style="background-color: #63923e !important; color: #ffffff !important; text-align: center; padding: 1.5mm; border-color: #4d7c2a;">Warranty</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td style="text-align: center; font-weight: 700;">1</td><td><strong>SOLAR PANELS</strong></td><td>${warrantyPanelSpec}</td><td style="text-align: center; color: #16a34a; font-weight: 700;">12 Year Warranty /<br>30 Year Performance Warranty</td></tr>
+            <tr><td style="text-align: center; font-weight: 700;">2</td><td><strong>MOUNTING STRUCTURE</strong></td><td>Elevated Hot-dip Galvanized Structure (HDG 80-120 micron, 25+ yr durability)</td><td style="text-align: center; color: #16a34a; font-weight: 700;">25-Year Galvanization &amp; Structural Integrity</td></tr>
+            <tr><td style="text-align: center; font-weight: 700;">3</td><td><strong>INVERTER ARCHITECTURE</strong></td><td>${warrantyInverterSpec}</td><td style="text-align: center; color: #16a34a; font-weight: 700;">8-Year Comprehensive Replacement Warranty</td></tr>
+            <tr><td style="text-align: center; font-weight: 700;">4</td><td><strong>DCDB &amp; AC SWITCHGEAR</strong></td><td>HAVELLS / REPUTED MULTI-IN 600V-1000V DCDB with Type-2 SPDs</td><td style="text-align: center; color: #16a34a; font-weight: 700;">5 Year</td></tr>
+            <tr><td style="text-align: center; font-weight: 700;">5</td><td><strong>EARTHING &amp; SAFETY</strong></td><td>16 MM ALU. CONDUCTOR ROD; 14 MM × 1 MTR CHEMICAL COPPER BONDED RODS</td><td style="text-align: center; color: #16a34a; font-weight: 700;">10 Year System Life Warranty</td></tr>
+            <tr><td style="text-align: center; font-weight: 700;">6</td><td><strong>SOLAR DC/AC CABLING</strong></td><td>4 / 6 SQ MM COPPER TIN SOLAR CABLE (UV Resistant, Flame Retardant)</td><td style="text-align: center; color: #16a34a; font-weight: 700;">20 Year</td></tr>
+            <tr><td style="text-align: center; font-weight: 700;">7</td><td><strong>CIVIL CHAMBER</strong></td><td>HEAVY DUTY ISI STANDARD PRECAST CONCRETE CHAMBER</td><td style="text-align: center; color: #16a34a; font-weight: 700;">10 Year</td></tr>
+            <tr><td style="text-align: center; font-weight: 700;">8</td><td><strong>METERING &amp; INTERCONNECTION</strong></td><td>Bi-directional Net Meters under MSEDCL Solar Regulations</td><td style="text-align: center; color: #16a34a; font-weight: 700;">Statutory DISCOM Standard</td></tr>
+          </tbody>
+        </table>
+        <div style="font-size: 6.8pt; font-style: italic; color: #64748b; margin-bottom: 3mm;">
+          * Note: Other product warranties not mentioned above will be added later / as per project BOM.
+        </div>
+
+        <div style="font-size: 8.5pt; font-weight: 700; color: #000000; margin-bottom: 1mm;">
+          Terms and Conditions for Warranty, System Design, Installation &amp; Commercials
+        </div>
+        <div style="font-size: 7.2pt; color: #64748b; margin-bottom: 2mm;">
+          The following terms and conditions govern this society solar EPC proposal and form the collaborative agreement between Datlion Cnergy Pvt. Ltd. and the Client / Housing Society.
+        </div>
+
+        <!-- Section A -->
+        <div class="pdf-card" style="background: #f1f5f9; border-color: #cbd5e1; padding: 1.5mm 3mm; font-size: 7.5pt; font-weight: 700; color: #63923e; margin-bottom: 1.5mm;">
+          A. System Design &amp; Generation Feasibility Terms
+        </div>
+        <div style="font-size: 6.8pt; color: #334155; line-height: 1.35; margin-bottom: 2.5mm;">
+          <div><strong>1. Simulated Solar Generation &amp; Yield Engineering:</strong> Projections and carbon offsets are computer-simulated engineering estimations based on standard test conditions (STC) and historical Pune irradiance data (NASA/Meteonorm). Actual yield reflects real-time sunlight, seasonal weather, grid availability, and routine module washing.</div>
+          <div style="margin-top: 1mm;"><strong>2. Grid Synchronization &amp; Statutory Anti-Islanding:</strong> As mandated by Central Electricity Authority (CEA) and MSEDCL safety regulations, on-grid inverters automatically disconnect during utility power cuts or voltage/frequency trips (anti-islanding protection). Standby during utility outages is a regulatory safety feature.</div>
+          <div style="margin-top: 1mm;"><strong>3. Future Shading Obstructions &amp; Property Alterations:</strong> Array design is optimized for site conditions at the time of survey. Subsequent construction, foliage growth, or architectural changes on adjoining properties that cast shade are beyond the installer's scope.</div>
+        </div>
+
+        <!-- Section B -->
+        <div class="pdf-card" style="background: #f1f5f9; border-color: #cbd5e1; padding: 1.5mm 3mm; font-size: 7.5pt; font-weight: 700; color: #63923e; margin-bottom: 1.5mm;">
+          B. Rooftop Layout, Civil &amp; Structural Responsibilities
+        </div>
+        <div style="font-size: 6.8pt; color: #334155; line-height: 1.35;">
+          <div><strong>1. Roof Structural Soundness &amp; Load Capacity:</strong> Mounting structures are engineered for wind speeds up to 150 km/h. The client confirms the roof slab or support structure possesses adequate structural load-bearing capacity for the solar installation.</div>
+          <div style="margin-top: 1mm;"><strong>2. Fastener Sealing &amp; Roof Water Ingress:</strong> Datlion Cnergy employs standard chemical anchoring and weatherproofing sealant at base fixings. General roof slab waterproofing and structural maintenance remain the client's responsibility.</div>
+          <div style="margin-top: 1mm;"><strong>3. Rooftop Access &amp; Routine Module Washing:</strong> The client provides safe roof access and a soft-water tap connection. Fortnightly module washing with clean, non-abrasive water preserves peak power output and maintains OEM warranties.</div>
+          <div style="margin-top: 1mm;"><strong>4. Indicative Blueprint &amp; Site Adaptations:</strong> The CAD layout is an indicative engineering blueprint. Minor string routing or walkway adjustments may be made during physical installation to best accommodate site conduits without reducing contracted DC capacity.</div>
+        </div>
+      </div>
+      ${createPageFooter(warrantyPageNum, totalPagesCount)}
+    </div>
+  `;
+  pages.push(pageWarranty);
+
+  // ==========================================
+  // PAGE: Terms and Conditions (Contd.)
+  // ==========================================
+  const tcContdPageNum = warrantyPageNum + 1;
+  const pageTcContd = `
+    <div class="pdf-sample-page" data-page-index="${tcContdPageNum}">
+      ${createPageHeader("Terms and Conditions (Contd.)")}
+      <div class="pdf-page-body">
+        <!-- Section C -->
+        <div class="pdf-card" style="background: #f1f5f9; border-color: #cbd5e1; padding: 1.5mm 3mm; font-size: 7.5pt; font-weight: 700; color: #63923e; margin-bottom: 1.5mm;">
+          C. Commercial, Pricing &amp; Milestone Payment Terms
+        </div>
+        <div style="font-size: 6.8pt; color: #334155; line-height: 1.35; margin-bottom: 2.5mm;">
+          <div><strong>1. Quotation Validity &amp; Milestone Progress:</strong> Pricing is valid for 15 days from issue date. Payments follow agreed project milestones (advance booking, material dispatch, installation, and commissioning), ensuring smooth procurement and prompt execution.</div>
+          <div style="margin-top: 1mm;"><strong>2. Cabling, Wiring &amp; Civil Works at Actuals:</strong> Standard bill of materials (BOM) allowances are included. Cabling and wiring charges will be at actual measured length of DC and AC cabling required on site, ensuring client pays transparently for exact site requirements.</div>
+          <div style="margin-top: 1mm;"><strong>3. Statutory Taxes &amp; On-Site Material Custody:</strong> Pricing reflects prevailing GST rates (effective composite 8.9%). Delivered materials stored safely at site transition to client custody, with ownership title transferring upon final milestone settlement.</div>
+        </div>
+
+        <!-- Section D -->
+        <div class="pdf-card" style="background: #f1f5f9; border-color: #cbd5e1; padding: 1.5mm 3mm; font-size: 7.5pt; font-weight: 700; color: #63923e; margin-bottom: 1.5mm;">
+          D. MSEDCL Net Metering, Grid Interconnection &amp; PM Surya Ghar Subsidy Terms (MNRE 07.06.2024)
+        </div>
+        <div style="font-size: 6.8pt; color: #334155; line-height: 1.35; margin-bottom: 2.5mm;">
+          <div><strong>1. Central Financial Assistance (CFA) Eligibility &amp; DBT:</strong> Central subsidy under PM Surya Ghar: Muft Bijli Yojana applies strictly to Capex mode (consumer self-funded or bank loan financed) and is credited directly to the client's bank account via DBT. RESCO/utility aggregation models and off-grid setups are strictly excluded (₹0 CFA). Sizing strictly follows pro-rata slabs (0 to 2 kWp: ₹30,000/kWp / >2 to 3 kWp: ₹18,000/kWp / >3 kWp: ₹0 additional; max CFA cap of ₹78,000 per consumer). Maharashtra falls under General/Standard Category States (eligible DISCOMs: MSEDCL, BEST, Adani Electricity, Tata Power). Datlion Cnergy assists with National Portal documentation; EPC payments remain independent of DBT disbursement.</div>
+          <div style="margin-top: 1mm;"><strong>2. Mandatory Equipment &amp; Mounting Compliance:</strong> CFA requires 100% Domestic Content Requirement (DCR) ALMM-listed solar cells/modules and BIS-compliant inverters. Systems must be mounted on rooftops, terraces, balconies, BIPV, or elevated structures with ≥ 8 ft ground clearance. Ground-mounted systems are strictly ineligible for CFA.</div>
+          <div style="margin-top: 1mm;"><strong>3. Grid Feasibility &amp; Housing Society Sizing:</strong> Systems ≤ 10 kW enjoy deemed grid feasibility approval per MNRE guidelines. For Group Housing Societies / multi-meter buildings (Category B/C), total CFA capacity is capped at min(3 kWp × Total Houses, 500 kWp), and common utility power is prohibited from supplying individual residential flats.</div>
+        </div>
+
+        <!-- Section E -->
+        <div class="pdf-card" style="background: #f1f5f9; border-color: #cbd5e1; padding: 1.5mm 3mm; font-size: 7.5pt; font-weight: 700; color: #63923e; margin-bottom: 1.5mm;">
+          E. Bank Partner Financing Facilitation Terms
+        </div>
+        <div style="font-size: 6.8pt; color: #334155; line-height: 1.35; margin-bottom: 2.5mm;">
+          <div><strong>1. Illustrative EMI Projections &amp; Underwriting:</strong> All bank EMI figures, interest rates (e.g. 9.5% p.a.), and payback timelines are illustrative estimates. Final loan sanction, interest rates, and loan tenure are determined by the partner lending bank (SBI, Canara Bank, Union Bank, etc.) under PM Surya Ghar nationalized schemes.</div>
+          <div style="margin-top: 1mm;"><strong>2. EPC Facilitation Role &amp; Independent Milestones:</strong> Datlion Cnergy acts as a technology and documentation facilitator to help clients secure competitive green solar loans. Project milestone payments proceed in coordination with bank disbursement schedules.</div>
+        </div>
+
+        <!-- Section F -->
+        <div class="pdf-card" style="background: #f1f5f9; border-color: #cbd5e1; padding: 1.5mm 3mm; font-size: 7.5pt; font-weight: 700; color: #63923e; margin-bottom: 1.5mm;">
+          F. Terms and Conditions for Warranty &amp; OEM Pass-Through
+        </div>
+        <div style="font-size: 6.8pt; color: #334155; line-height: 1.35; margin-bottom: 2.5mm;">
+          <div><strong>1. Original Equipment Manufacturer (OEM) Pass-Through:</strong> Solar panels (12-yr product / 30-yr performance), inverters (10-yr), and switchgear carry direct manufacturer warranties. Datlion Cnergy acts as your local single-point facilitator for manufacturer warranty claims and RMA processing.</div>
+          <div style="margin-top: 1mm;"><strong>2. Operation, Maintenance &amp; Pass-Through Warranty:</strong> All product warranties are original equipment manufacturer (OEM) pass-through warranties. Standard warranty remains valid when the system is operated within rated electrical parameters, cleaned regularly with soft water, and serviced by authorized personnel.</div>
+          <div style="margin-top: 1mm;"><strong>3. Natural Calamity &amp; Force Majeure Protections:</strong> Warranties cover equipment manufacturing and performance defects. Damages caused by Natural Calamity events (cyclones exceeding design rating, hailstorms, flooding, earthquakes) or Force Majeure disruptions (civil unrest, grid-level anomalies) are covered under comprehensive plant insurance rather than equipment warranties.</div>
+          <div style="margin-top: 1mm;"><strong>4. Change in Government Policies &amp; Regulatory Framework:</strong> Savings and payback models are based on current MERC net metering regulations and MSEDCL tariffs. Any future Change in Government Policies, tariff revisions, or DISCOM grid-banking rules are external regulatory updates.</div>
+        </div>
+
+        <!-- Section G -->
+        <div class="pdf-card" style="background: #f1f5f9; border-color: #cbd5e1; padding: 1.5mm 3mm; font-size: 7.5pt; font-weight: 700; color: #63923e; margin-bottom: 1.5mm;">
+          G. Proposal-Wide General EPC Terms &amp; Conditions
+        </div>
+        <div style="font-size: 6.8pt; color: #334155; line-height: 1.35;">
+          <div><strong>1. Limitation of EPC Liability (Capped at 5%):</strong> To the extent permitted by law, the total cumulative aggregate liability of Datlion Cnergy Pvt. Ltd. for any claim or dispute arising under this proposal shall be subject to a Limitation of EPC Liability (Capped at 5%) of the total contract value actually received, excluding indirect or consequential downtime losses.</div>
+          <div style="margin-top: 1mm;"><strong>2. Mutual Good Faith &amp; Exclusive Jurisdiction:</strong> Both parties agree to resolve any operational questions through mutual consultation and good-faith cooperation. Unresolved legal disputes shall be subject to the exclusive jurisdiction of the competent courts in Pune, Maharashtra, India.</div>
+        </div>
+      </div>
+      ${createPageFooter(tcContdPageNum, totalPagesCount)}
+    </div>
+  `;
+  pages.push(pageTcContd);
 
   // ==========================================
   // OPTIONAL: Individual Resident Sheets

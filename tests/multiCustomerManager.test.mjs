@@ -265,6 +265,41 @@ assert.equal(flat202Ledger.inverterCost, 15006);
 assert.equal(bldg27Res.summary.totalInverters, 27, "Large society must have 27 separate inverters for 27 flats");
 console.log("✓ Separate inverters for separate flats in Building Ledger verified!");
 
+// 8. Test Left-Side Pricing & Rates Configuration in Building Ledger
+console.log("Testing Left-Side Pricing & Rates Configuration in Building Ledger...");
+const customBuildingLedger = calculateBuildingLedger({
+  buildingName: "Custom Rates Society",
+  panelRate: null, // Test fallback to pricing.panelDcrRatePerWp
+  panelType: "dcr",
+  structureType: "hotDip",
+  flats: [
+    { flatNo: "101", customerName: "A", monthlyUnits: 250, monthlyBill: 2800, sanctionedLoad: 3, consumerCategory: "LT-I" },
+    { flatNo: "102", customerName: "B", monthlyUnits: 350, monthlyBill: 4000, sanctionedLoad: 4, consumerCategory: "LT-I" },
+  ],
+  config: {
+    pricing: {
+      panelDcrRatePerWp: 29,
+      structureRates: { hotDip: 8 },
+      wiringRatePerW: 1.5,
+      installationRatePerW: 3.0,
+      consultancyRatePerW: 1.5,
+      contingencyRate: 2.0,
+      marginRate: 20,
+      inverterPriceTier: "price2",
+    },
+  },
+});
+
+assert.ok(customBuildingLedger);
+const totKw = customBuildingLedger.summary.totalBuildingCapacityKw;
+const dcWatts = totKw * 1000;
+assert.equal(customBuildingLedger.totals.effectivePanelRate, 29, "Effective panel rate must come from pricing.panelDcrRatePerWp");
+assert.equal(customBuildingLedger.totals.structureRate, 8, "Structure rate must come from pricing.structureRates.hotDip");
+assert.equal(customBuildingLedger.totals.wiringCost, dcWatts * 1.5, "Wiring cost must reflect pricing.wiringRatePerW");
+assert.equal(customBuildingLedger.totals.contingencyRate, 2.0, "Contingency rate must reflect pricing.contingencyRate");
+assert.equal(customBuildingLedger.totals.marginRate, 20, "Margin rate must reflect pricing.marginRate");
+console.log("✓ Left-side pricing and rates configuration in Building Ledger verified!");
+
 console.log("✓ MNRE Guidelines 07.06.2024 Multi-Customer Building constraints verified!");
 
 console.log("✓ CSV template, parsing, and export verified.");

@@ -736,9 +736,9 @@ assert.equal(includeIndivCheckbox.checked, false, "Include individual sheets mus
 openPdfBtn.click();
 assert.equal(sampleModal.style.display, "flex", "Sample View modal must open for building proposal");
 
-// Verify Combined Ledger proposal pages (Page 1 = Executive Summary, Page 2 = CAD Blueprint, Page 3 = Master Ledger)
+// Verify Combined Ledger proposal pages (Page 1 = Executive Summary, Page 2 = CAD Blueprint, Page 3 = Master Ledger, Page 4 = Warranty & Terms, Page 5 = Terms Contd.)
 const samplePages = samplePagesContainer.querySelectorAll(".pdf-sample-page");
-assert.equal(samplePages.length, 3, "Default building proposal output must be 3 pages (Combined Ledger)");
+assert.equal(samplePages.length, 5, "Default building proposal output must be 5 pages (Combined Ledger + Warranty & Terms)");
 
 const page1Text = samplePages[0].textContent;
 assert.ok(page1Text.includes("Building Executive Summary"), "Page 1 must contain Building Executive Summary");
@@ -750,6 +750,26 @@ assert.ok(page2Text.includes("Shared Rooftop Layout & Demarcated Flat Panel Allo
 const page3Text = samplePages[2].textContent;
 assert.ok(page3Text.includes("Resident-Wise Financial Allocation & Solar Ledger"), "Page 3 must contain Master Ledger title");
 assert.ok(page3Text.includes("BUILDING TOTALS (32 FLATS)"), "Page 3 must contain Master Ledger 32 flats totals");
+
+const page4Text = samplePages[3].textContent;
+assert.ok(page4Text.includes("Terms & Conditions, Warranty and Details"), "Page 4 must contain Warranty and Details");
+assert.ok(page4Text.includes("SOLAR PANELS"), "Page 4 must contain product warranty table");
+
+const page5Text = samplePages[4].textContent;
+assert.ok(page5Text.includes("Terms and Conditions (Contd.)"), "Page 5 must contain Terms and Conditions (Contd.)");
+assert.ok(page5Text.includes("MSEDCL Net Metering"), "Page 5 must contain MSEDCL Net Metering terms");
+
+// 9b. Verify Master Ledger table columns, colgroup definition and end-column visibility
+const ledgerTable = samplePages[2].querySelector(".pdf-ledger-table");
+assert.ok(ledgerTable, "Master ledger table must exist");
+const headerCells = Array.from(ledgerTable.querySelectorAll("thead th"));
+assert.equal(headerCells.length, 16, "Master ledger must have 16 columns matching PDF export");
+const colElements = Array.from(ledgerTable.querySelectorAll("colgroup col"));
+assert.equal(colElements.length, 16, "Colgroup must define 16 col elements to prevent table overflow");
+const headerNames = headerCells.map(h => h.textContent.trim().replace(/\s+/g, " "));
+assert.ok(headerNames.some(h => h.includes("Post Bill")), "Column 'Post Bill' must be present at the end");
+assert.ok(headerNames.some(h => h.includes("Payback")), "Column 'Payback' must be present at the end");
+assert.ok(headerNames.some(h => h.includes("Loan")), "Column 'Loan' must be present at the end");
 
 // 10. Test In-place text editing on Building Proposal preview with password 'editprop'
 const bldgUnlockBtn = document.getElementById("sampleViewUnlockEditBtn");
@@ -776,9 +796,9 @@ includeIndivCheckbox.checked = true;
 openPdfBtn.click();
 
 const fullPages = samplePagesContainer.querySelectorAll(".pdf-sample-page");
-assert.equal(fullPages.length, 3 + 32, "When 'Include Full Individual Resident Sheets' is checked, proposal must include all 32 individual flat sheets!");
+assert.equal(fullPages.length, 5 + 32, "When 'Include Full Individual Resident Sheets' is checked, proposal must include 5 base pages + all 32 individual flat sheets!");
 
-const individualFlatPage = fullPages[3].textContent;
+const individualFlatPage = fullPages[5].textContent;
 assert.ok(individualFlatPage.includes("Official Solar Proposal — Flat 101"), "Individual sheet must have customized flat header");
 assert.ok(individualFlatPage.includes("ELECTRICITY BILL COMPARISON: BEFORE VS AFTER SOLAR"), "Individual sheet must NOT skip electricity bill comparison");
 assert.ok(
@@ -828,12 +848,13 @@ showCadCheckbox.dispatchEvent(new window.Event("change"));
 
 openPdfBtn.click();
 const noCadPages = samplePagesContainer.querySelectorAll(".pdf-sample-page");
-assert.equal(noCadPages.length, 2, "Building proposal must only have 2 pages when CAD diagram is unchecked");
+assert.equal(noCadPages.length, 4, "Building proposal must only have 4 pages when CAD diagram is unchecked");
 
 const noCadContent = samplePagesContainer.textContent;
 assert.ok(!noCadContent.includes("Shared Rooftop Layout & Demarcated Flat Panel Allocation"), "Shared Rooftop Layout & Demarcated Flat Panel Allocation MUST be hidden when CAD is unchecked");
 assert.ok(noCadPages[0].textContent.includes("Gokuldham Heights CHS"), "Page 1 must show updated building name");
 assert.ok(noCadPages[1].textContent.includes("2. Resident-Wise Financial Allocation & Solar Ledger"), "Master ledger must be numbered as section 2 when CAD is hidden");
+assert.ok(noCadPages[2].textContent.includes("3. Terms & Conditions, Warranty and Details"), "Warranty must be numbered as section 3 when CAD is hidden");
 
 document.getElementById("closeSampleViewModalBtn")?.click();
 
@@ -843,9 +864,10 @@ showCadCheckbox.dispatchEvent(new window.Event("change"));
 
 openPdfBtn.click();
 const restoredCadPages = samplePagesContainer.querySelectorAll(".pdf-sample-page");
-assert.equal(restoredCadPages.length, 3, "Building proposal must have 3 pages when CAD diagram is re-checked");
+assert.equal(restoredCadPages.length, 5, "Building proposal must have 5 pages when CAD diagram is re-checked");
 assert.ok(samplePagesContainer.textContent.includes("Shared Rooftop Layout & Demarcated Flat Panel Allocation"), "CAD section must be restored when showCadDiagram is checked");
 assert.ok(restoredCadPages[2].textContent.includes("3. Resident-Wise Financial Allocation & Solar Ledger"), "Master ledger must be numbered as section 3 when CAD is shown");
+assert.ok(restoredCadPages[3].textContent.includes("4. Terms & Conditions, Warranty and Details"), "Warranty must be numbered as section 4 when CAD is shown");
 
 document.getElementById("closeSampleViewModalBtn")?.click();
 

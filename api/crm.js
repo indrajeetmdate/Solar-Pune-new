@@ -13,6 +13,16 @@ function isUuid(val) {
   return typeof val === 'string' && UUID_REGEX.test(val.trim());
 }
 
+function isValidProposalId(val) {
+  if (val === null || val === undefined || val === '') return false;
+  if (typeof val === 'number' && Number.isFinite(val)) return true;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    return UUID_REGEX.test(trimmed) || /^\d+$/.test(trimmed);
+  }
+  return false;
+}
+
 function normalizePhone10(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
   if (!digits) return '';
@@ -170,7 +180,7 @@ export default async function handler(req, res) {
         assigned_to: body.assigned_to || body.assignedTo,
         assigned_name: body.assigned_name || body.assignedName,
         proposal_serial_no: body.proposal_serial_no || body.proposalSerialNo,
-        proposal_id: isUuid(body.proposal_id || body.proposalId) ? (body.proposal_id || body.proposalId) : null,
+        proposal_id: isValidProposalId(body.proposal_id ?? body.proposalId) ? (body.proposal_id ?? body.proposalId) : null,
         notes: Array.isArray(body.notes) ? body.notes : [],
         updated_at: new Date().toISOString(),
       };

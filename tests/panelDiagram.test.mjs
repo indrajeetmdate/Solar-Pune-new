@@ -1417,5 +1417,54 @@ console.log("Running RooftopCAD tests...");
   console.log("✓ Test 21 Passed: Base Roof, Walkway Sizes & Panel Positions Preserved Across Tab Switches & Resizes");
 }
 
+// Test 22: Layers Panel Selection & Bounding Box/Gizmo for Roof, Image, Panels, Walkways, Cutouts
+{
+  const canvas = new MockCanvas();
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 50,
+    roofBreadthFt: 30,
+    requiredPanels: 8,
+  });
+
+  cad.addCutout(10, 10, 5, 5, "Water Tank", "water_tank");
+  cad.addPathway(0, 15, 50, 3, "horizontal");
+  cad.autoPlaceRemainingPanels();
+
+  // 1. Select Roof Layer
+  cad.selectLayer("roof");
+  assert.equal(cad.selectedItem?.type, "roof", "selectLayer('roof') must set selectedItem to roof");
+  assert.equal(cad.isSelected("roof"), true, "isSelected('roof') must return true");
+  const roofItem = cad.selectedItem.item;
+  assert.ok(roofItem.w > 0 && roofItem.h > 0, "Selected roof must have width and height");
+  assert.equal(roofItem.lengthFt, 50, "Selected roof must retain lengthFt");
+  assert.equal(roofItem.breadthFt, 30, "Selected roof must retain breadthFt");
+  const roofHandles = cad.getResizeHandles(cad.selectedItem);
+  assert.equal(roofHandles.length, 8, "Selected roof must have 8 resize handles for canvas gizmo");
+
+  // 2. Select Image Layer
+  cad.image.isLoaded = true;
+  cad.selectLayer("image");
+  assert.equal(cad.selectedItem?.type, "image", "selectLayer('image') must set selectedItem to image");
+  assert.equal(cad.isSelected("image"), true, "isSelected('image') must return true");
+
+  // 3. Select Panels Layer
+  cad.selectLayer("panels");
+  assert.ok(cad.selectedItems.length > 0, "selectLayer('panels') must select all panels");
+  assert.equal(cad.selectedItems.length, cad.panels.length, "All panels must be in selectedItems");
+  assert.equal(cad.isSelected("panel", cad.panels[0]), true, "First panel must be reported as selected");
+
+  // 4. Select Cutouts Layer
+  cad.selectLayer("cutouts");
+  assert.equal(cad.selectedItem?.type, "cutout", "selectLayer('cutouts') must select cutout");
+  assert.equal(cad.isSelected("cutout", cad.cutouts[0]), true, "Cutout must be reported as selected");
+
+  // 5. Select Pathways Layer
+  cad.selectLayer("pathways");
+  assert.equal(cad.selectedItem?.type, "pathway", "selectLayer('pathways') must select pathway");
+  assert.equal(cad.isSelected("pathway", cad.pathways[0]), true, "Pathway must be reported as selected");
+
+  console.log("✓ Test 22 Passed: CAD Layers Panel Selection & Bounding Box/Gizmo for Roof, Image, Panels, Walkways, Cutouts");
+}
+
 console.log("All RooftopCAD tests passed successfully!");
 

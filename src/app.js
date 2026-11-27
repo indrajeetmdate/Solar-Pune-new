@@ -1,5 +1,5 @@
 import { DEFAULT_CONFIG, TARIFF_PROFILES, PANEL_LABELS, STRUCTURE_LABELS, SYSTEM_LABELS, getPanelSpecificationText } from "./config.js";
-import { calculateEstimate, calculateSolarFinancing, getPanelConfigurations, calculateSingleMeterSubsidy, distributeCapacityAcrossMeters, calculateLifetimeSavings } from "./calculator.js";
+import { calculateEstimate, calculateSolarFinancing, getPanelConfigurations, calculateSingleMeterSubsidy, distributeCapacityAcrossMeters, calculateLifetimeSavings, findInverterForCapacity } from "./calculator.js";
 import { buildLoanScheduleSummary } from "./loanEngine.js";
 import { parseMsebBillFile, parseMultipleMsebBillFiles } from "./billParser.js";
 import { isSupportedBillFile } from "./ocrExtractor.js";
@@ -84,7 +84,7 @@ const ASSUMPTION_IDS = [
   "panelDcrRate", "panelNonDcrRate", "batteryRate", "inverterPriceTier",
   "hotDipStructureRate", "galvalumeStructureRate", "gpPurlinStructureRate", "wiringRate", "installationRate", "consultancyRate",
   "contingencyRate", "marginRate",
-  "panelWp", "panelEfficiency",
+  "panelWp", "ratesPanelWp", "panelEfficiency",
   "dailyGeneration", "shadingLoss", "orientationLoss", "systemLoss", "degradationRate", "batteryDod", "inverterEfficiency", "selfConsumptionPct",
   "savingsMethod", "fixedCharge", "electricityDuty", "tariffEscalation",
   "slabRate1", "slabRate2", "slabRate3", "slabRate4",
@@ -153,6 +153,7 @@ const ids = [
   "contingencyRate",
   "marginRate",
   "panelWp",
+  "ratesPanelWp",
   "panelEfficiency",
   "dailyGeneration",
 
@@ -426,7 +427,7 @@ function readConfig() {
       inverterPriceTier: $("inverterPriceTier") ? $("inverterPriceTier").value : (DEFAULT_CONFIG.pricing.inverterPriceTier || "price1"),
     },
     performance: {
-      panelWp: numberValue("panelWp") || 550,
+      panelWp: numberValue("ratesPanelWp") || numberValue("panelWp") || 550,
       panelEfficiency: numberValue("panelEfficiency") || 21.5,
       dailyGenerationPerKw: numberValue("dailyGeneration"),
 
@@ -1534,9 +1535,29 @@ function renderMultiMeterTable() {
   if (!tbody) return;
 
   const totalMeters = state.meters.length;
-
   const isSpecialState = Boolean($("isSpecialCategoryState")?.checked);
   const activeBreakdown = state.estimates?.recommended?.meterBreakdown || [];
+  const config = readConfig();
+  const priceTier = config.pricing?.inverterPriceTier || "price1";
+
+  if (tbody.contains(document.activeElement)) {
+    updateMultiMeterKPIs();
+    state.meters.forEach((meter) => {
+      const tr = Array.from(tbody.querySelectorAll("tr")).find((row) => row.getAttribute("data-meter-id") === String(meter.id));
+      if (tr) {
+        const breakdownMatch = activeBreakdown.find((b) => b.id === meter.id || (meter.consumerNumber && b.consumerNumber === meter.consumerNumber));
+        const effectiveAllocKw = Number(meter.allocatedKw) > 0 ? Number(meter.allocatedKw) : (Number(breakdownMatch?.allocatedKw) || 0);
+        const sub = calculateSingleMeterSubsidy(effectiveAllocKw, meter.consumerCategory || "LT-I", { isSpecialCategoryState: isSpecialState });
+        const inv = findInverterForCapacity(effectiveAllocKw, meter.phase || meter.connectionPhase || (effectiveAllocKw > 5.0 ? "3-phase" : "1-phase"), priceTier);
+        const invBadge = tr.querySelector(".mm-inverter-badge");
+        const subBadge = tr.querySelector(".mm-subsidy-badge");
+        if (invBadge && inv.modelName) invBadge.textContent = inv.modelName;
+        if (subBadge) subBadge.textContent = `₹${sub.toLocaleString('en-IN')}`;
+      }
+    });
+    return;
+  }
+
   let totalSubsidies = 0;
   const rowsHtml = state.meters.map((meter) => {
     const isMissingNo = !meter.consumerNumber;
@@ -1546,7 +1567,7 @@ function renderMultiMeterTable() {
     const effectiveAllocKw = Number(meter.allocatedKw) > 0 ? Number(meter.allocatedKw) : (Number(breakdownMatch?.allocatedKw) || 0);
     const sub = calculateSingleMeterSubsidy(effectiveAllocKw, meter.consumerCategory || "LT-I", { isSpecialCategoryState: isSpecialState });
     totalSubsidies += sub;
-    const inv = findInverterForCapacity(effectiveAllocKw, meter.phase || meter.connectionPhase || (effectiveAllocKw > 5.0 ? "3-phase" : "1-phase"));
+    const inv = findInverterForCapacity(effectiveAllocKw, meter.phase || meter.connectionPhase || (effectiveAllocKw > 5.0 ? "3-phase" : "1-phase"), priceTier);
 
     return `
       <tr data-meter-id="${meter.id}" style="border-bottom: 1px solid #e2e8f0; transition: background 0.15s;">
@@ -1686,9 +1707,58 @@ function setMeteringMode(mode) {
   render();
 }
 
+let isRendering = false;
+let isUpdatingBuildingStudio = false;
+
 function render() {
-  const resultsPanel = document.getElementById("resultsPanel") || document.querySelector(".results-panel");
-  if (resultsPanel) resultsPanel.classList.remove("blurred-overlay");
+  if (isRendering) return;
+  isRendering = true;
+  try {
+    const resultsPanel = document.getElementById("resultsPanel") || document.querySelector(".results-panel");
+    if (resultsPanel) resultsPanel.classList.remove("blurred-overlay");
+
+    // If in multi-meter mode, sync left-side totals if user was editing them
+    if (state.meteringMode === "multi" && state.meters && state.meters.length > 0) {
+      const activeId = document.activeElement ? document.activeElement.id : null;
+      const isEditingLeftTotals = activeId === "monthlyUnits" || activeId === "monthlyBill" || activeId === "sanctionedLoad";
+      if (isEditingLeftTotals) {
+        const uVal = numberValue("monthlyUnits");
+        const bVal = numberValue("monthlyBill");
+        const lVal = numberValue("sanctionedLoad");
+        if (state.meters.length === 1) {
+          if (uVal > 0) state.meters[0].monthlyUnits = uVal;
+          if (bVal > 0) state.meters[0].monthlyBill = bVal;
+          if (lVal > 0) state.meters[0].sanctionedLoad = lVal;
+        } else {
+          const curUnits = state.meters.reduce((s, m) => s + (Number(m.monthlyUnits) || 0), 0);
+          if (activeId === "monthlyUnits" && uVal > 0 && curUnits > 0 && uVal !== curUnits) {
+            const factor = uVal / curUnits;
+            state.meters.forEach((m) => {
+              m.monthlyUnits = Math.round((Number(m.monthlyUnits) || 0) * factor);
+            });
+          }
+          const curBill = state.meters.reduce((s, m) => s + (Number(m.monthlyBill) || 0), 0);
+          if (activeId === "monthlyBill" && bVal > 0 && curBill > 0 && bVal !== curBill) {
+            const factor = bVal / curBill;
+            state.meters.forEach((m) => {
+              m.monthlyBill = Math.round((Number(m.monthlyBill) || 0) * factor);
+            });
+          }
+          const curLoad = state.meters.reduce((s, m) => s + (Number(m.sanctionedLoad) || 0), 0);
+          if (activeId === "sanctionedLoad" && lVal > 0 && curLoad > 0 && lVal !== curLoad) {
+            const factor = lVal / curLoad;
+            state.meters.forEach((m) => {
+              m.sanctionedLoad = Math.max(0.5, Math.round((Number(m.sanctionedLoad) || 0) * factor * 10) / 10);
+            });
+          }
+        }
+      }
+    }
+
+    // If in building mode, always refresh Building Studio so left rates and configurations propagate immediately
+    if (state.proposalMode === "multi_building" || (state.buildingFlats && state.buildingFlats.length > 0)) {
+      updateBuildingStudio({ skipRender: true, forceSyncFromLeft: true });
+    }
 
   const input = readInput();
   const config = readConfig();
@@ -1834,22 +1904,9 @@ function render() {
     }
   }
 
-  // Update allocation bar targets and live inverter badges in multi-meter panel
+  // Update allocation bar targets, live inverter badges, and meters in multi-meter panel
   if (state.meteringMode === "multi") {
-    updateMultiMeterKPIs();
-    const tbody = $("mmMetersTableBody");
-    const bdList = option.meterBreakdown || [];
-    if (tbody && bdList.length > 0 && !tbody.contains(document.activeElement)) {
-      bdList.forEach((bm) => {
-        const tr = Array.from(tbody.querySelectorAll("tr")).find((row) => row.getAttribute("data-meter-id") === String(bm.id));
-        if (tr) {
-          const invBadge = tr.querySelector(".mm-inverter-badge");
-          const subBadge = tr.querySelector(".mm-subsidy-badge");
-          if (invBadge && bm.inverterModel) invBadge.textContent = bm.inverterModel;
-          if (subBadge && bm.subsidy !== undefined) subBadge.textContent = `₹${Number(bm.subsidy).toLocaleString('en-IN')}`;
-        }
-      });
-    }
+    renderMultiMeterTable();
   }
 
   $("sanctionStatus").textContent = estimate.sanctionedStatus.label;
@@ -2207,6 +2264,9 @@ function render() {
 
   // Subsidy column in comparison table + subsidy row in cost breakup
   document.querySelectorAll(".subsidy-col").forEach(el => el.style.display = hideSubsidy ? "none" : "");
+  } finally {
+    isRendering = false;
+  }
 }
 
 let cadListenersAttached = false;
@@ -2246,7 +2306,8 @@ function renderLayersPanel(cad, state) {
       layerIcon = "☀️";
       layerTitle = "Solar Panels";
       countBadge = `${state.panelsCount} placed`;
-      isLayerActive = state.selectedItem && state.selectedItem.type === "panel";
+      isLayerActive = (state.selectedItem && state.selectedItem.type === "panel") ||
+        (state.selectedItems && state.selectedItems.some((s) => s.type === "panel"));
 
       if (state.panels && state.panels.length > 0) {
         itemsHtml = state.panels
@@ -2276,7 +2337,8 @@ function renderLayersPanel(cad, state) {
       layerIcon = "➖";
       layerTitle = "Cutout Obstacles";
       countBadge = `${state.cutouts.length} zones`;
-      isLayerActive = state.selectedItem && state.selectedItem.type === "cutout";
+      isLayerActive = (state.selectedItem && state.selectedItem.type === "cutout") ||
+        (state.selectedItems && state.selectedItems.some((s) => s.type === "cutout"));
 
       if (state.cutouts && state.cutouts.length > 0) {
         itemsHtml = state.cutouts
@@ -2307,7 +2369,8 @@ function renderLayersPanel(cad, state) {
       layerIcon = "🚶";
       layerTitle = "Walkways";
       countBadge = `${state.pathways.length} corridors`;
-      isLayerActive = state.selectedItem && state.selectedItem.type === "pathway";
+      isLayerActive = (state.selectedItem && state.selectedItem.type === "pathway") ||
+        (state.selectedItems && state.selectedItems.some((s) => s.type === "pathway"));
 
       if (state.pathways && state.pathways.length > 0) {
         itemsHtml = state.pathways
@@ -2337,7 +2400,8 @@ function renderLayersPanel(cad, state) {
       layerIcon = "📐";
       layerTitle = "Base Roof Boundary";
       countBadge = `${state.roofLengthFt || 30} × ${state.roofBreadthFt || 20} ft`;
-      isLayerActive = state.selectedItem && state.selectedItem.type === "roof";
+      isLayerActive = (state.selectedItem && state.selectedItem.type === "roof") ||
+        (state.selectedItems && state.selectedItems.some((s) => s.type === "roof"));
       itemsHtml = `
         <div class="cad-component-row ${isLayerActive ? "active" : ""}" data-comp-type="roof" data-comp-id="roof_main" title="Click to select base roof">
           <div class="cad-component-info">
@@ -2350,7 +2414,8 @@ function renderLayersPanel(cad, state) {
       layerIcon = "🖼️";
       layerTitle = "Aerial Roof Image";
       countBadge = state.imageLoaded ? "Active" : "None";
-      isLayerActive = state.selectedItem && state.selectedItem.type === "image";
+      isLayerActive = (state.selectedItem && state.selectedItem.type === "image") ||
+        (state.selectedItems && state.selectedItems.some((s) => s.type === "image"));
       itemsHtml = `
         <div class="cad-component-row ${isLayerActive ? "active" : ""}" data-comp-type="image" data-comp-id="roof_image" title="Click to select image">
           <div class="cad-component-info">
@@ -2432,6 +2497,33 @@ function renderLayersPanel(cad, state) {
     });
   });
 
+  // Layer Card & Title click selection
+  container.querySelectorAll(".cad-layer-card").forEach((card) => {
+    card.addEventListener("click", (e) => {
+      if (
+        e.target.closest(".cad-layer-actions") ||
+        e.target.closest(".cad-layer-slider-row") ||
+        e.target.closest(".cad-component-row")
+      ) {
+        return;
+      }
+      const lName = card.getAttribute("data-layer-name");
+      if (lName && typeof cad.selectLayer === "function") {
+        cad.selectLayer(lName);
+      }
+    });
+  });
+
+  container.querySelectorAll(".cad-layer-title").forEach((titleEl) => {
+    titleEl.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const lName = titleEl.getAttribute("data-layer-name");
+      if (lName && typeof cad.selectLayer === "function") {
+        cad.selectLayer(lName);
+      }
+    });
+  });
+
   // Component row selection (supports Shift/Ctrl/Cmd multi-selection)
   container.querySelectorAll(".cad-component-row").forEach((row) => {
     row.addEventListener("click", (e) => {
@@ -2442,6 +2534,7 @@ function renderLayersPanel(cad, state) {
       ) {
         return;
       }
+      e.stopPropagation();
       const cType = row.getAttribute("data-comp-type");
       const cId = row.getAttribute("data-comp-id");
       const isMulti = e.shiftKey || e.ctrlKey || e.metaKey;
@@ -5307,27 +5400,69 @@ function switchWorkspaceTab(tabId) {
 }
 
 // ================= MULTI-CUSTOMER BUILDING STUDIO LOGIC =================
-function updateBuildingStudio() {
+function updateBuildingStudio(options = {}) {
+  if (isUpdatingBuildingStudio) return;
+  isUpdatingBuildingStudio = true;
+  try {
+    const config = readConfig();
+    const leftPanelRate = $("panelRate") && $("panelRate").value !== ""
+      ? Number($("panelRate").value)
+      : (config.pricing?.panelDcrRatePerWp || 25);
+    const leftPanelWp = Number($("ratesPanelWp")?.value) || Number($("panelWp")?.value) || 550;
+    const leftStructureType = $("structureType")?.value || "hotDip";
+    const leftRoofArea = Number($("roofArea")?.value) || 2000;
+    const leftLoanInterest = Number($("loanInterestRate")?.value) || 7.0;
+    const leftLoanUpfront = Number($("loanDownPaymentPct")?.value) || 10;
+    const leftIsSpecial = Boolean($("isSpecialCategoryState")?.checked);
+    const leftPanelMake = $("panelMake")?.value || "Tier-1 Mono PERC DCR";
+    const leftPanelType = $("panelType")?.value || "dcr";
+
+    // Sync left-side inputs into building input fields unless user is actively editing that building input
+    if ($("buildingPanelRateInput") && (options.forceSyncFromLeft || document.activeElement !== $("buildingPanelRateInput"))) {
+      $("buildingPanelRateInput").value = leftPanelRate;
+    }
+    if ($("buildingPanelWpInput") && (options.forceSyncFromLeft || document.activeElement !== $("buildingPanelWpInput"))) {
+      $("buildingPanelWpInput").value = leftPanelWp;
+    }
+    if ($("buildingStructureType") && (options.forceSyncFromLeft || document.activeElement !== $("buildingStructureType"))) {
+      $("buildingStructureType").value = leftStructureType;
+    }
+    if ($("buildingRoofAreaInput") && (options.forceSyncFromLeft || document.activeElement !== $("buildingRoofAreaInput"))) {
+      $("buildingRoofAreaInput").value = leftRoofArea;
+    }
+    if ($("buildingLoanRateInput") && (options.forceSyncFromLeft || document.activeElement !== $("buildingLoanRateInput"))) {
+      $("buildingLoanRateInput").value = leftLoanInterest;
+    }
+    if ($("buildingLoanUpfrontInput") && (options.forceSyncFromLeft || document.activeElement !== $("buildingLoanUpfrontInput"))) {
+      $("buildingLoanUpfrontInput").value = leftLoanUpfront;
+    }
+    if ($("buildingIsSpecialCategoryState") && (options.forceSyncFromLeft || document.activeElement !== $("buildingIsSpecialCategoryState"))) {
+      $("buildingIsSpecialCategoryState").checked = leftIsSpecial;
+    }
+    if ($("buildingPanelMakeInput") && (options.forceSyncFromLeft || document.activeElement !== $("buildingPanelMakeInput"))) {
+      $("buildingPanelMakeInput").value = leftPanelMake;
+    }
+
   const buildingName = $("buildingNameInput")?.value || state.buildingConfig?.buildingName || "Shivaji Heights Co-op Housing Society";
   const buildingAddress = $("buildingAddressInput")?.value || state.buildingConfig?.buildingAddress || "Baner, Pune, Maharashtra - 411045";
-  const roofAreaSqft = Number($("buildingRoofAreaInput")?.value) || state.buildingConfig?.roofArea || 2000;
+  const roofAreaSqft = Number($("buildingRoofAreaInput")?.value) || leftRoofArea;
   const roofLength = Number($("cadRoofLength")?.value) || state.buildingConfig?.roofLength || 50;
   const roofBreadth = Number($("cadRoofBreadth")?.value) || state.buildingConfig?.roofBreadth || 40;
-  const panelMake = $("buildingPanelMakeInput")?.value || state.buildingConfig?.panelMake || "Tier-1 Mono PERC DCR";
-  const panelWp = Number($("buildingPanelWpInput")?.value) || state.buildingConfig?.panelWp || 550;
-  const panelRate = Number($("buildingPanelRateInput")?.value) || state.buildingConfig?.panelRate || 28;
+  const panelMake = $("buildingPanelMakeInput")?.value || leftPanelMake;
+  const panelWp = Number($("buildingPanelWpInput")?.value) || leftPanelWp;
+  const panelRate = Number($("buildingPanelRateInput")?.value) || leftPanelRate;
   const rawLoanRate = $("buildingLoanRateInput")?.value;
   const parsedLoanRate = (rawLoanRate !== undefined && rawLoanRate !== "") ? Number(rawLoanRate) : NaN;
   const loanInterestRate = Number.isFinite(parsedLoanRate)
     ? parsedLoanRate
-    : (Number.isFinite(Number(state.buildingConfig?.loanRate)) ? Number(state.buildingConfig.loanRate) : 7.0);
+    : leftLoanInterest;
   const rawLoanUpfront = $("buildingLoanUpfrontInput")?.value;
   const parsedLoanUpfront = (rawLoanUpfront !== undefined && rawLoanUpfront !== "") ? Number(rawLoanUpfront) : NaN;
   const loanDownPaymentPct = Number.isFinite(parsedLoanUpfront)
     ? parsedLoanUpfront
-    : (Number.isFinite(Number(state.buildingConfig?.loanUpfront)) ? Number(state.buildingConfig.loanUpfront) : 10);
-  const structureType = $("buildingStructureType")?.value || state.buildingConfig?.structureType || "hotDip";
-  const isSpecialCategoryState = Boolean($("buildingIsSpecialCategoryState")?.checked);
+    : leftLoanUpfront;
+  const structureType = $("buildingStructureType")?.value || leftStructureType;
+  const isSpecialCategoryState = Boolean($("buildingIsSpecialCategoryState")?.checked || leftIsSpecial);
 
   state.buildingConfig = {
     ...(state.buildingConfig || {}),
@@ -5337,7 +5472,7 @@ function updateBuildingStudio() {
     roofLength,
     roofBreadth,
     panelMake,
-    panelType: "dcr",
+    panelType: leftPanelType,
     panelRate,
     panelWp,
     structureType,
@@ -5351,7 +5486,7 @@ function updateBuildingStudio() {
     buildingAddress,
     roofAreaSqft,
     panelMake,
-    panelType: "dcr",
+    panelType: leftPanelType,
     panelRate,
     panelWp,
     structureType,
@@ -5359,6 +5494,7 @@ function updateBuildingStudio() {
     loanInterestRate,
     loanDownPaymentPct,
     flats: state.buildingFlats,
+    config,
   });
 
   state.buildingData = buildingResult;
@@ -5381,9 +5517,9 @@ function updateBuildingStudio() {
   if ($("bldgKpiSavings")) $("bldgKpiSavings").textContent = `₹${summary.totalAnnualSavings.toLocaleString("en-IN")} / yr`;
   if ($("bldgKpiPayback")) $("bldgKpiPayback").textContent = `${summary.buildingPaybackYears} yrs`;
 
-  // Render Table Rows
+  // Render Table Rows (avoid wiping table if user is currently editing a cell)
   const tbody = $("buildingFlatsTableBody");
-  if (tbody) {
+  if (tbody && !tbody.contains(document.activeElement)) {
     tbody.innerHTML = buildingResult.flatLedger.map((f, i) => `
       <tr data-flat-idx="${i}">
         <td style="text-align: center; vertical-align: middle;">
@@ -5512,32 +5648,40 @@ function updateBuildingStudio() {
   if ($("footPayback")) $("footPayback").textContent = `${summary.buildingPaybackYears} yrs`;
 
   // Synchronize building data across all other workspace tabs
-  syncBuildingDataToWorkspace(buildingResult);
+    syncBuildingDataToWorkspace(buildingResult, options);
+  } finally {
+    isUpdatingBuildingStudio = false;
+  }
 }
 
-function syncBuildingDataToWorkspace(buildingResult) {
+function syncBuildingDataToWorkspace(buildingResult, options = {}) {
   if (!buildingResult || !buildingResult.summary) return;
+  if (state.proposalMode !== "multi_building") return;
   const summary = buildingResult.summary;
   const cfg = state.buildingConfig || {};
 
   // 1. Sidebar Project Details & Inputs
-  if ($("customerName")) $("customerName").value = cfg.buildingName || "Shivaji Heights Co-op Housing Society";
-  if ($("internalCustomerName")) $("internalCustomerName").value = cfg.buildingName || "Shivaji Heights Co-op Housing Society";
-  if ($("customerAddress")) $("customerAddress").value = cfg.buildingAddress || "Baner, Pune, Maharashtra - 411045";
-  if ($("monthlyUnits")) $("monthlyUnits").value = summary.totalMonthlyUnits;
-  if ($("monthlyBill")) $("monthlyBill").value = summary.totalCurrentBill;
-  if ($("sanctionedLoad")) $("sanctionedLoad").value = summary.totalSanctionedLoad;
+  const activeEl = typeof document !== "undefined" ? document.activeElement : null;
+  if ($("customerName") && activeEl !== $("customerName")) $("customerName").value = cfg.buildingName || "Shivaji Heights Co-op Housing Society";
+  if ($("internalCustomerName") && activeEl !== $("internalCustomerName")) $("internalCustomerName").value = cfg.buildingName || "Shivaji Heights Co-op Housing Society";
+  if ($("customerAddress") && activeEl !== $("customerAddress")) $("customerAddress").value = cfg.buildingAddress || "Baner, Pune, Maharashtra - 411045";
+  if ($("monthlyUnits") && activeEl !== $("monthlyUnits")) $("monthlyUnits").value = summary.totalMonthlyUnits;
+  if ($("monthlyBill") && activeEl !== $("monthlyBill")) $("monthlyBill").value = summary.totalCurrentBill;
+  if ($("sanctionedLoad") && activeEl !== $("sanctionedLoad")) $("sanctionedLoad").value = summary.totalSanctionedLoad;
   
-  const roofArea = Math.max(Number($("roofArea")?.value) || 0, summary.requiredRoofAreaSqft || cfg.roofArea || 2000);
-  if ($("roofArea")) $("roofArea").value = roofArea;
-  if ($("panelWp")) $("panelWp").value = cfg.panelWp || 550;
-  if ($("panelRate")) $("panelRate").value = cfg.panelRate || 28;
-  if ($("structureType")) $("structureType").value = cfg.structureType || "hotDip";
-  if ($("panelType")) $("panelType").value = "dcr";
-  if ($("isSpecialCategoryState")) $("isSpecialCategoryState").checked = Boolean(cfg.isSpecialCategoryState);
-  if ($("loanInterestRate")) $("loanInterestRate").value = Number.isFinite(Number(cfg.loanRate)) ? cfg.loanRate : 7.0;
-  if ($("loanDownPaymentPct")) $("loanDownPaymentPct").value = Number.isFinite(Number(cfg.loanUpfront)) ? cfg.loanUpfront : 10;
-  if ($("consumerCategory")) $("consumerCategory").value = "LT-I";
+  if ($("roofArea") && activeEl !== $("roofArea")) {
+    const roofArea = Math.max(Number($("roofArea")?.value) || 0, summary.requiredRoofAreaSqft || cfg.roofArea || 2000);
+    $("roofArea").value = roofArea;
+  }
+  if ($("panelWp") && activeEl !== $("panelWp")) $("panelWp").value = cfg.panelWp || 550;
+  if ($("ratesPanelWp") && activeEl !== $("ratesPanelWp")) $("ratesPanelWp").value = cfg.panelWp || 550;
+  if ($("panelRate") && activeEl !== $("panelRate") && cfg.panelRate) $("panelRate").value = cfg.panelRate;
+  if ($("structureType") && activeEl !== $("structureType")) $("structureType").value = cfg.structureType || "hotDip";
+  if ($("panelType") && activeEl !== $("panelType")) $("panelType").value = "dcr";
+  if ($("isSpecialCategoryState") && activeEl !== $("isSpecialCategoryState")) $("isSpecialCategoryState").checked = Boolean(cfg.isSpecialCategoryState);
+  if ($("loanInterestRate") && activeEl !== $("loanInterestRate")) $("loanInterestRate").value = Number.isFinite(Number(cfg.loanRate)) ? cfg.loanRate : 7.0;
+  if ($("loanDownPaymentPct") && activeEl !== $("loanDownPaymentPct")) $("loanDownPaymentPct").value = Number.isFinite(Number(cfg.loanUpfront)) ? cfg.loanUpfront : 10;
+  if ($("consumerCategory") && activeEl !== $("consumerCategory")) $("consumerCategory").value = "LT-I";
 
   // 2. Sync state.meters and meteringMode
   state.meteringMode = "multi";
@@ -5594,7 +5738,9 @@ function syncBuildingDataToWorkspace(buildingResult) {
   }
 
   // 4. Trigger global render() to update Sizing, Financials, Loan, Proposal & Export, and Guide
-  render();
+  if (!options.skipRender) {
+    render();
+  }
 
   const redoBtn = $("cadRedoDemarcationBtn");
   if (redoBtn) redoBtn.style.display = "inline-flex";
@@ -7409,6 +7555,153 @@ function attachEvents() {
       }
     });
   });
+
+  // Bidirectional sync: Building inputs -> Left Panel
+  const syncBuildingToLeft = (id, targetId, isCheckbox = false) => {
+    const el = $(id);
+    const target = $(targetId);
+    if (!el || !target) return;
+    const handler = () => {
+      if (isCheckbox) {
+        target.checked = el.checked;
+      } else {
+        target.value = el.value;
+      }
+      if (id === "buildingPanelRateInput") {
+        if ($("panelDcrRate") && $("panelType")?.value === "dcr") {
+          $("panelDcrRate").value = el.value;
+        } else if ($("panelNonDcrRate") && $("panelType")?.value === "nonDcr") {
+          $("panelNonDcrRate").value = el.value;
+        }
+      } else if (id === "buildingPanelWpInput") {
+        if ($("ratesPanelWp")) $("ratesPanelWp").value = el.value;
+      }
+      if (state.proposalMode === "multi_building") {
+        updateBuildingStudio();
+      }
+      render();
+    };
+    el.addEventListener("input", handler);
+    el.addEventListener("change", handler);
+  };
+
+  syncBuildingToLeft("buildingRoofAreaInput", "roofArea");
+  syncBuildingToLeft("buildingPanelMakeInput", "panelMake");
+  syncBuildingToLeft("buildingPanelWpInput", "panelWp");
+  syncBuildingToLeft("buildingPanelRateInput", "panelRate");
+  syncBuildingToLeft("buildingLoanRateInput", "loanInterestRate");
+  syncBuildingToLeft("buildingLoanUpfrontInput", "loanDownPaymentPct");
+  syncBuildingToLeft("buildingStructureType", "structureType");
+  syncBuildingToLeft("buildingIsSpecialCategoryState", "isSpecialCategoryState", true);
+
+  // Bidirectional sync: Rates & Tariff Slabs (Internal) <-> Project Inputs
+  $("ratesPanelWp")?.addEventListener("input", (e) => {
+    if ($("panelWp")) $("panelWp").value = e.target.value;
+    if ($("buildingPanelWpInput")) $("buildingPanelWpInput").value = e.target.value;
+    render();
+  });
+  $("ratesPanelWp")?.addEventListener("change", (e) => {
+    if ($("panelWp")) $("panelWp").value = e.target.value;
+    if ($("buildingPanelWpInput")) $("buildingPanelWpInput").value = e.target.value;
+    render();
+  });
+
+  $("panelWp")?.addEventListener("input", (e) => {
+    if ($("ratesPanelWp")) $("ratesPanelWp").value = e.target.value;
+    if ($("buildingPanelWpInput")) $("buildingPanelWpInput").value = e.target.value;
+    render();
+  });
+
+  $("panelDcrRate")?.addEventListener("input", (e) => {
+    if ($("panelType")?.value === "dcr") {
+      if ($("panelRate")) $("panelRate").value = e.target.value;
+      if ($("buildingPanelRateInput")) $("buildingPanelRateInput").value = e.target.value;
+    }
+    render();
+  });
+  $("panelNonDcrRate")?.addEventListener("input", (e) => {
+    if ($("panelType")?.value === "nonDcr") {
+      if ($("panelRate")) $("panelRate").value = e.target.value;
+      if ($("buildingPanelRateInput")) $("buildingPanelRateInput").value = e.target.value;
+    }
+    render();
+  });
+
+  $("panelRate")?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    if ($("panelType")?.value === "dcr") {
+      if ($("panelDcrRate")) $("panelDcrRate").value = val;
+    } else {
+      if ($("panelNonDcrRate")) $("panelNonDcrRate").value = val;
+    }
+    if ($("buildingPanelRateInput")) $("buildingPanelRateInput").value = val;
+    render();
+  });
+
+  $("panelType")?.addEventListener("change", (e) => {
+    const type = e.target.value;
+    if (type === "dcr" && $("panelDcrRate")) {
+      if ($("panelRate")) $("panelRate").value = $("panelDcrRate").value;
+    } else if (type === "nonDcr" && $("panelNonDcrRate")) {
+      if ($("panelRate")) $("panelRate").value = $("panelNonDcrRate").value;
+    }
+    render();
+  });
+
+  // Num Flats synchronization across left panel, multi-meter, and building studio
+  const handleNumFlatsSync = (e) => {
+    const count = parseInt(e.target.value, 10);
+    if (!count || count < 1) return;
+    if (state.meteringMode === "multi") {
+      if (!state.meters) state.meters = [];
+      while (state.meters.length < count) {
+        const i = state.meters.length + 1;
+        state.meters.push({
+          id: `meter_${Date.now()}_${i}`,
+          label: `Flat ${100 + i}`,
+          consumerNumber: `FLAT-${100 + i}`,
+          consumerName: `Resident Flat ${100 + i}`,
+          sanctionedLoad: 3,
+          consumerCategory: $("consumerCategory")?.value || "LT-I",
+          phase: "1-phase",
+          monthlyUnits: Math.round((Number($("monthlyUnits")?.value) || 450) / count),
+          monthlyBill: Math.round((Number($("monthlyBill")?.value) || 5200) / count),
+          allocatedKw: 0,
+          subsidy: 0,
+        });
+      }
+      while (state.meters.length > count && state.meters.length > 1) {
+        state.meters.pop();
+      }
+      render();
+    }
+    if (state.proposalMode === "multi_building") {
+      if (!state.buildingFlats) state.buildingFlats = [];
+      while (state.buildingFlats.length < count) {
+        const i = state.buildingFlats.length + 1;
+        state.buildingFlats.push({
+          id: `flat-${Date.now()}-${i}`,
+          flatNo: String(100 + i),
+          customerName: `Resident Flat ${100 + i}`,
+          sanctionedLoad: 3,
+          category: "LT-I",
+          phase: "1-phase",
+          monthlyUnits: 350,
+          monthlyBill: 3800,
+          panels: 0,
+          allocatedKw: 0,
+          loanMode: true,
+          color: null,
+        });
+      }
+      while (state.buildingFlats.length > count && state.buildingFlats.length > 1) {
+        state.buildingFlats.pop();
+      }
+      updateBuildingStudio();
+    }
+  };
+  $("numFlats")?.addEventListener("input", handleNumFlatsSync);
+  $("numFlats")?.addEventListener("change", handleNumFlatsSync);
 
   $("buildingNameInput")?.addEventListener("input", (e) => {
     const val = e.target.value;

@@ -202,7 +202,7 @@ export function calculateBuildingLedger({
   roofAreaSqft = 1500,
   panelMake = "Tata Power Solar",
   panelType = "dcr",
-  panelRate = 25,
+  panelRate = null,
   panelWp = 550,
   structureType = "hotDip",
   mountingType = "roof",
@@ -279,15 +279,22 @@ export function calculateBuildingLedger({
   const pricing = config.pricing || DEFAULT_CONFIG.pricing;
   const structureRate = (pricing.structureRates && pricing.structureRates[structureType] !== undefined)
     ? pricing.structureRates[structureType]
-    : 6;
-  const installationRate = pricing.installationRatePerW || 2.5;
-  const consultancyRate = pricing.consultancyRatePerW || 1.0;
+    : (pricing.structureRates?.hotDip || 6);
+  const installationRate = pricing.installationRatePerW !== undefined ? pricing.installationRatePerW : 2.5;
+  const consultancyRate = pricing.consultancyRatePerW !== undefined ? pricing.consultancyRatePerW : 1.0;
+  const wiringRate = pricing.wiringRatePerW !== undefined ? pricing.wiringRatePerW : 0;
   const safetyAndEarthingCostTotal = Math.max(15000, totalBuildingCapacityKw * 1500);
 
   // Calculate Building Gross Project Cost with Separate Inverters per Flat
   const totalDcWatts = totalBuildingCapacityKw * 1000;
-  const panelCost = totalDcWatts * panelRate;
+  const effectivePanelRate = (panelRate !== null && panelRate !== undefined && Number(panelRate) > 0)
+    ? Number(panelRate)
+    : (isDcr
+        ? (pricing.panelDcrRatePerWp || pricing.panelRate || 25)
+        : (pricing.panelNonDcrRatePerWp || pricing.panelRate || 15));
+  const panelCost = totalDcWatts * effectivePanelRate;
   const structureCost = totalDcWatts * structureRate;
+  const wiringCost = totalDcWatts * wiringRate;
 
   // Separate inverter sizing for each separate flat
   const flatInverterDetails = finalFlats.map((flat) => {
@@ -353,11 +360,12 @@ export function calculateBuildingLedger({
   const installationCost = totalDcWatts * installationRate;
   const consultancyCost = totalDcWatts * consultancyRate;
 
-  const preTaxSubtotal = panelCost + structureCost + inverterCost + installationCost + consultancyCost + safetyAndEarthingCostTotal;
+  const preTaxSubtotal = panelCost + structureCost + inverterCost + installationCost + consultancyCost + safetyAndEarthingCostTotal + wiringCost;
   const gst = preTaxSubtotal * 0.089; // 8.9% effective GST
-  const baseCostInclGst = preTaxSubtotal + gst;
-  const marginRatePct = pricing.marginRate !== undefined ? Number(pricing.marginRate) : DEFAULT_CONFIG.pricing.marginRate;
-  const margin = baseCostInclGst * (marginRatePct / 100); // Default 25% margin
+  const contingency = preTaxSubtotal * ((pricing.contingencyRate || 0) / 100);
+  const baseCostInclGst = preTaxSubtotal + gst + contingency;
+  const marginRatePct = pricing.marginRate !== undefined ? Number(pricing.marginRate) : (DEFAULT_CONFIG.pricing.marginRate || 25);
+  const margin = baseCostInclGst * (marginRatePct / 100); // Default margin
   const totalBuildingGrossCost = Math.round(baseCostInclGst + margin);
 
   // Gross cost per kWp
@@ -519,7 +527,13 @@ export function calculateBuildingLedger({
     overallPaybackYears,
     panelMake,
     panelType,
-    panelRate,
+    panelRate: effectivePanelRate,
+    effectivePanelRate,
+    structureRate,
+    wiringCost,
+    wiringRate,
+    contingencyRate: pricing.contingencyRate || 0,
+    marginRate: marginRatePct,
     panelWp,
     structureType,
     mountingType,
@@ -559,7 +573,13 @@ export function calculateBuildingLedger({
     roofAreaSqft,
     panelMake,
     panelType,
-    panelRate,
+    panelRate: effectivePanelRate,
+    effectivePanelRate,
+    structureRate,
+    wiringCost,
+    wiringRate,
+    contingencyRate: pricing.contingencyRate || 0,
+    marginRate: marginRatePct,
     panelWp,
     structureType,
     isSpecialCategoryState: isSpecial,

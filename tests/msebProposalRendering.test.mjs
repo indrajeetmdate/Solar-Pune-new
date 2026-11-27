@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { DEFAULT_CONFIG, getPanelSpecificationText } from "../src/config.js";
 import { calculateEstimate } from "../src/calculator.js";
+import { generateBuildingProposalPDF } from "../src/reportGenerator.js";
 
 // Test 1: getPanelSpecificationText coverage
 assert.equal(getPanelSpecificationText("dcr", null, 550), "Tier-1 DCR Mono PERC / TOPCon (550 Wp)");
@@ -236,5 +237,54 @@ assert.ok(htmlHiddenFlags.includes("Scope of Work (Turnkey EPC Delivery):"), "Sc
 assert.ok(!htmlHiddenFlags.includes("Bank Partner Loan Proposal"), "Loan pages must be hidden when hideCost is true");
 assert.ok(htmlHiddenFlags.includes("Installed Solar Capacity"), "Capacity label must switch to Installed Solar Capacity when solarInstalled is true");
 assert.ok(htmlHiddenFlags.includes("5kw Single Phase"), "Actual inverter model from tier matrix must appear in single Sample PDF");
+
+// Test 11: Building Master Financial Ledger table width fits comfortably within A4 boundaries
+const buildingDoc = new globalThis.window.jspdf.jsPDF();
+let buildingAutoTableOpts = null;
+buildingDoc.autoTable = (opts) => {
+  if (opts.head && opts.head[0] && opts.head[0].some(h => String(h).includes("Post Bill"))) {
+    buildingAutoTableOpts = opts;
+  }
+};
+await generateBuildingProposalPDF({
+  doc: buildingDoc,
+  pageWidth: 210,
+  pageHeight: 297,
+  margin: 15,
+  COLORS: { primary: "#63923E", secondary: "#92B56B", text: "#4C4C4C", textLight: "#777777", black: "#000000", white: "#FFFFFF" },
+  estimates: {},
+  selectedOption: {},
+  hideFlags: {
+    isBuildingProposal: true,
+    buildingData: {
+      buildingName: "Test Heights",
+      summary: { totalFlats: 2, totalSanctionedLoad: 10, totalBuildingPanels: 20, totalBuildingCapacityKw: 11, totalBuildingGrossCost: 500000, totalSubsidy: 156000, totalNetCost: 344000, monthlyGenerationTotal: 1500, totalMonthlySavings: 15000, buildingPaybackYears: 2.5 },
+      flatLedger: [
+        { flatNo: "101", customerName: "Flat 101", sanctionedLoad: 5, monthlyUnits: 400, panels: 10, allocatedKw: 5.5, inverterModel: "5kW Single Phase", grossCost: 250000, subsidy: 78000, netCost: 172000, monthlyGeneration: 750, monthlySavings: 7500, postSolarBill: 100, paybackYears: 2.5, loanMode: false },
+        { flatNo: "102", customerName: "Flat 102", sanctionedLoad: 5, monthlyUnits: 400, panels: 10, allocatedKw: 5.5, inverterModel: "5kW Single Phase", grossCost: 250000, subsidy: 78000, netCost: 172000, monthlyGeneration: 750, monthlySavings: 7500, postSolarBill: 100, paybackYears: 2.5, loanMode: true }
+      ]
+    }
+  },
+  logoResult: null,
+  sysDiffResult: null,
+  proposalSerialNo: "TEST-PROP-001",
+  proposalDate: "01 Jan 2026",
+  customerAddress: "Pune"
+});
+
+assert.ok(buildingAutoTableOpts, "Building autoTable options must be captured");
+const colStyles = buildingAutoTableOpts.columnStyles;
+const totalTableWidth = Object.values(colStyles).reduce((sum, col) => sum + (col.cellWidth || 0), 0);
+assert.ok(totalTableWidth <= 180, `Total column widths (${totalTableWidth} mm) must be <= 180 mm to prevent overflow on A4`);
+assert.equal(buildingAutoTableOpts.head[0].length, 16, "Building proposal ledger must have 16 columns");
+const lastColIndex = buildingAutoTableOpts.head[0].length - 1;
+assert.ok(buildingAutoTableOpts.head[0][lastColIndex].includes("Loan"), "Last column must be Loan Opt");
+assert.ok(buildingAutoTableOpts.head[0][lastColIndex - 1].includes("Payback"), "Second last column must be Payback");
+assert.ok(buildingAutoTableOpts.head[0][lastColIndex - 2].includes("Post Bill"), "Third last column must be Post Bill");
+
+assert.ok(buildingDoc.getNumberOfPages() >= 5, `Building proposal PDF must have at least 5 pages including Warranty and Terms, got ${buildingDoc.getNumberOfPages()}`);
+assert.ok(buildingDoc.textCalls.some(t => String(t).includes("Terms & Conditions, Warranty and Details")), "Building proposal PDF must contain 'Terms & Conditions, Warranty and Details'");
+assert.ok(buildingDoc.textCalls.some(t => String(t).includes("Terms and Conditions for Warranty")), "Building proposal PDF must contain 'Terms and Conditions for Warranty'");
+assert.ok(buildingDoc.textCalls.some(t => String(t).includes("MSEDCL Net Metering")), "Building proposal PDF must contain MSEDCL Net Metering terms");
 
 console.log("All MSEB Proposal Rendering, Panel Selection, and Loan Omission tests passed successfully! 🎉");

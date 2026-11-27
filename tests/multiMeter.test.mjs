@@ -162,4 +162,42 @@ const expectedTotalInvCost = 5 * 14429 + 14862;
 assert.equal(est.recommended.costBreakup.inverter, expectedTotalInvCost, "Total inverter cost in BOM must equal sum of separate flat inverters");
 console.log("✓ Separate inverters for separate flats in multi-bill calculateEstimate verified!");
 
+// 7. Test Left-Side Pricing & Tariff Slabs (Internal) Propagation to Multi-Meter Mode
+console.log("Testing Left-Side Pricing & Rates Propagation to Multi-Meter mode...");
+const customPricingConfig = {
+  ...DEFAULT_CONFIG,
+  pricing: {
+    ...DEFAULT_CONFIG.pricing,
+    panelDcrRatePerWp: 28, // Modified from default 25
+    marginRate: 20, // Modified from 25
+    wiringRatePerW: 1.5, // Added wiring rate
+    inverterPriceTier: "price2", // Price Tier 2 (discounted)
+    structureRates: {
+      ...DEFAULT_CONFIG.pricing.structureRates,
+      hotDip: 7.5, // Modified from 6
+    },
+  },
+  policy: {
+    ...DEFAULT_CONFIG.policy,
+    isSpecialCategoryState: true, // +10% CFA
+  },
+};
+
+const customEst = calculateEstimate(input, customPricingConfig);
+assert.ok(customEst.recommended);
+// Panel cost should reflect 28 Rs/Wp for actual DC watts (24 panels * 550Wp = 13.2kW = 13200W)
+const dcWatts = customEst.recommended.dcCapacityKw * 1000;
+assert.equal(customEst.recommended.costBreakup.panels, dcWatts * 28, "Panels cost must reflect custom panel rate (28 Rs/Wp)");
+// Structure cost should reflect 7.5 Rs/W
+assert.equal(customEst.recommended.costBreakup.structure, dcWatts * 7.5, "Structure cost must reflect custom structure rate (7.5 Rs/W)");
+// Wiring cost should reflect 1.5 Rs/W
+assert.equal(customEst.recommended.costBreakup.wiringExcludingCable, dcWatts * 1.5, "Wiring cost must reflect custom wiring rate (1.5 Rs/W)");
+// Inverter price tier 2 must be used for separate inverters
+assert.equal(customEst.recommended.inverterPriceTier, "price2", "Inverter price tier must be price2");
+assert.equal(customEst.recommended.meterBreakdown[0].inverterCost, 13944, "Flat 101 inverter cost must reflect price2 tier");
+// Subsidies must reflect Special Category State (+10% CFA: 2 kW = 66,000, 3 kW = 85,800)
+assert.equal(customEst.recommended.meterBreakdown[0].subsidy, 66000, "Flat 101 subsidy must reflect Special Category State");
+assert.equal(customEst.recommended.meterBreakdown[5].subsidy, 85800, "Flat 302 subsidy must reflect Special Category State");
+console.log("✓ Left-side pricing and rates propagation to multi-meter verified!");
+
 console.log("ALL MULTI-METER TESTS PASSED! 🎉");

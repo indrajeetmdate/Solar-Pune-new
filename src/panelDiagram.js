@@ -1118,11 +1118,17 @@ export class RooftopCAD {
   }
 
   // Selection & Properties Inspector Synchronization
-  isSelected(type, item) {
+  isSelected(type, item = null) {
+    if (!item && (type === "roof" || type === "image")) {
+      return Boolean(
+        (this.selectedItem && this.selectedItem.type === type) ||
+        (this.selectedItems && this.selectedItems.some((s) => s.type === type))
+      );
+    }
     if (!item) return false;
     const itemId = item.id || (type === "roof" ? "roof_main" : type === "image" ? "roof_image" : null);
     return this.selectedItems.some(
-      (s) => s.type === type && (s.item.id === itemId || s.item === item)
+      (s) => s.type === type && (s.item?.id === itemId || s.item === item || (type === "roof" && s.type === "roof") || (type === "image" && s.type === "image"))
     );
   }
 
@@ -1678,6 +1684,61 @@ export class RooftopCAD {
     };
   }
 
+  selectLayer(layerName) {
+    if (!layerName) {
+      this.clearSelection();
+      return;
+    }
+    if (layerName === "roof") {
+      this.selectComponent("roof", "roof_main");
+      return;
+    }
+    if (layerName === "image") {
+      this.selectComponent("image", "roof_image");
+      return;
+    }
+    if (layerName === "panels") {
+      this.selectAllPanels();
+      return;
+    }
+    if (layerName === "cutouts") {
+      if (this.cutouts && this.cutouts.length > 0) {
+        if (this.cutouts.length === 1) {
+          this.selectComponent("cutout", this.cutouts[0].id);
+        } else {
+          this.selectMultiple(this.cutouts.map((c) => ({ type: "cutout", item: c })));
+        }
+      } else {
+        this.clearSelection();
+      }
+      return;
+    }
+    if (layerName === "pathways") {
+      if (this.pathways && this.pathways.length > 0) {
+        if (this.pathways.length === 1) {
+          this.selectComponent("pathway", this.pathways[0].id);
+        } else {
+          this.selectMultiple(this.pathways.map((pw) => ({ type: "pathway", item: pw })));
+        }
+      } else {
+        this.clearSelection();
+      }
+      return;
+    }
+    if (layerName === "obstacles") {
+      if (this.externalObstacles && this.externalObstacles.length > 0) {
+        if (this.externalObstacles.length === 1) {
+          this.selectComponent("obstacle", this.externalObstacles[0].id);
+        } else {
+          this.selectMultiple(this.externalObstacles.map((obs) => ({ type: "obstacle", item: obs })));
+        }
+      } else {
+        this.clearSelection();
+      }
+      return;
+    }
+  }
+
   selectComponent(type, id, isMulti = false) {
     if (!type) {
       this.clearSelection();
@@ -1688,6 +1749,10 @@ export class RooftopCAD {
         id: "roof_main",
         type: "roof",
         shape: "rectangle",
+        x: this.roofX,
+        y: this.roofY,
+        w: this.roofW,
+        h: this.roofH,
         lengthFt: this.roofLengthFt,
         breadthFt: this.roofBreadthFt,
         label: "Base Roof",
@@ -2256,6 +2321,11 @@ export class RooftopCAD {
       y = b.y;
       w = b.w;
       h = b.h;
+    } else if (this.selectedItem && this.selectedItem.type === "roof") {
+      x = this.roofX;
+      y = this.roofY;
+      w = this.roofW;
+      h = this.roofH;
     }
 
     if (item.shape === "circle") {
@@ -2714,6 +2784,8 @@ export class RooftopCAD {
           cy: b ? b.cy : this.roofY + this.roofH / 2,
           scale: this.image.scale || 1.0,
         };
+      } else if (this.selectedItem.type === "roof") {
+        this.initialBounds = { x: this.roofX, y: this.roofY, w: this.roofW, h: this.roofH, radius: this.roofW / 2 };
       } else {
         this.initialBounds = { x: it.x, y: it.y, w: it.w, h: it.h, radius: it.radius || it.w / 2 };
       }
@@ -3247,6 +3319,16 @@ export class RooftopCAD {
     it.h = newH;
     it.lengthFt = Number((newW / this.scalePxPerFt).toFixed(1));
     it.breadthFt = Number((newH / this.scalePxPerFt).toFixed(1));
+
+    if (this.selectedItem && this.selectedItem.type === "roof") {
+      this.roofX = newX;
+      this.roofY = newY;
+      this.roofW = newW;
+      this.roofH = newH;
+      this.roofLengthFt = it.lengthFt;
+      this.roofBreadthFt = it.breadthFt;
+      this.clampItemsToRoof();
+    }
 
     if (this.onSelectionChange) {
       this.onSelectionChange(this.selectedItem);
@@ -4698,15 +4780,21 @@ export class RooftopCAD {
     ctx.save();
     ctx.globalAlpha = layerAlpha * (this.roofOpacity ?? 1.0);
 
-    ctx.fillStyle = this.image.isLoaded ? "rgba(99, 146, 62, 0.25)" : "rgba(34, 197, 94, 0.22)";
+    const isRoofSelected = this.isSelected("roof", { id: "roof_main" }) ||
+      (this.selectedItem && this.selectedItem.type === "roof") ||
+      (this.selectedItems && this.selectedItems.some((s) => s.type === "roof"));
+
+    ctx.fillStyle = isRoofSelected
+      ? "rgba(56, 189, 248, 0.28)"
+      : (this.image.isLoaded ? "rgba(99, 146, 62, 0.25)" : "rgba(34, 197, 94, 0.22)");
     ctx.fillRect(this.roofX, this.roofY, this.roofW, this.roofH);
 
-    ctx.strokeStyle = "#22c55e";
-    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = isRoofSelected ? "#38bdf8" : "#22c55e";
+    ctx.lineWidth = isRoofSelected ? 3.5 : 2.5;
     ctx.strokeRect(this.roofX, this.roofY, this.roofW, this.roofH);
 
     const tick = 8;
-    ctx.strokeStyle = "#4ade80";
+    ctx.strokeStyle = isRoofSelected ? "#38bdf8" : "#4ade80";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(this.roofX - tick, this.roofY);
@@ -5024,7 +5112,17 @@ export class RooftopCAD {
     } else if (this.selectedItem.type === "image") {
       b = this.getImageScreenBounds();
       if (!b) return;
+    } else if (this.selectedItem.type === "roof") {
+      b = {
+        x: this.roofX,
+        y: this.roofY,
+        w: this.roofW,
+        h: this.roofH,
+        lengthFt: this.roofLengthFt,
+        breadthFt: this.roofBreadthFt,
+      };
     }
+    if (!b || b.x === undefined || b.y === undefined) return;
 
     // Outer selection bounding box
     ctx.strokeStyle = "#38bdf8";
@@ -5054,6 +5152,12 @@ export class RooftopCAD {
       ctx.fillStyle = "#38bdf8";
       ctx.textAlign = "center";
       const dimText = `Aerial Image: ${b.lengthFt} ft × ${b.breadthFt} ft (${pct}% vs Base Roof)`;
+      ctx.fillText(dimText, b.x + b.w / 2, b.y - 8);
+    } else if (this.selectedItem.type === "roof") {
+      ctx.font = "bold 11px Inter, sans-serif";
+      ctx.fillStyle = "#38bdf8";
+      ctx.textAlign = "center";
+      const dimText = `Base Roof: ${this.roofLengthFt} ft × ${this.roofBreadthFt} ft (${this.roofLengthFt * this.roofBreadthFt} sq ft)`;
       ctx.fillText(dimText, b.x + b.w / 2, b.y - 8);
     } else if (this.dragMode === "resize_item") {
       ctx.font = "bold 10px Inter, sans-serif";

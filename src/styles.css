@@ -2563,6 +2563,7 @@ tr:hover td {
   flex-direction: column;
   gap: 2px;
   transition: all 0.15s ease;
+  cursor: pointer;
 }
 
 .cad-layer-card:hover {
@@ -2588,6 +2589,7 @@ tr:hover td {
   gap: 4px;
   font-size: 10.5px;
   font-weight: 700;
+  cursor: pointer;
   color: #f8fafc;
   cursor: pointer;
   user-select: none;
@@ -3325,6 +3327,33 @@ tr:hover td {
   box-sizing: border-box;
   word-wrap: break-word;
   overflow-wrap: break-word;
+}
+
+/* Building Proposal Master Ledger Table (Dense 16-Column Fit) */
+.pdf-ledger-table {
+  width: 100% !important;
+  max-width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+  box-sizing: border-box !important;
+  font-size: 5.4pt !important;
+  line-height: 1.15 !important;
+  margin-bottom: 2mm !important;
+}
+
+.pdf-ledger-table th,
+.pdf-ledger-table td {
+  padding: 1.5px 1px !important;
+  font-size: 5.4pt !important;
+  box-sizing: border-box !important;
+  word-wrap: normal !important;
+  overflow-wrap: normal !important;
+}
+
+.pdf-ledger-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ==========================================================================

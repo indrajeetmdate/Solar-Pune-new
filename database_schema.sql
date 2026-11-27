@@ -236,14 +236,28 @@ CREATE INDEX IF NOT EXISTS idx_crm_leads_proposal_id ON crm_leads(proposal_id);
 -- Add foreign key constraint with ON DELETE SET NULL
 -- (Deleting a proposal detaches it from the lead without deleting customer contact info)
 DO $$
+DECLARE
+    prop_id_type text;
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'fk_crm_leads_proposal_id'
-    ) THEN
-        ALTER TABLE crm_leads 
-        ADD CONSTRAINT fk_crm_leads_proposal_id 
-        FOREIGN KEY (proposal_id) REFERENCES proposals(id) ON DELETE SET NULL;
+    -- Detect the actual data type of proposals.id (e.g. integer, bigint, or uuid)
+    SELECT data_type INTO prop_id_type
+    FROM information_schema.columns
+    WHERE table_name = 'proposals' AND column_name = 'id';
+
+    -- If proposals.id is integer/bigint but crm_leads.proposal_id was created as uuid,
+    -- alter proposal_id to match the proposals.id data type
+    IF prop_id_type IN ('integer', 'bigint', 'smallint') THEN
+        EXECUTE 'ALTER TABLE crm_leads ALTER COLUMN proposal_id TYPE ' || prop_id_type ||
+                ' USING (CASE WHEN proposal_id::text ~ ''^\d+$'' THEN proposal_id::text::' || prop_id_type || ' ELSE NULL END)';
     END IF;
+
+    -- Drop existing constraint if it exists to allow clean re-creation
+    ALTER TABLE crm_leads DROP CONSTRAINT IF EXISTS fk_crm_leads_proposal_id;
+
+    -- Add foreign key constraint matching the types
+    ALTER TABLE crm_leads 
+    ADD CONSTRAINT fk_crm_leads_proposal_id 
+    FOREIGN KEY (proposal_id) REFERENCES proposals(id) ON DELETE SET NULL;
 END $$;
 
 -- ========================================================
