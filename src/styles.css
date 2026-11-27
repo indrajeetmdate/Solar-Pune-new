@@ -2032,6 +2032,98 @@ tr:hover td {
   border-color: #475569;
 }
 
+/* Save & Lock Drawing Button */
+.cad-text-btn.lock-btn {
+  background: rgba(30, 41, 59, 0.85);
+  border-color: #64748b;
+  color: #f1f5f9;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.cad-text-btn.lock-btn:hover {
+  background: rgba(51, 65, 85, 0.95);
+  border-color: #94a3b8;
+  color: #ffffff;
+}
+
+.cad-text-btn.lock-btn.locked {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: #f59e0b;
+  color: #fbbf24;
+  font-weight: 700;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.35);
+}
+
+.cad-text-btn.lock-btn.locked:hover {
+  background: rgba(245, 158, 11, 0.32);
+  border-color: #fbbf24;
+  color: #fef08a;
+}
+
+/* CAD Lock Banner Alert */
+.cad-lock-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.16) 0%, rgba(30, 41, 59, 0.92) 100%);
+  border: 1px solid #f59e0b;
+  border-radius: 4px;
+  padding: 6px 12px;
+  margin: 4px 0;
+  color: #fbbf24;
+  font-size: 11.5px;
+  animation: fadeIn 0.2s ease;
+}
+
+.cad-lock-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cad-lock-banner-icon {
+  font-size: 14px;
+}
+
+.cad-lock-banner-text strong {
+  color: #fef08a;
+}
+
+.cad-lock-banner-unlock-btn {
+  background: #f59e0b;
+  color: #0f172a;
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.cad-lock-banner-unlock-btn:hover {
+  background: #fbbf24;
+  transform: translateY(-1px);
+}
+
+/* Inspector Lock Notice */
+.cad-inspector-lock-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid #f59e0b;
+  border-radius: 4px;
+  color: #fbbf24;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
 /* Cutout Options with Shapes Subgroup */
 .cad-cutout-group {
   display: inline-flex;

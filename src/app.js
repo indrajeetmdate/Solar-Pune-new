@@ -616,8 +616,14 @@ function getMultiFlatInverterList(option) {
 function renderBreakup(option, input, customerView, config) {
   const isInternal = state.internalUnlocked;
   const sysType = option.systemType;
-  const dcWp = option.dcCapacityKw * 1000;
-  const costPerWatt = dcWp > 0 ? (option.totalPreSubsidy / dcWp) : 0;
+  const isBuildingMode = state.proposalMode === "multi_building" && Boolean(state.buildingData?.summary);
+  const bSummary = isBuildingMode ? state.buildingData.summary : null;
+
+  const displayTotalPreSubsidy = isBuildingMode && bSummary ? bSummary.totalBuildingGrossCost : option.totalPreSubsidy;
+  const displaySubsidy = isBuildingMode && bSummary ? bSummary.totalSubsidy : option.subsidy;
+  const displayNetCost = isBuildingMode && bSummary ? bSummary.totalNetCost : option.netCost;
+  const displayDcWp = isBuildingMode && bSummary ? (bSummary.totalBuildingCapacityKw * 1000) : (option.dcCapacityKw * 1000);
+  const costPerWatt = displayDcWp > 0 ? (displayTotalPreSubsidy / displayDcWp) : 0;
   const exceeds60 = costPerWatt > 60;
   const flatInvList = getMultiFlatInverterList(option);
 
@@ -651,9 +657,9 @@ function renderBreakup(option, input, customerView, config) {
     const pricing = config?.pricing || {};
     const calcDetails = {};
     const panelRate = option.costBreakup?.appliedPanelRate ?? (input.panelType === 'nonDcr' ? pricing.panelNonDcrRatePerWp : pricing.panelDcrRatePerWp);
-    calcDetails['panels'] = `${panelRate} Rs/Wp × ${dcWp.toLocaleString('en-IN')} Wp`;
+    calcDetails['panels'] = `${panelRate} Rs/Wp × ${displayDcWp.toLocaleString('en-IN')} Wp`;
     const structRate = pricing.structureRates?.[input.structureType] || 0;
-    calcDetails['structure'] = `${structRate} Rs/W × ${dcWp.toLocaleString('en-IN')} W`;
+    calcDetails['structure'] = `${structRate} Rs/W × ${displayDcWp.toLocaleString('en-IN')} W`;
     const invKw = option.inverterCapacityKw;
     const invModel = option.inverterModel || `${invKw} kW Inverter`;
     if (flatInvList.length > 1) {
@@ -684,13 +690,13 @@ function renderBreakup(option, input, customerView, config) {
       : 0;
     calcDetails['safetyAndEarthing'] = `Earthing, DCDB, ACDB, LA & surge protection`;
     calcDetails['wiringExcludingCable'] = wiringRateVal > 0
-      ? `${wiringRateVal} Rs/W × ${dcWp.toLocaleString('en-IN')} W`
+      ? `${wiringRateVal} Rs/W × ${displayDcWp.toLocaleString('en-IN')} W`
       : `0 Rs/W (excluded - cabling at actuals)`;
     calcDetails['electricalSafetyAndWiring'] = wiringRateVal > 0
-      ? `${wiringRateVal} Rs/W × ${dcWp.toLocaleString('en-IN')} W + protection`
+      ? `${wiringRateVal} Rs/W × ${displayDcWp.toLocaleString('en-IN')} W + protection`
       : `Protection switchgear only`;
-    calcDetails['installation'] = `${pricing.installationRatePerW || 0} Rs/W × ${dcWp.toLocaleString('en-IN')} W`;
-    calcDetails['consultancy'] = `${pricing.consultancyRatePerW || 0} Rs/W × ${dcWp.toLocaleString('en-IN')} W`;
+    calcDetails['installation'] = `${pricing.installationRatePerW || 0} Rs/W × ${displayDcWp.toLocaleString('en-IN')} W`;
+    calcDetails['consultancy'] = `${pricing.consultancyRatePerW || 0} Rs/W × ${displayDcWp.toLocaleString('en-IN')} W`;
 
     // Compact cost table
     itemsHtml += `<table style="width: 100%; border-collapse: collapse; font-size: 13px;">`;
@@ -721,31 +727,26 @@ function renderBreakup(option, input, customerView, config) {
       </tr>`;
     });
 
-    let gstVal = state.breakupConfigGst && state.breakupConfigGst[sysType] !== undefined ? state.breakupConfigGst[sysType] : option.costBreakup.gst;
-    let contVal = state.breakupConfigContingency && state.breakupConfigContingency[sysType] !== undefined ? state.breakupConfigContingency[sysType] : option.costBreakup.contingency;
+    let contVal = state.breakupConfigContingency && state.breakupConfigContingency[sysType] !== undefined
+      ? state.breakupConfigContingency[sysType]
+      : (option.costBreakup?.contingency !== undefined ? option.costBreakup.contingency : 0);
     let defaultMarginRate = (config && config.pricing && config.pricing.marginRate !== undefined) ? config.pricing.marginRate : 25;
     let marginPct = (state.breakupConfigMarginPct && state.breakupConfigMarginPct[sysType] !== undefined)
       ? state.breakupConfigMarginPct[sysType]
-      : (option.costBreakup.marginRate !== undefined ? option.costBreakup.marginRate : defaultMarginRate);
-    let baseCost = option.costBreakup.baseCostInclGst !== undefined
-      ? option.costBreakup.baseCostInclGst
-      : (displayList.reduce((sum, it) => sum + (it.isHidden || it.isHeader ? 0 : (it.value || 0)), 0) + gstVal + contVal);
-    let marginVal = option.costBreakup.margin !== undefined ? option.costBreakup.margin : Math.round(baseCost * (marginPct / 100));
+      : (option.costBreakup?.marginRate !== undefined ? option.costBreakup.marginRate : defaultMarginRate);
+
+    let preTaxSubtotal = displayList.reduce((sum, it) => sum + (it.isHidden || it.isHeader ? 0 : (it.value || 0)), 0);
+    let costBeforeMargin = preTaxSubtotal + contVal;
+    let marginVal = option.costBreakup?.margin !== undefined ? option.costBreakup.margin : Math.round(costBeforeMargin * (marginPct / 100));
+    let taxableAmount = costBeforeMargin + marginVal;
+
+    let effectiveGstRate = option.costBreakup?.effectiveGstRate !== undefined ? option.costBreakup.effectiveGstRate : 8.9;
+    let gstVal = state.breakupConfigGst && state.breakupConfigGst[sysType] !== undefined
+      ? state.breakupConfigGst[sysType]
+      : (option.costBreakup?.gst !== undefined ? option.costBreakup.gst : Math.round(taxableAmount * (effectiveGstRate / 100)));
 
     itemsHtml += `
       <tr style="border-top: 1px solid var(--line);">
-        <td style="padding: 5px 6px;">
-          GST (${option.costBreakup.effectiveGstRate}%)
-          <div style="font-size: 10px; font-style: italic; color: var(--text-muted);">70% goods @ 5% + 30% services @ 18%</div>
-        </td>
-        <td style="padding: 3px 2px; text-align: right; vertical-align: top;">
-          <input type="number" class="override-gst" data-sys="${sysType}" value="${Math.round(gstVal)}"
-            style="width: 78px; text-align: right; padding: 3px 4px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;">
-        </td>
-        <td style="padding: 3px 4px; text-align: right; font-size: 11px; color: var(--text-muted); vertical-align: top;">${money(gstVal)}</td>
-        <td></td>
-      </tr>
-      <tr>
         <td style="padding: 5px 6px;">
           Contingency
           <div style="font-size: 10px; font-style: italic; color: var(--text-muted);">${pricing.contingencyRate || 0}% of pre-tax subtotal</div>
@@ -760,7 +761,7 @@ function renderBreakup(option, input, customerView, config) {
       <tr>
         <td style="padding: 5px 6px;">
           Margin (${marginPct}%)
-          <div style="font-size: 10px; font-style: italic; color: var(--text-muted);">${marginPct}% of total component costs incl. GST</div>
+          <div style="font-size: 10px; font-style: italic; color: var(--text-muted);">${marginPct}% of component costs & contingency (before GST)</div>
         </td>
         <td style="padding: 3px 2px; text-align: right; vertical-align: top;">
           <div style="display: flex; align-items: center; justify-content: flex-end; gap: 2px;">
@@ -772,6 +773,18 @@ function renderBreakup(option, input, customerView, config) {
         <td style="padding: 3px 4px; text-align: right; font-size: 11px; color: var(--text-muted); vertical-align: top;">${money(marginVal)}</td>
         <td></td>
       </tr>
+      <tr>
+        <td style="padding: 5px 6px;">
+          GST (${effectiveGstRate}%)
+          <div style="font-size: 10px; font-style: italic; color: var(--text-muted);">70% goods @ 5% + 30% services @ 18% of taxable supply (after margin)</div>
+        </td>
+        <td style="padding: 3px 2px; text-align: right; vertical-align: top;">
+          <input type="number" class="override-gst" data-sys="${sysType}" value="${Math.round(gstVal)}"
+            style="width: 78px; text-align: right; padding: 3px 4px; font-size: 12px; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 4px;">
+        </td>
+        <td style="padding: 3px 4px; text-align: right; font-size: 11px; color: var(--text-muted); vertical-align: top;">${money(gstVal)}</td>
+        <td></td>
+      </tr>
     </table>`;
 
     // Totals summary (non-editable)
@@ -779,13 +792,13 @@ function renderBreakup(option, input, customerView, config) {
     <div style="margin-top: 8px; padding-top: 8px; border-top: 2px solid var(--line); font-size: 13px;">
       <div style="display:flex; justify-content:space-between; margin-bottom: 3px;">
         <span style="font-weight: 600;">Total (Inc. GST & Margin)</span>
-        <span style="font-weight: 600;">${money(option.totalPreSubsidy)} <span style="font-size: 11px; font-weight: normal; color: ${exceeds60 ? '#dc2626' : 'var(--text-muted)'};">(₹${costPerWatt.toFixed(1)}/W)</span></span>
+        <span style="font-weight: 600;">${money(displayTotalPreSubsidy)} <span style="font-size: 11px; font-weight: normal; color: ${exceeds60 ? '#dc2626' : 'var(--text-muted)'};">(₹${costPerWatt.toFixed(1)}/W)</span></span>
       </div>
       <div style="display:flex; justify-content:space-between; margin-bottom: 3px; color: var(--primary);">
-        <span>Subsidy</span><span>- ${money(option.subsidy)}</span>
+        <span>Subsidy</span><span>- ${money(displaySubsidy)}</span>
       </div>
       <div style="display:flex; justify-content:space-between; font-weight: 700; font-size: 14px; padding-top: 4px; border-top: 1px solid var(--line);">
-        <span>Net Customer Cost</span><span>${money(option.netCost)}</span>
+        <span>Net Customer Cost</span><span>${money(displayNetCost)}</span>
       </div>
       ${exceeds60 ? `
       <div class="cost-per-watt-alert" style="margin-top: 8px; padding: 7px 10px; background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; border-radius: 4px; color: #92400e; font-size: 12px; font-weight: 600;">
@@ -829,13 +842,17 @@ function renderBreakup(option, input, customerView, config) {
       </div>`;
     }
 
-    itemsHtml += `<div><dt style="font-weight: bold; color: var(--text);">Total System Cost (Inc. GST)</dt><dd style="font-weight: bold;">${money(option.totalPreSubsidy)}</dd></div>`;
+    const displayFinalTotal = isBuildingMode && bSummary ? bSummary.totalBuildingGrossCost : option.totalPreSubsidy;
+    const displayFinalSubsidy = isBuildingMode && bSummary ? bSummary.totalSubsidy : option.subsidy;
+    const effNetCost = isBuildingMode && bSummary ? bSummary.totalNetCost : option.netCost;
+    const displayNetCost = ($("hideSubsidy")?.checked || !(displayFinalSubsidy > 0)) ? displayFinalTotal : effNetCost;
+
+    itemsHtml += `<div><dt style="font-weight: bold; color: var(--text);">Total System Cost (Inc. GST)</dt><dd style="font-weight: bold;">${money(displayFinalTotal)}</dd></div>`;
     
-    if (!$("hideSubsidy")?.checked && (option.subsidy || 0) > 0) {
-      itemsHtml += `<div><dt>Expected Subsidy</dt><dd style="color: var(--primary);">- ${money(option.subsidy)}</dd></div>`;
+    if (!$("hideSubsidy")?.checked && (displayFinalSubsidy || 0) > 0) {
+      itemsHtml += `<div><dt>Expected Subsidy</dt><dd style="color: var(--primary);">- ${money(displayFinalSubsidy)}</dd></div>`;
     }
     
-    const displayNetCost = ($("hideSubsidy")?.checked || !(option.subsidy > 0)) ? option.totalPreSubsidy : option.netCost;
     itemsHtml += `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line);">
       <dt style="font-weight: bold; color: var(--text); font-size: 1.1em;">Net customer cost</dt>
       <dd style="font-weight: bold; font-size: 1.1em;">${money(displayNetCost)}</dd>
@@ -1780,6 +1797,22 @@ function render() {
   const fin = option.financing;
 
   if (isBuildingMode && bSummary) {
+    // Keep option fully synchronized with building studio summary
+    option.dcCapacityKw = bSummary.totalBuildingCapacityKw;
+    option.totalPreSubsidy = bSummary.totalBuildingGrossCost;
+    option.subsidy = bSummary.totalSubsidy;
+    option.netCost = bSummary.totalNetCost;
+    option.monthlySavings = bSummary.totalMonthlySavings;
+    option.annualSavings = bSummary.totalAnnualSavings;
+    option.paybackYears = bSummary.buildingPaybackYears;
+    option.roiPercent = bSummary.totalNetCost > 0 ? (bSummary.totalAnnualSavings / bSummary.totalNetCost) * 100 : 0;
+    option.inverterModel = bSummary.inverterModelSummary;
+    option.inverterCapacityKw = bSummary.inverterSelection?.ratingKw || bSummary.totalBuildingCapacityKw;
+    option.inverterSelection = bSummary.inverterSelection;
+    if (bSummary.costBreakup) {
+      option.costBreakup = { ...option.costBreakup, ...bSummary.costBreakup };
+    }
+
     $("recommendationTitle").textContent = `${SYSTEM_LABELS[option.systemType] || "On-grid"} DCR solar (${bSummary.totalFlats} Flats Combined)`;
     $("recommendationReason").textContent = `Category B PM Surya Ghar shared solar rooftop installation for ${bSummary.totalFlats} residential flats.`;
     $("recommendedCapacity").textContent = `${bSummary.totalBuildingCapacityKw.toFixed(1)} kWp (${bSummary.totalBuildingPanels} Panels)`;
@@ -2275,6 +2308,8 @@ function renderLayersPanel(cad, state) {
   const container = $("cadLayersList");
   if (!container || !state) return;
 
+  const isDrawingLocked = !!(state && state.isLocked);
+
   const totalLayersCount = $("cadLayersTotalCount");
   if (totalLayersCount) {
     const activeElements =
@@ -2321,7 +2356,7 @@ function renderLayersPanel(cad, state) {
                   <span>Panel #${p.index}</span>
                   <span style="color: #64748b; font-size: 10px;">(${pOpPercent}%)</span>
                 </div>
-                <div class="cad-component-actions">
+                <div class="cad-component-actions" ${isDrawingLocked ? 'style="display: none;"' : ''}>
                   <button type="button" class="cad-layer-btn comp-move-up-btn" data-type="panel" data-id="${p.id}" title="Move Up in stack">▲</button>
                   <button type="button" class="cad-layer-btn comp-move-down-btn" data-type="panel" data-id="${p.id}" title="Move Down in stack">▼</button>
                   <button type="button" class="cad-layer-btn comp-del-btn" data-type="panel" data-id="${p.id}" style="color: #f87171;" title="Delete & return to latent pool">✕</button>
@@ -2353,7 +2388,7 @@ function renderLayersPanel(cad, state) {
                   <span>${c.label || "Cutout " + (idx + 1)}</span>
                   <span style="color: #ef4444; font-size: 10px;">(${cOpPercent}%)</span>
                 </div>
-                <div class="cad-component-actions">
+                <div class="cad-component-actions" ${isDrawingLocked ? 'style="display: none;"' : ''}>
                   <button type="button" class="cad-layer-btn comp-move-up-btn" data-type="cutout" data-id="${c.id}" title="Move Up in stack">▲</button>
                   <button type="button" class="cad-layer-btn comp-move-down-btn" data-type="cutout" data-id="${c.id}" title="Move Down in stack">▼</button>
                   <button type="button" class="cad-layer-btn comp-del-btn" data-type="cutout" data-id="${c.id}" style="color: #f87171;" title="Delete obstacle">✕</button>
@@ -2384,7 +2419,7 @@ function renderLayersPanel(cad, state) {
                   <span>${pw.label || "Walkway " + (idx + 1)}</span>
                   <span style="color: #eab308; font-size: 10px;">(${pwOpPercent}%)</span>
                 </div>
-                <div class="cad-component-actions">
+                <div class="cad-component-actions" ${isDrawingLocked ? 'style="display: none;"' : ''}>
                   <button type="button" class="cad-layer-btn comp-move-up-btn" data-type="pathway" data-id="${pw.id}" title="Move Up in stack">▲</button>
                   <button type="button" class="cad-layer-btn comp-move-down-btn" data-type="pathway" data-id="${pw.id}" title="Move Down in stack">▼</button>
                   <button type="button" class="cad-layer-btn comp-del-btn" data-type="pathway" data-id="${pw.id}" style="color: #f87171;" title="Delete walkway">✕</button>
@@ -2437,14 +2472,14 @@ function renderLayersPanel(cad, state) {
           <div class="cad-layer-actions">
             ${layerName === "panels" ? '<button type="button" class="cad-layer-btn select-all-panels-btn" title="Select All Panels (or drag-select on canvas)" style="font-size: 10px; font-weight: 600; color: #38bdf8;">⊞ All</button>' : ''}
             <button type="button" class="cad-layer-btn layer-vis-btn" data-layer="${layerName}" title="${isVisible ? "Hide Layer" : "Show Layer"}">${isVisible ? "👁️" : "🕶️"}</button>
-            <button type="button" class="cad-layer-btn layer-up-btn" data-layer="${layerName}" title="Move Layer Up (draw on top of other layers)">🔼</button>
-            <button type="button" class="cad-layer-btn layer-down-btn" data-layer="${layerName}" title="Move Layer Down (draw below other layers)">🔽</button>
+            <button type="button" class="cad-layer-btn layer-up-btn" data-layer="${layerName}" ${isDrawingLocked ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''} title="Move Layer Up (draw on top of other layers)">🔼</button>
+            <button type="button" class="cad-layer-btn layer-down-btn" data-layer="${layerName}" ${isDrawingLocked ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''} title="Move Layer Down (draw below other layers)">🔽</button>
           </div>
         </div>
 
         <div class="cad-layer-slider-row">
           <span>Layer Opacity:</span>
-          <input type="range" class="layer-opacity-slider" data-layer="${layerName}" min="0.1" max="1.0" step="0.05" value="${opacity}">
+          <input type="range" class="layer-opacity-slider" data-layer="${layerName}" min="0.1" max="1.0" step="0.05" value="${opacity}" ${isDrawingLocked ? 'disabled style="opacity: 0.4; cursor: not-allowed;"' : ''}>
           <span style="min-width: 28px; text-align: right; font-variant-numeric: tabular-nums;">${opacityPercent}%</span>
         </div>
 
@@ -2477,6 +2512,7 @@ function renderLayersPanel(cad, state) {
   container.querySelectorAll(".layer-up-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (cad.isLocked) return;
       const lName = btn.getAttribute("data-layer");
       cad.moveLayerUp(lName);
     });
@@ -2485,6 +2521,7 @@ function renderLayersPanel(cad, state) {
   container.querySelectorAll(".layer-down-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (cad.isLocked) return;
       const lName = btn.getAttribute("data-layer");
       cad.moveLayerDown(lName);
     });
@@ -2492,6 +2529,7 @@ function renderLayersPanel(cad, state) {
 
   container.querySelectorAll(".layer-opacity-slider").forEach((slider) => {
     slider.addEventListener("input", (e) => {
+      if (cad.isLocked) return;
       const lName = slider.getAttribute("data-layer");
       cad.setLayerOpacity(lName, Number(e.target.value));
     });
@@ -2546,6 +2584,7 @@ function renderLayersPanel(cad, state) {
   container.querySelectorAll(".comp-move-up-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (cad.isLocked) return;
       const cType = btn.getAttribute("data-type");
       const cId = btn.getAttribute("data-id");
       cad.moveComponent(cType, cId, "up");
@@ -2555,6 +2594,7 @@ function renderLayersPanel(cad, state) {
   container.querySelectorAll(".comp-move-down-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (cad.isLocked) return;
       const cType = btn.getAttribute("data-type");
       const cId = btn.getAttribute("data-id");
       cad.moveComponent(cType, cId, "down");
@@ -2565,6 +2605,7 @@ function renderLayersPanel(cad, state) {
   container.querySelectorAll(".comp-del-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (cad.isLocked) return;
       const cType = btn.getAttribute("data-type");
       const cId = btn.getAttribute("data-id");
       cad.removeComponent(cType, cId);
@@ -2582,6 +2623,7 @@ function setupCadEventListeners(cad) {
   const pwInput = $("cadPathwayWidth");
 
   const syncDimensions = () => {
+    if (cad.isLocked) return;
     const l = Math.max(5, Number(lenInput?.value) || 26);
     const b = Math.max(5, Number(brInput?.value) || 25);
     cad.setRoofDimensions(l, b);
@@ -2597,6 +2639,7 @@ function setupCadEventListeners(cad) {
   lenInput?.addEventListener("input", syncDimensions);
   brInput?.addEventListener("input", syncDimensions);
   pwInput?.addEventListener("input", () => {
+    if (cad.isLocked) return;
     cad.defaultPathwayWidthFt = Math.max(1, Number(pwInput.value) || 2.5);
   });
 
@@ -2617,8 +2660,8 @@ function setupCadEventListeners(cad) {
   };
 
   const updateUndoRedoUI = (canUndo, canRedo) => {
-    if (undoBtn) undoBtn.disabled = !canUndo;
-    if (redoBtn) redoBtn.disabled = !canRedo;
+    if (undoBtn) undoBtn.disabled = !canUndo || !!cad.isLocked;
+    if (redoBtn) redoBtn.disabled = !canRedo || !!cad.isLocked;
   };
 
   cad.onHistoryChange = (canUndo, canRedo) => {
@@ -2630,6 +2673,7 @@ function setupCadEventListeners(cad) {
   updateUndoRedoUI(typeof cad.canUndo === "function" ? cad.canUndo() : false, typeof cad.canRedo === "function" ? cad.canRedo() : false);
 
   undoBtn?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     if (cad.undo()) {
       syncCadInputsFromCad();
       const stats = cad.getAreaStats();
@@ -2643,6 +2687,7 @@ function setupCadEventListeners(cad) {
   });
 
   redoBtn?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     if (cad.redo()) {
       syncCadInputsFromCad();
       const stats = cad.getAreaStats();
@@ -2667,11 +2712,147 @@ function setupCadEventListeners(cad) {
 
   toolBtns.forEach(({ id, tool }) => {
     $(id)?.addEventListener("click", () => {
+      if (cad.isLocked && tool !== "select") return;
       toolBtns.forEach((t) => $(t.id)?.classList.remove("active"));
       $(id)?.classList.add("active");
       cad.setTool(tool);
     });
   });
+
+  // Shape picker buttons for Cutouts (Rectangle, Circle, L-Shape)
+  const shapeBtns = [
+    { id: "cadShapeRectBtn", shape: "rectangle" },
+    { id: "cadShapeCircleBtn", shape: "circle" },
+    { id: "cadShapeLBtn", shape: "l_shape" },
+  ];
+
+  // Save & Lock CAD Drawing UI Sync & Controller
+  const updateLockUI = (isLocked) => {
+    const lockBtn = $("cadLockDrawingBtn");
+    const lockText = $("cadLockBtnText");
+    const lockIcon = $("cadLockBtnIcon");
+    const lockBanner = $("cadLockBanner");
+    const inspectorNotice = $("inspectorLockNotice");
+
+    if (lockBtn) {
+      lockBtn.classList.toggle("locked", !!isLocked);
+      lockBtn.title = isLocked
+        ? "Drawing is locked (Click to Unlock)"
+        : "Save & Lock CAD Drawing (Freeze all dimensions, placements and components)";
+    }
+    if (lockText) {
+      lockText.textContent = isLocked ? "Locked (Click to Unlock)" : "Save & Lock Drawing";
+    }
+    if (lockIcon) {
+      lockIcon.textContent = isLocked ? "🔒" : "💾";
+    }
+    if (lockBanner) {
+      lockBanner.style.display = isLocked ? "flex" : "none";
+    }
+    if (inspectorNotice) {
+      inspectorNotice.style.display = isLocked ? "inline-flex" : "none";
+    }
+
+    const mutateBtnIds = [
+      "cadAutoPlaceBtn", "cadClearPanelsBtn", "cadAddSinglePanelBtn", "cadAddBlockBtn",
+      "cadAddHorizPathwayBtn", "cadRedoDemarcationBtn", "cadImageRedoDemarcationBtn",
+      "cadToolPanelBtn", "cadToolSubtractBtn", "cadToolPathwayBtn", "cadToolRoofBtn",
+      "cadShapeRectBtn", "cadShapeCircleBtn", "cadShapeLBtn", "cadClearCutoutsBtn",
+      "cadRotateSelectedBtn", "cadScaleUpSelectedBtn", "cadScaleDownSelectedBtn", "cadDeleteSelectedBtn",
+      "cadAddTreeBtn", "cadAddPoleBtn", "cadAddNeighborBtn", "cadAddWallBtn", "cadClearObstaclesBtn",
+      "cadRemoveImageBtn", "cadFitImageBtn", "cadFitImageContainBtn", "cadFitImageWidthBtn",
+      "cadFitImageHeightBtn", "cadFitImageCoverBtn", "cadScaleImageMinusBtn", "cadScaleImagePlusBtn",
+      "cadRotateImageMinus1Btn", "cadRotateImagePlus1Btn", "cadRotateImageBtn", "cadRotateImageResetBtn",
+      "cadPanImageLeftBtn", "cadPanImageRightBtn", "cadPanImageUpBtn", "cadPanImageDownBtn", "cadPanImageResetBtn",
+      "cadNorthMinus15Btn", "cadNorthPlus15Btn", "cadNorthResetBtn",
+      "inspectorFitWidthBtn", "inspectorFitHeightBtn", "inspectorFitContainBtn", "inspectorFitCoverBtn",
+      "inspectorCenterImageBtn", "inspectorNudgeLeftBtn", "inspectorNudgeRightBtn",
+      "inspectorNudgeUpBtn", "inspectorNudgeDownBtn", "inspectorMoveUpBtn", "inspectorMoveDownBtn",
+      "inspectorBringToFrontBtn", "inspectorSendToBackBtn", "inspectorDeleteBtn"
+    ];
+
+    mutateBtnIds.forEach((id) => {
+      const btn = $(id);
+      if (btn) btn.disabled = !!isLocked;
+    });
+
+    const mutateInputIds = [
+      "cadRoofLength", "cadRoofBreadth", "cadPathwayWidth",
+      "cadBuildingHeightInput", "cadElevationBldgHeightInput", "cadNorthAngleInput",
+      "cadImageInput", "cadZoomSlider", "cadImageRotationInput", "cadImageRotationSlider",
+      "cadImageScaleRoofPctInput", "cadImagePhysicalWidthInput", "cadOpacitySlider",
+      "inspectorLength", "inspectorBreadth", "inspectorDiameter",
+      "inspectorDistX", "inspectorDistXSlider", "inspectorDistY", "inspectorDistYSlider",
+      "inspectorHeight", "inspectorLabel", "inspectorOpacity"
+    ];
+
+    mutateInputIds.forEach((id) => {
+      const el = $(id);
+      if (el) el.disabled = !!isLocked;
+    });
+
+    if (undoBtn) undoBtn.disabled = !!isLocked || (typeof cad.canUndo === "function" ? !cad.canUndo() : true);
+    if (redoBtn) redoBtn.disabled = !!isLocked || (typeof cad.canRedo === "function" ? !cad.canRedo() : true);
+
+    if (isLocked) {
+      toolBtns.forEach((t) => $(t.id)?.classList.remove("active"));
+      $("cadToolSelectBtn")?.classList.add("active");
+      if (typeof cad.setTool === "function") {
+        cad.setTool("select");
+      }
+    }
+  };
+
+  const lockDrawingBtn = $("cadLockDrawingBtn");
+  lockDrawingBtn?.addEventListener("click", () => {
+    const nextLocked = !cad.isLocked;
+    cad.setDrawingLocked(nextLocked);
+    if (nextLocked) {
+      try {
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem("solar_cad_is_locked", "true");
+          const snap = typeof cad.serialize === "function" ? cad.serialize() : null;
+          if (snap) localStorage.setItem("solar_cad_locked_state", JSON.stringify(snap));
+        }
+      } catch (err) {
+        console.warn("Could not save locked CAD state to localStorage:", err);
+      }
+      showLoadToast("🔒 CAD Drawing Saved & Locked. All dimensions, placements and components are frozen.");
+    } else {
+      try {
+        if (typeof localStorage !== "undefined") {
+          localStorage.removeItem("solar_cad_is_locked");
+        }
+      } catch (err) {
+        console.warn("Could not remove locked CAD state from localStorage:", err);
+      }
+      showLoadToast("🔓 CAD Drawing Unlocked. Editing enabled.");
+    }
+    updateLockUI(cad.isLocked);
+    if (typeof updateInspectorUI === "function") {
+      updateInspectorUI(cad.selectedItem, cad.selectedItems);
+    }
+  });
+
+  $("cadBannerUnlockBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) {
+      lockDrawingBtn?.click();
+    }
+  });
+
+  cad.onLockChange = (isLocked) => {
+    updateLockUI(isLocked);
+    if (typeof updateInspectorUI === "function") {
+      updateInspectorUI(cad.selectedItem, cad.selectedItems);
+    }
+  };
+
+  try {
+    if (typeof localStorage !== "undefined" && localStorage.getItem("solar_cad_is_locked") === "true") {
+      cad.setDrawingLocked(true);
+    }
+  } catch (_) {}
+  updateLockUI(!!cad.isLocked);
 
   // Toggle Layers Panel & Collapse Button
   const toggleLayersPanel = () => {
@@ -2723,30 +2904,29 @@ function setupCadEventListeners(cad) {
 
   // Bulk Multi-Select Action Buttons
   $("cadRotateSelectedBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.rotateSelectedPanels(90);
   });
 
   $("cadScaleUpSelectedBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.scaleSelectedItems(1.1);
   });
 
   $("cadScaleDownSelectedBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.scaleSelectedItems(0.9);
   });
 
   $("cadDeleteSelectedBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.removeSelectedItems();
   });
 
   // Shape picker buttons for Cutouts (Rectangle, Circle, L-Shape)
-  const shapeBtns = [
-    { id: "cadShapeRectBtn", shape: "rectangle" },
-    { id: "cadShapeCircleBtn", shape: "circle" },
-    { id: "cadShapeLBtn", shape: "l_shape" },
-  ];
-
   shapeBtns.forEach(({ id, shape }) => {
     $(id)?.addEventListener("click", () => {
+      if (cad.isLocked) return;
       shapeBtns.forEach((s) => $(s.id)?.classList.remove("active"));
       $(id)?.classList.add("active");
       cad.setShapeType(shape);
@@ -2784,11 +2964,29 @@ function setupCadEventListeners(cad) {
     const opacityVal = $("inspectorOpacityVal");
     const zOrderGroup = $("inspectorZOrderGroup");
     const imgActions = $("inspectorImageActionsGroup");
+    const lockNotice = $("inspectorLockNotice");
     if (imgActions) imgActions.style.display = "none";
     const lenLbl = lenGroup?.querySelector("label");
     if (lenLbl) lenLbl.textContent = "L:";
     const brLbl = brGroup?.querySelector("label");
     if (brLbl) brLbl.textContent = "B:";
+
+    const applyInspectorLockState = () => {
+      if (cad.isLocked) {
+        if (lockNotice) lockNotice.style.display = "inline-flex";
+        if (delBtn) delBtn.style.display = "none";
+        if (zOrderGroup) zOrderGroup.style.display = "none";
+        if (imgActions) imgActions.style.display = "none";
+        [lenInput, brInput, diaInput, distXInput, distXSlider, distYInput, distYSlider, heightInput, opacityInput, labelInput].forEach((inp) => {
+          if (inp) inp.disabled = true;
+        });
+      } else {
+        if (lockNotice) lockNotice.style.display = "none";
+        [lenInput, brInput, diaInput, distXInput, distXSlider, distYInput, distYSlider, heightInput, opacityInput, labelInput].forEach((inp) => {
+          if (inp) inp.disabled = false;
+        });
+      }
+    };
 
     const multi = selectedItems || (cad.selectedItems && cad.selectedItems.length > 1 ? cad.selectedItems : null);
 
@@ -2832,6 +3030,7 @@ function setupCadEventListeners(cad) {
         }
       });
       if (areaVal) areaVal.textContent = `${Math.round(totalArea)} sq ft`;
+      applyInspectorLockState();
       return;
     }
 
@@ -2859,6 +3058,7 @@ function setupCadEventListeners(cad) {
       if (opacityInput) opacityInput.value = cad.roofOpacity || 1.0;
       if (opacityVal) opacityVal.textContent = `${Math.round((cad.roofOpacity || 1.0) * 100)}%`;
       if (zOrderGroup) zOrderGroup.style.display = "none";
+      applyInspectorLockState();
       return;
     }
 
@@ -3008,6 +3208,7 @@ function setupCadEventListeners(cad) {
       if (areaVal) areaVal.textContent = `${it.lengthFt}×${it.breadthFt} ft (H: ${it.heightFt} ft)`;
       if (zOrderGroup) zOrderGroup.style.display = "none";
     }
+    applyInspectorLockState();
   };
 
   cad.onSelectionChange = (sel, selectedItems) => {
@@ -3023,6 +3224,7 @@ function setupCadEventListeners(cad) {
 
   // Two-way Inspector Input Listeners
   $("inspectorLength")?.addEventListener("input", (e) => {
+    if (cad.isLocked) return;
     const val = Number(e.target.value);
     if (!cad.selectedItem || cad.selectedItem.type === "roof") {
       cad.setRoofDimensions(val, cad.roofBreadthFt);
@@ -3036,6 +3238,7 @@ function setupCadEventListeners(cad) {
   });
 
   $("inspectorBreadth")?.addEventListener("input", (e) => {
+    if (cad.isLocked) return;
     const val = Number(e.target.value);
     if (!cad.selectedItem || cad.selectedItem.type === "roof") {
       cad.setRoofDimensions(cad.roofLengthFt, val);
@@ -3049,10 +3252,12 @@ function setupCadEventListeners(cad) {
   });
 
   $("inspectorDiameter")?.addEventListener("input", (e) => {
+    if (cad.isLocked) return;
     cad.updateSelectedItem({ diameterFt: Number(e.target.value) });
   });
 
   const updateItemDistX = (val) => {
+    if (cad.isLocked) return;
     const num = Number(val);
     if (isNaN(num)) return;
     if (!cad.selectedItem || cad.selectedItem.type === "roof") {
@@ -3072,6 +3277,7 @@ function setupCadEventListeners(cad) {
   };
 
   const updateItemDistY = (val) => {
+    if (cad.isLocked) return;
     const num = Number(val);
     if (isNaN(num)) return;
     if (!cad.selectedItem || cad.selectedItem.type === "roof") {
@@ -3096,22 +3302,37 @@ function setupCadEventListeners(cad) {
   $("inspectorDistYSlider")?.addEventListener("input", (e) => updateItemDistY(e.target.value));
 
   // Object Nudge Buttons (0.5 ft step)
-  $("inspectorNudgeLeftBtn")?.addEventListener("click", () => cad.nudgeSelectedItem(-0.5, 0));
-  $("inspectorNudgeRightBtn")?.addEventListener("click", () => cad.nudgeSelectedItem(0.5, 0));
-  $("inspectorNudgeUpBtn")?.addEventListener("click", () => cad.nudgeSelectedItem(0, -0.5));
-  $("inspectorNudgeDownBtn")?.addEventListener("click", () => cad.nudgeSelectedItem(0, 0.5));
+  $("inspectorNudgeLeftBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.nudgeSelectedItem(-0.5, 0);
+  });
+  $("inspectorNudgeRightBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.nudgeSelectedItem(0.5, 0);
+  });
+  $("inspectorNudgeUpBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.nudgeSelectedItem(0, -0.5);
+  });
+  $("inspectorNudgeDownBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.nudgeSelectedItem(0, 0.5);
+  });
 
   $("inspectorHeight")?.addEventListener("input", (e) => {
+    if (cad.isLocked) return;
     if (cad.selectedItem && cad.selectedItem.type === "obstacle") {
       cad.updateSelectedItem({ heightFt: Number(e.target.value) });
     }
   });
 
   $("inspectorLabel")?.addEventListener("input", (e) => {
+    if (cad.isLocked) return;
     cad.updateSelectedItem({ label: e.target.value });
   });
 
   $("inspectorOpacity")?.addEventListener("input", (e) => {
+    if (cad.isLocked) return;
     const val = Number(e.target.value);
     if ($("inspectorOpacityVal")) $("inspectorOpacityVal").textContent = `${Math.round(val * 100)}%`;
     if (!cad.selectedItem || cad.selectedItem.type === "roof") {
@@ -3124,12 +3345,25 @@ function setupCadEventListeners(cad) {
     }
   });
 
-  $("inspectorMoveUpBtn")?.addEventListener("click", () => cad.moveSelectedItemUp());
-  $("inspectorMoveDownBtn")?.addEventListener("click", () => cad.moveSelectedItemDown());
-  $("inspectorBringToFrontBtn")?.addEventListener("click", () => cad.bringSelectedItemToFront());
-  $("inspectorSendToBackBtn")?.addEventListener("click", () => cad.sendSelectedItemToBack());
+  $("inspectorMoveUpBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.moveSelectedItemUp();
+  });
+  $("inspectorMoveDownBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.moveSelectedItemDown();
+  });
+  $("inspectorBringToFrontBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.bringSelectedItemToFront();
+  });
+  $("inspectorSendToBackBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.sendSelectedItemToBack();
+  });
 
   $("inspectorDeleteBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.removeSelectedItem();
   });
 
@@ -3250,28 +3484,34 @@ function setupCadEventListeners(cad) {
   // True North Alignment Controls
   const northAngleInput = $("cadNorthAngleInput");
   const updateNorth = (deg) => {
+    if (cad.isLocked) return;
     cad.setNorthAngle(deg);
     if (northAngleInput) northAngleInput.value = cad.northAngleDeg;
   };
 
   northAngleInput?.addEventListener("input", (e) => {
+    if (cad.isLocked) return;
     cad.setNorthAngle(Number(e.target.value));
   });
   northAngleInput?.addEventListener("change", (e) => {
+    if (cad.isLocked) return;
     cad.setNorthAngle(Number(e.target.value));
   });
 
   $("cadNorthMinus15Btn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.rotateNorth(-15);
     if (northAngleInput) northAngleInput.value = cad.northAngleDeg;
   });
 
   $("cadNorthPlus15Btn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.rotateNorth(15);
     if (northAngleInput) northAngleInput.value = cad.northAngleDeg;
   });
 
   $("cadNorthResetBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.setNorthAngle(0);
     if (northAngleInput) northAngleInput.value = 0;
   });
@@ -3285,6 +3525,7 @@ function setupCadEventListeners(cad) {
   // Building Height Inputs (Drawer and Quick Elevation Control)
   const bldgHInput = $("cadBuildingHeightInput");
   const updateBldgHeight = (val) => {
+    if (cad.isLocked) return;
     const h = Math.max(5, Math.min(150, Number(val) || 18));
     cad.setBuildingHeight(h);
     if (bldgHInput && document.activeElement !== bldgHInput) bldgHInput.value = h;
@@ -3306,11 +3547,26 @@ function setupCadEventListeners(cad) {
   };
 
   // Surrounding Obstacles in Yard
-  $("cadAddTreeBtn")?.addEventListener("click", () => cad.addExternalObstacle("tree"));
-  $("cadAddPoleBtn")?.addEventListener("click", () => cad.addExternalObstacle("pole"));
-  $("cadAddNeighborBtn")?.addEventListener("click", () => cad.addExternalObstacle("building"));
-  $("cadAddWallBtn")?.addEventListener("click", () => cad.addExternalObstacle("wall"));
-  $("cadClearObstaclesBtn")?.addEventListener("click", () => cad.clearAllObstacles());
+  $("cadAddTreeBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.addExternalObstacle("tree");
+  });
+  $("cadAddPoleBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.addExternalObstacle("pole");
+  });
+  $("cadAddNeighborBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.addExternalObstacle("building");
+  });
+  $("cadAddWallBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.addExternalObstacle("wall");
+  });
+  $("cadClearObstaclesBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.clearAllObstacles();
+  });
 
   // Astronomical 2D Sun Path & Shadow Simulation Controls
   const toggleSunSimBtn = $("cadToggleSunSimBtn");
@@ -3399,9 +3655,16 @@ function setupCadEventListeners(cad) {
   };
 
   // Panel placement actions
-  $("cadAddSinglePanelBtn")?.addEventListener("click", () => cad.placePanel());
-  $("cadAddBlockBtn")?.addEventListener("click", () => cad.placePanelBlock(2, 2));
+  $("cadAddSinglePanelBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.placePanel();
+  });
+  $("cadAddBlockBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.placePanelBlock(2, 2);
+  });
   $("cadAutoPlaceBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.autoPlaceRemainingPanels();
     if (typeof cad.updateAllPanelDimensions === "function") {
       cad.updateAllPanelDimensions();
@@ -3415,8 +3678,12 @@ function setupCadEventListeners(cad) {
   });
   $("cadRedoDemarcationBtn")?.addEventListener("click", () => resetAndRedoDemarcation(true));
   $("cadImageRedoDemarcationBtn")?.addEventListener("click", () => resetAndRedoDemarcation(true));
-  $("cadAddHorizPathwayBtn")?.addEventListener("click", () => cad.addDefaultHorizontalPathway());
+  $("cadAddHorizPathwayBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.addDefaultHorizontalPathway();
+  });
   $("cadClearPanelsBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.clearAllPanels();
     if (typeof cad.clearMultiCustomerDemarcation === "function") {
       cad.clearMultiCustomerDemarcation();
@@ -3426,7 +3693,10 @@ function setupCadEventListeners(cad) {
       $("cadInventoryCount").textContent = `0 / ${total} Placed (${total} Remaining)`;
     }
   });
-  $("cadClearCutoutsBtn")?.addEventListener("click", () => cad.clearAllCutouts());
+  $("cadClearCutoutsBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
+    cad.clearAllCutouts();
+  });
 
   // Render initial Layers Panel
   renderLayersPanel(cad, cad.getLayerState());
@@ -3474,6 +3744,7 @@ function setupCadEventListeners(cad) {
   };
 
   imgInput?.addEventListener("change", (e) => {
+    if (cad.isLocked) return;
     if (e.target.files && e.target.files[0]) {
       cad.loadCustomImage(e.target.files[0]);
       if (imgControls) imgControls.style.display = "flex";
@@ -3506,52 +3777,63 @@ function setupCadEventListeners(cad) {
   });
 
   $("cadLockImageBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.setImageLocked(!cad.image.locked);
     updateLockBtnUI();
   });
 
   $("cadZoomSlider")?.addEventListener("input", (e) => {
+    if (cad.isLocked) return;
     cad.setImageZoom(e.target.value);
     syncImageScaleUI();
   });
   $("cadZoomInBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.setImageZoom(cad.image.scale * 1.02);
     syncImageScaleUI();
   });
   $("cadZoomOutBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.setImageZoom(cad.image.scale * 0.98);
     syncImageScaleUI();
   });
 
   $("cadFitImageContainBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.fitImageToRoof("contain");
     syncImageScaleUI();
     updateLockBtnUI();
   });
   $("cadFitImageWidthBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.fitImageToRoof("width");
     syncImageScaleUI();
     updateLockBtnUI();
   });
   $("cadFitImageHeightBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.fitImageToRoof("height");
     syncImageScaleUI();
     updateLockBtnUI();
   });
   $("cadFitImageCoverBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.fitImageToRoof("cover");
     syncImageScaleUI();
     updateLockBtnUI();
   });
   $("cadScaleImageMinusBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.scaleImageByFactor(0.95);
     syncImageScaleUI();
   });
   $("cadScaleImagePlusBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.scaleImageByFactor(1.05);
     syncImageScaleUI();
   });
   $("cadImageScaleRoofPctInput")?.addEventListener("input", (e) => {
+    if (cad.isLocked) return;
     const val = Number(e.target.value);
     if (val > 0) {
       cad.scaleImageToPercentOfRoof(val);
@@ -3559,6 +3841,7 @@ function setupCadEventListeners(cad) {
     }
   });
   $("cadImagePhysicalWidthInput")?.addEventListener("input", (e) => {
+    if (cad.isLocked) return;
     const val = Number(e.target.value);
     if (val > 0) {
       cad.setImagePhysicalWidthFt(val);
@@ -3568,31 +3851,37 @@ function setupCadEventListeners(cad) {
 
   // Inspector quick image buttons
   $("inspectorFitWidthBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.fitImageToRoof("width");
     syncImageScaleUI();
     updateLockBtnUI();
   });
   $("inspectorFitHeightBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.fitImageToRoof("height");
     syncImageScaleUI();
     updateLockBtnUI();
   });
   $("inspectorFitContainBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.fitImageToRoof("contain");
     syncImageScaleUI();
     updateLockBtnUI();
   });
   $("inspectorFitCoverBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.fitImageToRoof("cover");
     syncImageScaleUI();
     updateLockBtnUI();
   });
   $("inspectorCenterImageBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.centerImageOnRoof();
     updateLockBtnUI();
   });
 
   $("cadImageRotationInput")?.addEventListener("input", (e) => {
+    if (cad.isLocked) return;
     const val = parseFloat(e.target.value);
     if (!isNaN(val)) {
       if (cad.image.locked) {
@@ -3606,6 +3895,7 @@ function setupCadEventListeners(cad) {
   });
 
   $("cadImageRotationSlider")?.addEventListener("input", (e) => {
+    if (cad.isLocked) return;
     const val = parseFloat(e.target.value);
     if (!isNaN(val)) {
       if (cad.image.locked) {
@@ -3619,26 +3909,31 @@ function setupCadEventListeners(cad) {
   });
 
   $("cadRotateImageMinus1Btn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.rotateImageBy(-1);
     syncImageRotationUI();
   });
 
   $("cadRotateImagePlus1Btn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.rotateImageBy(1);
     syncImageRotationUI();
   });
 
   $("cadRotateImageBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.rotateImageBy(90);
     syncImageRotationUI();
   });
 
   $("cadRotateImageResetBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.setImageRotation(0, true);
     syncImageRotationUI();
   });
 
   const handlePanImage = (dx, dy, e) => {
+    if (cad.isLocked) return;
     const step = (e && e.shiftKey) ? 25 : 5;
     cad.panImage(dx * step, dy * step);
     updateLockBtnUI();
@@ -3649,17 +3944,23 @@ function setupCadEventListeners(cad) {
   $("cadPanImageUpBtn")?.addEventListener("click", (e) => handlePanImage(0, -1, e));
   $("cadPanImageDownBtn")?.addEventListener("click", (e) => handlePanImage(0, 1, e));
   $("cadPanImageResetBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.resetImagePan();
     updateLockBtnUI();
   });
 
-  $("cadOpacitySlider")?.addEventListener("input", (e) => cad.setImageOpacity(e.target.value));
+  $("cadOpacitySlider")?.addEventListener("input", (e) => {
+    if (cad.isLocked) return;
+    cad.setImageOpacity(e.target.value);
+  });
   $("cadFitImageBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.resetImageTransform();
     if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale;
     syncImageRotationUI();
   });
   $("cadRemoveImageBtn")?.addEventListener("click", () => {
+    if (cad.isLocked) return;
     cad.removeCustomImage();
     if (imgControls) imgControls.style.display = "none";
     const drawer = $("cadImageDrawer");
@@ -3806,7 +4107,7 @@ function renderDiagram(pl, input) {
       const roofInputChanged = state.lastCadSyncedRoofArea !== undefined && Math.abs(targetUsableArea - state.lastCadSyncedRoofArea) >= 1;
 
       // Only resize CAD base roof when the Usable Roof Area input itself was changed (not on tab switches or walkway edits)
-      if (!isEditingCadDirectly && !isBuildingMode && roofInputChanged && Math.abs(currentStats.netUsableSqft - targetUsableArea) >= 1) {
+      if (!cad.isLocked && !isEditingCadDirectly && !isBuildingMode && roofInputChanged && Math.abs(currentStats.netUsableSqft - targetUsableArea) >= 1) {
         const deductions = (currentStats.cutoutSqft || 0) + (currentStats.pathwaySqft || 0);
         const targetGross = targetUsableArea + deductions;
         let preferredRatio = 1.35;
@@ -3823,7 +4124,7 @@ function renderDiagram(pl, input) {
 
   // Multi-Customer Building demarcation in CAD
   if (isBuildingMode && state.buildingData?.flatLedger) {
-    if (cad.panels && cad.panels.length < effectiveReqPanels && typeof cad.autoPlaceRemainingPanels === "function") {
+    if (!cad.isLocked && cad.panels && cad.panels.length < effectiveReqPanels && typeof cad.autoPlaceRemainingPanels === "function") {
       cad.autoPlaceRemainingPanels("portrait");
     }
     if (typeof cad.assignPanelsToFlats === "function") {
@@ -5386,13 +5687,19 @@ function switchWorkspaceTab(tabId) {
         }
       }
       setTimeout(() => {
-        if (typeof cad.resizeCanvas === "function") {
-          cad.resizeCanvas();
-        } else if (typeof cad.autoFitRoof === "function") {
-          cad.autoFitRoof();
-        }
-        if (typeof cad.render === "function") {
-          cad.render();
+        if (cad.isLocked) {
+          if (typeof cad.render === "function") {
+            cad.render();
+          }
+        } else {
+          if (typeof cad.resizeCanvas === "function") {
+            cad.resizeCanvas();
+          } else if (typeof cad.autoFitRoof === "function") {
+            cad.autoFitRoof();
+          }
+          if (typeof cad.render === "function") {
+            cad.render();
+          }
         }
       }, 50);
     }
@@ -5705,35 +6012,44 @@ function syncBuildingDataToWorkspace(buildingResult, options = {}) {
   // 3. Sync Rooftop CAD (#paneCad)
   const cad = getActiveRooftopCAD();
   if (cad) {
-    const minNeededArea = summary.requiredRoofAreaSqft || Math.ceil((summary.totalBuildingPanels * 27.5) / 0.70);
-    const chosenArea = Math.max(Number(cfg.roofArea) || 0, Number($("buildingRoofAreaInput")?.value) || 0, minNeededArea);
-    const curStats = typeof cad.getAreaStats === "function" ? cad.getAreaStats() : { netUsableSqft: 0 };
-    if (curStats.netUsableSqft < chosenArea || cad.roofW <= 0) {
-      const { l, b } = solveRoofDimensions(chosenArea, 1.35);
-      if (typeof cad.setRoofDimensions === "function") cad.setRoofDimensions(l, b);
-      if ($("cadRoofLength")) $("cadRoofLength").value = l;
-      if ($("cadRoofBreadth")) $("cadRoofBreadth").value = b;
-    }
-    if (typeof cad.setRequiredPanels === "function") {
-      cad.setRequiredPanels(summary.totalBuildingPanels, 1123, 2279);
-    }
-    // Clear old single-customer or mismatched panels so building panels are placed fresh and uniformly
-    if (cad.panels && cad.panels.length !== summary.totalBuildingPanels) {
-      cad.panels = [];
-    }
-    if (cad.panels && cad.panels.length < summary.totalBuildingPanels) {
-      if (typeof cad.autoPlaceRemainingPanels === "function") {
-        cad.autoPlaceRemainingPanels("portrait");
+    if (cad.isLocked) {
+      if (typeof cad.assignPanelsToFlats === "function") {
+        cad.assignPanelsToFlats(buildingResult.flatLedger);
       }
-    }
-    if (typeof cad.updateAllPanelDimensions === "function") {
-      cad.updateAllPanelDimensions();
-    }
-    if (typeof cad.assignPanelsToFlats === "function") {
-      cad.assignPanelsToFlats(buildingResult.flatLedger);
-    }
-    if (typeof cad.render === "function") {
-      cad.render();
+      if (typeof cad.render === "function") {
+        cad.render();
+      }
+    } else {
+      const minNeededArea = summary.requiredRoofAreaSqft || Math.ceil((summary.totalBuildingPanels * 27.5) / 0.70);
+      const chosenArea = Math.max(Number(cfg.roofArea) || 0, Number($("buildingRoofAreaInput")?.value) || 0, minNeededArea);
+      const curStats = typeof cad.getAreaStats === "function" ? cad.getAreaStats() : { netUsableSqft: 0 };
+      if (curStats.netUsableSqft < chosenArea || cad.roofW <= 0) {
+        const { l, b } = solveRoofDimensions(chosenArea, 1.35);
+        if (typeof cad.setRoofDimensions === "function") cad.setRoofDimensions(l, b);
+        if ($("cadRoofLength")) $("cadRoofLength").value = l;
+        if ($("cadRoofBreadth")) $("cadRoofBreadth").value = b;
+      }
+      if (typeof cad.setRequiredPanels === "function") {
+        cad.setRequiredPanels(summary.totalBuildingPanels, 1123, 2279);
+      }
+      // Clear old single-customer or mismatched panels so building panels are placed fresh and uniformly
+      if (cad.panels && cad.panels.length !== summary.totalBuildingPanels) {
+        cad.panels = [];
+      }
+      if (cad.panels && cad.panels.length < summary.totalBuildingPanels) {
+        if (typeof cad.autoPlaceRemainingPanels === "function") {
+          cad.autoPlaceRemainingPanels("portrait");
+        }
+      }
+      if (typeof cad.updateAllPanelDimensions === "function") {
+        cad.updateAllPanelDimensions();
+      }
+      if (typeof cad.assignPanelsToFlats === "function") {
+        cad.assignPanelsToFlats(buildingResult.flatLedger);
+      }
+      if (typeof cad.render === "function") {
+        cad.render();
+      }
     }
   }
 
@@ -5751,6 +6067,13 @@ function syncBuildingDataToWorkspace(buildingResult, options = {}) {
 function resetAndRedoDemarcation(notifyUser = true) {
   const cad = getActiveRooftopCAD();
   if (!cad) return;
+
+  if (cad.isLocked) {
+    if (notifyUser) {
+      showLoadToast("🔒 CAD Drawing is locked. Unlock CAD to re-demarcate.");
+    }
+    return;
+  }
 
   const isBuilding = state.proposalMode === "multi_building" || state.meteringMode === "multi";
   if (!isBuilding) {
@@ -7361,7 +7684,7 @@ function attachEvents() {
     if ($("csvRoofAreaInput")) $("csvRoofAreaInput").value = finalArea;
 
     const cad = getActiveRooftopCAD();
-    if (cad) {
+    if (cad && !cad.isLocked) {
       cad.panels = [];
       cad.setRoofDimensions(l, b);
       if ($("cadRoofLength")) $("cadRoofLength").value = l;
@@ -8005,6 +8328,9 @@ function applyBillConfig(estimate, input) {
 function applyBreakupConfig(estimate, input, config = readConfig()) {
   if (!state.breakupConfig) state.breakupConfig = {};
 
+  const isBuildingMode = state.proposalMode === "multi_building" && Boolean(state.buildingData?.summary);
+  const bSum = isBuildingMode ? state.buildingData.summary : null;
+
   estimate.options.forEach(option => {
     let sysType = option.systemType;
     let mainInverterPrefix = sysType === "hybrid" ? "Hybrid" : (sysType === "offgrid" ? "Off-grid" : "On-grid");
@@ -8013,10 +8339,14 @@ function applyBreakupConfig(estimate, input, config = readConfig()) {
       ? `Separate ${mainInverterPrefix} Inverters (${flatInvList.length} Flats)`
       : `${mainInverterPrefix} Inverter`;
 
+    if (isBuildingMode && bSum && bSum.costBreakup) {
+      option.costBreakup = { ...option.costBreakup, ...bSum.costBreakup };
+    }
+
     let defaultItems = [
-      { id: 'panels', label: 'Solar Panels', value: option.costBreakup.panels },
-      { id: 'structure', label: `Mounting Structure (${STRUCTURE_LABELS[input.structureType]})`, value: option.costBreakup.structure },
-      { id: 'inverter', label: inverterLabel, value: option.costBreakup.inverter },
+      { id: 'panels', label: 'Solar Panels', value: (isBuildingMode && bSum?.costBreakup) ? bSum.costBreakup.panels : option.costBreakup.panels },
+      { id: 'structure', label: `Mounting Structure (${STRUCTURE_LABELS[input.structureType] || "Hot-dip galvanized"})`, value: (isBuildingMode && bSum?.costBreakup) ? bSum.costBreakup.structure : option.costBreakup.structure },
+      { id: 'inverter', label: inverterLabel, value: (isBuildingMode && bSum?.costBreakup) ? bSum.costBreakup.inverter : option.costBreakup.inverter },
     ];
     if (option.costBreakup.backupInverter > 0) {
       defaultItems.push({ id: 'backupInverter', label: 'Backup Off-grid Inverter', value: option.costBreakup.backupInverter });
@@ -8025,10 +8355,10 @@ function applyBreakupConfig(estimate, input, config = readConfig()) {
       defaultItems.push({ id: 'battery', label: option.costBreakup.backupInverter > 0 ? 'Backup Battery Storage' : 'Battery Storage', value: option.costBreakup.battery });
     }
     defaultItems.push(
-      { id: 'safetyAndEarthing', label: 'Safety and earthing', value: option.costBreakup.safetyAndEarthing },
-      { id: 'wiringExcludingCable', label: 'Wiring excluding cable cost', value: option.costBreakup.wiringExcludingCable },
-      { id: 'installation', label: 'Installation & Commissioning', value: option.costBreakup.installation },
-      { id: 'consultancy', label: 'Consultancy', value: option.costBreakup.consultancy }
+      { id: 'safetyAndEarthing', label: 'Safety and earthing', value: (isBuildingMode && bSum?.costBreakup) ? bSum.costBreakup.safetyAndEarthing : option.costBreakup.safetyAndEarthing },
+      { id: 'wiringExcludingCable', label: 'Wiring excluding cable cost', value: (isBuildingMode && bSum?.costBreakup) ? bSum.costBreakup.wiringExcludingCable : option.costBreakup.wiringExcludingCable },
+      { id: 'installation', label: 'Installation & Commissioning', value: (isBuildingMode && bSum?.costBreakup) ? bSum.costBreakup.installation : option.costBreakup.installation },
+      { id: 'consultancy', label: 'Consultancy', value: (isBuildingMode && bSum?.costBreakup) ? bSum.costBreakup.consultancy : option.costBreakup.consultancy }
     );
 
     // If config doesn't exist for this sysType, seed it
@@ -8088,41 +8418,61 @@ function applyBreakupConfig(estimate, input, config = readConfig()) {
       finalItems.push(item);
     });
 
-    const goodsShare = 0.70;
-    const servicesShare = 0.30;
-    const effectiveGstRate = (goodsShare * 5) + (servicesShare * 18);
-    
-    // Check if GST is overridden
-    let configGst = state.breakupConfigGst && state.breakupConfigGst[sysType] !== undefined ? state.breakupConfigGst[sysType] : null;
-    const gst = configGst !== null ? configGst : preTaxSubtotal * (effectiveGstRate / 100);
-    
     // Contingency
     let configContingency = state.breakupConfigContingency && state.breakupConfigContingency[sysType] !== undefined ? state.breakupConfigContingency[sysType] : null;
     const contingency = configContingency !== null ? configContingency : preTaxSubtotal * ((input.contingencyRate || 0) / 100);
+    const costBeforeMargin = preTaxSubtotal + contingency;
 
-    const baseCostInclGst = preTaxSubtotal + gst + contingency;
-
-    // Margin (default 25% of total component costs incl. of GST)
+    // Margin (default 25% of pre-tax component costs + contingency)
     let defaultMarginRate = (config && config.pricing && config.pricing.marginRate !== undefined) ? config.pricing.marginRate : 25;
     let marginRate = (state.breakupConfigMarginPct && state.breakupConfigMarginPct[sysType] !== undefined)
       ? state.breakupConfigMarginPct[sysType]
       : defaultMarginRate;
-    const margin = baseCostInclGst * (marginRate / 100);
+    const margin = costBeforeMargin * (marginRate / 100);
+    const taxableAmount = costBeforeMargin + margin;
+
+    // GST calculated AFTER margin on taxable supply value
+    const goodsShare = 0.70;
+    const servicesShare = 0.30;
+    const effectiveGstRate = (goodsShare * 5) + (servicesShare * 18);
+    let configGst = state.breakupConfigGst && state.breakupConfigGst[sysType] !== undefined ? state.breakupConfigGst[sysType] : null;
+    const gst = configGst !== null ? configGst : taxableAmount * (effectiveGstRate / 100);
 
     option.costBreakup.effectiveGstRate = effectiveGstRate;
     option.costBreakup.gst = gst;
     option.costBreakup.contingency = contingency;
-    option.costBreakup.baseCostInclGst = baseCostInclGst;
+    option.costBreakup.costBeforeMargin = costBeforeMargin;
     option.costBreakup.marginRate = marginRate;
     option.costBreakup.margin = margin;
+    option.costBreakup.taxableAmount = taxableAmount;
+    option.costBreakup.baseCostInclGst = taxableAmount;
 
     if ($("hideCost")?.checked) {
       option.totalPreSubsidy = 0;
       option.subsidy = 0;
       option.netCost = 0;
     } else {
-      option.totalPreSubsidy = baseCostInclGst + margin;
-      option.netCost = Math.max(option.totalPreSubsidy - (option.subsidy || 0), 0);
+      if (isBuildingMode && bSum) {
+        const hasManualOverrides = configList.some(c => c.isOverride) ||
+          (state.breakupConfigGst && state.breakupConfigGst[sysType] !== undefined) ||
+          (state.breakupConfigContingency && state.breakupConfigContingency[sysType] !== undefined) ||
+          (state.breakupConfigMarginPct && state.breakupConfigMarginPct[sysType] !== undefined);
+        
+        if (hasManualOverrides) {
+          option.totalPreSubsidy = Math.round(taxableAmount + gst);
+          option.subsidy = bSum.totalSubsidy;
+          option.netCost = Math.max(option.totalPreSubsidy - option.subsidy, 0);
+          bSum.totalBuildingGrossCost = option.totalPreSubsidy;
+          bSum.totalNetCost = option.netCost;
+        } else {
+          option.totalPreSubsidy = bSum.totalBuildingGrossCost;
+          option.subsidy = bSum.totalSubsidy;
+          option.netCost = bSum.totalNetCost;
+        }
+      } else {
+        option.totalPreSubsidy = Math.round(taxableAmount + gst);
+        option.netCost = Math.max(option.totalPreSubsidy - (option.subsidy || 0), 0);
+      }
     }
     
     option.paybackYears = option.annualSavings > 0 && option.netCost > 0 ? option.netCost / option.annualSavings : 0;
@@ -9359,6 +9709,15 @@ window.loadProposalState = function(data) {
             }
             if ($("cadZoomSlider")) $("cadZoomSlider").value = cad.image.scale || 1.0;
             if ($("cadOpacitySlider") && sData.cad.image.opacity !== undefined) $("cadOpacitySlider").value = sData.cad.image.opacity;
+          }
+          if (sData.cad.isLocked) {
+            try {
+              if (typeof localStorage !== "undefined") localStorage.setItem("solar_cad_is_locked", "true");
+            } catch (_) {}
+          } else {
+            try {
+              if (typeof localStorage !== "undefined") localStorage.removeItem("solar_cad_is_locked");
+            } catch (_) {}
           }
           if (typeof cad.render === "function") cad.render();
           if (typeof cad.notifyChanges === "function") cad.notifyChanges();

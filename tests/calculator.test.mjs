@@ -141,11 +141,13 @@ assert.ok(commercialEstimate.options[1].savingsBreakdown.todPeakAvoided > 0, "Hy
   const opt = est.recommended;
   const cb = opt.costBreakup;
 
-  // Margin percentage defaults to 25%
+  // Margin percentage defaults to 25% (calculated on pre-tax direct cost & contingency, GST after margin)
   assert.equal(cb.marginRate, 25, "Default margin must be 25%");
-  assert.ok(cb.baseCostInclGst > 0, "Base cost incl. GST must be calculated");
-  assert.equal(cb.margin, Math.round(cb.baseCostInclGst * 0.25), "Margin must be 25% of base cost incl. GST");
-  assert.equal(opt.totalPreSubsidy, cb.baseCostInclGst + cb.margin, "Total cost must include margin");
+  assert.ok(cb.costBeforeMargin > 0, "Cost before margin must be calculated");
+  assert.equal(cb.margin, Math.round(cb.costBeforeMargin * 0.25), "Margin must be 25% of pre-tax cost & contingency");
+  assert.equal(cb.taxableAmount, cb.costBeforeMargin + cb.margin, "Taxable amount must be cost before margin + margin");
+  assert.equal(cb.gst, Math.round(cb.taxableAmount * (cb.effectiveGstRate / 100)), "GST must be calculated after margin on taxable supply value");
+  assert.equal(opt.totalPreSubsidy, cb.taxableAmount + cb.gst, "Total cost must be taxable amount + GST");
   assert.equal(opt.netCost, opt.totalPreSubsidy - opt.subsidy, "Net cost must equal total pre-subsidy minus subsidy");
 
   // Warning benchmark: high margin (> 60 Rs/W triggers warning)

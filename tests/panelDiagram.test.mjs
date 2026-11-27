@@ -1466,5 +1466,135 @@ console.log("Running RooftopCAD tests...");
   console.log("✓ Test 22 Passed: CAD Layers Panel Selection & Bounding Box/Gizmo for Roof, Image, Panels, Walkways, Cutouts");
 }
 
+// Test 23: Save & Lock Drawing (Freeze all dimensions, placements, components, and tools)
+{
+  const canvas = new MockCanvas();
+  const cad = new RooftopCAD(canvas, {
+    roofLengthFt: 40,
+    roofBreadthFt: 25,
+    requiredPanels: 10,
+    buildingHeightFt: 20,
+    northAngleDeg: 15,
+  });
+
+  // Setup initial components before locking
+  cad.addCutout(10, 10, 6, 6, "circle", "Tank");
+  cad.addPathway(0, 12, 40, 2.5, "horizontal");
+  cad.autoPlaceRemainingPanels();
+  const origPanelCount = cad.panels.length;
+  assert.ok(origPanelCount > 0, "Initial panels must be placed before locking");
+  const origRoofLen = cad.roofLengthFt;
+  const origRoofBr = cad.roofBreadthFt;
+  const origBldgH = cad.buildingHeightFt;
+  const origNorth = cad.northAngleDeg;
+  const origPanelX = cad.panels[0].x;
+  const origPanelY = cad.panels[0].y;
+  const origCutoutW = cad.cutouts[0].w;
+
+  // 1. Lock the drawing
+  let lockCallbackFired = false;
+  cad.onLockChange = (locked) => {
+    lockCallbackFired = locked;
+  };
+  cad.setDrawingLocked(true);
+
+  assert.equal(cad.isLocked, true, "cad.isLocked must be true after setDrawingLocked(true)");
+  assert.equal(lockCallbackFired, true, "onLockChange callback must fire with true");
+  assert.equal(cad.canUndo(), false, "canUndo must return false when locked");
+  assert.equal(cad.canRedo(), false, "canRedo must return false when locked");
+  assert.equal(cad.undo(), false, "undo() must return false when locked");
+  assert.equal(cad.redo(), false, "redo() must return false when locked");
+
+  // 2. Verify all dimension and layout mutation attempts are blocked
+  cad.setRoofDimensions(60, 50);
+  assert.equal(cad.roofLengthFt, origRoofLen, "setRoofDimensions must NOT change roofLengthFt when locked");
+  assert.equal(cad.roofBreadthFt, origRoofBr, "setRoofDimensions must NOT change roofBreadthFt when locked");
+
+  cad.setNorthAngle(90);
+  assert.equal(cad.northAngleDeg, origNorth, "setNorthAngle must NOT change north angle when locked");
+
+  cad.setBuildingHeight(45);
+  assert.equal(cad.buildingHeightFt, origBldgH, "setBuildingHeight must NOT change building height when locked");
+
+  // 3. Verify component additions and deletions are blocked
+  const newCutout = cad.addCutout(20, 20, 5, 5, "rectangle");
+  assert.equal(newCutout, null, "addCutout must return null when locked");
+  assert.equal(cad.cutouts.length, 1, "cutouts count must remain 1");
+
+  const newPathway = cad.addPathway(0, 0, 10, 2);
+  assert.equal(newPathway, null, "addPathway must return null when locked");
+  assert.equal(cad.pathways.length, 1, "pathways count must remain 1");
+
+  cad.addDefaultHorizontalPathway();
+  cad.addDefaultVerticalPathway();
+  assert.equal(cad.pathways.length, 1, "default pathway additions must be blocked when locked");
+
+  const newObstacle = cad.addExternalObstacle("tree");
+  assert.equal(newObstacle, null, "addExternalObstacle must return null when locked");
+  assert.equal(cad.externalObstacles.length, 0, "externalObstacles count must remain 0");
+
+  const placedSingle = cad.placePanel("portrait");
+  assert.equal(placedSingle, null, "placePanel must return null when locked");
+
+  cad.placePanelBlock(2, 2);
+  cad.autoPlaceRemainingPanels();
+  assert.equal(cad.panels.length, origPanelCount, "panel count must remain identical when locked");
+
+  cad.clearAllPanels();
+  assert.equal(cad.panels.length, origPanelCount, "clearAllPanels must NOT remove panels when locked");
+
+  cad.clearAllCutouts();
+  assert.equal(cad.cutouts.length, 1, "clearAllCutouts must NOT remove cutouts when locked");
+
+  cad.clearAllPathways();
+  assert.equal(cad.pathways.length, 1, "clearAllPathways must NOT remove pathways when locked");
+
+  // 4. Verify component transformations (rotation, scaling, nudging, dragging) are blocked
+  cad.selectItem("panel", cad.panels[0]);
+  cad.rotateSelectedPanels(90);
+  assert.equal(cad.panels[0].x, origPanelX, "Panel X must not change on rotate when locked");
+  assert.equal(cad.panels[0].y, origPanelY, "Panel Y must not change on rotate when locked");
+
+  cad.scaleSelectedItems(1.5);
+  assert.equal(cad.panels[0].x, origPanelX, "Panel X must not change on scale when locked");
+
+  cad.nudgeSelectedItem(5, 5);
+  assert.equal(cad.panels[0].x, origPanelX, "Panel X must not change on nudge when locked");
+  assert.equal(cad.panels[0].y, origPanelY, "Panel Y must not change on nudge when locked");
+
+  cad.setSelectedItemPosition(100, 100);
+  assert.equal(cad.panels[0].x, origPanelX, "Panel position must not change on setSelectedItemPosition when locked");
+
+  cad.removeSelectedItem();
+  cad.removeSelectedItems();
+  assert.equal(cad.panels.length, origPanelCount, "removeSelectedItems must NOT remove items when locked");
+
+  // 5. Verify resize handles and handle hits are empty/null
+  const handles = cad.getResizeHandles(cad.panels[0]);
+  assert.deepEqual(handles, [], "getResizeHandles must return empty array when locked");
+  const handleHit = cad.findHandleAt(origPanelX, origPanelY);
+  assert.equal(handleHit, null, "findHandleAt must return null when locked");
+
+  // 6. Verify serialization & restoration round-trip preserves locked state
+  const serialized = cad.serialize();
+  assert.equal(serialized.isLocked, true, "serialized state must include isLocked: true");
+
+  const cad2 = new RooftopCAD(new MockCanvas(), { roofLengthFt: 10, roofBreadthFt: 10 });
+  cad2.loadState(serialized);
+  assert.equal(cad2.isLocked, true, "loadState must restore isLocked: true");
+  assert.equal(cad2.roofLengthFt, origRoofLen, "loadState must restore exact roofLengthFt");
+  assert.equal(cad2.roofBreadthFt, origRoofBr, "loadState must restore exact roofBreadthFt");
+  assert.equal(cad2.panels.length, origPanelCount, "loadState must restore exact panels");
+
+  // 7. Verify unlocking restores full editing capability
+  cad.setDrawingLocked(false);
+  assert.equal(cad.isLocked, false, "cad.isLocked must be false after unlock");
+  cad.setRoofDimensions(55, 35);
+  assert.equal(cad.roofLengthFt, 55, "setRoofDimensions must work after unlocking");
+  assert.equal(cad.roofBreadthFt, 35, "setRoofDimensions must work after unlocking");
+
+  console.log("✓ Test 23 Passed: Save & Lock Drawing (Freeze all dimensions, placements, components, and tools)");
+}
+
 console.log("All RooftopCAD tests passed successfully!");
 

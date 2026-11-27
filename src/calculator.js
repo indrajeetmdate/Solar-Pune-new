@@ -926,18 +926,24 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
     panelCost + structureCost + inverterCost + backupInverterCost + batteryCost +
     safetyAndEarthingCost + wiringCost + installationCost + consultancyCost;
 
-  // GST: Supply of Goods (70% @ 5%) + Supply of Services (30% @ 18%) = 8.9% effective
+  // Contingency on pre-tax component subtotal
+  const contingency = preTaxSubtotal * ((pricing.contingencyRate || 0) / 100);
+  const costBeforeMargin = round(preTaxSubtotal + contingency, 0);
+
+  // EPC Contractor Margin (default 25% on pre-tax component costs + contingency)
+  const marginRate = pricing.marginRate !== undefined ? pricing.marginRate : (input.marginRate !== undefined ? input.marginRate : 25);
+  const margin = round(costBeforeMargin * (marginRate / 100), 0);
+  const taxableAmount = costBeforeMargin + margin;
+
+  // GST: Supply of Goods (70% @ 5%) + Supply of Services (30% @ 18%) = 8.9% effective on taxable supply value (calculated after margin)
   const goodsShare = 0.70;
   const servicesShare = 0.30;
   const goodsGstRate = 5;
   const servicesGstRate = 18;
   const effectiveGstRate = (goodsShare * goodsGstRate) + (servicesShare * servicesGstRate); // 8.9%
-  const gst = preTaxSubtotal * (effectiveGstRate / 100);
-  const contingency = preTaxSubtotal * ((pricing.contingencyRate || 0) / 100);
-  const baseCostInclGst = round(preTaxSubtotal + gst + contingency, 0);
-  const marginRate = pricing.marginRate !== undefined ? pricing.marginRate : (input.marginRate !== undefined ? input.marginRate : 25);
-  const margin = round(baseCostInclGst * (marginRate / 100), 0);
-  const totalPreSubsidy = baseCostInclGst + margin;
+  const gst = round(taxableAmount * (effectiveGstRate / 100), 0);
+
+  const totalPreSubsidy = taxableAmount + gst;
   const subsidyResult = calculateSubsidy(systemType, panelType, dcCapacityKw, input, config.policy);
   const subsidy = subsidyResult.total;
   const netCost = Math.max(totalPreSubsidy - subsidy, 0);
@@ -1075,12 +1081,15 @@ export function calculateSystemOption(systemType, panelType, input, config = DEF
       electricalSafetyAndWiring: round(wiringCost + safetyAndEarthingCost, 0),
       installation: round(installationCost, 0),
       consultancy: round(consultancyCost, 0),
-      gst: round(gst, 0),
-      effectiveGstRate: round(effectiveGstRate, 1),
       contingency: round(contingency, 0),
-      baseCostInclGst: round(baseCostInclGst, 0),
+      preTaxSubtotal: round(preTaxSubtotal, 0),
+      costBeforeMargin: round(costBeforeMargin, 0),
       marginRate: round(marginRate, 1),
       margin: round(margin, 0),
+      taxableAmount: round(taxableAmount, 0),
+      gst: round(gst, 0),
+      effectiveGstRate: round(effectiveGstRate, 1),
+      baseCostInclGst: round(taxableAmount, 0),
     },
     financing: calculateSolarFinancing({
       netCost,

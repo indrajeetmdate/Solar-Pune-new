@@ -1137,4 +1137,79 @@ console.log("✓ Multi-Customer Building Solar Proposal Studio & Cross-Workspace
   });
 }
 
+// 18. Save & Lock CAD Drawing UI & Comprehensive Freeze Verification
+{
+  console.log("\nTesting Save & Lock CAD Drawing UI & Freeze Controls...");
+  const cad = getActiveRooftopCAD();
+  assert.ok(cad, "CAD instance must be available");
+
+  const lockBtn = document.getElementById("cadLockDrawingBtn");
+  const lockBanner = document.getElementById("cadLockBanner");
+  const bannerUnlockBtn = document.getElementById("cadBannerUnlockBtn");
+  const inspectorNotice = document.getElementById("inspectorLockNotice");
+  const autoPlaceBtn = document.getElementById("cadAutoPlaceBtn");
+  const clearPanelsBtn = document.getElementById("cadClearPanelsBtn");
+  const roofLenInput = document.getElementById("cadRoofLength");
+  const roofBrInput = document.getElementById("cadRoofBreadth");
+
+  assert.ok(lockBtn, "Save & Lock Drawing button must exist in CAD toolbar");
+  assert.ok(lockBanner, "Lock banner alert must exist in workspace");
+  assert.ok(bannerUnlockBtn, "Banner unlock button must exist");
+  assert.ok(inspectorNotice, "Inspector lock notice must exist");
+
+  // Initial state: unlocked
+  assert.equal(cad.isLocked, false, "Drawing must initially be unlocked");
+  assert.equal(lockBanner.style.display, "none", "Lock banner must initially be hidden");
+  assert.equal(inspectorNotice.style.display, "none", "Inspector lock notice must initially be hidden");
+
+  // Place baseline panels and set roof dimensions
+  cad.setRoofDimensions(36, 28);
+  cad.panels = [];
+  cad.setRequiredPanels(6, 1123, 2279);
+  cad.autoPlaceRemainingPanels("portrait");
+  const baselinePanelCount = cad.panels.length;
+  assert.equal(baselinePanelCount, 6, "Must have placed 6 panels before locking");
+
+  // Click Save & Lock Drawing
+  lockBtn.click();
+  assert.equal(cad.isLocked, true, "Drawing must be locked after clicking lock button");
+  assert.ok(lockBtn.classList.contains("locked"), "Lock button must have .locked CSS class");
+  assert.ok(lockBtn.textContent.includes("Locked"), "Lock button text must indicate 'Locked'");
+  assert.equal(lockBanner.style.display, "flex", "Lock banner must be displayed as flex when locked");
+  assert.equal(inspectorNotice.style.display, "inline-flex", "Inspector notice must be displayed when locked");
+
+  // Check localStorage persistence
+  assert.equal(window.localStorage.getItem("solar_cad_is_locked"), "true", "localStorage 'solar_cad_is_locked' must be 'true'");
+  assert.ok(window.localStorage.getItem("solar_cad_locked_state"), "localStorage 'solar_cad_locked_state' must contain serialized snapshot");
+
+  // Check that mutation controls are disabled
+  assert.equal(autoPlaceBtn.disabled, true, "Auto-place button must be disabled when locked");
+  assert.equal(clearPanelsBtn.disabled, true, "Clear panels button must be disabled when locked");
+  assert.equal(roofLenInput.disabled, true, "Roof length input must be disabled when locked");
+  assert.equal(roofBrInput.disabled, true, "Roof breadth input must be disabled when locked");
+
+  // Attempt mutations while locked
+  cad.setRoofDimensions(99, 99);
+  assert.equal(cad.roofLengthFt, 36, "Roof length must NOT change while locked");
+  assert.equal(cad.roofBreadthFt, 28, "Roof breadth must NOT change while locked");
+
+  cad.clearAllPanels();
+  assert.equal(cad.panels.length, baselinePanelCount, "Panels must NOT be cleared while locked");
+
+  cad.placePanel();
+  assert.equal(cad.panels.length, baselinePanelCount, "New panels must NOT be placed while locked");
+
+  // Check clicking on banner unlock button
+  bannerUnlockBtn.click();
+  assert.equal(cad.isLocked, false, "Drawing must be unlocked after clicking banner unlock button");
+  assert.ok(!lockBtn.classList.contains("locked"), "Lock button must not have .locked CSS class after unlock");
+  assert.equal(lockBanner.style.display, "none", "Lock banner must be hidden after unlock");
+  assert.equal(inspectorNotice.style.display, "none", "Inspector lock notice must be hidden after unlock");
+  assert.equal(window.localStorage.getItem("solar_cad_is_locked"), null, "localStorage 'solar_cad_is_locked' must be cleared after unlock");
+  assert.equal(autoPlaceBtn.disabled, false, "Auto-place button must be re-enabled after unlock");
+  assert.equal(clearPanelsBtn.disabled, false, "Clear panels button must be re-enabled after unlock");
+
+  console.log("✓ Save & Lock CAD Drawing UI & Freeze Controls verified successfully!");
+}
+
 console.log("\nALL END-TO-END WORKSPACE & AUTO-CALCULATION TESTS PASSED! 🚀🎉");

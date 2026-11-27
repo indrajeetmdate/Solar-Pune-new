@@ -361,12 +361,15 @@ export function calculateBuildingLedger({
   const consultancyCost = totalDcWatts * consultancyRate;
 
   const preTaxSubtotal = panelCost + structureCost + inverterCost + installationCost + consultancyCost + safetyAndEarthingCostTotal + wiringCost;
-  const gst = preTaxSubtotal * 0.089; // 8.9% effective GST
   const contingency = preTaxSubtotal * ((pricing.contingencyRate || 0) / 100);
-  const baseCostInclGst = preTaxSubtotal + gst + contingency;
+  const costBeforeMargin = preTaxSubtotal + contingency;
   const marginRatePct = pricing.marginRate !== undefined ? Number(pricing.marginRate) : (DEFAULT_CONFIG.pricing.marginRate || 25);
-  const margin = baseCostInclGst * (marginRatePct / 100); // Default margin
-  const totalBuildingGrossCost = Math.round(baseCostInclGst + margin);
+  const margin = costBeforeMargin * (marginRatePct / 100); // Margin on pre-tax cost & contingency
+  const taxableSubtotal = costBeforeMargin + margin;
+  const effectiveGstRate = 0.089; // 8.9% effective GST (70% goods @ 5% + 30% services @ 18% on taxable amount)
+  const gst = taxableSubtotal * effectiveGstRate;
+  const totalBuildingGrossCost = Math.round(taxableSubtotal + gst);
+  const baseCostInclGst = Math.round(taxableSubtotal); // Kept for backwards compatibility
 
   // Gross cost per kWp
   const grossCostPerKw = totalBuildingCapacityKw > 0 ? (totalBuildingGrossCost / totalBuildingCapacityKw) : 60000;
@@ -547,6 +550,29 @@ export function calculateBuildingLedger({
     requiredRoofAreaSqft,
     loanInterestRate,
     loanDownPaymentPct,
+    costBreakup: {
+      panels: Math.round(panelCost),
+      appliedPanelRate: effectivePanelRate,
+      structure: Math.round(structureCost),
+      inverter: Math.round(inverterCost),
+      backupInverter: 0,
+      battery: 0,
+      safetyAndEarthing: Math.round(safetyAndEarthingCostTotal),
+      wiringExcludingCable: Math.round(wiringCost),
+      electricalSafetyAndWiring: Math.round(safetyAndEarthingCostTotal + wiringCost),
+      installation: Math.round(installationCost),
+      consultancy: Math.round(consultancyCost),
+      contingency: Math.round(contingency),
+      preTaxSubtotal: Math.round(preTaxSubtotal),
+      costBeforeMargin: Math.round(costBeforeMargin),
+      marginRate: marginRatePct,
+      margin: Math.round(margin),
+      taxableAmount: Math.round(taxableSubtotal),
+      gst: Math.round(gst),
+      effectiveGstRate: 8.9,
+      baseCostInclGst: Math.round(taxableSubtotal),
+      totalBuildingGrossCost,
+    },
   };
 
   const summary = {

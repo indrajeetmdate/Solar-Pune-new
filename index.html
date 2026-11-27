@@ -863,6 +863,11 @@
                   <span>⚙️</span> <span>More Tools ▾</span>
                 </button>
 
+                <!-- Save & Lock Drawing (Freezes dimensions, placements and components) -->
+                <button type="button" class="cad-text-btn lock-btn" id="cadLockDrawingBtn" title="Save & Lock CAD Drawing (Freeze all dimensions, placements and components)">
+                  <span id="cadLockBtnIcon">🔒</span> <span id="cadLockBtnText">Save & Lock Drawing</span>
+                </button>
+
                 <!-- Right-aligned Toggles & Status -->
                 <div class="cad-btn-group cad-bar-right" style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
                   <div class="cad-compact-pill" id="cadInventoryPill" title="Latent Pool Inventory">
@@ -1102,6 +1107,10 @@
                   <strong id="inspectorTypeTitle">Base Roof</strong>
                 </div>
 
+                <div class="cad-inspector-lock-notice" id="inspectorLockNotice" style="display: none;">
+                  <span>🔒 Drawing Locked</span>
+                </div>
+
                 <div class="cad-input-group" id="inspectorLabelGroup" style="display: none;">
                   <label for="inspectorLabel">Label:</label>
                   <input type="text" id="inspectorLabel" value="Main Roof" style="width: 90px;">
@@ -1178,6 +1187,17 @@
                   <button type="button" class="cad-btn-mini" id="inspectorDeleteBtn" style="color: #f87171; display: none;" title="Delete Selected (Del) [Returns panel to latent pool]">🗑️ Delete</button>
                   <button type="button" class="cad-btn-mini" id="inspectorDeselectBtn" title="Clear selection" style="display: none;">✕ Clear</button>
                 </div>
+              </div>
+
+              <!-- DRAWING LOCKED BANNER ALERT -->
+              <div class="cad-lock-banner" id="cadLockBanner" style="display: none;">
+                <div class="cad-lock-banner-content">
+                  <span class="cad-lock-banner-icon">🔒</span>
+                  <span class="cad-lock-banner-text"><strong>CAD Drawing is Locked:</strong> All dimensions, placements, and components are frozen and protected from accidental modification.</span>
+                </div>
+                <button type="button" class="cad-btn-mini cad-lock-banner-unlock-btn" id="cadBannerUnlockBtn" title="Unlock CAD Drawing for Editing">
+                  🔓 Unlock Drawing
+                </button>
               </div>
 
               <!-- CAD WORKSPACE: CANVAS + SLIM DOCKED LAYERS PANEL -->
